@@ -1,0 +1,125 @@
+# ============================================
+# pyproject.toml — Configuração Centralizada
+# IT Governance Dashboard
+# ============================================
+
+[project]
+name = "it-gov-dashboard"
+version = "1.0.0"
+description = "Dashboard de Governança de TI - Grupo Gadens"
+requires-python = ">=3.12"
+
+# ============================================
+# Ruff — Linter + Formatter (substitui black+isort+flake8)
+# ============================================
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    "venv", ".venv", "build", "dist",
+    "_backups", "data", "htmlcov", "migrations"
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (security)
+    "N",    # pep8-naming
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (formatter cuida)
+    "S101",   # assert usado (ok em testes)
+    "B008",   # function call in default arg (Flask usa muito)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "N802"]   # testes podem usar assert e nomes flexíveis
+"config.py" = ["S105", "S106"]  # secrets em config (vem do .env)
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ============================================
+# Pytest — Migrado de pytest.ini
+# ============================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--color=yes",
+    "--durations=10",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-config=.coveragerc",
+]
+markers = [
+    "slow: testes lentos (>1s)",
+    "integration: testes de integração (Flask client)",
+    "unit: testes unitários puros",
+    "smoke: testes críticos de fumaça",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:flask",
+    "ignore::DeprecationWarning:werkzeug",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ============================================
+# Coverage
+# ============================================
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "venv/*",
+    ".venv/*",
+    "_backups/*",
+    "*/migrations/*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+precision = 2
+show_missing = true
+
+# ============================================
+# Mypy — Type Checking (gradual)
+# ============================================
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+check_untyped_defs = false
+exclude = ["venv", ".venv", "_backups", "tests"]
+
+# ============================================
+# Bandit — Security
+# ============================================
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "_backups"]
+skips = ["B101"]  # assert_used

@@ -1,25 +1,50 @@
+# ============================================
+# IT Governance Dashboard - .gitignore
+# ============================================
+
 # ===== Python =====
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.egg-info/
+*.egg
+dist/
+build/
+develop-eggs/
+eggs/
+.eggs/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+
+# ===== Virtual Environments =====
 venv/
 env/
 ENV/
 .venv/
-*.egg-info/
-dist/
-build/
+.env/
+virtualenv/
 
 # ===== Ambiente / Secrets =====
 .env
 .env.local
 .env.*.local
 .env.bak*
+.env.production
+.env.staging
 *.bak
 *.bak.*
 *.pre-*
+*.orig
+secrets/
+credentials/
+*.pem
+*.key
+*.crt
+!*.example
 
 # ===== Testes / Coverage =====
 .coverage
@@ -27,10 +52,26 @@ build/
 htmlcov/
 .pytest_cache/
 .tox/
+.nox/
 coverage.xml
 *.cover
+.hypothesis/
+nosetests.xml
+junit.xml
+test-results/
 
-# ===== Dados / Backups =====
+# ===== Lint / Type Check / Security =====
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+bandit-report.json
+safety-report.json
+.bandit
+
+# ===== Dados / Backups / Logs =====
 data/
 _backups/
 backups/
@@ -39,23 +80,48 @@ backups/
 *.sqlite3
 *.log
 logs/
+*.dump
+*.sql.gz
 
 # ===== IDEs =====
 .vscode/
+!.vscode/settings.json.example
 .idea/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.spyderproject
+.spyproject
+.ropeproject
 
 # ===== OS =====
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# ===== Arquivos sensíveis específicos =====
-license_costs.json
-cftv-setup/logs/
+# ===== Jupyter =====
+.ipynb_checkpoints
+*.ipynb
 
-# ===== Node (caso tenha frontend) =====
+# ===== Node (se houver frontend assets) =====
 node_modules/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ===== Docker =====
+*.pid
+docker-compose.override.yml
+
+# ===== Projeto específico =====
+instance/
+*.local.py
+local_settings.py
