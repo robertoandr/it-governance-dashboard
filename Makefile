@@ -4,20 +4,19 @@
 # ============================================
 
 .PHONY: help install install-dev test test-fast test-cov lint format \
-        security audit clean run pre-commit setup all check
+        security audit clean run pre-commit setup all check typecheck
 
 CYAN := \033[36m
 GREEN := \033[32m
 YELLOW := \033[33m
 RESET := \033[0m
 
+# ===== Ajuda =====
 help: ## Mostra esta ajuda
 	@echo ""
 	@echo "$(CYAN)IT Governance Dashboard — Comandos$(RESET)"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$
-' $(MAKEFILE_LIST) | \ 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-18s$(RESET) %s\n",
-$$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-18s$(RESET) %s\n",$$1, $$2}'
 	@echo ""
 
 # ===== Instalação =====

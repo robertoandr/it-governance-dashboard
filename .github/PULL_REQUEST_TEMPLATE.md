@@ -1,28 +1,27 @@
-## 📝 Descrição
-<!-- O que esse PR faz? -->
+## 📋 Descrição
+<!-- O que este PR faz? Por quê? -->
 
-## 🔗 Issue Relacionada
-Closes #
-
-## ✅ Tipo de Mudança
-- [ ] 🐛 Bug fix
-- [ ] ✨ Nova feature
-- [ ] 💥 Breaking change
-- [ ] 📚 Documentação
-- [ ] ♻️ Refatoração
+## 🎯 Tipo de mudança
+- [ ] 🐛 Bug fix (mudança que corrige um problema)
+- [ ] ✨ Feature (mudança que adiciona funcionalidade)
+- [ ] 💥 Breaking change (quebra compatibilidade)
+- [ ] 📝 Documentação
+- [ ] 🎨 Refactor / Qualidade
 - [ ] 🔒 Segurança
+- [ ] ⚡ Performance
 
-## 🧪 Como Testar
-1. 
-2. 
-3. 
+## ✅ Checklist
+- [ ] Código segue padrões do projeto (`make lint`)
+- [ ] Testes adicionados/atualizados (`make test`)
+- [ ] Cobertura mantida ou aumentada
+- [ ] Documentação atualizada (se aplicável)
+- [ ] Não introduz vulnerabilidades (`make security`)
+- [ ] Commit segue Conventional Commits
 
-## 📸 Screenshots (se UI)
-<!-- Antes / Depois -->
+## 🧪 Como testar
+<!-- Passos para reproduzir e validar -->
 
-## ✔️ Checklist
-- [ ] Código testado localmente
-- [ ] Sem secrets/tokens commitados
-- [ ] Documentação atualizada
-- [ ] Sem warnings no lint
-- [ ] Compatível com Python 3.x
+## 📸 Screenshots (se aplicável)
+
+## 🔗 Issues relacionadas
+Closes #

@@ -126,3 +126,7 @@ docker-compose.override.yml
 instance/
 *.local.py
 local_settings.py
+
+# Saídas locais de coletores (não versionar)
+license_costs.json
+*.local.json

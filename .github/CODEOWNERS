@@ -1,0 +1,14 @@
+# ============================================
+# CODEOWNERS — Revisores automáticos
+# ============================================
+
+# Owner global (fallback)
+* @robertoandr
+
+# Áreas críticas
+/collectors/         @robertoandr
+/services/           @robertoandr
+/routes/             @robertoandr
+/.github/            @robertoandr
+requirements*.txt    @robertoandr
+pyproject.toml       @robertoandr
