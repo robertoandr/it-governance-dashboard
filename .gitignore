@@ -38,6 +38,7 @@ virtualenv/
 *.bak
 *.bak.*
 *.pre-*
+!.pre-commit-config.yaml
 *.orig
 secrets/
 credentials/
