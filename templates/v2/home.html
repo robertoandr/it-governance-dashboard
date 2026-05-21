@@ -1,0 +1,90 @@
+{% extends "v2/base.html" %}
+
+{% block title %}Visão Geral · Governança de TI{% endblock %}
+{% block page_title %}🏠 Visão Geral{% endblock %}
+
+{% block content %}
+<div class="home-grid" id="home-grid">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>Carregando dados de governança…</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    fetch("/api/governance/owners")
+      .then(r => r.json())
+      .then(data => renderHome(data))
+      .catch(err => {
+        document.getElementById("home-grid").innerHTML =
+          `<div class="error-state">❌ Erro ao carregar: ${err.message}</div>`;
+      });
+  });
+
+  function renderHome(data) {
+    const grid = document.getElementById("home-grid");
+    const domains = data.domains || [];
+    const active = domains.filter(d => d.status === "active");
+    const planned = domains.filter(d => d.status === "planned");
+
+    let html = `
+      <div class="section-header">
+        <h2>Domínios Ativos <span class="counter">${active.length}</span></h2>
+      </div>
+      <div class="cards-row">
+    `;
+
+    active.forEach(d => {
+      const sla = d.sla || {};
+      const cur = sla.current != null ? sla.current.toFixed(1) + "%" : "—";
+      const tgt = sla.target != null ? sla.target.toFixed(1) + "%" : "—";
+      const slaClass = sla.status === "warn" ? "sla-warn" : "sla-ok";
+      const owner = d.owner || {};
+
+      html += `
+        <a href="${d.route || '#'}" class="domain-card active">
+          <div class="card-top">
+            <span class="card-icon">${d.icon || "📦"}</span>
+            <span class="card-status ${slaClass}">${cur}</span>
+          </div>
+          <h3>${d.name}</h3>
+          <p class="card-desc">${d.short_desc || ""}</p>
+          <div class="card-meta">
+            <span>👤 ${owner.team || "—"}</span>
+            <span>🎯 SLA ${tgt}</span>
+          </div>
+        </a>
+      `;
+    });
+
+    html += `</div>`;
+
+    if (planned.length) {
+      html += `
+        <div class="section-header" style="margin-top: 32px;">
+          <h2>Em Breve <span class="counter">${planned.length}</span></h2>
+        </div>
+        <div class="cards-row">
+      `;
+      planned.forEach(d => {
+        html += `
+          <div class="domain-card planned" title="Em breve - ${d.eta || ''}">
+            <div class="card-top">
+              <span class="card-icon">${d.icon || "📦"}</span>
+              <span class="card-status sla-planned">🔒 ${d.eta || ''}</span>
+            </div>
+            <h3>${d.name}</h3>
+            <p class="card-desc">${d.short_desc || ""}</p>
+          </div>
+        `;
+      });
+      html += `</div>`;
+    }
+
+    grid.innerHTML = html;
+  }
+</script>
+{% endblock %}

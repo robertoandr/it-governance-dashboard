@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Governança de TI · GADENS{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard_v2.css') }}">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <span class="brand-icon">🏛️</span>
+          <div class="brand-text">
+            <strong>GADENS</strong>
+            <small>Governança de TI</small>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <div class="nav-loading">Carregando domínios…</div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="search-trigger" id="btn-search" disabled title="Em breve">
+          🔍 Buscar <kbd>Ctrl+K</kbd>
+        </button>
+        <div class="refresh-info">
+          🔄 Auto-refresh: <span id="refresh-interval">30s</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
+          <h1 class="page-title">{% block page_title %}Visão Geral{% endblock %}</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="last-refresh" id="last-refresh">—</span>
+          <span class="env-badge">v2 · beta</span>
+        </div>
+      </header>
+
+      <section class="content-area">
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+  {% block scripts_extra %}{% endblock %}
+</body>
+</html>

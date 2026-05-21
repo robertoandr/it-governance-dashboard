@@ -1,0 +1,13 @@
+{
+  "CFTV": "26",
+  "Lojas": "44",
+  "Lojas/Centro": "45",
+  "Lojas/Centro/CFTV": "46",
+  "Lojas/Centro/CFTV/NVR": "47",
+  "Lojas/Centro/CFTV/Cameras": "48",
+  "Lojas/Centro/Servidores": "49",
+  "Lojas/Centro/Impressoras": "50",
+  "Lojas/Centro/Rede": "51",
+  "CFTV/NVRs": "52",
+  "CFTV/Cameras": "53"
+}

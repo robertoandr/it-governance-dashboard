@@ -1,0 +1,355 @@
+/* ============================================================
+   maintenance.css — Sprint 6d
+   UI de Manutenção Manual (FAB + Modal + Toast + Badges)
+   ============================================================ */
+
+/* ── Variáveis locais (fallback se globals não existirem) ── */
+:root {
+  --maint-color: #ff9800;
+  --maint-bg: rgba(255, 152, 0, 0.12);
+  --maint-border: rgba(255, 152, 0, 0.4);
+  --maint-text: #ffb74d;
+  --ok-color: #4caf50;
+  --err-color: #f44336;
+}
+
+/* ── Badge inline (usado em listas/tabelas) ── */
+.maint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--maint-bg);
+  border: 1px solid var(--maint-border);
+  color: var(--maint-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.maint-badge::before { content: "🔧"; font-size: 0.85rem; }
+
+/* ── Card de manutenção ativa (no overview) ── */
+.maint-card {
+  background: linear-gradient(135deg, var(--maint-bg), transparent);
+  border: 1px solid var(--maint-border);
+  border-left: 4px solid var(--maint-color);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 12px 0;
+  display: none; /* aparece via JS quando há hosts */
+}
+.maint-card.has-items { display: block; }
+.maint-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.maint-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--maint-text);
+}
+.maint-card-count {
+  background: var(--maint-color);
+  color: #000;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.maint-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.maint-card-item {
+  background: rgba(0,0,0,0.25);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.maint-card-item .host-name { font-weight: 600; }
+.maint-card-item .host-reason {
+  opacity: 0.75;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+.maint-btn-clear {
+  background: transparent;
+  border: 1px solid var(--maint-border);
+  color: var(--maint-text);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.maint-btn-clear:hover {
+  background: var(--maint-color);
+  color: #000;
+}
+
+/* ── FAB (Floating Action Button) ── */
+.maint-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--maint-color);
+  color: #000;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 9998;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.maint-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+.maint-fab:active { transform: scale(0.95); }
+
+/* ── Modal ── */
+.maint-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(3px);
+}
+.maint-modal-overlay.show { display: flex; }
+.maint-modal {
+  background: #1e2330;
+  border: 1px solid var(--maint-border);
+  border-radius: 10px;
+  padding: 24px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.maint-modal h3 {
+  margin: 0 0 16px;
+  color: var(--maint-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.maint-modal label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ccc;
+}
+.maint-modal input,
+.maint-modal textarea,
+.maint-modal select {
+  width: 100%;
+  padding: 8px 10px;
+  background: #0f1320;
+  border: 1px solid #333;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.maint-modal input:focus,
+.maint-modal textarea:focus {
+  outline: none;
+  border-color: var(--maint-color);
+}
+.maint-modal textarea { resize: vertical; min-height: 60px; }
+.maint-modal-hint {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 4px;
+}
+.maint-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.maint-modal-actions button {
+  padding: 8px 18px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+  transition: opacity 0.15s;
+}
+.maint-modal-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.maint-btn-cancel {
+  background: #333;
+  color: #ccc;
+}
+.maint-btn-submit {
+  background: var(--maint-color);
+  color: #000;
+}
+.maint-btn-submit:hover:not(:disabled) { background: #ffb74d; }
+
+/* ── Toast ── */
+.maint-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  z-index: 10000;
+  animation: maintToastIn 0.3s ease-out;
+  max-width: 360px;
+}
+.maint-toast.success { background: var(--ok-color); }
+.maint-toast.error   { background: var(--err-color); }
+.maint-toast.info    { background: #2196f3; }
+@keyframes maintToastIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.maint-toast.out { animation: maintToastOut 0.3s ease-in forwards; }
+@keyframes maintToastOut {
+  to { transform: translateX(120%); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* ✨ SPRINT 6g — FAB Release Polish                              */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.maint-fab-release {
+  position: fixed;
+  right: 24px;
+  bottom: 92px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 9998;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #f44336;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.3s ease,
+              background 0.4s ease-in-out;
+}
+
+.maint-fab-release:hover {
+  transform: scale(1.12);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.maint-fab-release:active { transform: scale(0.94); }
+
+/* 🎚️ Severidade (níveis de cor) */
+.maint-fab-release--low {
+  background: #f39c12;
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.45);
+}
+.maint-fab-release--mid {
+  background: #e67e22;
+  box-shadow: 0 4px 14px rgba(230, 126, 34, 0.5);
+}
+.maint-fab-release--high {
+  background: #c0392b;
+  box-shadow: 0 4px 16px rgba(192, 57, 43, 0.6);
+  animation: maintFabPulseHigh 1.6s ease-in-out infinite;
+}
+
+/* 🔔 Badge numérico */
+.maint-fab-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.maint-fab-badge--bump {
+  animation: maintBadgeBump 0.5s ease-out;
+}
+
+/* 💫 Animações */
+@keyframes maintFabPulseHigh {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(192, 57, 43, 0.6),
+                0 0 0 0 rgba(192, 57, 43, 0.5);
+  }
+  50% {
+    box-shadow: 0 4px 18px rgba(192, 57, 43, 0.8),
+                0 0 0 12px rgba(192, 57, 43, 0);
+  }
+}
+
+@keyframes maintBadgeBump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.5); }
+  70%  { transform: scale(0.85); }
+  100% { transform: scale(1); }
+}
+
+/* 🛈 Tooltip rico (hover) */
+.maint-fab-release[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  right: 64px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(20, 20, 20, 0.95);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: maintTipFadeIn 0.2s ease-out;
+}
+
+@keyframes maintTipFadeIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(6px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+/* ═══ FIM Sprint 6g ═══ */

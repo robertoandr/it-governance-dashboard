@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB-Governanca
+    type: influxdb
+    access: proxy
+    url: http://172.29.2.11:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: grupogadens
+      defaultBucket: governanca-m365
+      tlsSkipVerify: true
+      httpMode: POST
+    secureJsonData:
+      token: ${INFLUX_TOKEN}
+    editable: true

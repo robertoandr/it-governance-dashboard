@@ -1,0 +1,7 @@
+flask>=3.0
+requests>=2.31
+python-dotenv>=1.0
+influxdb-client>=1.40
+msal>=1.26
+ldap3>=2.9
+PyYAML>=6.0

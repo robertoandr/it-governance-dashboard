@@ -1,0 +1,131 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "uid": "govti-m365-v1",
+  "title": "🛡️ Governanca TI - Microsoft 365",
+  "tags": ["governanca","m365","cobit","seguranca"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": {"from": "now-7d", "to": "now"},
+  "templating": {"list": []},
+  "panels": [
+    {
+      "type": "stat",
+      "title": "👥 Total de Usuários",
+      "id": 1,
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -1d)\n  |> filter(fn: (r) => r._measurement == \"m365_users\" and r._field == \"total\")\n  |> last()", "refId": "A"}],
+      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue"}]}, "unit": "none"}}
+    },
+    {
+      "type": "stat",
+      "title": "🔐 MFA Habilitado",
+      "id": 2,
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -1d)\n  |> filter(fn: (r) => r._measurement == \"m365_mfa\" and r._field == \"habilitados\")\n  |> last()", "refId": "A"}],
+      "options": {"colorMode": "background", "graphMode": "area"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}]}, "unit": "none"}}
+    },
+    {
+      "type": "stat",
+      "title": "⚠️ MFA Desabilitado",
+      "id": 3,
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -1d)\n  |> filter(fn: (r) => r._measurement == \"m365_mfa\" and r._field == \"desabilitados\")\n  |> last()", "refId": "A"}],
+      "options": {"colorMode": "background", "graphMode": "area"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 100}]}, "unit": "none"}}
+    },
+    {
+      "type": "gauge",
+      "title": "% Adoção MFA (Meta: 95%)",
+      "id": 4,
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "hab = from(bucket: \"governanca-m365\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"m365_mfa\" and r._field == \"habilitados\") |> last() |> findRecord(fn: (key) => true, idx: 0)\ndes = from(bucket: \"governanca-m365\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"m365_mfa\" and r._field == \"desabilitados\") |> last() |> findRecord(fn: (key) => true, idx: 0)\nfrom(bucket: \"governanca-m365\")\n  |> range(start: -1d)\n  |> filter(fn: (r) => r._measurement == \"m365_mfa\" and r._field == \"habilitados\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: r._value) / (float(v: hab._value) + float(v: des._value)) * 100.0}))", "refId": "A"}],
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 70}, {"color": "green", "value": 95}]}, "unit": "percent", "min": 0, "max": 100}}
+    },
+    {
+      "type": "stat",
+      "title": "🚨 Incidentes M365 Ativos",
+      "id": 5,
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -1d)\n  |> filter(fn: (r) => r._measurement == \"m365_incidents\" and r._field == \"total_ativos\")\n  |> last()", "refId": "A"}],
+      "options": {"colorMode": "background", "graphMode": "area"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 8}]}, "unit": "none"}}
+    },
+    {
+      "type": "stat",
+      "title": "🟢 Serviços OK / Total",
+      "id": 6,
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 4},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"m365_service_status\" and r._field == \"status_code\")\n  |> last()\n  |> filter(fn: (r) => r._value == 1)\n  |> count()", "refId": "A"}],
+      "options": {"colorMode": "value"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "yellow", "value": 20}, {"color": "green", "value": 25}]}}}
+    },
+    {
+      "type": "timeseries",
+      "title": "📈 Evolução de Usuários (30d)",
+      "id": 7,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"m365_users\" and r._field == \"total\")\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "showPoints": "auto"}, "unit": "none"}}
+    },
+    {
+      "type": "timeseries",
+      "title": "📈 Tendência MFA (Habilitados vs Desabilitados)",
+      "id": 8,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"m365_mfa\")\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 15}, "unit": "none"}}
+    },
+    {
+      "type": "table",
+      "title": "🟦 Status atual dos Serviços M365",
+      "id": 9,
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"m365_service_status\" and r._field == \"status_text\")\n  |> last()\n  |> keep(columns: [\"service\",\"_value\",\"_time\"])\n  |> rename(columns: {_value: \"Status\", service: \"Serviço\", _time: \"Última verificação\"})", "refId": "A"}],
+      "fieldConfig": {"defaults": {"custom": {"align": "left"}, "mappings": [{"type": "value", "options": {"serviceOperational": {"color": "green", "index": 0, "text": "✅ Operacional"}, "serviceDegradation": {"color": "orange", "index": 1, "text": "⚠️ Degradado"}, "serviceRestored": {"color": "blue", "index": 2, "text": "🔄 Restaurado"}, "investigating": {"color": "red", "index": 3, "text": "🔍 Investigando"}}}]}}
+    },
+    {
+      "type": "table",
+      "title": "🚨 Incidentes M365 Ativos (detalhe)",
+      "id": 10,
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"m365_incident_detail\")\n  |> last()\n  |> pivot(rowKey: [\"id\",\"service\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"id\",\"service\",\"classification\",\"status\"])\n  |> rename(columns: {id: \"ID\", service: \"Serviço\", classification: \"Classificação\", status: \"Status\"})", "refId": "A"}],
+      "fieldConfig": {"defaults": {"custom": {"align": "left"}}}
+    },
+    {
+      "type": "barchart",
+      "title": "📊 Incidentes por Serviço (top)",
+      "id": 11,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"m365_incident_detail\" and r._field == \"status\")\n  |> last()\n  |> group(columns: [\"service\"])\n  |> count()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "none"}}
+    },
+    {
+      "type": "piechart",
+      "title": "🥧 Classificação dos Incidentes",
+      "id": 12,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{"query": "from(bucket: \"governanca-m365\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"m365_incident_detail\" and r._field == \"classification\")\n  |> last()\n  |> group(columns: [\"_value\"])\n  |> count()", "refId": "A"}],
+      "options": {"legend": {"displayMode": "table", "placement": "right", "values": ["value","percent"]}}
+    }
+  ]
+}

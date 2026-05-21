@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Governança de TI · Grupo Gadens</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/maintenance.css') }}">
+</head>
+<body data-theme="dark" data-cache-ttl="{{ cache_ttl }}" data-zabbix-url="{{ zabbix_front_url }}">
+
+<button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <img src="{{ url_for('static', filename='LOGO_GRUPO_GADENS.png') }}" alt="Grupo Gadens">
+    <h2>GOV<span class="accent">HUB</span></h2>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-title">Dashboards</div>
+    <div class="nav-item active" data-tab="overview"><span class="ico">▣</span><span>Visão Geral</span></div>
+
+    <div class="nav-section-title">Operações</div>
+    <div class="nav-item" data-tab="problems"><span class="ico">⚠</span><span>Problemas</span></div>
+    <div class="nav-item" data-tab="hosts"><span class="ico">▤</span><span>Hosts</span></div>
+    <div class="nav-item" data-tab="triggers"><span class="ico">⚡</span><span>Triggers</span><span class="badge" id="nav-triggers-badge" style="display:none">0</span></div>
+
+    <div class="nav-section-title">Microsoft 365</div>
+    <div class="nav-item" data-tab="m365"><span class="ico">▦</span><span>Serviços M365</span></div>
+    <div class="nav-item" data-tab="licenses"><span class="ico">$</span><span>Licenças</span></div>
+    <div class="nav-item" data-tab="identity"><span class="ico">◉</span><span>Identidade</span></div>
+
+    <div class="nav-section-title">Governança</div>
+    <div class="nav-item" data-tab="security"><span class="ico">⛨</span><span>Segurança</span></div>
+    <div class="nav-item" data-tab="finops"><span class="ico">◈</span><span>FINOPS / Custos</span></div>
+
+    <div class="nav-section-title">Vigilância</div>
+    <div class="nav-item" data-tab="cftv"><span class="ico">●</span><span>CFTV</span></div>
+  </nav>
+  <div class="sidebar-footer">Dashboard de TI · v1.0<br><span class="muted">© Grupo Gadens</span></div>
+</aside>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div>
+      <span class="topbar-title" id="tb-panel-title">Visão Geral</span>
+      <span class="topbar-divider"></span><span class="topbar-sub">Governança & Monitoramento</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-pill" id="status-pill"><span class="dot"></span><span id="status-text">Conectando…</span></span>
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="countdown">Refresh em <b id="countdown">--</b>s</span>
+    <button class="theme-toggle" id="theme-toggle" data-tip="Alternar tema claro/escuro">◐</button>
+  </div>
+</header>
+
+<main class="main">
+
+  {# ─────────── VISÃO GERAL ─────────── #}
+  <section class="panel active" data-panel="overview">
+    <h2 class="panel-title">Visão Geral</h2>
+    <div class="kpi-grid">
+      <div class="score-card">
+        <div class="score-header">
+          <span class="score-title">Score de Saúde Geral</span>
+          <span class="score-label" id="score-label">—</span>
+        </div>
+        <div class="score-value" id="score-value">—<span style="font-size:22px;font-weight:700">%</span></div>
+        <div class="score-components" id="score-components"></div>
+      </div>
+      <div class="kpi-card" data-key="secure_score" data-tip="Microsoft Secure Score · meta ≥ 85%">
+        <div class="kpi-label">Secure Score</div>
+        <div class="kpi-value"><span id="kpi-ss">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span id="kpi-ss-curr">—</span> / <span id="kpi-ss-max">—</span></div>
+        <div class="progress"><div id="bar-ss" class="bar"></div></div>
+      </div>
+      <div class="kpi-card" data-key="hosts" data-tip="% de hosts respondendo no Zabbix">
+        <div class="kpi-label">Hosts UP</div>
+        <div class="kpi-value"><span id="kpi-hosts-pct">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span style="color:var(--ok)" id="kpi-hosts-up">—</span> UP · <span style="color:var(--crit)" id="kpi-hosts-down">—</span> DOWN · <span id="kpi-hosts-total">—</span></div>
+        <div class="progress"><div id="bar-hosts" class="bar"></div></div>
+      </div>
+      <div class="kpi-card" data-key="triggers" data-tip="Triggers em estado PROBLEM no Zabbix">
+        <div class="kpi-label">Triggers Ativas</div>
+        <div class="kpi-value"><span id="kpi-trg-total">—</span></div>
+        <div class="kpi-sub"><span style="color:var(--crit)" id="kpi-trg-crit">—</span> críticas · <span id="kpi-trg-ack">—</span> ack</div>
+      </div>
+      <div class="kpi-card" data-key="mfa" data-tip="% de usuários com MFA habilitado">
+        <div class="kpi-label">MFA Ativa</div>
+        <div class="kpi-value"><span id="kpi-mfa">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span id="kpi-mfa-on">—</span> habilitados · <span id="kpi-mfa-off">—</span> sem MFA</div>
+        <div class="progress"><div id="bar-mfa" class="bar"></div></div>
+      </div>
+      <div class="kpi-card" data-key="intune" data-tip="% dispositivos compliant no Intune">
+        <div class="kpi-label">Intune Compliance</div>
+        <div class="kpi-value"><span id="kpi-intune">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span id="kpi-intune-c">—</span> / <span id="kpi-intune-t">—</span> dispositivos</div>
+        <div class="progress"><div id="bar-intune" class="bar"></div></div>
+      </div>
+      <div class="kpi-card" data-key="incidents" data-tip="Incidentes ativos do M365">
+        <div class="kpi-label">Incidentes M365</div>
+        <div class="kpi-value"><span id="kpi-inc">—</span></div>
+        <div class="kpi-sub">ativos no momento</div>
+      </div>
+      <div class="kpi-card" data-key="users" data-tip="Total de usuários no tenant M365">
+        <div class="kpi-label">Usuários M365</div>
+        <div class="kpi-value"><span id="kpi-users">—</span></div>
+        <div class="kpi-sub" id="kpi-users-sub">—</div>
+      </div>
+    </div>
+  </section>
+
+  {# ─────────── PROBLEMAS ─────────── #}
+  <section class="panel" data-panel="problems">
+    <h2 class="panel-title">Problemas Ativos</h2>
+    <div class="card">
+      <div class="card-title">Por severidade</div>
+      <div class="sev-grid">
+        <div class="sev-box sev-disaster"><span class="n" id="sev-disaster">—</span><span class="l">Disaster</span></div>
+        <div class="sev-box sev-high"><span class="n" id="sev-high">—</span><span class="l">High</span></div>
+        <div class="sev-box sev-average"><span class="n" id="sev-average">—</span><span class="l">Average</span></div>
+        <div class="sev-box sev-warning"><span class="n" id="sev-warning">—</span><span class="l">Warning</span></div>
+        <div class="sev-box sev-info"><span class="n" id="sev-info">—</span><span class="l">Info</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top problemas</div>
+      <table>
+        <thead><tr><th>Sev</th><th>Host</th><th>Problema</th><th>Quando</th><th>Ack</th></tr></thead>
+        <tbody id="problems-body"><tr><td colspan="5" class="muted center">carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ─────────── HOSTS ─────────── #}
+  <section class="panel" data-panel="hosts">
+    <h2 class="panel-title">Hosts Monitorados</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card" data-key="hosts-total">
+        <div class="kpi-label">Total</div>
+        <div class="kpi-value big"><span id="hosts-total">—</span></div>
+        <div class="kpi-sub">monitorados</div>
+      </div>
+      <div class="kpi-card ok">
+        <div class="kpi-label">UP</div>
+        <div class="kpi-value big" style="color:var(--ok)"><span id="hosts-up">—</span></div>
+        <div class="kpi-sub">disponíveis</div>
+      </div>
+      <div class="kpi-card crit">
+        <div class="kpi-label">DOWN</div>
+        <div class="kpi-value big" style="color:var(--crit)"><span id="hosts-down">—</span></div>
+        <div class="kpi-sub">indisponíveis</div>
+      </div>
+      <div class="kpi-card" data-key="hosts-pct">
+        <div class="kpi-label">Disponibilidade</div>
+        <div class="kpi-value big"><span id="hosts-pct">—</span><span class="unit">%</span></div>
+        <div class="progress"><div id="bar-hosts2" class="bar"></div></div>
+      </div>
+    </div>
+  </section>
+
+  {# ─────────── TRIGGERS ─────────── #}
+  <section class="panel" data-panel="triggers">
+    <h2 class="panel-title">Triggers ativas — clique no checkbox para reconhecer</h2>
+    <div class="card">
+      <div class="toolbar">
+        <input id="trig-filter" placeholder="Filtrar por host ou descrição…" class="filter-input">
+        <label class="chk"><input type="checkbox" id="hide-acked"> Ocultar reconhecidas</label>
+        <span class="muted small" id="trig-summary">—</span>
+      </div>
+      <table class="trig-table">
+        <thead><tr><th>✓</th><th>Sev</th><th>Host</th><th>Trigger</th><th>Desde</th><th>Status</th></tr></thead>
+        <tbody id="triggers-body"><tr><td colspan="6" class="muted center">carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ─────────── SERVIÇOS M365 ─────────── #}
+  <section class="panel" data-panel="m365">
+    <h2 class="panel-title">Microsoft 365 — Serviços</h2>
+    <div class="card">
+      <div class="card-title">Service Health</div>
+      <ul id="service-health" class="svc-list"><li class="muted">carregando…</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Items M365 do Zabbix (<span id="m365-items-count">—</span>)</div>
+      <input id="m365-filter" placeholder="Filtrar por chave ou nome…" class="filter-input">
+      <table>
+        <thead><tr><th>Chave</th><th>Nome</th><th>Valor</th><th>Atualizado</th></tr></thead>
+        <tbody id="m365-items-body"><tr><td colspan="4" class="muted center">carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ─────────── LICENÇAS ─────────── #}
+  <section class="panel" data-panel="licenses">
+    <h2 class="panel-title">Licenças Microsoft 365</h2>
+    <div class="card">
+      <div class="toolbar">
+        <input id="lic-filter" placeholder="Filtrar plano…" class="filter-input">
+        <span class="muted small" id="lic-summary">—</span>
+      </div>
+      <table>
+        <thead><tr><th>Plano</th><th>Usadas</th><th>Total</th><th>Livres</th><th>%</th></tr></thead>
+        <tbody id="licenses-body"><tr><td colspan="5" class="muted center">carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ─────────── IDENTIDADE ─────────── #}
+  <section class="panel" data-panel="identity">
+    <h2 class="panel-title">Identidade</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card" data-key="users_m365">
+        <div class="kpi-label">Usuários M365</div>
+        <div class="kpi-value big"><span id="m365-users-total">—</span></div>
+        <div class="kpi-sub"><span style="color:var(--ok)" id="m365-users-ativos">—</span> ativos · <span class="muted" id="m365-users-inativos">—</span> inativos</div>
+      </div>
+      <div class="kpi-card" data-key="users_ad">
+        <div class="kpi-label">Usuários AD</div>
+        <div class="kpi-value big"><span id="ad-users-total">—</span></div>
+        <div class="kpi-sub"><span style="color:var(--ok)" id="ad-users-active">—</span> habilitados · <span class="muted" id="ad-users-disabled">—</span> desabilitados</div>
+        <div class="muted small" id="ad-note" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </section>
+
+  {# ─────────── SEGURANÇA ─────────── #}
+  <section class="panel" data-panel="security">
+    <h2 class="panel-title">Segurança</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card" data-key="security-ss" data-tip="Microsoft Secure Score — postura de segurança geral do tenant">
+        <div class="kpi-label">Secure Score</div>
+        <div class="kpi-value big"><span id="sec-ss">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span id="sec-ss-curr">—</span> / <span id="sec-ss-max">—</span> pts · meta ≥ 85%</div>
+        <div class="progress"><div id="bar-sec-ss" class="bar"></div></div>
+      </div>
+      <div class="kpi-card" data-key="security-mfa">
+        <div class="kpi-label">MFA Habilitada</div>
+        <div class="kpi-value big"><span id="sec-mfa">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span id="sec-mfa-on">—</span> com MFA · <span id="sec-mfa-off">—</span> sem MFA</div>
+        <div class="progress"><div id="bar-sec-mfa" class="bar"></div></div>
+      </div>
+      <div class="kpi-card" data-key="security-intune">
+        <div class="kpi-label">Intune Compliance</div>
+        <div class="kpi-value big"><span id="sec-intune">—</span><span class="unit">%</span></div>
+        <div class="kpi-sub"><span id="sec-intune-c">—</span> / <span id="sec-intune-t">—</span> dispositivos</div>
+        <div class="progress"><div id="bar-sec-intune" class="bar"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Triggers de Segurança (M365)</div>
+      <table>
+        <thead><tr><th>Sev</th><th>Trigger</th><th>Desde</th><th>Status</th></tr></thead>
+        <tbody id="security-trig-body"><tr><td colspan="4" class="muted center">carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ─────────── FINOPS / CUSTOS ─────────── #}
+  <section class="panel" data-panel="finops">
+    <h2 class="panel-title">FINOPS / Custos — Licenças</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card" data-key="finops-total">
+        <div class="kpi-label">Total de Planos</div>
+        <div class="kpi-value big"><span id="finops-plans">—</span></div>
+        <div class="kpi-sub">planos no tenant</div>
+      </div>
+      <div class="kpi-card" data-key="finops-used">
+        <div class="kpi-label">Custo Mensal Total</div>
+        <div class="kpi-value big"><span id="finops-used">—</span></div>
+        <div class="kpi-sub">mensal · anual no sub</div>
+      </div>
+      <div class="kpi-card info" data-key="finops-annual" data-tip="Projeção anual = mensal × 12">
+        <div class="kpi-label">Custo Anual</div>
+        <div class="kpi-value big" style="color:var(--info)"><span id="finops-annual">—</span></div>
+        <div class="kpi-sub" id="finops-annual-sub">projeção mensal × 12</div>
+      </div>
+      <div class="kpi-card" data-key="finops-waste" data-tip="Licenças adquiridas mas não atribuídas">
+        <div class="kpi-label">Desperdício R$/ano</div>
+        <div class="kpi-value big"><span id="finops-waste">—</span></div>
+        <div class="kpi-sub">só licenças pagas ociosas</div>
+      </div>
+      <div class="kpi-card crit" data-key="finops-over" data-tip="SKUs onde o consumo passou o adquirido — risco de compliance">
+        <div class="kpi-label">Overprovisioning</div>
+        <div class="kpi-value big" style="color:var(--crit)"><span id="finops-over">—</span></div>
+        <div class="kpi-sub">planos acima de 100%</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Planos com maior desperdício (top 10)</div>
+      <table>
+        <thead><tr><th>Plano</th><th>Categoria</th><th>Adquirido</th><th>Em uso</th><th>Ocioso</th><th>Custo/un Mensal</th><th>Custo/un Anual</th><th>Δ vs anterior</th><th>Desperdício R$/ano</th></tr></thead>
+        <tbody id="finops-body"><tr><td colspan="9" class="muted center">carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+    {# ─────────── CFTV (FUNCIONAL) ─────────── #}
+  <section class="panel" data-panel="cftv">
+    <h2 class="panel-title">CFTV · Vigilância Operacional</h2>
+
+    <!-- Banner crítico (C3) -->
+    <div class="cftv-banner" id="cftv-banner">
+      <span class="pulse"></span>
+      <span id="cftv-banner-text">⚠️ Atenção: dispositivos offline detectados</span>
+    </div>
+
+    <!-- Gauge disponibilidade (A1) -->
+    <div class="cftv-gauge-wrap">
+      <div class="cftv-gauge">
+        <svg viewBox="0 0 120 120">
+          <circle class="track" cx="60" cy="60" r="52"></circle>
+          <circle class="bar" id="cftv-gauge-bar" cx="60" cy="60" r="52"
+                  stroke-dasharray="326.7" stroke-dashoffset="326.7" stroke="#10b981"></circle>
+        </svg>
+        <div class="label">
+          <div class="pct" id="cftv-gauge-pct">—</div>
+          <div class="sub">Disponibilidade</div>
+        </div>
+      </div>
+      <div class="cftv-gauge-info">
+        <h3>Saúde do Parque CFTV</h3>
+        <p>SLA operacional em tempo real · atualiza a cada 30s</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:2;">
+        <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value big" id="cftv-total">—</div></div>
+        <div class="kpi-card" style="border-left:4px solid var(--success)"><div class="kpi-label">Online</div><div class="kpi-value big" id="cftv-up" style="color:var(--success)">—</div></div>
+        <div class="kpi-card" style="border-left:4px solid var(--danger)"><div class="kpi-label">Offline</div><div class="kpi-value big" id="cftv-down" style="color:var(--danger)">—</div></div>
+        <div class="kpi-card" style="border-left:4px solid var(--warn)"><div class="kpi-label">Manutenção</div><div class="kpi-value big" id="cftv-maint" style="color:var(--warn)">—</div></div>
+      </div>
+    </div>
+
+    <!-- Categorias com ícones + barras (A2 + A4) -->
+    <h3 style="margin-top:20px;margin-bottom:10px;font-size:14px;color:var(--text-mute)">Status por Categoria</h3>
+    <div class="kpi-grid">
+      <div class="cftv-cat-card">
+        <div class="cftv-cat-head"><span class="cftv-cat-icon">📹</span><span class="cftv-cat-name">Câmeras</span></div>
+        <div class="cftv-cat-stats" id="cftv-cat-camera">—</div>
+        <div class="cftv-cat-bar"><div id="cftv-bar-camera" style="width:0%"></div></div>
+      </div>
+      <div class="cftv-cat-card">
+        <div class="cftv-cat-head"><span class="cftv-cat-icon">👤</span><span class="cftv-cat-name">Faciais</span></div>
+        <div class="cftv-cat-stats" id="cftv-cat-facial">—</div>
+        <div class="cftv-cat-bar"><div id="cftv-bar-facial" style="width:0%"></div></div>
+      </div>
+      <div class="cftv-cat-card">
+        <div class="cftv-cat-head"><span class="cftv-cat-icon">💾</span><span class="cftv-cat-name">DVRs</span></div>
+        <div class="cftv-cat-stats" id="cftv-cat-dvr">—</div>
+        <div class="cftv-cat-bar"><div id="cftv-bar-dvr" style="width:0%"></div></div>
+      </div>
+      <div class="cftv-cat-card">
+        <div class="cftv-cat-head"><span class="cftv-cat-icon">📡</span><span class="cftv-cat-name">Antenas</span></div>
+        <div class="cftv-cat-stats" id="cftv-cat-antena">—</div>
+        <div class="cftv-cat-bar"><div id="cftv-bar-antena" style="width:0%"></div></div>
+      </div>
+      <div class="cftv-cat-card">
+        <div class="cftv-cat-head"><span class="cftv-cat-icon">📺</span><span class="cftv-cat-name">Telas</span></div>
+        <div class="cftv-cat-stats" id="cftv-cat-tela">—</div>
+        <div class="cftv-cat-bar"><div id="cftv-bar-tela" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Lista DOWN (C1 link Zabbix) -->
+    <h3 style="margin-top:20px;margin-bottom:10px;font-size:14px;color:var(--danger)">🔴 Dispositivos Offline</h3>
+    <div class="card" style="padding:0; overflow-x: auto;">
+      <table class="data-table" style="width:100%;text-align:left;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--text-mute);font-size:12px;">
+            <th style="padding:10px">Dispositivo</th>
+            <th style="padding:10px">IP</th>
+            <th style="padding:10px">Local</th>
+            <th style="padding:10px;text-align:right">Ação</th>
+          </tr>
+        </thead>
+        <tbody id="cftv-down-list">
+          <tr><td colspan="4" style="padding:10px;text-align:center;">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Lista MAINT (B3) -->
+    <h3 style="margin-top:20px;margin-bottom:10px;font-size:14px;color:var(--warn)">🟡 Em Manutenção</h3>
+    <div id="maint-active-card" class="maint-card"></div>
+    <div class="card" style="padding:0; overflow-x: auto;">
+      <table class="data-table" style="width:100%;text-align:left;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--text-mute);font-size:12px;">
+            <th style="padding:10px">Dispositivo</th>
+            <th style="padding:10px">IP</th>
+            <th style="padding:10px">Local</th>
+            <th style="padding:10px">Categoria</th>
+            <th style="padding:10px;text-align:right">Ação</th>
+          </tr>
+        </thead>
+        <tbody id="cftv-maint-list">
+          <tr><td colspan="5" style="padding:10px;text-align:center;">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <script>
+    const ZBX_BASE = "https://noc.grupogadens.com.br/zabbix";
+
+    function cftvZbxLink(hostid) {
+      if (!hostid) return '<span style="opacity:0.4">—</span>';
+      return `<a href="${ZBX_BASE}/zabbix.php?action=host.view&filter_hostids[]=${hostid}" target="_blank" class="cftv-zbx-btn">🔗 Zabbix</a>`;
+    }
+
+    function cftvGaugeColor(pct) {
+      if (pct >= 95) return '#10b981';
+      if (pct >= 85) return '#f59e0b';
+      return '#ef4444';
+    }
+
+    async function updateCFTV() {
+      try {
+        const res = await fetch('/api/data', { cache: 'no-store' });
+        const data = await res.json();
+        const c = data.cftv;
+        if (!c) return;
+
+        // KPIs
+        document.getElementById('cftv-total').innerText = c.total || 0;
+        document.getElementById('cftv-up').innerText    = c.up || 0;
+        document.getElementById('cftv-down').innerText  = c.down || 0;
+        document.getElementById('cftv-maint').innerText = c.maint || 0;
+
+        // Gauge (A1)
+        const total = c.total || 0;
+        const up    = c.up || 0;
+        const pct   = total > 0 ? (up / total * 100) : 0;
+        const pctR  = Math.round(pct * 10) / 10;
+        document.getElementById('cftv-gauge-pct').innerText = pctR.toFixed(1) + '%';
+        const bar   = document.getElementById('cftv-gauge-bar');
+        const circ  = 2 * Math.PI * 52;  // 326.7
+        bar.setAttribute('stroke-dashoffset', circ * (1 - pct/100));
+        bar.setAttribute('stroke', cftvGaugeColor(pct));
+
+        // Banner (C3)
+        const banner = document.getElementById('cftv-banner');
+        const btxt   = document.getElementById('cftv-banner-text');
+        if ((c.down || 0) > 0) {
+          banner.classList.add('show');
+          btxt.innerText = `⚠️ ATENÇÃO: ${c.down} dispositivo(s) offline · Disponibilidade ${pctR.toFixed(1)}%`;
+        } else {
+          banner.classList.remove('show');
+        }
+
+        // Categorias + barras (A2 + A4)
+        const cats = ['camera', 'facial', 'dvr', 'antena', 'tela'];
+        cats.forEach(k => {
+          const el  = document.getElementById('cftv-cat-' + k);
+          const bel = document.getElementById('cftv-bar-' + k);
+          const st  = (c.by_subcat && c.by_subcat[k]) || null;
+          if (st && el) {
+            const tot = st.total || (st.up + st.down + (st.maint||0) + (st.nodata||0));
+            const cpct = tot > 0 ? (st.up / tot * 100) : 0;
+            el.innerHTML = `<span style="color:var(--success)">${st.up} UP</span> · <span style="color:var(--danger)">${st.down} DOWN</span> · <span style="opacity:0.6">${cpct.toFixed(0)}%</span>`;
+            if (bel) {
+              bel.style.width = cpct + '%';
+              bel.style.background = cftvGaugeColor(cpct);
+            }
+          }
+        });
+
+        // Tabela DOWN (com link Zabbix)
+        const tb = document.getElementById('cftv-down-list');
+        if (tb) {
+          if (c.down_list && c.down_list.length > 0) {
+            tb.innerHTML = c.down_list.map(d => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:10px;color:var(--danger)">🔴 ${d.host || d.name || '-'}</td>
+                <td style="padding:10px;font-family:monospace">${d.ip || '-'}</td>
+                <td style="padding:10px">${d.andar || '-'}</td>
+                <td style="padding:10px;text-align:right">${cftvZbxLink(d.hostid)}</td>
+              </tr>`).join('');
+          } else {
+            tb.innerHTML = '<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--success)">✅ Todos os dispositivos operacionais</td></tr>';
+          }
+        }
+
+        // Tabela MAINT (B3)
+        const tm = document.getElementById('cftv-maint-list');
+        if (tm) {
+          if (c.maint_list && c.maint_list.length > 0) {
+            tm.innerHTML = c.maint_list.map(d => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:10px;color:var(--warn)">🟡 ${d.host || d.name || '-'}</td>
+                <td style="padding:10px;font-family:monospace">${d.ip || '-'}</td>
+                <td style="padding:10px">${d.andar || '-'}</td>
+                <td style="padding:10px;text-transform:capitalize">${d.subcat || '-'}</td>
+                <td style="padding:10px;text-align:right">${cftvZbxLink(d.hostid)}</td>
+              </tr>`).join('');
+          } else {
+            tm.innerHTML = '<tr><td colspan="5" style="padding:14px;text-align:center;opacity:0.6">Nenhum dispositivo em manutenção</td></tr>';
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao atualizar CFTV:', e);
+      }
+    }
+    setTimeout(updateCFTV, 800);
+    setInterval(updateCFTV, 30000);
+  </script>
+</section>
+
+</main>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+
+<!-- MODAL PIN -->
+<div id="pin-modal" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <h3 style="margin:0 0 4px;color:var(--text)">Confirme sua identidade</h3>
+    <p class="muted small" style="margin-bottom:14px">Digite o PIN de 6 dígitos para editar valores. Fica válido até você fechar a aba.</p>
+    <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+           class="filter-input" placeholder="000000" style="text-align:center;font-size:18px;letter-spacing:6px;font-family:monospace">
+    <div id="pin-error" class="error small" style="margin-top:8px;display:none"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button id="pin-cancel" class="theme-toggle" style="flex:1;width:auto;border-radius:6px;height:36px;font-size:13px;font-weight:600">Cancelar</button>
+      <button id="pin-confirm" class="theme-toggle" style="flex:1;width:auto;border-radius:6px;height:36px;font-size:13px;font-weight:600;background:var(--accent);color:#fff;border:none">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+  <script src="{{ url_for('static', filename='js/maintenance.js') }}"></script>
+</body>
+</html>

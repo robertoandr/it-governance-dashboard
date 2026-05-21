@@ -1,0 +1,208 @@
+:root {
+  --bg-primary: #0f1419;
+  --bg-secondary: #1a2030;
+  --bg-tertiary: #232b3d;
+  --bg-hover: #2d3550;
+  --border: #2a3346;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --shadow: 0 4px 16px rgba(0,0,0,.35);
+  --radius: 10px;
+  --sidebar-w: 260px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-header {
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-icon { font-size: 28px; }
+.brand-text strong { display: block; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+.brand-text small {
+  display: block; font-size: 11px; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 8px; }
+
+.nav-loading { padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.nav-group-label {
+  padding: 12px 12px 6px; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-muted); font-weight: 600;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 6px;
+  color: var(--text-primary); text-decoration: none;
+  margin: 2px 0; font-size: 13.5px;
+  transition: background 0.15s;
+}
+
+.nav-item:hover { background: var(--bg-hover); }
+.nav-item.active { background: var(--accent); color: #fff; font-weight: 500; }
+.nav-item.planned { color: var(--text-muted); cursor: not-allowed; }
+.nav-item.planned:hover { background: transparent; }
+
+.nav-item .nav-icon { font-size: 16px; width: 22px; text-align: center; }
+.nav-item .nav-label { flex: 1; }
+.nav-item .nav-badge {
+  font-size: 10px; background: var(--bg-tertiary);
+  padding: 2px 8px; border-radius: 10px; color: var(--text-secondary);
+}
+.nav-item.planned .nav-badge { background: transparent; border: 1px solid var(--border); }
+
+.sidebar-footer { padding: 12px; border-top: 1px solid var(--border); font-size: 12px; }
+
+.search-trigger {
+  width: 100%; padding: 8px 10px;
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-secondary);
+  text-align: left; cursor: not-allowed; font-size: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.search-trigger kbd {
+  background: var(--bg-primary); padding: 1px 6px;
+  border-radius: 3px; font-size: 10px; border: 1px solid var(--border);
+}
+
+.refresh-info { color: var(--text-muted); text-align: center; }
+
+.main-content { display: flex; flex-direction: column; }
+
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 24px; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+
+.topbar-left { display: flex; align-items: center; gap: 14px; }
+
+.sidebar-toggle {
+  background: transparent; border: none; color: var(--text-primary);
+  font-size: 20px; cursor: pointer; display: none;
+}
+
+.page-title { margin: 0; font-size: 18px; font-weight: 600; }
+
+.topbar-right {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 12px; color: var(--text-secondary);
+}
+
+.env-badge {
+  background: var(--accent); color: #fff;
+  padding: 3px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 600;
+}
+
+.content-area { padding: 24px; flex: 1; }
+
+.section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.section-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+
+.counter {
+  background: var(--bg-tertiary); color: var(--text-secondary);
+  padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 500;
+}
+
+.cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.domain-card {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+  text-decoration: none; color: var(--text-primary);
+  transition: all 0.2s;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.domain-card.active:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.domain-card.planned { opacity: 0.6; cursor: not-allowed; }
+
+.card-top { display: flex; justify-content: space-between; align-items: center; }
+.card-icon { font-size: 28px; }
+
+.card-status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; }
+.sla-ok { background: rgba(63,185,80,.15); color: var(--success); }
+.sla-warn { background: rgba(210,153,34,.15); color: var(--warning); }
+.sla-planned { background: var(--bg-tertiary); color: var(--text-muted); }
+
+.domain-card h3 { margin: 0; font-size: 16px; font-weight: 600; }
+
+.card-desc { margin: 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.4; }
+
+.card-meta {
+  display: flex; justify-content: space-between;
+  font-size: 11.5px; color: var(--text-muted);
+  margin-top: 6px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.loading-state, .error-state {
+  text-align: center; padding: 60px 20px; color: var(--text-secondary);
+}
+
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; margin: 0 auto 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed; left: -100%; width: 80%;
+    z-index: 100; transition: left 0.3s;
+  }
+  .sidebar.open { left: 0; }
+  .sidebar-toggle { display: block; }
+}

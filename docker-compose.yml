@@ -1,0 +1,23 @@
+services:
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: itgov-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-ChangeMe!2026}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_URL=http://172.29.2.11:8086
+      - INFLUX_ORG=grupogadens
+      - INFLUX_BUCKET=governanca-m365
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

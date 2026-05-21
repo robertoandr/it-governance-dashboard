@@ -1,0 +1,359 @@
+"""
+conftest.py — Fixtures compartilhadas pytest
+
+Estratégia:
+- Isolamento total: cada teste tem seus próprios state/history files
+- monkeypatch dos paths hardcoded no maintenance_service
+- OPS_PIN definido só pro escopo dos testes
+"""
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+# 🛠️ Garantir que /opt/it-gov-dashboard está no PYTHONPATH
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 🔐 OPS_PIN: setar ANTES de qualquer import dos módulos
+# ─────────────────────────────────────────────────────────────────────
+os.environ["OPS_PIN"] = "TEST_PIN_1234"
+
+
+@pytest.fixture
+def ops_pin():
+    """Retorna o PIN configurado pra testes."""
+    return "TEST_PIN_1234"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 🧪 Isolamento de state: cada teste roda em diretório temporário
+# ─────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def isolated_state(tmp_path, monkeypatch):
+    """
+    Redireciona _STATE_FILE e _HISTORY_FILE pro tmp_path do pytest.
+    Garante que testes NUNCA poluem o estado real de produção.
+    """
+    from services import maintenance_service as svc
+
+    state_file = tmp_path / "manual_maintenance.json"
+    history_file = tmp_path / "maintenance_history.jsonl"
+
+    monkeypatch.setattr(svc, "_STATE_FILE", state_file)
+    monkeypatch.setattr(svc, "_HISTORY_FILE", history_file)
+
+    yield {
+        "state_file": state_file,
+        "history_file": history_file,
+        "svc": svc,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 🌐 Flask test client (com state isolado)
+# ─────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def client(isolated_state):
+    """
+    Flask test client com state isolado.
+    Importa app DEPOIS de configurar o env (OPS_PIN).
+    """
+    from app import app as flask_app
+
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        yield c
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 🎬 Helper: pré-popular state com hosts em manutenção
+# ─────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def populated_state(isolated_state):
+    """Estado com 3 hosts pré-marcados pra testes."""
+    svc = isolated_state["svc"]
+    svc.mark(
+        hosts=["CAM-8A-35", "CAM-8A-36", "SRV-CORE-01"],
+        operator="test_setup",
+        reason="Fixture populated_state",
+        domain="cftv",
+    )
+    return isolated_state
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 🏛️ FIXTURES — GOVERNANCE
+# ═══════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def fake_owners_yaml(tmp_path):
+    """
+    Cria um owners.yaml temporário com estrutura fiel à produção.
+    Retorna o Path do arquivo criado.
+    """
+    yaml_content = """
+version: "1.0"
+last_updated: "2026-05-19"
+
+organization:
+  name: "Test Org"
+  short_name: "TEST"
+  dashboard_title: "Dashboard de Teste"
+
+domains:
+  m365:
+    name: "Microsoft 365"
+    icon: "🟢"
+    short_desc: "Cloud e identidade"
+    owner:
+      team: "TI Cloud"
+      lead: "Tester"
+      email: "test@test.com"
+    sla:
+      target: 99.5
+    status: "active"
+    route: "/m365"
+    order: 10
+
+  cftv:
+    name: "CFTV"
+    icon: "🎥"
+    short_desc: "Vigilância"
+    owner:
+      team: "TI Infra"
+      lead: "Tester"
+      email: "test@test.com"
+    sla:
+      target: 95.0
+    status: "active"
+    route: "/cftv"
+    order: 20
+
+  rede:
+    name: "Rede"
+    icon: "🌐"
+    short_desc: "Switches e wifi"
+    status: "planned"
+    eta: "2026-Q3"
+    order: 30
+
+  backup:
+    name: "Backup"
+    icon: "💾"
+    short_desc: "Jobs e DR"
+    status: "planned"
+    eta: "2026-Q4"
+    order: 50
+"""
+    yaml_file = tmp_path / "owners.yaml"
+    yaml_file.write_text(yaml_content, encoding="utf-8")
+    return yaml_file
+
+
+@pytest.fixture
+def gov_service(fake_owners_yaml, monkeypatch):
+    """
+    Retorna o módulo governance_service com:
+      - _OWNERS_FILE redirecionado pro tmp
+      - cache global resetado (sem vazamento entre testes!)
+    """
+    import importlib
+    import services.governance_service as gs
+    importlib.reload(gs)  # 🔥 garante cache limpo
+
+    # Redireciona o arquivo
+    monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
+
+    # Reset explícito do cache (defensivo)
+    gs._yaml_cache["data"] = None
+    gs._yaml_cache["loaded_at"] = 0.0
+    gs._yaml_cache["mtime"] = 0.0
+
+    yield gs
+
+    # Cleanup pós-teste
+    gs._yaml_cache["data"] = None
+
+
+@pytest.fixture
+def fake_cache_runtime():
+    """Mock de _cache global (DASHBOARD_CACHE) com dados típicos."""
+    return {
+        "cftv": {"up_pct": 97.3, "total": 100, "up": 97, "down": 3},
+        "mfa": {"pct": 88.5},
+        "service_health": [
+            {"service": "Exchange", "status": "serviceOperational"},
+            {"service": "Teams", "status": "serviceOperational"},
+        ],
+    }
+
+
+@pytest.fixture
+def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
+    """
+    Cliente Flask de teste com:
+      - governance_bp registrado
+      - owners.yaml temporário
+      - DASHBOARD_CACHE injetado em app.config
+    """
+    import importlib
+    from flask import Flask
+    import services.governance_service as gs
+    importlib.reload(gs)
+
+    monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
+    gs._yaml_cache["data"] = None
+    gs._yaml_cache["loaded_at"] = 0.0
+    gs._yaml_cache["mtime"] = 0.0
+
+    # Reimporta route APÓS reload do service
+    import routes.governance as gov_routes
+    importlib.reload(gov_routes)
+
+    app = Flask(__name__)
+    app.config["DASHBOARD_CACHE"] = fake_cache_runtime
+    app.register_blueprint(gov_routes.governance_bp)
+    app.testing = True
+
+    return app.test_client()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 🏛️ FIXTURES — GOVERNANCE
+# ═══════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def fake_owners_yaml(tmp_path):
+    """
+    Cria um owners.yaml temporário com estrutura fiel à produção.
+    Retorna o Path do arquivo criado.
+    """
+    yaml_content = """
+version: "1.0"
+last_updated: "2026-05-19"
+
+organization:
+  name: "Test Org"
+  short_name: "TEST"
+  dashboard_title: "Dashboard de Teste"
+
+domains:
+  m365:
+    name: "Microsoft 365"
+    icon: "🟢"
+    short_desc: "Cloud e identidade"
+    owner:
+      team: "TI Cloud"
+      lead: "Tester"
+      email: "test@test.com"
+    sla:
+      target: 99.5
+    status: "active"
+    route: "/m365"
+    order: 10
+
+  cftv:
+    name: "CFTV"
+    icon: "🎥"
+    short_desc: "Vigilância"
+    owner:
+      team: "TI Infra"
+      lead: "Tester"
+      email: "test@test.com"
+    sla:
+      target: 95.0
+    status: "active"
+    route: "/cftv"
+    order: 20
+
+  rede:
+    name: "Rede"
+    icon: "🌐"
+    short_desc: "Switches e wifi"
+    status: "planned"
+    eta: "2026-Q3"
+    order: 30
+
+  backup:
+    name: "Backup"
+    icon: "💾"
+    short_desc: "Jobs e DR"
+    status: "planned"
+    eta: "2026-Q4"
+    order: 50
+"""
+    yaml_file = tmp_path / "owners.yaml"
+    yaml_file.write_text(yaml_content, encoding="utf-8")
+    return yaml_file
+
+
+@pytest.fixture
+def gov_service(fake_owners_yaml, monkeypatch):
+    """
+    Retorna o módulo governance_service com:
+      - _OWNERS_FILE redirecionado pro tmp
+      - cache global resetado (sem vazamento entre testes!)
+    """
+    import importlib
+    import services.governance_service as gs
+    importlib.reload(gs)  # 🔥 garante cache limpo
+
+    # Redireciona o arquivo
+    monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
+
+    # Reset explícito do cache (defensivo)
+    gs._yaml_cache["data"] = None
+    gs._yaml_cache["loaded_at"] = 0.0
+    gs._yaml_cache["mtime"] = 0.0
+
+    yield gs
+
+    # Cleanup pós-teste
+    gs._yaml_cache["data"] = None
+
+
+@pytest.fixture
+def fake_cache_runtime():
+    """Mock de _cache global (DASHBOARD_CACHE) com dados típicos."""
+    return {
+        "cftv": {"up_pct": 97.3, "total": 100, "up": 97, "down": 3},
+        "mfa": {"pct": 88.5},
+        "service_health": [
+            {"service": "Exchange", "status": "serviceOperational"},
+            {"service": "Teams", "status": "serviceOperational"},
+        ],
+    }
+
+
+@pytest.fixture
+def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
+    """
+    Cliente Flask de teste com:
+      - governance_bp registrado
+      - owners.yaml temporário
+      - DASHBOARD_CACHE injetado em app.config
+    """
+    import importlib
+    from flask import Flask
+    import services.governance_service as gs
+    importlib.reload(gs)
+
+    monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
+    gs._yaml_cache["data"] = None
+    gs._yaml_cache["loaded_at"] = 0.0
+    gs._yaml_cache["mtime"] = 0.0
+
+    # Reimporta route APÓS reload do service
+    import routes.governance as gov_routes
+    importlib.reload(gov_routes)
+
+    app = Flask(__name__)
+    app.config["DASHBOARD_CACHE"] = fake_cache_runtime
+    app.register_blueprint(gov_routes.governance_bp)
+    app.testing = True
+
+    return app.test_client()

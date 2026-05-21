@@ -1,0 +1,136 @@
+{
+  "loja": "Centro",
+  "nvr_parent": "nvr-centro-01",
+  "nvr_parent_id": "10790",
+  "total": 18,
+  "criados": [
+    {
+      "host": "cam-loja-d01",
+      "id": "10791",
+      "ip": "172.29.11.151",
+      "canal": "D1",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d02",
+      "id": "10792",
+      "ip": "172.29.11.5",
+      "canal": "D2",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d03",
+      "id": "10793",
+      "ip": "172.29.11.7",
+      "canal": "D3",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d04",
+      "id": "10794",
+      "ip": "172.29.11.6",
+      "canal": "D4",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d05",
+      "id": "10795",
+      "ip": "172.29.11.3",
+      "canal": "D5",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d06",
+      "id": "10796",
+      "ip": "172.29.11.2",
+      "canal": "D6",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d07",
+      "id": "10797",
+      "ip": "172.29.11.4",
+      "canal": "D7",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d08",
+      "id": "10798",
+      "ip": "172.29.11.12",
+      "canal": "D8",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d09",
+      "id": "10799",
+      "ip": "172.29.11.150",
+      "canal": "D9",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d10",
+      "id": "10800",
+      "ip": "172.29.11.8",
+      "canal": "D10",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d11",
+      "id": "10801",
+      "ip": "172.29.11.13",
+      "canal": "D11",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d12",
+      "id": "10802",
+      "ip": "172.29.11.11",
+      "canal": "D12",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d13",
+      "id": "10803",
+      "ip": "172.29.11.9",
+      "canal": "D13",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d14",
+      "id": "10804",
+      "ip": "172.29.11.15",
+      "canal": "D14",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d15",
+      "id": "10805",
+      "ip": "192.168.1.124",
+      "canal": "D15",
+      "ip_status": "fora_da_rede"
+    },
+    {
+      "host": "cam-loja-d16",
+      "id": "10806",
+      "ip": "172.29.11.10",
+      "canal": "D16",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d17",
+      "id": "10807",
+      "ip": "172.29.11.14",
+      "canal": "D17",
+      "ip_status": "rede_correta"
+    },
+    {
+      "host": "cam-loja-d18",
+      "id": "10808",
+      "ip": "172.29.11.148",
+      "canal": "D18",
+      "ip_status": "rede_correta"
+    }
+  ],
+  "ja_existentes": [],
+  "erros": []
+}

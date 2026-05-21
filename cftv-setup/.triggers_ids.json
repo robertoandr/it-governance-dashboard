@@ -1,0 +1,298 @@
+{
+  "criadas": [
+    {
+      "id": "25706",
+      "desc": "[CFTV-NVR] nvr-centro-01 INDISPONÍVEL — perda total de gravação"
+    },
+    {
+      "id": "25707",
+      "desc": "[CFTV-CAM] cam-loja-d01 instável (down há 2min)"
+    },
+    {
+      "id": "25708",
+      "desc": "[CFTV-CAM] cam-loja-d01 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25709",
+      "desc": "[CFTV-CAM] cam-loja-d01 latência alta (>5ms)"
+    },
+    {
+      "id": "25710",
+      "desc": "[CFTV-CAM] cam-loja-d01 packet loss >10%"
+    },
+    {
+      "id": "25711",
+      "desc": "[CFTV-CAM] cam-loja-d02 instável (down há 2min)"
+    },
+    {
+      "id": "25712",
+      "desc": "[CFTV-CAM] cam-loja-d02 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25713",
+      "desc": "[CFTV-CAM] cam-loja-d02 latência alta (>5ms)"
+    },
+    {
+      "id": "25714",
+      "desc": "[CFTV-CAM] cam-loja-d02 packet loss >10%"
+    },
+    {
+      "id": "25715",
+      "desc": "[CFTV-CAM] cam-loja-d03 instável (down há 2min)"
+    },
+    {
+      "id": "25716",
+      "desc": "[CFTV-CAM] cam-loja-d03 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25717",
+      "desc": "[CFTV-CAM] cam-loja-d03 latência alta (>5ms)"
+    },
+    {
+      "id": "25718",
+      "desc": "[CFTV-CAM] cam-loja-d03 packet loss >10%"
+    },
+    {
+      "id": "25719",
+      "desc": "[CFTV-CAM] cam-loja-d04 instável (down há 2min)"
+    },
+    {
+      "id": "25720",
+      "desc": "[CFTV-CAM] cam-loja-d04 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25721",
+      "desc": "[CFTV-CAM] cam-loja-d04 latência alta (>5ms)"
+    },
+    {
+      "id": "25722",
+      "desc": "[CFTV-CAM] cam-loja-d04 packet loss >10%"
+    },
+    {
+      "id": "25723",
+      "desc": "[CFTV-CAM] cam-loja-d05 instável (down há 2min)"
+    },
+    {
+      "id": "25724",
+      "desc": "[CFTV-CAM] cam-loja-d05 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25725",
+      "desc": "[CFTV-CAM] cam-loja-d05 latência alta (>5ms)"
+    },
+    {
+      "id": "25726",
+      "desc": "[CFTV-CAM] cam-loja-d05 packet loss >10%"
+    },
+    {
+      "id": "25727",
+      "desc": "[CFTV-CAM] cam-loja-d06 instável (down há 2min)"
+    },
+    {
+      "id": "25728",
+      "desc": "[CFTV-CAM] cam-loja-d06 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25729",
+      "desc": "[CFTV-CAM] cam-loja-d06 latência alta (>5ms)"
+    },
+    {
+      "id": "25730",
+      "desc": "[CFTV-CAM] cam-loja-d06 packet loss >10%"
+    },
+    {
+      "id": "25731",
+      "desc": "[CFTV-CAM] cam-loja-d07 instável (down há 2min)"
+    },
+    {
+      "id": "25732",
+      "desc": "[CFTV-CAM] cam-loja-d07 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25733",
+      "desc": "[CFTV-CAM] cam-loja-d07 latência alta (>5ms)"
+    },
+    {
+      "id": "25734",
+      "desc": "[CFTV-CAM] cam-loja-d07 packet loss >10%"
+    },
+    {
+      "id": "25735",
+      "desc": "[CFTV-CAM] cam-loja-d08 instável (down há 2min)"
+    },
+    {
+      "id": "25736",
+      "desc": "[CFTV-CAM] cam-loja-d08 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25737",
+      "desc": "[CFTV-CAM] cam-loja-d08 latência alta (>5ms)"
+    },
+    {
+      "id": "25738",
+      "desc": "[CFTV-CAM] cam-loja-d08 packet loss >10%"
+    },
+    {
+      "id": "25739",
+      "desc": "[CFTV-CAM] cam-loja-d09 instável (down há 2min)"
+    },
+    {
+      "id": "25740",
+      "desc": "[CFTV-CAM] cam-loja-d09 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25741",
+      "desc": "[CFTV-CAM] cam-loja-d09 latência alta (>5ms)"
+    },
+    {
+      "id": "25742",
+      "desc": "[CFTV-CAM] cam-loja-d09 packet loss >10%"
+    },
+    {
+      "id": "25743",
+      "desc": "[CFTV-CAM] cam-loja-d10 instável (down há 2min)"
+    },
+    {
+      "id": "25744",
+      "desc": "[CFTV-CAM] cam-loja-d10 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25745",
+      "desc": "[CFTV-CAM] cam-loja-d10 latência alta (>5ms)"
+    },
+    {
+      "id": "25746",
+      "desc": "[CFTV-CAM] cam-loja-d10 packet loss >10%"
+    },
+    {
+      "id": "25747",
+      "desc": "[CFTV-CAM] cam-loja-d11 instável (down há 2min)"
+    },
+    {
+      "id": "25748",
+      "desc": "[CFTV-CAM] cam-loja-d11 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25749",
+      "desc": "[CFTV-CAM] cam-loja-d11 latência alta (>5ms)"
+    },
+    {
+      "id": "25750",
+      "desc": "[CFTV-CAM] cam-loja-d11 packet loss >10%"
+    },
+    {
+      "id": "25751",
+      "desc": "[CFTV-CAM] cam-loja-d12 instável (down há 2min)"
+    },
+    {
+      "id": "25752",
+      "desc": "[CFTV-CAM] cam-loja-d12 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25753",
+      "desc": "[CFTV-CAM] cam-loja-d12 latência alta (>5ms)"
+    },
+    {
+      "id": "25754",
+      "desc": "[CFTV-CAM] cam-loja-d12 packet loss >10%"
+    },
+    {
+      "id": "25755",
+      "desc": "[CFTV-CAM] cam-loja-d13 instável (down há 2min)"
+    },
+    {
+      "id": "25756",
+      "desc": "[CFTV-CAM] cam-loja-d13 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25757",
+      "desc": "[CFTV-CAM] cam-loja-d13 latência alta (>5ms)"
+    },
+    {
+      "id": "25758",
+      "desc": "[CFTV-CAM] cam-loja-d13 packet loss >10%"
+    },
+    {
+      "id": "25759",
+      "desc": "[CFTV-CAM] cam-loja-d14 instável (down há 2min)"
+    },
+    {
+      "id": "25760",
+      "desc": "[CFTV-CAM] cam-loja-d14 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25761",
+      "desc": "[CFTV-CAM] cam-loja-d14 latência alta (>5ms)"
+    },
+    {
+      "id": "25762",
+      "desc": "[CFTV-CAM] cam-loja-d14 packet loss >10%"
+    },
+    {
+      "id": "25763",
+      "desc": "[CFTV-CAM] cam-loja-d15 instável (down há 2min)"
+    },
+    {
+      "id": "25764",
+      "desc": "[CFTV-CAM] cam-loja-d15 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25765",
+      "desc": "[CFTV-CAM] cam-loja-d15 latência alta (>5ms)"
+    },
+    {
+      "id": "25766",
+      "desc": "[CFTV-CAM] cam-loja-d15 packet loss >10%"
+    },
+    {
+      "id": "25767",
+      "desc": "[CFTV-CAM] cam-loja-d16 instável (down há 2min)"
+    },
+    {
+      "id": "25768",
+      "desc": "[CFTV-CAM] cam-loja-d16 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25769",
+      "desc": "[CFTV-CAM] cam-loja-d16 latência alta (>5ms)"
+    },
+    {
+      "id": "25770",
+      "desc": "[CFTV-CAM] cam-loja-d16 packet loss >10%"
+    },
+    {
+      "id": "25771",
+      "desc": "[CFTV-CAM] cam-loja-d17 instável (down há 2min)"
+    },
+    {
+      "id": "25772",
+      "desc": "[CFTV-CAM] cam-loja-d17 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25773",
+      "desc": "[CFTV-CAM] cam-loja-d17 latência alta (>5ms)"
+    },
+    {
+      "id": "25774",
+      "desc": "[CFTV-CAM] cam-loja-d17 packet loss >10%"
+    },
+    {
+      "id": "25775",
+      "desc": "[CFTV-CAM] cam-loja-d18 instável (down há 2min)"
+    },
+    {
+      "id": "25776",
+      "desc": "[CFTV-CAM] cam-loja-d18 OFFLINE (down há 5min)"
+    },
+    {
+      "id": "25777",
+      "desc": "[CFTV-CAM] cam-loja-d18 latência alta (>5ms)"
+    },
+    {
+      "id": "25778",
+      "desc": "[CFTV-CAM] cam-loja-d18 packet loss >10%"
+    }
+  ],
+  "ja_existiam": [],
+  "erros": []
+}

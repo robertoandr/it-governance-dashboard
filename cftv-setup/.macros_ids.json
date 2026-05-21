@@ -1,0 +1,41 @@
+{
+  "criados": [
+    {
+      "macro": "{$CFTV.CAM.DOWN.WARN}",
+      "id": "3"
+    },
+    {
+      "macro": "{$CFTV.CAM.DOWN.HIGH}",
+      "id": "4"
+    },
+    {
+      "macro": "{$CFTV.NVR.DOWN.DISASTER}",
+      "id": "5"
+    },
+    {
+      "macro": "{$CFTV.PING.LOSS.WARN}",
+      "id": "6"
+    },
+    {
+      "macro": "{$CFTV.PING.LOSS.HIGH}",
+      "id": "7"
+    },
+    {
+      "macro": "{$CFTV.PING.LATENCY.WARN}",
+      "id": "8"
+    },
+    {
+      "macro": "{$CFTV.PING.LATENCY.HIGH}",
+      "id": "9"
+    },
+    {
+      "macro": "{$CFTV.MASS.DOWN.THRESHOLD}",
+      "id": "10"
+    },
+    {
+      "macro": "{$CFTV.BUSINESS.HOURS}",
+      "id": "11"
+    }
+  ],
+  "atualizados": []
+}

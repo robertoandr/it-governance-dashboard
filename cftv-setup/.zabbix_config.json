@@ -1,0 +1,9 @@
+{
+  "api_url": "https://172.29.2.11/zabbix/api_jsonrpc.php",
+  "user": "Admin",
+  "password": "zabbix",
+  "zabbix_version": "7.0.26",
+  "verify_ssl": false,
+  "use_https": true,
+  "_comment": "Gerado manualmente - NÃO COMMITAR"
+}

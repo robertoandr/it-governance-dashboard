@@ -1,0 +1,13 @@
+{
+  "host_id": "10790",
+  "host": "nvr-centro-01",
+  "name": "NVR Centro - Hikvision DS-7632NXI-K2",
+  "ip": "172.29.11.20",
+  "group_ids": [
+    "47",
+    "52"
+  ],
+  "template_ids": [
+    "10564"
+  ]
+}
