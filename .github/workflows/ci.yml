@@ -114,6 +114,14 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests with coverage
+        env:
+          INFLUX_URL: http://localhost:8086
+          INFLUX_TOKEN: ci-fake-token-not-real
+          INFLUX_ORG: ci-test-org
+          INFLUX_BUCKET: ci-test-bucket
+          SECRET_KEY: ci-test-secret-key
+          OPS_PIN: TEST_PIN_1234
+          FLASK_ENV: testing
         run: |
           pytest --cov=. \
                  --cov-report=xml \

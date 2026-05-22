@@ -22,6 +22,18 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # ─────────────────────────────────────────────────────────────────────
 os.environ["OPS_PIN"] = "TEST_PIN_1234"
 
+# ─────────────────────────────────────────────────────────────────────
+# 🧪 Variáveis de infra MOCK — evita falha no import de config.py
+# Nenhum teste deve conectar de verdade ao InfluxDB/AD/M365.
+# Estes valores existem APENAS para satisfazer _env() em config.py.
+# ─────────────────────────────────────────────────────────────────────
+os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_ORG", "test-org")
+os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+os.environ.setdefault("FLASK_ENV", "testing")
+
 
 @pytest.fixture
 def ops_pin():
