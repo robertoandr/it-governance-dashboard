@@ -17,15 +17,14 @@
 ═══════════════════════════════════════════════════════════════════
 """
 import sys
-import os
-import json
 from pathlib import Path
 
 sys.path.insert(0, "/opt/it-gov-dashboard")
 
 try:
-    import config
     import requests
+
+    import config
 except ImportError as e:
     sys.exit(f"❌ Falha ao importar dependências: {e}\n"
              f"   Verifique se /opt/it-gov-dashboard/config.py existe.")
@@ -187,7 +186,7 @@ def check_existing(token):
 def import_template(token):
     step("4/5", "Importando template no Zabbix")
 
-    with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
+    with open(TEMPLATE_FILE, encoding="utf-8") as f:
         yaml_content = f.read()
 
     print(f"   {C.DIM}Enviando {len(yaml_content):,} bytes para API...{C.END}")
@@ -271,7 +270,7 @@ def print_summary(main_template):
 
     print(f"\n  🎯 {C.BOLD}TEMPLATE PRINCIPAL:{C.END}")
     print(f"     ID:    {C.OK}{C.BOLD}{tid}{C.END}")
-    print(f"     Nome:  Hikvision camera by HTTP")
+    print("     Nome:  Hikvision camera by HTTP")
 
     print(f"\n  📌 {C.BOLD}PRÓXIMOS PASSOS:{C.END}\n")
     print(f"     {C.DIM}# Salvar o ID para próxima fase:{C.END}")
@@ -345,15 +344,13 @@ if __name__ == "__main__":
 ═══════════════════════════════════════════════════════════════════
 """
 import sys
-import os
-import json
-from pathlib import Path
 
 sys.path.insert(0, "/opt/it-gov-dashboard")
 
 try:
-    import config
     import requests
+
+    import config
 except ImportError as e:
     sys.exit(f"❌ Falha ao importar dependências: {e}\n"
              f"   Verifique se /opt/it-gov-dashboard/config.py existe.")
@@ -515,7 +512,7 @@ def check_existing(token):
 def import_template(token):
     step("4/5", "Importando template no Zabbix")
 
-    with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
+    with open(TEMPLATE_FILE, encoding="utf-8") as f:
         yaml_content = f.read()
 
     print(f"   {C.DIM}Enviando {len(yaml_content):,} bytes para API...{C.END}")
@@ -599,7 +596,7 @@ def print_summary(main_template):
 
     print(f"\n  🎯 {C.BOLD}TEMPLATE PRINCIPAL:{C.END}")
     print(f"     ID:    {C.OK}{C.BOLD}{tid}{C.END}")
-    print(f"     Nome:  Hikvision camera by HTTP")
+    print("     Nome:  Hikvision camera by HTTP")
 
     print(f"\n  📌 {C.BOLD}PRÓXIMOS PASSOS:{C.END}\n")
     print(f"     {C.DIM}# Salvar o ID para próxima fase:{C.END}")

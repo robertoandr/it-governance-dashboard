@@ -4,7 +4,9 @@ Coletor Zabbix via JSON-RPC API.
   - get_active_triggers, get_m365_items, acknowledge_event (Sprint 1)
 """
 import logging
+
 import requests
+
 import config
 
 log = logging.getLogger(__name__)
@@ -71,7 +73,7 @@ class ZabbixCollector:
             "limit": limit, "recent": True,
         })
         if not problems:
-            return {"by_severity": {l: 0 for l in SEVERITY_LABELS.values()}, "items": []}
+            return {"by_severity": dict.fromkeys(SEVERITY_LABELS.values(), 0), "items": []}
         trigger_ids = list({p["objectid"] for p in problems})
         triggers = self._call("trigger.get", {
             "output": ["triggerid"],
@@ -83,7 +85,7 @@ class ZabbixCollector:
             hosts_list = t.get("hosts", [])
             if hosts_list:
                 t2h[t["triggerid"]] = hosts_list[0].get("name") or hosts_list[0].get("host", "?")
-        by_sev = {l: 0 for l in SEVERITY_LABELS.values()}
+        by_sev = dict.fromkeys(SEVERITY_LABELS.values(), 0)
         rows = []
         for p in problems:
             sev = SEVERITY_LABELS.get(str(p.get("severity", "0")), "not_classified")

@@ -6,7 +6,6 @@ Cobre:
   • GET /api/governance/organization
   • GET /api/governance/domain/<key>
 """
-import pytest
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -29,19 +29,19 @@ os.environ["OPS_PIN"] = "TEST_PIN_1234"
 # ─────────────────────────────────────────────────────────────────────
 # InfluxDB (obrigatórias)
 os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
-os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")
 os.environ.setdefault("INFLUX_ORG", "test-org")
 os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
 
 # Zabbix (obrigatórias)
 os.environ.setdefault("ZABBIX_URL", "http://localhost/zabbix/api_jsonrpc.php")
 os.environ.setdefault("ZABBIX_USER", "test-user")
-os.environ.setdefault("ZABBIX_PASSWORD", "test-password-not-real")  # noqa: S105
+os.environ.setdefault("ZABBIX_PASSWORD", "test-password-not-real")
 os.environ.setdefault("ZABBIX_FRONT_URL", "http://localhost/zabbix")
 
 # Flask (boa prática)
 os.environ.setdefault("FLASK_ENV", "testing")
-os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 
 # ─────────────────────────────────────────────────────────────────────
 # 🧪 Variáveis de infra MOCK — evita falha no import de config.py
@@ -49,10 +49,10 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
 # Estes valores existem APENAS para satisfazer _env() em config.py.
 # ─────────────────────────────────────────────────────────────────────
 os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
-os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")
 os.environ.setdefault("INFLUX_ORG", "test-org")
 os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
-os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 os.environ.setdefault("FLASK_ENV", "testing")
 
 
@@ -195,6 +195,7 @@ def gov_service(fake_owners_yaml, monkeypatch):
       - cache global resetado (sem vazamento entre testes!)
     """
     import importlib
+
     import services.governance_service as gs
     importlib.reload(gs)  # 🔥 garante cache limpo
 
@@ -234,7 +235,9 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
       - DASHBOARD_CACHE injetado em app.config
     """
     import importlib
+
     from flask import Flask
+
     import services.governance_service as gs
     importlib.reload(gs)
 
@@ -332,6 +335,7 @@ def gov_service(fake_owners_yaml, monkeypatch):
       - cache global resetado (sem vazamento entre testes!)
     """
     import importlib
+
     import services.governance_service as gs
     importlib.reload(gs)  # 🔥 garante cache limpo
 
@@ -371,7 +375,9 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
       - DASHBOARD_CACHE injetado em app.config
     """
     import importlib
+
     from flask import Flask
+
     import services.governance_service as gs
     importlib.reload(gs)
 

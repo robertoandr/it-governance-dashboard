@@ -5,19 +5,21 @@ Flask + thread de refresh + Score de Saúde Geral.
 import logging
 import threading
 import time
-from datetime import datetime, timezone
-from flask import Flask, render_template, jsonify, request
+from datetime import UTC, datetime
+
+from flask import Flask, jsonify, render_template, request
 
 import config
-from collectors.zabbix import ZabbixCollector
-from collectors.influx import InfluxCollector
-from collectors.graph import GraphCollector
 from collectors.grafana import GrafanaCollector
+from collectors.graph import GraphCollector
+from collectors.influx import InfluxCollector
 from collectors.ldap_collector import LDAPCollector
+from collectors.zabbix import ZabbixCollector
 
 # Fase 5: Blueprints de Governança
 from routes.governance import governance_bp
 from routes.maintenance import maintenance_bp
+
 # Sprint 6c: integração de manutenção manual com pipeline Zabbix
 from services import maintenance_service as _maint
 
@@ -148,7 +150,7 @@ def _refresh_once():
 
     merged = {**_cache, **new_data}
     new_data["health_score"] = _compute_health_score(merged)
-    new_data["last_refresh"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    new_data["last_refresh"] = datetime.now(UTC).isoformat(timespec="seconds")
     new_data["last_error"] = "; ".join(errors) if errors else None
 
     with _cache_lock:
@@ -275,7 +277,7 @@ def api_license_edit():
     if field == "cost_brl" and old_value != value:
         history = costs[sku].setdefault("history", [])
         history.append({
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "date": datetime.now(UTC).strftime("%Y-%m-%d"),
             "cost_brl": float(old_value) if old_value else 0,
         })
         # Mantém apenas últimos 20 entries
@@ -293,7 +295,7 @@ def api_license_edit():
     log_path = Path("/opt/it-gov-dashboard/logs/finops-changes.log")
     log_path.parent.mkdir(exist_ok=True)
     with open(log_path, "a") as f:
-        f.write(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} | "
+        f.write(f"{datetime.now(UTC).isoformat(timespec='seconds')} | "
                 f"IP={request.remote_addr} | SKU={sku} | field={field} | "
                 f"old={old_value} | new={value}\n")
 

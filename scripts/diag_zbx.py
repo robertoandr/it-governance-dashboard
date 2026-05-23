@@ -1,4 +1,9 @@
-import os, requests, urllib3, json
+import json
+import os
+
+import requests
+import urllib3
+
 urllib3.disable_warnings()
 
 env_vars = {}

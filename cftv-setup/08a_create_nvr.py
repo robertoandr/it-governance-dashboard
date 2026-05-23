@@ -15,8 +15,8 @@
 import json
 import ssl
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 # ─── Configurações ──────────────────────────────────────────────
@@ -92,7 +92,7 @@ def zabbix_api(url, method, params, auth=None):
 
 # ─── Main ───────────────────────────────────────────────────────
 banner("🎥 FASE 3a — CRIAR NVR HIKVISION")
-print(f"  Projeto: Dashboard de Governança de TI — Grupo Gadens")
+print("  Projeto: Dashboard de Governança de TI — Grupo Gadens")
 print(f"  Equipamento: {NVR_DATA['vendor']} {NVR_DATA['model']}")
 print(f"  Local: Loja {NVR_DATA['loja']} ({NVR_DATA['ip']})")
 
@@ -108,7 +108,7 @@ print(f"   ✅ URL: {cfg['api_url']}")
 
 if not GROUPS_FILE.exists():
     print(f"   ❌ Mapping de grupos não encontrado: {GROUPS_FILE}")
-    print(f"      Execute primeiro: 07_create_hostgroups.py")
+    print("      Execute primeiro: 07_create_hostgroups.py")
     sys.exit(1)
 with open(GROUPS_FILE) as f:
     groups_map = json.load(f)
@@ -167,11 +167,11 @@ if existing:
     host_id = existing[0]["hostid"]
     print(f"   ⏭️  Host já existe: {NVR_DATA['host']} (ID {host_id})")
     print(f"      Nome visível: {existing[0]['name']}")
-    print(f"      Pulando criação. Use update se quiser modificar.")
+    print("      Pulando criação. Use update se quiser modificar.")
 else:
     # ─── [6/6] Criar host ──────────────────────────────────────
     print("\n[6/6] Criando host no Zabbix")
-    
+
     host_params = {
         "host": NVR_DATA["host"],
         "name": NVR_DATA["name"],
@@ -213,17 +213,17 @@ else:
             ),
         },
     }
-    
+
     result = zabbix_api(cfg["api_url"], "host.create", host_params, auth=token)
     host_id = result["hostids"][0]
-    print(f"   ✅ Host criado!")
+    print("   ✅ Host criado!")
     print(f"      ID:       {host_id}")
     print(f"      Host:     {NVR_DATA['host']}")
     print(f"      Nome:     {NVR_DATA['name']}")
     print(f"      IP:       {NVR_DATA['ip']}")
     print(f"      Grupos:   {len(group_ids)}")
     print(f"      Templates:{len(template_ids)}")
-    print(f"      Tags:     7")
+    print("      Tags:     7")
 
 # ─── Persistir ID ───────────────────────────────────────────────
 output_data = {

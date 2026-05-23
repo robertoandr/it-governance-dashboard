@@ -9,7 +9,9 @@ Pré-requisito no Grafana (uma vez):
   Depois: sudo systemctl restart grafana-server
 """
 import logging
+
 import requests
+
 import config
 
 log = logging.getLogger(__name__)

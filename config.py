@@ -4,6 +4,7 @@ Lê variáveis de ambiente do .env e expõe como constantes Python.
 """
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Carrega .env do diretório do app
@@ -14,7 +15,7 @@ load_dotenv(BASE_DIR / ".env")
 def _env(var: str, default: str | None = None, required: bool = True) -> str:
     value = os.getenv(var, default)
     if required and (value is None or value == ""):
-        raise EnvironmentError(
+        raise OSError(
             f"Variável de ambiente obrigatória não definida: {var}. "
             f"Verifique o arquivo {BASE_DIR / '.env'}"
         )

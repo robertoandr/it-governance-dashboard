@@ -4,6 +4,7 @@ Habilitado apenas quando LDAP_ENABLED=true no .env e a conta de serviço existir
 DC do domínio grupogadens.com.br: 172.29.1.246
 """
 import logging
+
 import config
 
 log = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ class LDAPCollector:
                 "note": "LDAP_ENABLED=false. Habilite após criar a conta de serviço no DC.",
             }
         try:
-            from ldap3 import Server, Connection, ALL, SUBTREE
+            from ldap3 import ALL, SUBTREE, Connection, Server
         except ImportError:
             return {"active": 0, "disabled": 0, "total": 0, "enabled": False,
                     "error": "ldap3 não instalado"}

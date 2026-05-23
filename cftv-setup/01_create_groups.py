@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Cria host groups CFTV no Zabbix via API."""
 import sys
+
 sys.path.insert(0, "/opt/it-gov-dashboard")
-import config
 import requests
+
+import config
 
 ZBX_URL = config.ZABBIX_URL
 
@@ -21,7 +23,7 @@ token = call("user.login", {
     "username": config.ZABBIX_USER,
     "password": config.ZABBIX_PASSWORD
 }, auth=None)
-print(f"✓ Login OK")
+print("✓ Login OK")
 
 groups_to_create = [
     "CFTV",

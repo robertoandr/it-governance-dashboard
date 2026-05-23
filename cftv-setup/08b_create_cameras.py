@@ -13,8 +13,8 @@
 import json
 import ssl
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 # ─── Configurações ──────────────────────────────────────────────
@@ -104,8 +104,8 @@ def classify_ip(ip):
 
 # ─── Main ───────────────────────────────────────────────────────
 banner("📹 FASE 3b — CRIAR 18 CÂMERAS IP")
-print(f"  Projeto: Dashboard de Governança de TI — Grupo Gadens")
-print(f"  Local: Loja Centro (NVR 172.29.11.20)")
+print("  Projeto: Dashboard de Governança de TI — Grupo Gadens")
+print("  Local: Loja Centro (NVR 172.29.11.20)")
 print(f"  Total a criar: {len(CAMERAS)} câmeras")
 
 # ─── [1/7] Carregar configs ────────────────────────────────────
@@ -164,7 +164,7 @@ print(f"   📊 Total câmeras:       {len(CAMERAS)}")
 print(f"   ✅ Rede correta:        {len(CAMERAS) - anomalias}")
 print(f"   ⚠️  Fora da rede:       {anomalias}")
 if anomalias:
-    print(f"   🚨 Anomalias detectadas:")
+    print("   🚨 Anomalias detectadas:")
     for ch, ip in CAMERAS:
         if not ip.startswith(EXPECTED_NETWORK):
             print(f"      • {ch}: {ip}  → tag 'ip_status: fora_da_rede'")
@@ -179,22 +179,22 @@ for idx, (canal, ip) in enumerate(CAMERAS, 1):
     canal_num = canal.replace("D", "").zfill(2)   # D1 → 01, D15 → 15
     host_tech = f"cam-loja-d{canal_num}"
     host_name = f"Câmera {canal} - Loja Centro (canal {canal})"
-    
+
     ip_status, ip_tag = classify_ip(ip)
     icon = "⚠️ " if ip_status == "warning" else "  "
-    
+
     # Verificar duplicata
     existing = zabbix_api(cfg["api_url"], "host.get", {
         "output": ["hostid", "host"],
         "filter": {"host": [host_tech]},
     }, auth=token)
-    
+
     if existing:
         hid = existing[0]["hostid"]
         print(f" {idx:2d}/18 {icon}⏭️  {host_tech:20s} {ip:15s} já existe (ID {hid})")
         resultados["ja_existentes"].append({"host": host_tech, "id": hid})
         continue
-    
+
     # Criar
     params = {
         "host": host_tech,
@@ -231,7 +231,7 @@ for idx, (canal, ip) in enumerate(CAMERAS, 1):
             ),
         },
     }
-    
+
     try:
         r = zabbix_api(cfg["api_url"], "host.create", params, auth=token)
         hid = r["hostids"][0]

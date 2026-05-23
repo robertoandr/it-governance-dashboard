@@ -8,10 +8,8 @@ Cobertura:
 - Edge cases
 - Audit log
 """
-import json
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════
 # 🟢 GRUPO 1 — Estado inicial

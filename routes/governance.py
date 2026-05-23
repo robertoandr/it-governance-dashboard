@@ -7,7 +7,8 @@ Endpoints:
   GET /api/governance/domain/<key> → detalhes de um domínio
 """
 import logging
-from flask import Blueprint, jsonify, current_app
+
+from flask import Blueprint, current_app, jsonify
 
 from services import governance_service as gs
 

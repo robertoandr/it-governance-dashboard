@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Cria os 3 DVRs no Zabbix vinculados ao Template_CFTV_Ping."""
 import sys
+
 sys.path.insert(0, "/opt/it-gov-dashboard")
-import config
 import requests
+
+import config
 
 ZBX_URL = config.ZABBIX_URL
 TEMPLATE_NAME = "Template_CFTV_Ping"

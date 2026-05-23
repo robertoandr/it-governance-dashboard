@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC
 from functools import wraps
 
 from flask import Blueprint, jsonify, request
@@ -55,7 +56,7 @@ def require_pin(fn):
                 "error": "ops_pin_not_configured",
                 "message": "Servidor sem OPS_PIN definido. Contate o admin.",
             }), 503
-        
+
         provided = _extract_pin()
         if provided != expected:
             log.warning("Tentativa de escrita com PIN inválido — IP: %s",
@@ -65,7 +66,7 @@ def require_pin(fn):
                 "error": "invalid_pin",
                 "message": "PIN inválido.",
             }), 401
-        
+
         return fn(*args, **kwargs)
     return wrapper
 
@@ -98,7 +99,7 @@ def maintenance_history():
     except (TypeError, ValueError):
         limit = 50
     limit = max(1, min(limit, 500))  # clamp 1..500
-    
+
     return jsonify({
         "ok": True,
         "limit": limit,
@@ -124,7 +125,7 @@ def mark_maintenance():
       }
     """
     data = request.get_json(silent=True) or {}
-    
+
     hosts = data.get("hosts") or []
     if isinstance(hosts, str):
         hosts = [hosts]
@@ -134,25 +135,25 @@ def mark_maintenance():
             "error": "invalid_hosts",
             "message": "Campo 'hosts' deve ser lista não-vazia.",
         }), 400
-    
+
     operator = str(data.get("operator", "")).strip()
     reason = str(data.get("reason", "")).strip()
     domain = str(data.get("domain", "cftv")).strip() or "cftv"
-    
+
     if not operator:
         return jsonify({
             "ok": False,
             "error": "missing_operator",
             "message": "Campo 'operator' é obrigatório.",
         }), 400
-    
+
     if not reason:
         return jsonify({
             "ok": False,
             "error": "missing_reason",
             "message": "Campo 'reason' é obrigatório.",
         }), 400
-    
+
     result = svc.mark(hosts=hosts, operator=operator, reason=reason, domain=domain)
     return jsonify({"ok": True, **result})
 
@@ -172,7 +173,7 @@ def clear_maintenance():
       }
     """
     data = request.get_json(silent=True) or {}
-    
+
     hosts = data.get("hosts") or []
     if isinstance(hosts, str):
         hosts = [hosts]
@@ -182,17 +183,17 @@ def clear_maintenance():
             "error": "invalid_hosts",
             "message": "Campo 'hosts' deve ser lista não-vazia.",
         }), 400
-    
+
     operator = str(data.get("operator", "")).strip()
     note = str(data.get("note", "")).strip()
-    
+
     if not operator:
         return jsonify({
             "ok": False,
             "error": "missing_operator",
             "message": "Campo 'operator' é obrigatório.",
         }), 400
-    
+
     result = svc.clear(hosts=hosts, operator=operator, note=note)
     return jsonify({"ok": True, **result})
 
@@ -207,7 +208,7 @@ def maintenance_debug():
     Health/debug endpoint — útil para troubleshooting.
     NÃO requer PIN (apenas leitura de metadados).
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
     sf = svc._STATE_FILE
     hf = svc._HISTORY_FILE
     state = svc._load_state()
@@ -218,7 +219,7 @@ def maintenance_debug():
         st = sf.stat()
         state_info["size_bytes"] = st.st_size
         state_info["mtime"] = datetime.fromtimestamp(
-            st.st_mtime, timezone.utc
+            st.st_mtime, UTC
         ).isoformat(timespec="seconds")
 
     history_info = {"path": str(hf), "exists": hf.exists()}

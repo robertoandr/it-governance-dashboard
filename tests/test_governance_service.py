@@ -8,8 +8,6 @@ Cobre:
   • get_domains_with_runtime (enriquecimento)
 """
 import time
-import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════
 # 📦 GRUPO 1 — Loading & Cache

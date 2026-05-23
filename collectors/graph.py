@@ -7,10 +7,12 @@ Incidents e Users no InfluxDB. Aqui só buscamos o que falta:
   - Licenças ativas
 """
 import json
-from pathlib import Path
 import logging
-import requests
+from pathlib import Path
+
 import msal
+import requests
+
 import config
 
 log = logging.getLogger(__name__)

@@ -8,7 +8,6 @@ Cobertura:
 - Status codes
 - Autenticação
 """
-import json
 
 
 # ═══════════════════════════════════════════════════════════════════

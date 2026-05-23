@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Cria Template_CFTV_Ping com items ICMP + triggers."""
 import sys
+
 sys.path.insert(0, "/opt/it-gov-dashboard")
-import config
 import requests
+
+import config
 
 ZBX_URL = config.ZABBIX_URL
 TEMPLATE_NAME = "Template_CFTV_Ping"
@@ -149,7 +151,7 @@ if 4 in created_triggers and 5 in created_triggers:
         print(f"  ⚠ dependência não aplicada: {e}")
 
 print()
-print(f"=== Resumo template ===")
+print("=== Resumo template ===")
 print(f"  Template ID: {template_id}")
 print(f"  Items: {len(created_items)}")
 print(f"  Triggers: {len(created_triggers)}")
