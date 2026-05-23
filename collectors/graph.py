@@ -9,6 +9,7 @@ Incidents e Users no InfluxDB. Aqui só buscamos o que falta:
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import msal

@@ -84,9 +84,7 @@ def _compute_health_score(d: dict) -> dict:
     if trs:
         crit = sum(1 for t in trs if t.get("severity_num", 0) >= 4)
         v = 100.0 * (1.0 - crit / len(trs))
-        components.append(
-            {"name": "Triggers não-críticas", "value": round(v, 1), "weight": 20, "unit": "%"}
-        )
+        components.append({"name": "Triggers não-críticas", "value": round(v, 1), "weight": 20, "unit": "%"})
         weighted += v * 20
         total_w += 20
     else:
@@ -97,9 +95,7 @@ def _compute_health_score(d: dict) -> dict:
     mfa = d.get("mfa") or {}
     if mfa.get("total", 0) > 0:
         v = float(mfa.get("pct") or 0)
-        components.append(
-            {"name": "MFA habilitada", "value": round(v, 1), "weight": 15, "unit": "%"}
-        )
+        components.append({"name": "MFA habilitada", "value": round(v, 1), "weight": 15, "unit": "%"})
         weighted += v * 15
         total_w += 15
 

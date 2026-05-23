@@ -104,11 +104,7 @@ def compute_sla_current(domain_key: str, cache: dict) -> float | None:
         sh = cache.get("service_health") or []
         # se há service_health, todos OK = 100%, qualquer issue = 95%
         sh_pct = (
-            100.0
-            if not sh
-            else (
-                100.0 if all(s.get("status") in ("serviceOperational", "ok") for s in sh) else 95.0
-            )
+            100.0 if not sh else (100.0 if all(s.get("status") in ("serviceOperational", "ok") for s in sh) else 95.0)
         )
         if mfa is None:
             return sh_pct

@@ -73,9 +73,7 @@ class TestAutenticacao:
     """Endpoints de escrita exigem PIN válido."""
 
     def test_mark_sem_pin_401(self, client):
-        r = client.post(
-            "/api/maintenance/mark", json={"hosts": ["X"], "operator": "op", "reason": "r"}
-        )
+        r = client.post("/api/maintenance/mark", json={"hosts": ["X"], "operator": "op", "reason": "r"})
         assert r.status_code == 401
         body = r.get_json()
         assert body["error"] == "invalid_pin"
