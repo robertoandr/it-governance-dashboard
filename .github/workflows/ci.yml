@@ -175,6 +175,13 @@ jobs:
         env:
           FLASK_ENV: testing
           SECRET_KEY: ci-smoke-test-key
+          INFLUX_URL: http://localhost:8086
+          INFLUX_TOKEN: ci-fake-token
+          INFLUX_ORG: ci-org
+          INFLUX_BUCKET: ci-bucket
+          ZABBIX_URL: http://localhost/api_jsonrpc.php
+          ZABBIX_USER: ci-user
+          ZABBIX_PASSWORD: ci-pass
         run: |
           python -c "import app; print('✅ App importa OK')"
           python -c "from app import app as flask_app; print(f'✅ Flask app: {flask_app.name}')"
