@@ -19,6 +19,7 @@ ENV VARS:
     ZBX_CA_BUNDLE     Caminho para CA bundle customizado (opcional)
     ZBX_TIMEOUT       Timeout em segundos (default: 10)
 """
+
 import json
 import os
 import sys
@@ -41,8 +42,7 @@ def _resolve_tls_verify():
     ca_bundle = os.getenv("ZBX_CA_BUNDLE", "").strip()
     if ca_bundle:
         if not os.path.isfile(ca_bundle):
-            print(f"⚠️  ZBX_CA_BUNDLE aponta para arquivo inexistente: {ca_bundle}",
-                  file=sys.stderr)
+            print(f"⚠️  ZBX_CA_BUNDLE aponta para arquivo inexistente: {ca_bundle}", file=sys.stderr)
             sys.exit(2)
         return ca_bundle
 
@@ -95,8 +95,14 @@ for k, v in env_vars.items():
 # Resolução de token
 # ─────────────────────────────────────────────────────────
 token = None
-for cand in ["ZABBIX_TOKEN", "ZABBIX_API_TOKEN", "ZBX_TOKEN",
-             "ZABBIX_AUTH_TOKEN", "API_TOKEN", "TOKEN"]:
+for cand in [
+    "ZABBIX_TOKEN",
+    "ZABBIX_API_TOKEN",
+    "ZBX_TOKEN",
+    "ZABBIX_AUTH_TOKEN",
+    "API_TOKEN",
+    "TOKEN",
+]:
     if env_vars.get(cand):
         token = env_vars[cand]
         print(f"\nToken encontrado em: {cand}")

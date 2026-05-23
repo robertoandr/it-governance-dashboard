@@ -8,14 +8,13 @@ Cobertura:
 - Edge cases
 - Audit log
 """
-import json
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════
 # 🟢 GRUPO 1 — Estado inicial
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestEstadoInicial:
     """Estado fresco, sem hosts."""
@@ -44,6 +43,7 @@ class TestEstadoInicial:
 # ═══════════════════════════════════════════════════════════════════
 # 🟢 GRUPO 2 — mark() — marcar hosts
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestMark:
     """Testes da função mark()."""
@@ -123,6 +123,7 @@ class TestMark:
 # 🔴 GRUPO 3 — clear() — liberar hosts
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestClear:
     """Testes da função clear()."""
 
@@ -160,6 +161,7 @@ class TestClear:
 # 🟣 GRUPO 4 — Contratos da API (Sprint 6f)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestContratos:
     """🛡️ Sprint 6f: list_active() retorna list, list_active_dict() retorna dict."""
 
@@ -170,7 +172,7 @@ class TestContratos:
         assert len(result) == 3
         for item in result:
             assert isinstance(item, dict)
-            assert "host" in item        # ← Sprint 6f: campo "host" injetado
+            assert "host" in item  # ← Sprint 6f: campo "host" injetado
             assert "marked_by" in item
             assert "reason" in item
             assert "domain" in item
@@ -196,6 +198,7 @@ class TestContratos:
 # ═══════════════════════════════════════════════════════════════════
 # 📊 GRUPO 5 — stats() e history()
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestStatsHistory:
     """Estatísticas e audit log."""
@@ -249,6 +252,7 @@ class TestStatsHistory:
 # 🛡️ GRUPO 6 — Robustez (validações Sprint 6e)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestRobustez:
     """JSON corrompido, valores inválidos, etc."""
 
@@ -276,6 +280,7 @@ class TestRobustez:
 # ═══════════════════════════════════════════════════════════════════
 # Sprint 6c: filtros que enriquecem/anotam dados do collector Zabbix
 # antes de chegarem no dashboard. Fail-open por design.
+
 
 class TestApplyFilterHosts:
     """apply_filter('hosts', ...) — summary agregado."""
@@ -314,9 +319,9 @@ class TestApplyFilterProblems:
         svc = populated_state["svc"]
         data = {
             "items": [
-                {"host": "CAM-8A-35", "severity": "high"},      # em maint
-                {"host": "CAM-8A-36", "severity": "warning"},   # em maint
-                {"host": "OUTRO-HOST", "severity": "high"},     # NÃO em maint
+                {"host": "CAM-8A-35", "severity": "high"},  # em maint
+                {"host": "CAM-8A-36", "severity": "warning"},  # em maint
+                {"host": "OUTRO-HOST", "severity": "high"},  # NÃO em maint
             ],
             "by_severity": {"high": 2, "warning": 1, "average": 0},
         }
@@ -392,7 +397,8 @@ class TestApplyFilterCFTV:
         """CFTV às vezes usa 'name' em vez de 'host'."""
         svc = populated_state["svc"]
         data = {
-            "down": 1, "maint": 0,
+            "down": 1,
+            "maint": 0,
             "down_list": [{"name": "CAM-8A-35", "subcat": "cameras"}],
             "maint_list": [],
             "by_subcat": {},

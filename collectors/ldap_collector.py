@@ -3,7 +3,9 @@ Coletor LDAP/AD.
 Habilitado apenas quando LDAP_ENABLED=true no .env e a conta de serviço existir.
 DC do domínio grupogadens.com.br: 172.29.1.246
 """
+
 import logging
+
 import config
 
 log = logging.getLogger(__name__)
@@ -20,27 +22,35 @@ class LDAPCollector:
                 "note": "LDAP_ENABLED=false. Habilite após criar a conta de serviço no DC.",
             }
         try:
-            from ldap3 import Server, Connection, ALL, SUBTREE
+            from ldap3 import ALL, SUBTREE, Connection, Server
         except ImportError:
-            return {"active": 0, "disabled": 0, "total": 0, "enabled": False,
-                    "error": "ldap3 não instalado"}
+            return {
+                "active": 0,
+                "disabled": 0,
+                "total": 0,
+                "enabled": False,
+                "error": "ldap3 não instalado",
+            }
 
         try:
             srv = Server(config.LDAP_SERVER, get_info=ALL)
-            conn = Connection(srv, config.LDAP_USER, config.LDAP_PASSWORD,
-                              auto_bind=True, receive_timeout=10)
+            conn = Connection(
+                srv, config.LDAP_USER, config.LDAP_PASSWORD, auto_bind=True, receive_timeout=10
+            )
             # Usuários habilitados
             conn.search(
                 config.LDAP_BASE_DN,
                 "(&(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))",
-                SUBTREE, attributes=["cn"],
+                SUBTREE,
+                attributes=["cn"],
             )
             active = len(conn.entries)
             # Usuários desabilitados
             conn.search(
                 config.LDAP_BASE_DN,
                 "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=2))",
-                SUBTREE, attributes=["cn"],
+                SUBTREE,
+                attributes=["cn"],
             )
             disabled = len(conn.entries)
             conn.unbind()
@@ -52,5 +62,4 @@ class LDAPCollector:
             }
         except Exception as e:
             log.warning("LDAP falhou: %s", e)
-            return {"active": 0, "disabled": 0, "total": 0, "enabled": True,
-                    "error": str(e)}
+            return {"active": 0, "disabled": 0, "total": 0, "enabled": True, "error": str(e)}
