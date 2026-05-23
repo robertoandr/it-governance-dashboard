@@ -7,6 +7,7 @@ Cobre:
   • compute_sla_current (cftv, m365, None)
   • get_domains_with_runtime (enriquecimento)
 """
+
 import time
 import pytest
 
@@ -14,6 +15,7 @@ import pytest
 # ═══════════════════════════════════════════════════════════════════
 # 📦 GRUPO 1 — Loading & Cache
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestLoadYaml:
     """_load_yaml — cache TTL + invalidação por mtime."""
@@ -40,6 +42,7 @@ class TestLoadYaml:
 
     def test_arquivo_nao_existe_retorna_estrutura_vazia(self, gov_service, monkeypatch):
         from pathlib import Path
+
         monkeypatch.setattr(gov_service, "_OWNERS_FILE", Path("/tmp/nao_existe_xyz.yaml"))
         gov_service._yaml_cache["data"] = None  # força reload
         data = gov_service._load_yaml()
@@ -63,6 +66,7 @@ class TestLoadYaml:
 # 🏢 GRUPO 2 — Organization
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestGetOrganization:
     def test_retorna_dict_completo(self, gov_service):
         org = gov_service.get_organization()
@@ -80,6 +84,7 @@ class TestGetOrganization:
 # ═══════════════════════════════════════════════════════════════════
 # 📋 GRUPO 3 — get_domains
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestGetDomains:
     def test_retorna_lista(self, gov_service):
@@ -119,6 +124,7 @@ class TestGetDomains:
 # 🔍 GRUPO 4 — get_domain (singular)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestGetDomain:
     def test_retorna_domain_existente(self, gov_service):
         d = gov_service.get_domain("m365")
@@ -148,6 +154,7 @@ class TestGetDomain:
 # ═══════════════════════════════════════════════════════════════════
 # 📊 GRUPO 5 — compute_sla_current
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestComputeSlaCurrent:
     """Lógica de SLA dinâmico baseado no _cache global."""
@@ -193,6 +200,7 @@ class TestComputeSlaCurrent:
 # ═══════════════════════════════════════════════════════════════════
 # 🚀 GRUPO 6 — get_domains_with_runtime
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestGetDomainsWithRuntime:
     def test_enriquece_active_com_sla_current(self, gov_service, fake_cache_runtime):

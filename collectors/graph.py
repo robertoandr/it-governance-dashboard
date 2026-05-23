@@ -6,6 +6,7 @@ Incidents e Users no InfluxDB. Aqui só buscamos o que falta:
   - Intune compliance %
   - Licenças ativas
 """
+
 import json
 from pathlib import Path
 import logging
@@ -14,7 +15,6 @@ import msal
 import config
 
 log = logging.getLogger(__name__)
-
 
 
 _NAMES_PATH = Path(__file__).resolve().parent.parent / "data" / "license_names.json"
@@ -132,9 +132,7 @@ class GraphCollector:
         if not config.GRAPH_ENABLED:
             return {"pct": 0, "compliant": 0, "total": 0, "enabled": False}
         try:
-            data = self._get(
-                "/deviceManagement/managedDevices?$select=complianceState&$top=999"
-            )
+            data = self._get("/deviceManagement/managedDevices?$select=complianceState&$top=999")
             devices = data.get("value", [])
             if not devices:
                 return {"pct": 0, "compliant": 0, "total": 0, "enabled": True}
@@ -186,24 +184,26 @@ class GraphCollector:
                 delta_pct = round(((cost - prev_cost) / prev_cost) * 100, 1) if prev_cost else None
                 free = max(0, enabled - consumed)
                 # Só "paid" conta em $$
-                pays = (category == "paid")
-                out.append({
-                    "name": _pretty_sku_name(sku_id),
-                    "sku": sku_id,
-                    "enabled": enabled,
-                    "consumed": consumed,
-                    "free": free,
-                    "pct_used": round((consumed / enabled) * 100, 1) if enabled else 0,
-                    "cost_brl": cost,
-                    "category": category,
-                    "is_free": (category == "free"),
-                    "history": history,
-                    "previous_cost_brl": prev_cost,
-                    "delta_abs": delta_abs,
-                    "delta_pct": delta_pct,
-                    "monthly_total_brl": round(cost * consumed, 2) if pays else 0,
-                    "waste_brl": round(cost * free, 2) if pays else 0,
-                })
+                pays = category == "paid"
+                out.append(
+                    {
+                        "name": _pretty_sku_name(sku_id),
+                        "sku": sku_id,
+                        "enabled": enabled,
+                        "consumed": consumed,
+                        "free": free,
+                        "pct_used": round((consumed / enabled) * 100, 1) if enabled else 0,
+                        "cost_brl": cost,
+                        "category": category,
+                        "is_free": (category == "free"),
+                        "history": history,
+                        "previous_cost_brl": prev_cost,
+                        "delta_abs": delta_abs,
+                        "delta_pct": delta_pct,
+                        "monthly_total_brl": round(cost * consumed, 2) if pays else 0,
+                        "waste_brl": round(cost * free, 2) if pays else 0,
+                    }
+                )
             return sorted(out, key=lambda x: -x["enabled"])
         except Exception as e:
             log.warning("Licenças falharam: %s", e)

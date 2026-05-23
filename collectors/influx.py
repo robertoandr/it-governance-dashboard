@@ -2,6 +2,7 @@
 Coletor InfluxDB - usa HTTP direto pra contornar bug da lib influxdb-client
 que não distingue entre org name (org=) e org ID (orgID=) na query.
 """
+
 import csv
 import io
 import logging
@@ -29,8 +30,18 @@ class InfluxCollector:
     def _run_flux(self, flux: str) -> list[dict]:
         try:
             r = requests.post(self._query_url, headers=self._headers, data=flux, timeout=15)
-            log.warning("DEBUG flux url=%s len_resp=%d sample=%s", self._query_url, len(r.text), r.text[:300]); 
-            log.warning("DEBUG flux url=%s len_resp=%d sample=%s", self._query_url, len(r.text), r.text[:300]); 
+            log.warning(
+                "DEBUG flux url=%s len_resp=%d sample=%s",
+                self._query_url,
+                len(r.text),
+                r.text[:300],
+            )
+            log.warning(
+                "DEBUG flux url=%s len_resp=%d sample=%s",
+                self._query_url,
+                len(r.text),
+                r.text[:300],
+            )
             if r.status_code != 200:
                 log.warning("Influx HTTP %s: %s", r.status_code, r.text[:200])
                 return []
@@ -83,8 +94,13 @@ class InfluxCollector:
         des = float(v.get("desabilitados") or 0)
         total = hab + enf + des
         pct = round(((hab + enf) / total) * 100, 1) if total else 0
-        return {"habilitados": int(hab), "enforced": int(enf),
-                "desabilitados": int(des), "total": int(total), "pct": pct}
+        return {
+            "habilitados": int(hab),
+            "enforced": int(enf),
+            "desabilitados": int(des),
+            "total": int(total),
+            "pct": pct,
+        }
 
     def get_service_health(self):
         rows = self._last_values_by_tag("m365_service_status", "service")

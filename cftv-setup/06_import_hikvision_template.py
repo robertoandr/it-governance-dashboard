@@ -16,6 +16,7 @@
   Data:    2026-05-19
 ═══════════════════════════════════════════════════════════════════
 """
+
 import sys
 import os
 import json
@@ -27,8 +28,10 @@ try:
     import config
     import requests
 except ImportError as e:
-    sys.exit(f"❌ Falha ao importar dependências: {e}\n"
-             f"   Verifique se /opt/it-gov-dashboard/config.py existe.")
+    sys.exit(
+        f"❌ Falha ao importar dependências: {e}\n"
+        f"   Verifique se /opt/it-gov-dashboard/config.py existe."
+    )
 
 # ══════════════════════════════════════════════════════════════════
 # CONFIGURAÇÕES
@@ -38,15 +41,16 @@ ZBX_URL = config.ZABBIX_URL
 ZBX_USER = config.ZABBIX_USER
 ZBX_PASS = config.ZABBIX_PASSWORD
 
+
 # Cores ANSI para output amigável
 class C:
-    OK    = "\033[92m"
-    WARN  = "\033[93m"
-    ERR   = "\033[91m"
-    INFO  = "\033[96m"
-    BOLD  = "\033[1m"
-    DIM   = "\033[2m"
-    END   = "\033[0m"
+    OK = "\033[92m"
+    WARN = "\033[93m"
+    ERR = "\033[91m"
+    INFO = "\033[96m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    END = "\033[0m"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -79,12 +83,7 @@ def error(text):
 
 def call(method, params, auth=None, timeout=60):
     """Wrapper genérico para chamadas Zabbix API."""
-    body = {
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params,
-        "id": 1
-    }
+    body = {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
     if auth:
         body["auth"] = auth
 
@@ -117,8 +116,10 @@ def preflight():
         error(f"Arquivo não encontrado: {TEMPLATE_FILE}")
         print(f"\n   {C.DIM}Solução: baixe o template antes de rodar:{C.END}")
         print(f"   {C.DIM}wget -O {TEMPLATE_FILE} \\{C.END}")
-        print(f"   {C.DIM}  'https://git.zabbix.com/projects/ZBX/repos/zabbix/raw/"
-              f"templates/cctv/hikvision/template_cctv_hikvision.yaml?at=release/7.0'{C.END}")
+        print(
+            f"   {C.DIM}  'https://git.zabbix.com/projects/ZBX/repos/zabbix/raw/"
+            f"templates/cctv/hikvision/template_cctv_hikvision.yaml?at=release/7.0'{C.END}"
+        )
         sys.exit(1)
 
     size = path.stat().st_size
@@ -148,10 +149,7 @@ def preflight():
 def authenticate():
     step("2/5", "Autenticação no Zabbix")
     try:
-        token = call("user.login", {
-            "username": ZBX_USER,
-            "password": ZBX_PASS
-        })
+        token = call("user.login", {"username": ZBX_USER, "password": ZBX_PASS})
         success(f"Login OK como '{ZBX_USER}'")
         return token
     except Exception as e:
@@ -165,10 +163,11 @@ def authenticate():
 def check_existing(token):
     step("3/5", "Verificando se template já foi importado")
 
-    existing = call("template.get", {
-        "output": ["templateid", "host", "name"],
-        "search": {"host": "Hikvision"}
-    }, auth=token)
+    existing = call(
+        "template.get",
+        {"output": ["templateid", "host", "name"], "search": {"host": "Hikvision"}},
+        auth=token,
+    )
 
     if existing:
         warn(f"Encontrados {len(existing)} template(s) Hikvision já no Zabbix:")
@@ -193,22 +192,23 @@ def import_template(token):
     print(f"   {C.DIM}Enviando {len(yaml_content):,} bytes para API...{C.END}")
 
     rules = {
-        "template_groups":  {"createMissing": True},
-        "host_groups":      {"createMissing": True},
-        "templates":        {"createMissing": True, "updateExisting": True},
-        "items":            {"createMissing": True, "updateExisting": True},
-        "triggers":         {"createMissing": True, "updateExisting": True},
-        "graphs":           {"createMissing": True, "updateExisting": True},
-        "discoveryRules":   {"createMissing": True, "updateExisting": True},
-        "valueMaps":        {"createMissing": True, "updateExisting": True},
+        "template_groups": {"createMissing": True},
+        "host_groups": {"createMissing": True},
+        "templates": {"createMissing": True, "updateExisting": True},
+        "items": {"createMissing": True, "updateExisting": True},
+        "triggers": {"createMissing": True, "updateExisting": True},
+        "graphs": {"createMissing": True, "updateExisting": True},
+        "discoveryRules": {"createMissing": True, "updateExisting": True},
+        "valueMaps": {"createMissing": True, "updateExisting": True},
     }
 
     try:
-        call("configuration.import", {
-            "format": "yaml",
-            "rules": rules,
-            "source": yaml_content
-        }, auth=token, timeout=120)
+        call(
+            "configuration.import",
+            {"format": "yaml", "rules": rules, "source": yaml_content},
+            auth=token,
+            timeout=120,
+        )
         success("Importação concluída com sucesso!")
     except Exception as e:
         error(f"Falha no import: {e}")
@@ -221,13 +221,17 @@ def import_template(token):
 def get_template_ids(token):
     step("5/5", "Recuperando IDs dos templates criados")
 
-    templates = call("template.get", {
-        "output": ["templateid", "host", "name", "description"],
-        "search": {"host": "Hikvision"},
-        "selectItems": "count",
-        "selectTriggers": "count",
-        "selectDiscoveries": "count",
-    }, auth=token)
+    templates = call(
+        "template.get",
+        {
+            "output": ["templateid", "host", "name", "description"],
+            "search": {"host": "Hikvision"},
+            "selectItems": "count",
+            "selectTriggers": "count",
+            "selectDiscoveries": "count",
+        },
+        auth=token,
+    )
 
     if not templates:
         error("Nenhum template Hikvision encontrado após import (estranho!)")
@@ -242,7 +246,7 @@ def get_template_ids(token):
     banner("📋 TEMPLATES HIKVISION INSTALADOS", char="═")
 
     for t in templates:
-        is_main = (t["host"] == "Hikvision camera by HTTP")
+        is_main = t["host"] == "Hikvision camera by HTTP"
         marker = f"{C.OK}👉{C.END}" if is_main else "  "
         items = t.get("items", "0")
         trigs = t.get("triggers", "0")
@@ -355,8 +359,10 @@ try:
     import config
     import requests
 except ImportError as e:
-    sys.exit(f"❌ Falha ao importar dependências: {e}\n"
-             f"   Verifique se /opt/it-gov-dashboard/config.py existe.")
+    sys.exit(
+        f"❌ Falha ao importar dependências: {e}\n"
+        f"   Verifique se /opt/it-gov-dashboard/config.py existe."
+    )
 
 # ══════════════════════════════════════════════════════════════════
 # CONFIGURAÇÕES
@@ -366,15 +372,16 @@ ZBX_URL = config.ZABBIX_URL
 ZBX_USER = config.ZABBIX_USER
 ZBX_PASS = config.ZABBIX_PASSWORD
 
+
 # Cores ANSI para output amigável
 class C:
-    OK    = "\033[92m"
-    WARN  = "\033[93m"
-    ERR   = "\033[91m"
-    INFO  = "\033[96m"
-    BOLD  = "\033[1m"
-    DIM   = "\033[2m"
-    END   = "\033[0m"
+    OK = "\033[92m"
+    WARN = "\033[93m"
+    ERR = "\033[91m"
+    INFO = "\033[96m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    END = "\033[0m"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -407,12 +414,7 @@ def error(text):
 
 def call(method, params, auth=None, timeout=60):
     """Wrapper genérico para chamadas Zabbix API."""
-    body = {
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params,
-        "id": 1
-    }
+    body = {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
     if auth:
         body["auth"] = auth
 
@@ -445,8 +447,10 @@ def preflight():
         error(f"Arquivo não encontrado: {TEMPLATE_FILE}")
         print(f"\n   {C.DIM}Solução: baixe o template antes de rodar:{C.END}")
         print(f"   {C.DIM}wget -O {TEMPLATE_FILE} \\{C.END}")
-        print(f"   {C.DIM}  'https://git.zabbix.com/projects/ZBX/repos/zabbix/raw/"
-              f"templates/cctv/hikvision/template_cctv_hikvision.yaml?at=release/7.0'{C.END}")
+        print(
+            f"   {C.DIM}  'https://git.zabbix.com/projects/ZBX/repos/zabbix/raw/"
+            f"templates/cctv/hikvision/template_cctv_hikvision.yaml?at=release/7.0'{C.END}"
+        )
         sys.exit(1)
 
     size = path.stat().st_size
@@ -476,10 +480,7 @@ def preflight():
 def authenticate():
     step("2/5", "Autenticação no Zabbix")
     try:
-        token = call("user.login", {
-            "username": ZBX_USER,
-            "password": ZBX_PASS
-        })
+        token = call("user.login", {"username": ZBX_USER, "password": ZBX_PASS})
         success(f"Login OK como '{ZBX_USER}'")
         return token
     except Exception as e:
@@ -493,10 +494,11 @@ def authenticate():
 def check_existing(token):
     step("3/5", "Verificando se template já foi importado")
 
-    existing = call("template.get", {
-        "output": ["templateid", "host", "name"],
-        "search": {"host": "Hikvision"}
-    }, auth=token)
+    existing = call(
+        "template.get",
+        {"output": ["templateid", "host", "name"], "search": {"host": "Hikvision"}},
+        auth=token,
+    )
 
     if existing:
         warn(f"Encontrados {len(existing)} template(s) Hikvision já no Zabbix:")
@@ -521,22 +523,23 @@ def import_template(token):
     print(f"   {C.DIM}Enviando {len(yaml_content):,} bytes para API...{C.END}")
 
     rules = {
-        "template_groups":  {"createMissing": True},
-        "host_groups":      {"createMissing": True},
-        "templates":        {"createMissing": True, "updateExisting": True},
-        "items":            {"createMissing": True, "updateExisting": True},
-        "triggers":         {"createMissing": True, "updateExisting": True},
-        "graphs":           {"createMissing": True, "updateExisting": True},
-        "discoveryRules":   {"createMissing": True, "updateExisting": True},
-        "valueMaps":        {"createMissing": True, "updateExisting": True},
+        "template_groups": {"createMissing": True},
+        "host_groups": {"createMissing": True},
+        "templates": {"createMissing": True, "updateExisting": True},
+        "items": {"createMissing": True, "updateExisting": True},
+        "triggers": {"createMissing": True, "updateExisting": True},
+        "graphs": {"createMissing": True, "updateExisting": True},
+        "discoveryRules": {"createMissing": True, "updateExisting": True},
+        "valueMaps": {"createMissing": True, "updateExisting": True},
     }
 
     try:
-        call("configuration.import", {
-            "format": "yaml",
-            "rules": rules,
-            "source": yaml_content
-        }, auth=token, timeout=120)
+        call(
+            "configuration.import",
+            {"format": "yaml", "rules": rules, "source": yaml_content},
+            auth=token,
+            timeout=120,
+        )
         success("Importação concluída com sucesso!")
     except Exception as e:
         error(f"Falha no import: {e}")
@@ -549,13 +552,17 @@ def import_template(token):
 def get_template_ids(token):
     step("5/5", "Recuperando IDs dos templates criados")
 
-    templates = call("template.get", {
-        "output": ["templateid", "host", "name", "description"],
-        "search": {"host": "Hikvision"},
-        "selectItems": "count",
-        "selectTriggers": "count",
-        "selectDiscoveries": "count",
-    }, auth=token)
+    templates = call(
+        "template.get",
+        {
+            "output": ["templateid", "host", "name", "description"],
+            "search": {"host": "Hikvision"},
+            "selectItems": "count",
+            "selectTriggers": "count",
+            "selectDiscoveries": "count",
+        },
+        auth=token,
+    )
 
     if not templates:
         error("Nenhum template Hikvision encontrado após import (estranho!)")
@@ -570,7 +577,7 @@ def get_template_ids(token):
     banner("📋 TEMPLATES HIKVISION INSTALADOS", char="═")
 
     for t in templates:
-        is_main = (t["host"] == "Hikvision camera by HTTP")
+        is_main = t["host"] == "Hikvision camera by HTTP"
         marker = f"{C.OK}👉{C.END}" if is_main else "  "
         items = t.get("items", "0")
         trigs = t.get("triggers", "0")

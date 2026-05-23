@@ -117,10 +117,14 @@ print(f"   ✅ Grupos mapeados: {len(groups_map)} entradas")
 # ─── [2/6] Autenticar ──────────────────────────────────────────
 print("\n[2/6] Autenticando na API")
 
-token = zabbix_api(cfg["api_url"], "user.login", {
-    "username": cfg["user"],
-    "password": cfg["password"],
-})
+token = zabbix_api(
+    cfg["api_url"],
+    "user.login",
+    {
+        "username": cfg["user"],
+        "password": cfg["password"],
+    },
+)
 print(f"   ✅ Login OK como '{cfg['user']}'")
 print(f"   ✅ Token: {token[:16]}...")
 
@@ -141,10 +145,15 @@ print("\n[4/6] Localizando template(s)")
 
 template_ids = []
 for tname in TEMPLATES_DESIRED:
-    tpls = zabbix_api(cfg["api_url"], "template.get", {
-        "output": ["templateid", "name"],
-        "filter": {"name": [tname]},
-    }, auth=token)
+    tpls = zabbix_api(
+        cfg["api_url"],
+        "template.get",
+        {
+            "output": ["templateid", "name"],
+            "filter": {"name": [tname]},
+        },
+        auth=token,
+    )
     if not tpls:
         print(f"   ⚠️  Template '{tname}' não encontrado — pulando")
         continue
@@ -158,10 +167,15 @@ if not template_ids:
 # ─── [5/6] Verificar se host já existe ─────────────────────────
 print("\n[5/6] Verificando se host já existe")
 
-existing = zabbix_api(cfg["api_url"], "host.get", {
-    "output": ["hostid", "host", "name"],
-    "filter": {"host": [NVR_DATA["host"]]},
-}, auth=token)
+existing = zabbix_api(
+    cfg["api_url"],
+    "host.get",
+    {
+        "output": ["hostid", "host", "name"],
+        "filter": {"host": [NVR_DATA["host"]]},
+    },
+    auth=token,
+)
 
 if existing:
     host_id = existing[0]["hostid"]
@@ -171,18 +185,18 @@ if existing:
 else:
     # ─── [6/6] Criar host ──────────────────────────────────────
     print("\n[6/6] Criando host no Zabbix")
-    
+
     host_params = {
         "host": NVR_DATA["host"],
         "name": NVR_DATA["name"],
         "interfaces": [
             {
-                "type": 1,           # 1=Agent, 2=SNMP, 3=IPMI, 4=JMX
+                "type": 1,  # 1=Agent, 2=SNMP, 3=IPMI, 4=JMX
                 "main": 1,
                 "useip": 1,
                 "ip": NVR_DATA["ip"],
                 "dns": "",
-                "port": "10050",     # Porta padrão (mesmo sem agent, pra ping)
+                "port": "10050",  # Porta padrão (mesmo sem agent, pra ping)
             }
         ],
         "groups": group_ids,
@@ -196,7 +210,7 @@ else:
             {"tag": "canais_total", "value": NVR_DATA["canais_total"]},
             {"tag": "canais_uso", "value": NVR_DATA["canais_uso"]},
         ],
-        "inventory_mode": 1,    # 1 = Automático
+        "inventory_mode": 1,  # 1 = Automático
         "inventory": {
             "type": "NVR",
             "type_full": f"{NVR_DATA['vendor']} {NVR_DATA['model']}",
@@ -213,7 +227,7 @@ else:
             ),
         },
     }
-    
+
     result = zabbix_api(cfg["api_url"], "host.create", host_params, auth=token)
     host_id = result["hostids"][0]
     print(f"   ✅ Host criado!")
@@ -248,13 +262,13 @@ print(f"""
 
   1️⃣  Validar no Zabbix Web:
       https://172.29.2.11/zabbix → Data collection → Hosts
-      Procure: {NVR_DATA['host']}
+      Procure: {NVR_DATA["host"]}
   
   2️⃣  Aguardar 1-5 minutos pro primeiro ping:
       Status deve ficar VERDE (UP)
   
   3️⃣  Se status ficar VERMELHO:
-      • Verificar conectividade: ping {NVR_DATA['ip']}
+      • Verificar conectividade: ping {NVR_DATA["ip"]}
       • Verificar firewall entre Zabbix e NVR
       • Confirmar ICMP habilitado no NVR
   
@@ -267,5 +281,5 @@ print(f"""
              "params":{{"hostids":"{host_id}",
                        "output":["host","status","available"]}},
              "id":1}}' \\
-        {cfg['api_url']}
+        {cfg["api_url"]}
 """)

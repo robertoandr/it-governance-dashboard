@@ -2,6 +2,7 @@
 Dashboard de Governança de TI - Grupo Gadens
 Flask + thread de refresh + Score de Saúde Geral.
 """
+
 import logging
 import threading
 import time
@@ -18,11 +19,11 @@ from collectors.ldap_collector import LDAPCollector
 # Fase 5: Blueprints de Governança
 from routes.governance import governance_bp
 from routes.maintenance import maintenance_bp
+
 # Sprint 6c: integração de manutenção manual com pipeline Zabbix
 from services import maintenance_service as _maint
 
-logging.basicConfig(level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("dashboard")
 
 app = Flask(__name__)
@@ -32,14 +33,23 @@ app.register_blueprint(governance_bp)
 app.register_blueprint(maintenance_bp)
 
 _cache: dict = {
-    "hosts": {}, "problems": {"by_severity": {}, "items": []},
-    "triggers": [], "m365_items": {},
-    "mfa": {}, "service_health": [], "incidents": {}, "users_m365": {},
-    "secure_score": {}, "intune": {}, "licenses": [],
-    "grafana_dashboards": [], "users_ad": {},
+    "hosts": {},
+    "problems": {"by_severity": {}, "items": []},
+    "triggers": [],
+    "m365_items": {},
+    "mfa": {},
+    "service_health": [],
+    "incidents": {},
+    "users_m365": {},
+    "secure_score": {},
+    "intune": {},
+    "licenses": [],
+    "grafana_dashboards": [],
+    "users_ad": {},
     "cftv": {"enabled": False, "total": 0, "by_subcat": {}, "down_list": []},
     "health_score": {"score": 0, "label": "—", "components": []},
-    "last_refresh": None, "last_error": None,
+    "last_refresh": None,
+    "last_error": None,
     "thresholds": config.THRESHOLDS,
 }
 _cache_lock = threading.Lock()
@@ -59,65 +69,84 @@ def _compute_health_score(d: dict) -> dict:
     if ss.get("enabled") and ss.get("pct") is not None:
         v = float(ss["pct"])
         components.append({"name": "Secure Score", "value": round(v, 1), "weight": 30, "unit": "%"})
-        weighted += v * 30; total_w += 30
+        weighted += v * 30
+        total_w += 30
 
     hosts = d.get("hosts") or {}
     if hosts.get("total"):
         v = float(hosts.get("up_pct") or 0)
         components.append({"name": "Hosts UP", "value": round(v, 1), "weight": 25, "unit": "%"})
-        weighted += v * 25; total_w += 25
+        weighted += v * 25
+        total_w += 25
 
     trs = d.get("triggers") or []
     if trs:
         crit = sum(1 for t in trs if t.get("severity_num", 0) >= 4)
         v = 100.0 * (1.0 - crit / len(trs))
-        components.append({"name": "Triggers não-críticas", "value": round(v, 1), "weight": 20, "unit": "%"})
-        weighted += v * 20; total_w += 20
+        components.append(
+            {"name": "Triggers não-críticas", "value": round(v, 1), "weight": 20, "unit": "%"}
+        )
+        weighted += v * 20
+        total_w += 20
     else:
         components.append({"name": "Triggers", "value": 100, "weight": 20, "unit": "%"})
-        weighted += 100 * 20; total_w += 20
+        weighted += 100 * 20
+        total_w += 20
 
     mfa = d.get("mfa") or {}
     if mfa.get("total", 0) > 0:
         v = float(mfa.get("pct") or 0)
-        components.append({"name": "MFA habilitada", "value": round(v, 1), "weight": 15, "unit": "%"})
-        weighted += v * 15; total_w += 15
+        components.append(
+            {"name": "MFA habilitada", "value": round(v, 1), "weight": 15, "unit": "%"}
+        )
+        weighted += v * 15
+        total_w += 15
 
     sh = d.get("service_health") or []
     if sh:
         ok = sum(1 for s in sh if "operational" in str(s.get("status_text", "")).lower())
         v = round(100.0 * ok / len(sh), 1) if sh else 0
         components.append({"name": "Service Health", "value": v, "weight": 10, "unit": "%"})
-        weighted += v * 10; total_w += 10
+        weighted += v * 10
+        total_w += 10
 
     score = round(weighted / total_w, 1) if total_w else 0.0
-    if score >= 85: label = "Excelente"
-    elif score >= 70: label = "Bom"
-    elif score >= 50: label = "Atenção"
-    else: label = "Crítico"
+    if score >= 85:
+        label = "Excelente"
+    elif score >= 70:
+        label = "Bom"
+    elif score >= 50:
+        label = "Atenção"
+    else:
+        label = "Crítico"
     return {"score": score, "label": label, "components": components}
 
 
 def _refresh_once():
     with _zbx_lock:
         zbx = _zbx_shared
-    influx = InfluxCollector(); graph = GraphCollector()
-    grafana = GrafanaCollector(); ldap = LDAPCollector()
+    influx = InfluxCollector()
+    graph = GraphCollector()
+    grafana = GrafanaCollector()
+    ldap = LDAPCollector()
 
-    new_data = {}; errors = []
+    new_data = {}
+    errors = []
 
     # Sprint 6c: wrappear coletas do Zabbix com filtro de manutenção manual
     # (m365_items não é wrappeado: não tem hosts on-prem)
     for name, fn in [
-        ("hosts",      lambda: _maint.apply_filter("hosts",    zbx.get_host_summary())),
-        ("problems",   lambda: _maint.apply_filter("problems", zbx.get_problems(limit=30))),
-        ("triggers",   lambda: _maint.apply_filter("triggers", zbx.get_active_triggers(limit=200))),
+        ("hosts", lambda: _maint.apply_filter("hosts", zbx.get_host_summary())),
+        ("problems", lambda: _maint.apply_filter("problems", zbx.get_problems(limit=30))),
+        ("triggers", lambda: _maint.apply_filter("triggers", zbx.get_active_triggers(limit=200))),
         ("m365_items", zbx.get_m365_items),
-        ("cftv",       lambda: _maint.apply_filter("cftv",     zbx.get_cftv_summary())),
+        ("cftv", lambda: _maint.apply_filter("cftv", zbx.get_cftv_summary())),
     ]:
-        try: new_data[name] = fn()
+        try:
+            new_data[name] = fn()
         except Exception as e:
-            log.warning("%s: %s", name, e); errors.append(f"{name}: {e}")
+            log.warning("%s: %s", name, e)
+            errors.append(f"{name}: {e}")
 
     for name, fn in [
         ("mfa", influx.get_mfa),
@@ -125,8 +154,10 @@ def _refresh_once():
         ("incidents", influx.get_incidents),
         ("users_m365", influx.get_users),
     ]:
-        try: new_data[name] = fn()
-        except Exception as e: log.warning("%s: %s", name, e)
+        try:
+            new_data[name] = fn()
+        except Exception as e:
+            log.warning("%s: %s", name, e)
     influx.close()
 
     if config.GRAPH_ENABLED:
@@ -135,16 +166,23 @@ def _refresh_once():
             ("intune", graph.get_intune_compliance),
             ("licenses", graph.get_licenses),
         ]:
-            try: new_data[name] = fn()
+            try:
+                new_data[name] = fn()
             except Exception as e:
-                log.warning("%s: %s", name, e); errors.append(f"{name}: {e}")
+                log.warning("%s: %s", name, e)
+                errors.append(f"{name}: {e}")
 
     if config.GRAFANA_ENABLED:
-        try: new_data["grafana_dashboards"] = grafana.list_dashboards()
-        except Exception as e: log.warning("grafana: %s", e)
+        try:
+            new_data["grafana_dashboards"] = grafana.list_dashboards()
+        except Exception as e:
+            log.warning("grafana: %s", e)
     if config.LDAP_ENABLED:
-        try: new_data["users_ad"] = ldap.get_user_summary()
-        except Exception as e: log.warning("users_ad: %s", e); errors.append(f"users_ad: {e}")
+        try:
+            new_data["users_ad"] = ldap.get_user_summary()
+        except Exception as e:
+            log.warning("users_ad: %s", e)
+            errors.append(f"users_ad: {e}")
 
     merged = {**_cache, **new_data}
     new_data["health_score"] = _compute_health_score(merged)
@@ -157,41 +195,50 @@ def _refresh_once():
 
 def _refresh_loop():
     while True:
-        try: _refresh_once()
+        try:
+            _refresh_once()
         except Exception as e:
             log.exception("loop: %s", e)
-            with _cache_lock: _cache["last_error"] = str(e)
+            with _cache_lock:
+                _cache["last_error"] = str(e)
         time.sleep(config.CACHE_TTL)
 
 
 @app.route("/")
 def index():
-    with _cache_lock: data = dict(_cache)
-    return render_template("dashboard.html", data=data,
+    with _cache_lock:
+        data = dict(_cache)
+    return render_template(
+        "dashboard.html",
+        data=data,
         grafana_url=config.GRAFANA_URL if config.GRAFANA_ENABLED else None,
         cache_ttl=config.CACHE_TTL,
-        zabbix_front_url=config.ZABBIX_FRONT_URL)
+        zabbix_front_url=config.ZABBIX_FRONT_URL,
+    )
 
 
 @app.route("/api/data")
 def api_data():
-    with _cache_lock: return jsonify(_cache)
+    with _cache_lock:
+        return jsonify(_cache)
 
 
 @app.route("/api/health")
 def api_health():
     with _cache_lock:
         hs = _cache.get("health_score") or {}
-        return jsonify({
-            "ok": _cache.get("last_refresh") is not None,
-            "last_refresh": _cache.get("last_refresh"),
-            "last_error": _cache.get("last_error"),
-            "graph_enabled": config.GRAPH_ENABLED,
-            "grafana_enabled": config.GRAFANA_ENABLED,
-            "ldap_enabled": config.LDAP_ENABLED,
-            "health_score": hs.get("score"),
-            "health_label": hs.get("label"),
-        })
+        return jsonify(
+            {
+                "ok": _cache.get("last_refresh") is not None,
+                "last_refresh": _cache.get("last_refresh"),
+                "last_error": _cache.get("last_error"),
+                "graph_enabled": config.GRAPH_ENABLED,
+                "grafana_enabled": config.GRAFANA_ENABLED,
+                "ldap_enabled": config.LDAP_ENABLED,
+                "health_score": hs.get("score"),
+                "health_label": hs.get("label"),
+            }
+        )
 
 
 @app.route("/api/ack", methods=["POST"])
@@ -209,6 +256,7 @@ def api_ack():
     except Exception as e:
         log.warning("ack %s: %s", eventid, e)
         return jsonify({"ok": False, "error": str(e)}), 500
+
 
 @app.route("/api/unack", methods=["POST"])
 def api_unack():
@@ -231,6 +279,7 @@ def api_license_edit():
     """Edita cost_brl ou category de uma SKU. Valida PIN, faz append no history e loga."""
     import json
     from pathlib import Path
+
     body = request.get_json(silent=True) or {}
     pin = str(body.get("pin", "")).strip()
     sku = str(body.get("sku", "")).strip()
@@ -274,10 +323,12 @@ def api_license_edit():
     # Se mudou cost_brl, faz append no history (data atual)
     if field == "cost_brl" and old_value != value:
         history = costs[sku].setdefault("history", [])
-        history.append({
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "cost_brl": float(old_value) if old_value else 0,
-        })
+        history.append(
+            {
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "cost_brl": float(old_value) if old_value else 0,
+            }
+        )
         # Mantém apenas últimos 20 entries
         costs[sku]["history"] = history[-20:]
 
@@ -293,23 +344,23 @@ def api_license_edit():
     log_path = Path("/opt/it-gov-dashboard/logs/finops-changes.log")
     log_path.parent.mkdir(exist_ok=True)
     with open(log_path, "a") as f:
-        f.write(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} | "
-                f"IP={request.remote_addr} | SKU={sku} | field={field} | "
-                f"old={old_value} | new={value}\n")
+        f.write(
+            f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} | "
+            f"IP={request.remote_addr} | SKU={sku} | field={field} | "
+            f"old={old_value} | new={value}\n"
+        )
 
     threading.Thread(target=_refresh_once, daemon=True).start()
     return jsonify({"ok": True, "sku": sku, "field": field, "old": old_value, "new": value})
 
 
-
-
-
 def _start():
     t = threading.Thread(target=_refresh_loop, daemon=True, name="refresh")
-    t.start(); log.info("Thread de refresh iniciada (TTL=%ss)", config.CACHE_TTL)
+    t.start()
+    log.info("Thread de refresh iniciada (TTL=%ss)", config.CACHE_TTL)
+
 
 _start()
-
 
 
 # ═════════════════════════════════════════════════════════════

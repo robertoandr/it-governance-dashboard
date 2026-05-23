@@ -4,6 +4,7 @@ Serviço de Governança - lê metadados de domínios e owners.
 Carrega config/owners.yaml com cache em memória (TTL 60s).
 Calcula SLA atual consumindo o _cache global do app.
 """
+
 import logging
 import threading
 import time
@@ -103,9 +104,12 @@ def compute_sla_current(domain_key: str, cache: dict) -> float | None:
         mfa = (cache.get("mfa") or {}).get("pct")
         sh = cache.get("service_health") or []
         # se há service_health, todos OK = 100%, qualquer issue = 95%
-        sh_pct = 100.0 if not sh else (
-            100.0 if all(s.get("status") in ("serviceOperational", "ok") for s in sh)
-            else 95.0
+        sh_pct = (
+            100.0
+            if not sh
+            else (
+                100.0 if all(s.get("status") in ("serviceOperational", "ok") for s in sh) else 95.0
+            )
         )
         if mfa is None:
             return sh_pct

@@ -6,6 +6,7 @@ Estratégia:
 - monkeypatch dos paths hardcoded no maintenance_service
 - OPS_PIN definido só pro escopo dos testes
 """
+
 import os
 import sys
 from pathlib import Path
@@ -122,6 +123,7 @@ def populated_state(isolated_state):
 # 🏛️ FIXTURES — GOVERNANCE
 # ═══════════════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def fake_owners_yaml(tmp_path):
     """
@@ -196,6 +198,7 @@ def gov_service(fake_owners_yaml, monkeypatch):
     """
     import importlib
     import services.governance_service as gs
+
     importlib.reload(gs)  # 🔥 garante cache limpo
 
     # Redireciona o arquivo
@@ -236,6 +239,7 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
     import importlib
     from flask import Flask
     import services.governance_service as gs
+
     importlib.reload(gs)
 
     monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
@@ -245,6 +249,7 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
 
     # Reimporta route APÓS reload do service
     import routes.governance as gov_routes
+
     importlib.reload(gov_routes)
 
     app = Flask(__name__)
@@ -259,6 +264,7 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
 # 🏛️ FIXTURES — GOVERNANCE
 # ═══════════════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def fake_owners_yaml(tmp_path):
     """
@@ -333,6 +339,7 @@ def gov_service(fake_owners_yaml, monkeypatch):
     """
     import importlib
     import services.governance_service as gs
+
     importlib.reload(gs)  # 🔥 garante cache limpo
 
     # Redireciona o arquivo
@@ -373,6 +380,7 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
     import importlib
     from flask import Flask
     import services.governance_service as gs
+
     importlib.reload(gs)
 
     monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
@@ -382,6 +390,7 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
 
     # Reimporta route APÓS reload do service
     import routes.governance as gov_routes
+
     importlib.reload(gov_routes)
 
     app = Flask(__name__)
