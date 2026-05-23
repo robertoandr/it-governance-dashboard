@@ -22,6 +22,39 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # ─────────────────────────────────────────────────────────────────────
 os.environ["OPS_PIN"] = "TEST_PIN_1234"
 
+# ─────────────────────────────────────────────────────────────────────
+# 🧪 Variáveis de infra MOCK para testes
+# Satisfaz config.py:_env() que valida envs obrigatórias no import.
+# NENHUM teste deve conectar de verdade — use mocks/monkeypatch.
+# ─────────────────────────────────────────────────────────────────────
+# InfluxDB (obrigatórias)
+os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_ORG", "test-org")
+os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
+
+# Zabbix (obrigatórias)
+os.environ.setdefault("ZABBIX_URL", "http://localhost/zabbix/api_jsonrpc.php")
+os.environ.setdefault("ZABBIX_USER", "test-user")
+os.environ.setdefault("ZABBIX_PASSWORD", "test-password-not-real")  # noqa: S105
+os.environ.setdefault("ZABBIX_FRONT_URL", "http://localhost/zabbix")
+
+# Flask (boa prática)
+os.environ.setdefault("FLASK_ENV", "testing")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+
+# ─────────────────────────────────────────────────────────────────────
+# 🧪 Variáveis de infra MOCK — evita falha no import de config.py
+# Nenhum teste deve conectar de verdade ao InfluxDB/AD/M365.
+# Estes valores existem APENAS para satisfazer _env() em config.py.
+# ─────────────────────────────────────────────────────────────────────
+os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_ORG", "test-org")
+os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+os.environ.setdefault("FLASK_ENV", "testing")
+
 
 @pytest.fixture
 def ops_pin():
