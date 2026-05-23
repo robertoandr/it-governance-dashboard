@@ -62,3 +62,77 @@ A exceção deve ser **reavaliada** se:
 | Data | Revisor | Alteração |
 |---|---|---|
 | 2026-05-23 | @robertoandr | Documento criado com EX-001 |
+
+---
+
+### EX-002 — Bandit Medium Severity Skips (Operacionais)
+
+| Campo | Valor |
+|---|---|
+| **ID** | EX-002 |
+| **Status** | ✅ Ativa |
+| **Owner** | @robertoandr |
+| **Criada em** | 2026-05-23 |
+| **Revisão** | 2026-08-23 (trimestral) |
+
+#### 🎯 Regras Suprimidas
+
+| Regra | Justificativa | Escopo |
+|---|---|---|
+| **B104** | Bind 0.0.0.0 é **necessário** em containers Docker/K8s para receber tráfego do orchestrator. Mitigado por network policies e ingress controlado. | `app.py` |
+| **B108** | Uso de `/tmp` em scripts de setup CFTV **internos**, executados manualmente em ambiente controlado, sem dados sensíveis persistentes. | `cftv-setup/*.py` |
+| **B310** | URLs em `urllib.urlopen` são **literais hardcoded** apontando para endpoints internos validados em code review. Não há input do usuário. | `cftv-setup/*.py` |
+
+#### 🛡️ Gate de Segurança
+
+O CI **bloqueia** PRs com:
+- ❌ Qualquer issue **HIGH severity** (não suprimível)
+- ❌ Qualquer **nova** Medium fora da allowlist EX-002
+
+O CI **alerta** (sem bloquear) sobre:
+- ⚠️ Issues Medium/Low conhecidas e justificadas
+
+#### 📈 Métricas de Acompanhamento
+
+| Métrica | Meta | Atual |
+|---|---|---|
+| HIGH issues | 0 | 0 ✅ |
+| Medium não justificadas | 0 | 0 ✅ |
+| Cobertura de exceções documentadas | 100% | 100% ✅ |
+
+---
+
+### EX-002 — Bandit Medium Severity Skips (Operacionais)
+
+| Campo | Valor |
+|---|---|
+| **ID** | EX-002 |
+| **Status** | ✅ Ativa |
+| **Owner** | @robertoandr |
+| **Criada em** | 2026-05-23 |
+| **Revisão** | 2026-08-23 (trimestral) |
+
+#### 🎯 Regras Suprimidas
+
+| Regra | Justificativa | Escopo |
+|---|---|---|
+| **B104** | Bind 0.0.0.0 é **necessário** em containers Docker/K8s para receber tráfego do orchestrator. Mitigado por network policies e ingress controlado. | `app.py` |
+| **B108** | Uso de `/tmp` em scripts de setup CFTV **internos**, executados manualmente em ambiente controlado, sem dados sensíveis persistentes. | `cftv-setup/*.py` |
+| **B310** | URLs em `urllib.urlopen` são **literais hardcoded** apontando para endpoints internos validados em code review. Não há input do usuário. | `cftv-setup/*.py` |
+
+#### 🛡️ Gate de Segurança
+
+O CI **bloqueia** PRs com:
+- ❌ Qualquer issue **HIGH severity** (não suprimível)
+- ❌ Qualquer **nova** Medium fora da allowlist EX-002
+
+O CI **alerta** (sem bloquear) sobre:
+- ⚠️ Issues Medium/Low conhecidas e justificadas
+
+#### 📈 Métricas de Acompanhamento
+
+| Métrica | Meta | Atual |
+|---|---|---|
+| HIGH issues | 0 | 0 ✅ |
+| Medium não justificadas | 0 | 0 ✅ |
+| Cobertura de exceções documentadas | 100% | 100% ✅ |
