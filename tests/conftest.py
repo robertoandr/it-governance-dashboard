@@ -6,6 +6,7 @@ Estratégia:
 - monkeypatch dos paths hardcoded no maintenance_service
 - OPS_PIN definido só pro escopo dos testes
 """
+
 import os
 import sys
 from pathlib import Path
@@ -29,19 +30,19 @@ os.environ["OPS_PIN"] = "TEST_PIN_1234"
 # ─────────────────────────────────────────────────────────────────────
 # InfluxDB (obrigatórias)
 os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
-os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")
 os.environ.setdefault("INFLUX_ORG", "test-org")
 os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
 
 # Zabbix (obrigatórias)
 os.environ.setdefault("ZABBIX_URL", "http://localhost/zabbix/api_jsonrpc.php")
 os.environ.setdefault("ZABBIX_USER", "test-user")
-os.environ.setdefault("ZABBIX_PASSWORD", "test-password-not-real")  # noqa: S105
+os.environ.setdefault("ZABBIX_PASSWORD", "test-password-not-real")
 os.environ.setdefault("ZABBIX_FRONT_URL", "http://localhost/zabbix")
 
 # Flask (boa prática)
 os.environ.setdefault("FLASK_ENV", "testing")
-os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 
 # ─────────────────────────────────────────────────────────────────────
 # 🧪 Variáveis de infra MOCK — evita falha no import de config.py
@@ -49,10 +50,10 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
 # Estes valores existem APENAS para satisfazer _env() em config.py.
 # ─────────────────────────────────────────────────────────────────────
 os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
-os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")  # noqa: S105
+os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")
 os.environ.setdefault("INFLUX_ORG", "test-org")
 os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
-os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")  # noqa: S105
+os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 os.environ.setdefault("FLASK_ENV", "testing")
 
 
@@ -122,142 +123,6 @@ def populated_state(isolated_state):
 # 🏛️ FIXTURES — GOVERNANCE
 # ═══════════════════════════════════════════════════════════════════
 
-@pytest.fixture
-def fake_owners_yaml(tmp_path):
-    """
-    Cria um owners.yaml temporário com estrutura fiel à produção.
-    Retorna o Path do arquivo criado.
-    """
-    yaml_content = """
-version: "1.0"
-last_updated: "2026-05-19"
-
-organization:
-  name: "Test Org"
-  short_name: "TEST"
-  dashboard_title: "Dashboard de Teste"
-
-domains:
-  m365:
-    name: "Microsoft 365"
-    icon: "🟢"
-    short_desc: "Cloud e identidade"
-    owner:
-      team: "TI Cloud"
-      lead: "Tester"
-      email: "test@test.com"
-    sla:
-      target: 99.5
-    status: "active"
-    route: "/m365"
-    order: 10
-
-  cftv:
-    name: "CFTV"
-    icon: "🎥"
-    short_desc: "Vigilância"
-    owner:
-      team: "TI Infra"
-      lead: "Tester"
-      email: "test@test.com"
-    sla:
-      target: 95.0
-    status: "active"
-    route: "/cftv"
-    order: 20
-
-  rede:
-    name: "Rede"
-    icon: "🌐"
-    short_desc: "Switches e wifi"
-    status: "planned"
-    eta: "2026-Q3"
-    order: 30
-
-  backup:
-    name: "Backup"
-    icon: "💾"
-    short_desc: "Jobs e DR"
-    status: "planned"
-    eta: "2026-Q4"
-    order: 50
-"""
-    yaml_file = tmp_path / "owners.yaml"
-    yaml_file.write_text(yaml_content, encoding="utf-8")
-    return yaml_file
-
-
-@pytest.fixture
-def gov_service(fake_owners_yaml, monkeypatch):
-    """
-    Retorna o módulo governance_service com:
-      - _OWNERS_FILE redirecionado pro tmp
-      - cache global resetado (sem vazamento entre testes!)
-    """
-    import importlib
-    import services.governance_service as gs
-    importlib.reload(gs)  # 🔥 garante cache limpo
-
-    # Redireciona o arquivo
-    monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
-
-    # Reset explícito do cache (defensivo)
-    gs._yaml_cache["data"] = None
-    gs._yaml_cache["loaded_at"] = 0.0
-    gs._yaml_cache["mtime"] = 0.0
-
-    yield gs
-
-    # Cleanup pós-teste
-    gs._yaml_cache["data"] = None
-
-
-@pytest.fixture
-def fake_cache_runtime():
-    """Mock de _cache global (DASHBOARD_CACHE) com dados típicos."""
-    return {
-        "cftv": {"up_pct": 97.3, "total": 100, "up": 97, "down": 3},
-        "mfa": {"pct": 88.5},
-        "service_health": [
-            {"service": "Exchange", "status": "serviceOperational"},
-            {"service": "Teams", "status": "serviceOperational"},
-        ],
-    }
-
-
-@pytest.fixture
-def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
-    """
-    Cliente Flask de teste com:
-      - governance_bp registrado
-      - owners.yaml temporário
-      - DASHBOARD_CACHE injetado em app.config
-    """
-    import importlib
-    from flask import Flask
-    import services.governance_service as gs
-    importlib.reload(gs)
-
-    monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
-    gs._yaml_cache["data"] = None
-    gs._yaml_cache["loaded_at"] = 0.0
-    gs._yaml_cache["mtime"] = 0.0
-
-    # Reimporta route APÓS reload do service
-    import routes.governance as gov_routes
-    importlib.reload(gov_routes)
-
-    app = Flask(__name__)
-    app.config["DASHBOARD_CACHE"] = fake_cache_runtime
-    app.register_blueprint(gov_routes.governance_bp)
-    app.testing = True
-
-    return app.test_client()
-
-
-# ═══════════════════════════════════════════════════════════════════
-# 🏛️ FIXTURES — GOVERNANCE
-# ═══════════════════════════════════════════════════════════════════
 
 @pytest.fixture
 def fake_owners_yaml(tmp_path):
@@ -332,7 +197,9 @@ def gov_service(fake_owners_yaml, monkeypatch):
       - cache global resetado (sem vazamento entre testes!)
     """
     import importlib
+
     import services.governance_service as gs
+
     importlib.reload(gs)  # 🔥 garante cache limpo
 
     # Redireciona o arquivo
@@ -371,8 +238,11 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
       - DASHBOARD_CACHE injetado em app.config
     """
     import importlib
+
     from flask import Flask
+
     import services.governance_service as gs
+
     importlib.reload(gs)
 
     monkeypatch.setattr(gs, "_OWNERS_FILE", fake_owners_yaml)
@@ -382,6 +252,7 @@ def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
 
     # Reimporta route APÓS reload do service
     import routes.governance as gov_routes
+
     importlib.reload(gov_routes)
 
     app = Flask(__name__)

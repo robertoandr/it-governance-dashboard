@@ -29,3 +29,4 @@ pre-commit>=3.7
 # ----- Dev Utils -----
 ipython>=8.20              # REPL melhorado
 ipdb>=0.13                 # debugger interativo
+types-PyYAML

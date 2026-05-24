@@ -115,12 +115,15 @@ def api(url, method, params, auth=None):
         headers["Authorization"] = f"Bearer {auth}"
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers)
-    ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
             result = json.loads(r.read().decode("utf-8"))
     except Exception as e:
-        print(f"   ❌ Erro de rede: {e}"); sys.exit(1)
+        print(f"   ❌ Erro de rede: {e}")
+        sys.exit(1)
     if "error" in result:
         err = result["error"]
         print(f"   ❌ {err.get('message')}: {err.get('data')}")
@@ -135,31 +138,38 @@ cfg = json.loads(CONFIG_FILE.read_text())
 groups = json.loads(GROUPS_FILE.read_text())
 
 print("\n[1/5] Autenticando")
-tok = api(cfg["api_url"], "user.login",
-          {"username": cfg["user"], "password": cfg["password"]})
+tok = api(cfg["api_url"], "user.login", {"username": cfg["user"], "password": cfg["password"]})
 print("   ✅ Login OK")
 
 print("\n[2/5] Buscando hosts CFTV (NVRs + Câmeras)")
 nvr_gid = str(groups["CFTV/NVRs"])
 cam_gid = str(groups["CFTV/Cameras"])
 
-nvrs = api(cfg["api_url"], "host.get", {
-    "groupids": [nvr_gid], "output": ["hostid", "host"]
-}, auth=tok)
+nvrs = api(
+    cfg["api_url"], "host.get", {"groupids": [nvr_gid], "output": ["hostid", "host"]}, auth=tok
+)
 
-cams = api(cfg["api_url"], "host.get", {
-    "groupids": [cam_gid], "output": ["hostid", "host"]
-}, auth=tok)
+cams = api(
+    cfg["api_url"], "host.get", {"groupids": [cam_gid], "output": ["hostid", "host"]}, auth=tok
+)
 
 print(f"   ✅ NVRs: {len(nvrs)}")
 print(f"   ✅ Câmeras: {len(cams)}")
-print(f"   📊 Triggers planejadas: {len(nvrs)*1 + len(cams)*4}")
+print(f"   📊 Triggers planejadas: {len(nvrs) * 1 + len(cams) * 4}")
 
 print("\n[3/5] Listando triggers existentes (para evitar duplicação)")
-existing = api(cfg["api_url"], "trigger.get", {
-    "hostids": [h["hostid"] for h in nvrs + cams],
-    "output": ["triggerid", "description"],
-}, auth=tok) or []
+existing = (
+    api(
+        cfg["api_url"],
+        "trigger.get",
+        {
+            "hostids": [h["hostid"] for h in nvrs + cams],
+            "output": ["triggerid", "description"],
+        },
+        auth=tok,
+    )
+    or []
+)
 existing_descs = {t["description"] for t in existing}
 print(f"   ℹ️  Triggers já existentes nestes hosts: {len(existing)}")
 
@@ -167,6 +177,7 @@ print("\n[4/5] Criando triggers")
 print("─" * 70)
 
 results = {"criadas": [], "ja_existiam": [], "erros": []}
+
 
 def create_trigger_list(host, trig_list, label):
     for t in trig_list:
@@ -178,11 +189,12 @@ def create_trigger_list(host, trig_list, label):
         if r and "triggerids" in r:
             tid = r["triggerids"][0]
             results["criadas"].append({"id": tid, "desc": t["description"]})
-            sev_icon = {1:"🔵",2:"🟡",3:"🟠",4:"🔴",5:"⚫"}.get(t["priority"],"⚪")
+            sev_icon = {1: "🔵", 2: "🟡", 3: "🟠", 4: "🔴", 5: "⚫"}.get(t["priority"], "⚪")
             print(f"   ✅ {label:20s} {sev_icon} ID {tid}: {t['description'][:50]}...")
         else:
             results["erros"].append(t["description"])
             print(f"   ❌ {label:20s} falhou: {t['description'][:50]}...")
+
 
 # NVRs
 for nvr in nvrs:
@@ -203,11 +215,11 @@ api(cfg["api_url"], "user.logout", [], auth=tok)
 banner("✅ FASE 4b CONCLUÍDA")
 print(f"""
   📊 RESULTADO:
-     ✅ Criadas:      {len(results['criadas']):3d}
-     ⏭️  Já existiam:  {len(results['ja_existiam']):3d}
-     ❌ Erros:         {len(results['erros']):3d}
+     ✅ Criadas:      {len(results["criadas"]):3d}
+     ⏭️  Já existiam:  {len(results["ja_existiam"]):3d}
+     ❌ Erros:         {len(results["erros"]):3d}
      ────────────────────────
-     📦 Total alvo:   {len(nvrs)*1 + len(cams)*4:3d}
+     📦 Total alvo:   {len(nvrs) * 1 + len(cams) * 4:3d}
 
   💡 ONDE VER NO ZABBIX:
      • Configuration → Hosts → [clicar host] → Triggers

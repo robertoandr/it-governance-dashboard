@@ -23,35 +23,38 @@ OUTPUT_FILE = BASE_DIR / ".macros_ids.json"
 # Formato: (macro, valor, descrição)
 MACROS = [
     # ─── Downtime (em segundos) ───
-    ("{$CFTV.CAM.DOWN.WARN}", "120",
-     "Tempo em segundos para alertar câmera como instável (Average)"),
-    
-    ("{$CFTV.CAM.DOWN.HIGH}", "300",
-     "Tempo em segundos para alertar câmera como down crítico (High)"),
-    
-    ("{$CFTV.NVR.DOWN.DISASTER}", "120",
-     "Tempo em segundos para alertar NVR como disaster (perde tudo)"),
-    
+    (
+        "{$CFTV.CAM.DOWN.WARN}",
+        "120",
+        "Tempo em segundos para alertar câmera como instável (Average)",
+    ),
+    (
+        "{$CFTV.CAM.DOWN.HIGH}",
+        "300",
+        "Tempo em segundos para alertar câmera como down crítico (High)",
+    ),
+    (
+        "{$CFTV.NVR.DOWN.DISASTER}",
+        "120",
+        "Tempo em segundos para alertar NVR como disaster (perde tudo)",
+    ),
     # ─── Qualidade de rede ───
-    ("{$CFTV.PING.LOSS.WARN}", "10",
-     "Packet loss % acima do qual gera Warning (qualidade ruim)"),
-    
-    ("{$CFTV.PING.LOSS.HIGH}", "30",
-     "Packet loss % acima do qual gera High (rede degradada)"),
-    
-    ("{$CFTV.PING.LATENCY.WARN}", "0.005",
-     "Latência em segundos (5ms) acima da qual gera Warning"),
-    
-    ("{$CFTV.PING.LATENCY.HIGH}", "0.020",
-     "Latência em segundos (20ms) acima da qual gera High"),
-    
+    ("{$CFTV.PING.LOSS.WARN}", "10", "Packet loss % acima do qual gera Warning (qualidade ruim)"),
+    ("{$CFTV.PING.LOSS.HIGH}", "30", "Packet loss % acima do qual gera High (rede degradada)"),
+    ("{$CFTV.PING.LATENCY.WARN}", "0.005", "Latência em segundos (5ms) acima da qual gera Warning"),
+    ("{$CFTV.PING.LATENCY.HIGH}", "0.020", "Latência em segundos (20ms) acima da qual gera High"),
     # ─── Correlação ───
-    ("{$CFTV.MASS.DOWN.THRESHOLD}", "3",
-     "Número de câmeras down simultâneas para acionar alerta correlacionado"),
-    
+    (
+        "{$CFTV.MASS.DOWN.THRESHOLD}",
+        "3",
+        "Número de câmeras down simultâneas para acionar alerta correlacionado",
+    ),
     # ─── Horário comercial (uso futuro em ações) ───
-    ("{$CFTV.BUSINESS.HOURS}", "1-5,08:00-22:00;6,08:00-18:00",
-     "Horário comercial das lojas (seg-sex 8-22h, sáb 8-18h)"),
+    (
+        "{$CFTV.BUSINESS.HOURS}",
+        "1-5,08:00-22:00;6,08:00-18:00",
+        "Horário comercial das lojas (seg-sex 8-22h, sáb 8-18h)",
+    ),
 ]
 
 
@@ -69,12 +72,15 @@ def api(url, method, params, auth=None):
         headers["Authorization"] = f"Bearer {auth}"
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers)
-    ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
             result = json.loads(r.read().decode("utf-8"))
     except Exception as e:
-        print(f"   ❌ Erro de rede: {e}"); sys.exit(1)
+        print(f"   ❌ Erro de rede: {e}")
+        sys.exit(1)
     if "error" in result:
         err = result["error"]
         print(f"   ❌ {err.get('message')}: {err.get('data')}")
@@ -89,13 +95,11 @@ print(f"  Total a criar/atualizar: {len(MACROS)}")
 cfg = json.loads(CONFIG_FILE.read_text())
 
 print("\n[1/4] Autenticando")
-tok = api(cfg["api_url"], "user.login",
-          {"username": cfg["user"], "password": cfg["password"]})
-print(f"   ✅ Login OK")
+tok = api(cfg["api_url"], "user.login", {"username": cfg["user"], "password": cfg["password"]})
+print("   ✅ Login OK")
 
 print("\n[2/4] Listando macros globais existentes")
-existing = api(cfg["api_url"], "usermacro.get",
-               {"globalmacro": True, "output": "extend"}, auth=tok)
+existing = api(cfg["api_url"], "usermacro.get", {"globalmacro": True, "output": "extend"}, auth=tok)
 existing_map = {m["macro"]: m["globalmacroid"] for m in existing}
 print(f"   ℹ️  Macros globais já existentes: {len(existing)}")
 
@@ -106,19 +110,29 @@ results = {"criados": [], "atualizados": []}
 for macro, value, desc in MACROS:
     if macro in existing_map:
         mid = existing_map[macro]
-        api(cfg["api_url"], "usermacro.updateglobal", {
-            "globalmacroid": mid,
-            "value": value,
-            "description": desc,
-        }, auth=tok)
+        api(
+            cfg["api_url"],
+            "usermacro.updateglobal",
+            {
+                "globalmacroid": mid,
+                "value": value,
+                "description": desc,
+            },
+            auth=tok,
+        )
         print(f"   🔄 {macro:35s} = {value:10s}  (atualizado)")
         results["atualizados"].append({"macro": macro, "id": mid})
     else:
-        r = api(cfg["api_url"], "usermacro.createglobal", {
-            "macro": macro,
-            "value": value,
-            "description": desc,
-        }, auth=tok)
+        r = api(
+            cfg["api_url"],
+            "usermacro.createglobal",
+            {
+                "macro": macro,
+                "value": value,
+                "description": desc,
+            },
+            auth=tok,
+        )
         mid = r["globalmacroids"][0]
         print(f"   ✅ {macro:35s} = {value:10s}  (criado ID {mid})")
         results["criados"].append({"macro": macro, "id": mid})
@@ -132,8 +146,8 @@ api(cfg["api_url"], "user.logout", [], auth=tok)
 banner("✅ FASE 4a CONCLUÍDA")
 print(f"""
   📊 RESULTADO:
-     ✅ Criados:      {len(results['criados']):2d}
-     🔄 Atualizados:  {len(results['atualizados']):2d}
+     ✅ Criados:      {len(results["criados"]):2d}
+     🔄 Atualizados:  {len(results["atualizados"]):2d}
      ─────────────────────
      📦 Total:        {len(MACROS):2d}
 

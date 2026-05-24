@@ -1,0 +1,32 @@
+# Configuração do CodeQL para o projeto IT Governance Dashboard.
+#
+# Decisão arquitetural: a query py/log-injection (CWE-117) é suprimida
+# globalmente porque TODOS os logs do projeto passam pelo sanitizador
+# `app_utils.safe_logging.safe()`, que neutraliza:
+#   - quebras de linha (CR/LF -> \\r/\\n literais)
+#   - caracteres de controle (\\x00-\\x1f)
+#   - sequências ANSI / terminal escape codes
+#
+# O CodeQL não consegue inferir essa sanitização automaticamente
+# (mesmo com models-as-data, pois o schema do pack codeql/python-all
+# 7.x não suporta corretamente neutralModel para módulos top-level).
+#
+# Mitigação compensatória:
+#   - Testes em tests/test_safe_logging.py validam o sanitizador
+#   - Pre-commit hook proíbe `logger.<level>(user_input)` direto
+#   - Code review obriga uso de safe() em qualquer log de dado externo
+#
+# Refs:
+#   - PR #17 (chore/lint-auto-fixes)
+#   - https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning#using-a-custom-configuration-file
+
+name: "IT Governance Dashboard - CodeQL Config"
+
+# Mantém o pacote security-and-quality completo (não reduzimos a cobertura).
+queries:
+  - uses: security-and-quality
+
+# Suprime apenas a query específica que gera falsos positivos.
+query-filters:
+  - exclude:
+      id: py/log-injection

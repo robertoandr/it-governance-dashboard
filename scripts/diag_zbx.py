@@ -1,4 +1,9 @@
-import os, requests, urllib3, json
+import json
+import os
+
+import requests
+import urllib3
+
 urllib3.disable_warnings()
 
 env_vars = {}
@@ -21,8 +26,14 @@ for k, v in env_vars.items():
     print("   " + k + " = " + masked)
 
 token = None
-for cand in ["ZABBIX_TOKEN", "ZABBIX_API_TOKEN", "ZBX_TOKEN",
-             "ZABBIX_AUTH_TOKEN", "API_TOKEN", "TOKEN"]:
+for cand in [
+    "ZABBIX_TOKEN",
+    "ZABBIX_API_TOKEN",
+    "ZBX_TOKEN",
+    "ZABBIX_AUTH_TOKEN",
+    "API_TOKEN",
+    "TOKEN",
+]:
     if env_vars.get(cand):
         token = env_vars[cand]
         print("\nToken encontrado em: " + cand)
@@ -30,24 +41,31 @@ for cand in ["ZABBIX_TOKEN", "ZABBIX_API_TOKEN", "ZBX_TOKEN",
 
 url = env_vars.get("ZABBIX_URL")
 
+# SSL verification toggle (default: True). Para Zabbix com cert self-signed:
+#   export ZBX_VERIFY_SSL=false
+_verify_ssl = os.environ.get("ZBX_VERIFY_SSL", "true").strip().lower() not in ("false", "0", "no")
+
 if not token:
     print("\nERRO: nenhum token encontrado no .env")
     raise SystemExit(1)
 
 print("\nTestando " + str(url) + " ...")
-r = requests.post(url, json={
-    "jsonrpc": "2.0", "method": "apiinfo.version",
-    "params": {}, "id": 1
-}, verify=False, timeout=10).json()
+r = requests.post(
+    url,
+    json={"jsonrpc": "2.0", "method": "apiinfo.version", "params": {}, "id": 1},
+    verify=_verify_ssl,
+    timeout=10,
+).json()
 print("   Versao Zabbix: " + str(r.get("result", "ERRO")))
 
 print("\nTestando auth via Bearer header...")
-r = requests.post(url,
-    json={"jsonrpc": "2.0", "method": "host.get",
-          "params": {"countOutput": True}, "id": 2},
-    headers={"Content-Type": "application/json-rpc",
-             "Authorization": "Bearer " + token},
-    verify=False, timeout=10).json()
+r = requests.post(
+    url,
+    json={"jsonrpc": "2.0", "method": "host.get", "params": {"countOutput": True}, "id": 2},
+    headers={"Content-Type": "application/json-rpc", "Authorization": "Bearer " + token},
+    verify=_verify_ssl,
+    timeout=10,
+).json()
 if "result" in r:
     print("   OK! Total de hosts: " + str(r["result"]))
 else:

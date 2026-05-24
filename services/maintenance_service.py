@@ -7,14 +7,17 @@ Características:
 - Thread-safe via threading.Lock
 - Sem expiração automática (decisão de produto)
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, cast
+
+from app_utils import safe
 
 log = logging.getLogger("maintenance")
 
@@ -28,7 +31,7 @@ _LOCK = threading.Lock()
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _validate_state(data) -> dict:
@@ -54,7 +57,7 @@ def _validate_state(data) -> dict:
             log.warning("Host com nome inválido descartado: %r", host_name)
             continue
         if not isinstance(info, dict):
-            log.warning("Info inválido para host %s — descartado", host_name)
+            log.warning("Info inválido para host %s — descartado", safe(host_name))
             continue
         clean_hosts[host_name.strip()] = info
 
@@ -71,7 +74,7 @@ def _load_state() -> dict:
             data = json.load(f)
         return _validate_state(data)
     except (json.JSONDecodeError, OSError) as e:
-        log.error("Falha ao ler %s: %s — usando estado vazio", _STATE_FILE, e)
+        log.error("Falha ao ler %s: %s — usando estado vazio", _STATE_FILE, safe(e))
         return {"version": 1, "hosts": {}, "updated_at": None}
 
 
@@ -93,12 +96,13 @@ def _append_history(event: dict) -> None:
 
 # ── API Pública ────────────────────────────────────────────────────────────
 
-def list_active_dict() -> dict:
+
+def list_active_dict() -> dict[str, Any]:
     """
     Retorna dicionário {host_name: info} dos hosts em manutenção.
     🔧 USO INTERNO — para lookups rápidos via .keys()/.get().
     """
-    return _load_state().get("hosts", {})
+    return cast("dict[str, Any]", _load_state().get("hosts", {}))
 
 
 def list_active() -> list:
@@ -119,35 +123,36 @@ def is_in_maintenance(host_name: str) -> bool:
     return host_name in _load_state().get("hosts", {})
 
 
-def get_info(host_name: str) -> Optional[dict]:
+def get_info(host_name: str) -> dict[str, Any] | None:
     """Info de manutenção de um host específico (ou None)."""
-    return _load_state().get("hosts", {}).get(host_name)
+    result = _load_state().get("hosts", {}).get(host_name)
+    return cast("dict[str, Any] | None", result)
 
 
 def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> dict:
     """
     Marca 1+ hosts como em manutenção.
-    
+
     Args:
         hosts: lista de host names (ex: ["CAM-8A-35", "CAM-8A-36"])
         operator: nome do operador (ex: "roberto")
         reason: motivo livre (ex: "Investigação switch 8º andar")
         domain: domínio do dashboard (ex: "cftv", "m365") — default cftv
-    
+
     Returns:
         {"marked": [...], "already_in_maint": [...], "count": N}
     """
     if not hosts:
         return {"marked": [], "already_in_maint": [], "count": 0}
-    
+
     operator = (operator or "").strip() or "anonymous"
     reason = (reason or "").strip() or "(sem motivo informado)"
-    
+
     with _LOCK:
         state = _load_state()
         marked = []
         already = []
-        
+
         for h in hosts:
             h = h.strip()
             if not h:
@@ -162,19 +167,25 @@ def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> 
                 "domain": domain,
             }
             marked.append(h)
-            _append_history({
-                "action": "mark",
-                "host": h,
-                "by": operator,
-                "reason": reason,
-                "domain": domain,
-            })
-        
+            _append_history(
+                {
+                    "action": "mark",
+                    "host": h,
+                    "by": operator,
+                    "reason": reason,
+                    "domain": domain,
+                }
+            )
+
         if marked:
             _save_state(state)
-            log.info("Manutenção: %d host(s) marcado(s) por %s — motivo: %s",
-                     len(marked), operator, reason)
-        
+            log.info(
+                "Manutenção: %d host(s) marcado(s) por %s — motivo: %s",
+                len(marked),
+                safe(operator),
+                safe(reason),
+            )
+
         return {
             "marked": marked,
             "already_in_maint": already,
@@ -185,21 +196,21 @@ def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> 
 def clear(hosts: list[str], operator: str, note: str = "") -> dict:
     """
     Remove 1+ hosts da manutenção.
-    
+
     Returns:
         {"cleared": [...], "not_found": [...], "count": N}
     """
     if not hosts:
         return {"cleared": [], "not_found": [], "count": 0}
-    
+
     operator = (operator or "").strip() or "anonymous"
     note = (note or "").strip()
-    
+
     with _LOCK:
         state = _load_state()
         cleared = []
         not_found = []
-        
+
         for h in hosts:
             h = h.strip()
             if not h:
@@ -209,18 +220,20 @@ def clear(hosts: list[str], operator: str, note: str = "") -> dict:
                 continue
             prev = state["hosts"].pop(h)
             cleared.append(h)
-            _append_history({
-                "action": "clear",
-                "host": h,
-                "by": operator,
-                "note": note,
-                "previous": prev,
-            })
-        
+            _append_history(
+                {
+                    "action": "clear",
+                    "host": h,
+                    "by": operator,
+                    "note": note,
+                    "previous": prev,
+                }
+            )
+
         if cleared:
             _save_state(state)
-            log.info("Manutenção: %d host(s) liberado(s) por %s", len(cleared), operator)
-        
+            log.info("Manutenção: %d host(s) liberado(s) por %s", len(cleared), safe(operator))
+
         return {
             "cleared": cleared,
             "not_found": not_found,
@@ -232,7 +245,7 @@ def history(limit: int = 100) -> list[dict]:
     """Retorna últimos N eventos (mais recente primeiro)."""
     if not _HISTORY_FILE.exists():
         return []
-    
+
     lines = _HISTORY_FILE.read_text(encoding="utf-8").strip().split("\n")
     events = []
     for line in lines[-limit:]:
@@ -242,7 +255,7 @@ def history(limit: int = 100) -> list[dict]:
             events.append(json.loads(line))
         except json.JSONDecodeError:
             continue
-    
+
     return list(reversed(events))  # mais recente primeiro
 
 
@@ -250,15 +263,15 @@ def stats() -> dict:
     """Estatísticas rápidas pra dashboard."""
     state = _load_state()
     hosts = state.get("hosts", {})
-    
-    by_domain = {}
-    by_operator = {}
-    for h, info in hosts.items():
+
+    by_domain: dict[str, int] = {}
+    by_operator: dict[str, int] = {}
+    for _h, info in hosts.items():
         d = info.get("domain", "unknown")
         op = info.get("marked_by", "unknown")
         by_domain[d] = by_domain.get(d, 0) + 1
         by_operator[op] = by_operator.get(op, 0) + 1
-    
+
     return {
         "total_in_maintenance": len(hosts),
         "by_domain": by_domain,
@@ -273,14 +286,15 @@ def stats() -> dict:
 # Filtra/anota dados coletados do Zabbix com info de manutenção
 # manual. Fail-open: qualquer erro retorna data original intacta.
 
+
 def apply_filter(key: str, data):
     """
     Aplica filtro de manutenção manual sobre dados do collector Zabbix.
-    
+
     Args:
         key: "hosts" | "problems" | "triggers" | "cftv"
         data: dados originais retornados pelo ZabbixCollector
-    
+
     Returns:
         Dados enriquecidos/filtrados. Em caso de erro, retorna data original.
     """
@@ -288,7 +302,7 @@ def apply_filter(key: str, data):
         in_maint = set(list_active_dict().keys())  # 🔧 Sprint 6f: uso interno = dict
         if not in_maint:
             return data
-        
+
         if key == "hosts":
             return _mf_filter_hosts_summary(data, in_maint)
         if key == "problems":
@@ -299,13 +313,11 @@ def apply_filter(key: str, data):
             return _mf_filter_cftv(data, in_maint)
         return data
     except Exception as e:
-        try:
-            import logging
-            logging.getLogger(__name__).warning(
-                "apply_filter(%s) falhou: %s — retornando dados originais", key, e
-            )
-        except Exception:
-            pass
+        log.warning(
+            "apply_filter(%s) falhou: %s — retornando dados originais",
+            safe(key),
+            type(e).__name__,
+        )
         return data
 
 
@@ -333,13 +345,13 @@ def _mf_filter_problems(data: dict, in_maint: set) -> dict:
     items = data.get("items", []) or []
     filtered = [p for p in items if p.get("host") not in in_maint]
     suppressed = len(items) - len(filtered)
-    
+
     by_sev_keys = list((data.get("by_severity") or {}).keys())
-    by_sev = {k: 0 for k in by_sev_keys}
+    by_sev = dict.fromkeys(by_sev_keys, 0)
     for p in filtered:
         sev = p.get("severity", "not_classified")
         by_sev[sev] = by_sev.get(sev, 0) + 1
-    
+
     return {
         "by_severity": by_sev,
         "items": filtered,
@@ -365,14 +377,13 @@ def _mf_filter_cftv(data: dict, in_maint: set) -> dict:
     down_list = list(out.get("down_list", []) or [])
     maint_list = list(out.get("maint_list", []) or [])
     by_subcat = {k: dict(v) for k, v in (out.get("by_subcat") or {}).items()}
-    
+
     new_down_list = []
     moved = 0
     for h in down_list:
         if not isinstance(h, dict):
             new_down_list.append(h)
             continue
-        host_key = h.get("host") or h.get("name")
         # checa tanto "host" quanto "name" (CFTV usa ambos)
         if (h.get("host") in in_maint) or (h.get("name") in in_maint):
             h_marked = dict(h)
@@ -385,7 +396,7 @@ def _mf_filter_cftv(data: dict, in_maint: set) -> dict:
                 by_subcat[subcat]["maint"] = int(by_subcat[subcat].get("maint", 0) or 0) + 1
         else:
             new_down_list.append(h)
-    
+
     out["down_list"] = new_down_list
     out["maint_list"] = maint_list
     out["by_subcat"] = by_subcat
@@ -393,6 +404,7 @@ def _mf_filter_cftv(data: dict, in_maint: set) -> dict:
     out["maint"] = int(out.get("maint", 0) or 0) + moved
     out["maint_manual_count"] = moved
     return out
+
 
 # ── Sprint 6e: startup banner ──────────────────────────────────────────────
 log.info(

@@ -8,8 +8,11 @@ Pré-requisito no Grafana (uma vez):
     cookie_samesite = none
   Depois: sudo systemctl restart grafana-server
 """
+
 import logging
+
 import requests
+
 import config
 
 log = logging.getLogger(__name__)
@@ -38,13 +41,15 @@ class GrafanaCollector:
                 uid = d.get("uid")
                 if not uid:
                     continue
-                out.append({
-                    "title": d.get("title", uid),
-                    "uid": uid,
-                    "url": f"{config.GRAFANA_URL}/d/{uid}?theme=dark",
-                    # kiosk=tv esconde o menu lateral e o header — bom pra iframe
-                    "embed_url": f"{config.GRAFANA_URL}/d/{uid}?kiosk=tv&theme=dark&refresh=30s",
-                })
+                out.append(
+                    {
+                        "title": d.get("title", uid),
+                        "uid": uid,
+                        "url": f"{config.GRAFANA_URL}/d/{uid}?theme=dark",
+                        # kiosk=tv esconde o menu lateral e o header — bom pra iframe
+                        "embed_url": f"{config.GRAFANA_URL}/d/{uid}?kiosk=tv&theme=dark&refresh=30s",
+                    }
+                )
             return out
         except Exception as e:
             log.warning("Falha ao listar dashboards Grafana: %s", e)

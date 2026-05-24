@@ -38,6 +38,12 @@ ignore = [
     "E501",   # line too long (formatter cuida)
     "S101",   # assert usado (ok em testes)
     "B008",   # function call in default arg (Flask usa muito)
+    # ── Exceções de governança justificadas ──
+    "S310",   # urllib.urlopen — URLs vêm de config.py validado (Zabbix interno)
+    "S501",   # verify=False — Zabbix self-signed em LAN corporativa
+    "S104",   # 0.0.0.0 bind — necessário em container/dev
+    "S108",   # /tmp/* — paths de download em scripts CLI one-shot
+    "RUF001", # caractere ℹ — uso intencional em CLI output (UX)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -80,45 +86,68 @@ filterwarnings = [
 ]
 
 # ============================================
-# Coverage
+# Bandit — Security
+# ============================================
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "_backups"]
+skips = ["B101"]  # assert_used
+
+# ============================================
+# Mypy — Type checking gradual
+# ============================================
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Strict em services/ (núcleo de negócio)
+[[tool.mypy.overrides]]
+module = "services.*"
+disallow_untyped_defs = false   # subir gradualmente
+strict_equality = true
+
+# Collectors: lenient (I/O externo, difícil tipar)
+[[tool.mypy.overrides]]
+module = "collectors.*"
+ignore_errors = true
+
+# Tests: lenient
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+# Bibliotecas sem stubs
+[[tool.mypy.overrides]]
+module = ["pyzabbix.*", "influxdb_client.*", "ldap3.*"]
+ignore_missing_imports = true
+
+# ============================================
+# Coverage — Thresholds realistas
 # ============================================
 [tool.coverage.run]
 source = ["."]
 omit = [
     "tests/*",
-    "venv/*",
+    "*/site-packages/*",
     ".venv/*",
-    "_backups/*",
-    "*/migrations/*",
-    "setup.py",
+    "cftv-setup/*",
+    "scripts/*",
 ]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
-    "def __repr__",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
 precision = 2
 show_missing = true
+skip_covered = false
 
-# ============================================
-# Mypy — Type Checking (gradual)
-# ============================================
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = false
-warn_unused_configs = true
-ignore_missing_imports = true
-no_implicit_optional = true
-check_untyped_defs = false
-exclude = ["venv", ".venv", "_backups", "tests"]
-
-# ============================================
-# Bandit — Security
-# ============================================
-[tool.bandit]
-exclude_dirs = ["tests", "venv", ".venv", "_backups"]
-skips = ["B101"]  # assert_used
+[tool.coverage.html]
+directory = "htmlcov"
