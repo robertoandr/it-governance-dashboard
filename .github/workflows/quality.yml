@@ -81,8 +81,7 @@ jobs:
 
       - name: Run bandit security scan
         run: bandit -r . -c pyproject.toml --severity-level medium
-        continue-on-error: true  # Avisa mas não bloqueia inicialmente
-
+        continue-on-error: true  # Avisa mas não bloqueia inicialment
 
   typecheck:
     name: 🔬 Type Check (Mypy)
@@ -93,10 +92,14 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-      - name: Install mypy
-        run: pip install mypy types-requests
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
       - name: Run mypy on services/
         run: mypy services/
+
 
   summary:
     name: ✅ Quality Summary
