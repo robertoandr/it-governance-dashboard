@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from flask import Flask, jsonify, render_template, request
 
 import config
+from app_utils import safe
 from collectors.grafana import GrafanaCollector
 from collectors.graph import GraphCollector
 from collectors.influx import InfluxCollector
@@ -199,7 +200,7 @@ def _refresh_loop():
         try:
             _refresh_once()
         except Exception as e:
-            log.exception("loop: %s", e)
+            log.exception("loop: %s", safe(e))
             with _cache_lock:
                 _cache["last_error"] = str(e)
         time.sleep(config.CACHE_TTL)
@@ -255,7 +256,7 @@ def api_ack():
         threading.Thread(target=_refresh_once, daemon=True).start()
         return jsonify(result)
     except Exception as e:
-        log.warning("ack %s: %s", eventid, e)
+        log.warning("ack %s: %s", safe(eventid), safe(e))
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -271,7 +272,7 @@ def api_unack():
         threading.Thread(target=_refresh_once, daemon=True).start()
         return jsonify(result)
     except Exception as e:
-        log.warning("unack %s: %s", eventid, e)
+        log.warning("unack %s: %s", safe(eventid), safe(e))
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

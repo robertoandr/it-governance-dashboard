@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from app_utils import safe
+
 log = logging.getLogger("maintenance")
 
 # Caminhos
@@ -55,7 +57,7 @@ def _validate_state(data) -> dict:
             log.warning("Host com nome inválido descartado: %r", host_name)
             continue
         if not isinstance(info, dict):
-            log.warning("Info inválido para host %s — descartado", host_name)
+            log.warning("Info inválido para host %s — descartado", safe(host_name))
             continue
         clean_hosts[host_name.strip()] = info
 
@@ -72,7 +74,7 @@ def _load_state() -> dict:
             data = json.load(f)
         return _validate_state(data)
     except (json.JSONDecodeError, OSError) as e:
-        log.error("Falha ao ler %s: %s — usando estado vazio", _STATE_FILE, e)
+        log.error("Falha ao ler %s: %s — usando estado vazio", _STATE_FILE, safe(e))
         return {"version": 1, "hosts": {}, "updated_at": None}
 
 
@@ -230,7 +232,7 @@ def clear(hosts: list[str], operator: str, note: str = "") -> dict:
 
         if cleared:
             _save_state(state)
-            log.info("Manutenção: %d host(s) liberado(s) por %s", len(cleared), operator)
+            log.info("Manutenção: %d host(s) liberado(s) por %s", len(cleared), safe(operator))
 
         return {
             "cleared": cleared,

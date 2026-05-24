@@ -20,6 +20,7 @@ from functools import wraps
 
 from flask import Blueprint, jsonify, request
 
+from app_utils import safe
 from services import maintenance_service as svc
 
 log = logging.getLogger("routes.maintenance")
@@ -63,7 +64,7 @@ def require_pin(fn):
 
         provided = _extract_pin()
         if provided != expected:
-            log.warning("Tentativa de escrita com PIN inválido — IP: %s", request.remote_addr)
+            log.warning("Tentativa de escrita com PIN inválido — IP: %s", safe(request.remote_addr))
             return jsonify(
                 {
                     "ok": False,
