@@ -16,10 +16,7 @@ load_dotenv(BASE_DIR / ".env")
 def _env(var: str, default: str | None = None, required: bool = True) -> str:
     value = os.getenv(var, default)
     if required and (value is None or value == ""):
-        raise OSError(
-            f"Variável de ambiente obrigatória não definida: {var}. "
-            f"Verifique o arquivo {BASE_DIR / '.env'}"
-        )
+        raise OSError(f"Variável de ambiente obrigatória não definida: {var}. Verifique o arquivo {BASE_DIR / '.env'}")
     return value or ""
 
 

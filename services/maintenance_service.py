@@ -111,11 +111,7 @@ def list_active() -> list:
     🌐 API PÚBLICA — formato idiomático REST (Sprint 6f).
     """
     hosts_dict = list_active_dict()
-    return [
-        {"host": host_name, **info}
-        for host_name, info in hosts_dict.items()
-        if isinstance(info, dict)
-    ]
+    return [{"host": host_name, **info} for host_name, info in hosts_dict.items() if isinstance(info, dict)]
 
 
 def is_in_maintenance(host_name: str) -> bool:

@@ -84,10 +84,7 @@ except FileNotFoundError:
 
 print("Variaveis encontradas no .env:")
 for k, v in env_vars.items():
-    if any(s in k.upper() for s in ["TOKEN", "PASS", "SECRET", "KEY"]):
-        masked = v[:6] + "***"
-    else:
-        masked = v[:30]
+    masked = v[:6] + "***" if any(s in k.upper() for s in ["TOKEN", "PASS", "SECRET", "KEY"]) else v[:30]
     print(f"   {k} = {masked}")
 
 
