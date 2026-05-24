@@ -34,9 +34,7 @@ class LDAPCollector:
 
         try:
             srv = Server(config.LDAP_SERVER, get_info=ALL)
-            conn = Connection(
-                srv, config.LDAP_USER, config.LDAP_PASSWORD, auto_bind=True, receive_timeout=10
-            )
+            conn = Connection(srv, config.LDAP_USER, config.LDAP_PASSWORD, auto_bind=True, receive_timeout=10)
             # Usuários habilitados
             conn.search(
                 config.LDAP_BASE_DN,

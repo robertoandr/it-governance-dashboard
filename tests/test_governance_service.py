@@ -46,9 +46,7 @@ class TestLoadYaml:
         data = gov_service._load_yaml()
         assert data == {"domains": {}, "organization": {}}
 
-    def test_yaml_invalido_mantem_cache_ou_volta_estrutura_vazia(
-        self, gov_service, fake_owners_yaml
-    ):
+    def test_yaml_invalido_mantem_cache_ou_volta_estrutura_vazia(self, gov_service, fake_owners_yaml):
         # Primeiro load OK
         gov_service._load_yaml()
 

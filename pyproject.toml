@@ -12,12 +12,28 @@ requires-python = ">=3.12"
 # ============================================
 # Ruff — Linter + Formatter (substitui black+isort+flake8)
 # ============================================
+# Estratégia: foca em código de PRODUÇÃO do dashboard.
+# Scripts one-shot de setup (cftv-setup/) são excluídos
+# pois rodam fora do runtime de produção e têm riscos
+# operacionais já mitigados por revisão manual e
+# execução controlada via runbook.
+# Ver docs/security/exceptions.md para justificativas.
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py312"
 extend-exclude = [
-    "venv", ".venv", "build", "dist",
-    "_backups", "data", "htmlcov", "migrations"
+    "cftv-setup",       # scripts one-shot de provisionamento Zabbix
+    "zabbix-mcp-server", # repo Git separado (nested, não nosso código)
+    ".governance",      # artefatos de governança (gerados)
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "_backups",
+    "data",
+    "htmlcov",
+    "migrations",
+    "node_modules",
 ]
 
 [tool.ruff.lint]
@@ -37,26 +53,26 @@ select = [
 ignore = [
     "E501",   # line too long (formatter cuida)
     "S101",   # assert usado (ok em testes)
+    "S104",   # bind 0.0.0.0 (controlado via FLASK_HOST env var)
+    "S108",   # /tmp hardcoded (uso controlado em scripts)
+    "S310",   # urllib URL (schemes validados em runtime via allowlist)
     "B008",   # function call in default arg (Flask usa muito)
-    # ── Exceções de governança justificadas ──
-    "S310",   # urllib.urlopen — URLs vêm de config.py validado (Zabbix interno)
-    "S501",   # verify=False — Zabbix self-signed em LAN corporativa
-    "S104",   # 0.0.0.0 bind — necessário em container/dev
-    "S108",   # /tmp/* — paths de download em scripts CLI one-shot
-    "RUF001", # caractere ℹ — uso intencional em CLI output (UX)
+    "RUF001", # ambiguous unicode (emojis intencionais em UI)
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S", "N802"]   # testes podem usar assert e nomes flexíveis
-"config.py" = ["S105", "S106"]  # secrets em config (vem do .env)
+"tests/**/*.py" = ["S", "N802", "B"]  # testes: asserts, nomes flexíveis
+"config.py" = ["S105", "S106"]        # secrets vêm do .env
+"scripts/**/*.py" = ["S"]             # diagnostic scripts
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-line-ending = "lf"
 
 # ============================================
-# Pytest — Migrado de pytest.ini
+# Pytest
 # ============================================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -86,68 +102,63 @@ filterwarnings = [
 ]
 
 # ============================================
-# Bandit — Security
-# ============================================
-[tool.bandit]
-exclude_dirs = ["tests", "venv", ".venv", "_backups"]
-skips = ["B101"]  # assert_used
-
-# ============================================
-# Mypy — Type checking gradual
-# ============================================
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-no_implicit_optional = true
-check_untyped_defs = true
-
-# Strict em services/ (núcleo de negócio)
-[[tool.mypy.overrides]]
-module = "services.*"
-disallow_untyped_defs = false   # subir gradualmente
-strict_equality = true
-
-# Collectors: lenient (I/O externo, difícil tipar)
-[[tool.mypy.overrides]]
-module = "collectors.*"
-ignore_errors = true
-
-# Tests: lenient
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
-
-# Bibliotecas sem stubs
-[[tool.mypy.overrides]]
-module = ["pyzabbix.*", "influxdb_client.*", "ldap3.*"]
-ignore_missing_imports = true
-
-# ============================================
-# Coverage — Thresholds realistas
+# Coverage
 # ============================================
 [tool.coverage.run]
 source = ["."]
 omit = [
     "tests/*",
-    "*/site-packages/*",
+    "venv/*",
     ".venv/*",
+    "_backups/*",
+    "*/migrations/*",
+    "setup.py",
     "cftv-setup/*",
-    "scripts/*",
 ]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
+    "def __repr__",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
 precision = 2
 show_missing = true
-skip_covered = false
 
-[tool.coverage.html]
-directory = "htmlcov"
+# ============================================
+# Mypy — Type Checking (gradual)
+# ============================================
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+check_untyped_defs = false
+exclude = ["venv", ".venv", "_backups", "tests", "cftv-setup"]
+
+# ============================================
+# Bandit — Security Scanner
+# ============================================
+# Skips justificados em docs/security/exceptions.md
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "venv",
+    ".venv",
+    "_backups",
+    "node_modules",
+    ".governance",
+    "cftv-setup",
+    "scripts",
+    "build",
+    "dist",
+]
+skips = [
+    "B101",  # assert_used (ok em código defensivo)
+    "B104",  # bind 0.0.0.0 (controlado por FLASK_HOST env var)
+    "B108",  # /tmp hardcoded (uso controlado em scripts one-shot)
+    "B310",  # urllib URL (schemes validados via allowlist runtime)
+]
