@@ -38,6 +38,12 @@ ignore = [
     "E501",   # line too long (formatter cuida)
     "S101",   # assert usado (ok em testes)
     "B008",   # function call in default arg (Flask usa muito)
+    # ── Exceções de governança justificadas ──
+    "S310",   # urllib.urlopen — URLs vêm de config.py validado (Zabbix interno)
+    "S501",   # verify=False — Zabbix self-signed em LAN corporativa
+    "S104",   # 0.0.0.0 bind — necessário em container/dev
+    "S108",   # /tmp/* — paths de download em scripts CLI one-shot
+    "RUF001", # caractere ℹ — uso intencional em CLI output (UX)
 ]
 
 [tool.ruff.lint.per-file-ignores]

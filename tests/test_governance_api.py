@@ -12,6 +12,7 @@ Cobre:
 # 👥 GRUPO 1 — /api/governance/owners
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestOwnersEndpoint:
     def test_owners_retorna_200(self, gov_client):
         r = gov_client.get("/api/governance/owners")
@@ -56,6 +57,7 @@ class TestOwnersEndpoint:
 # 🏢 GRUPO 2 — /api/governance/organization
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestOrganizationEndpoint:
     def test_organization_retorna_200(self, gov_client):
         r = gov_client.get("/api/governance/organization")
@@ -72,6 +74,7 @@ class TestOrganizationEndpoint:
 # ═══════════════════════════════════════════════════════════════════
 # 🔍 GRUPO 3 — /api/governance/domain/<key>
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestDomainDetailEndpoint:
     def test_domain_existente_retorna_200(self, gov_client):
@@ -109,6 +112,7 @@ class TestDomainDetailEndpoint:
 # ═══════════════════════════════════════════════════════════════════
 # 🛡️ GRUPO 4 — Contratos REST (compatibilidade frontend)
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestContratoREST:
     def test_owners_content_type_json(self, gov_client):

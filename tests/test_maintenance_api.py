@@ -14,6 +14,7 @@ Cobertura:
 # 🌐 GRUPO 1 — Endpoints GET (leitura)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestGetEndpoints:
     """Endpoints públicos de leitura."""
 
@@ -67,13 +68,14 @@ class TestGetEndpoints:
 # 🔐 GRUPO 2 — Autenticação OPS_PIN
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestAutenticacao:
     """Endpoints de escrita exigem PIN válido."""
 
     def test_mark_sem_pin_401(self, client):
-        r = client.post("/api/maintenance/mark", json={
-            "hosts": ["X"], "operator": "op", "reason": "r"
-        })
+        r = client.post(
+            "/api/maintenance/mark", json={"hosts": ["X"], "operator": "op", "reason": "r"}
+        )
         assert r.status_code == 401
         body = r.get_json()
         assert body["error"] == "invalid_pin"
@@ -96,18 +98,22 @@ class TestAutenticacao:
         assert r.get_json()["ok"] is True
 
     def test_mark_pin_via_body_funciona(self, client, ops_pin):
-        r = client.post("/api/maintenance/mark", json={
-            "pin": ops_pin,
-            "hosts": ["H1"],
-            "operator": "op",
-            "reason": "r",
-        })
+        r = client.post(
+            "/api/maintenance/mark",
+            json={
+                "pin": ops_pin,
+                "hosts": ["H1"],
+                "operator": "op",
+                "reason": "r",
+            },
+        )
         assert r.status_code == 200
 
 
 # ═══════════════════════════════════════════════════════════════════
 # ✏️ GRUPO 3 — POST /mark
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestMarkEndpoint:
     """POST /api/maintenance/mark."""
@@ -165,6 +171,7 @@ class TestMarkEndpoint:
 # 🧹 GRUPO 4 — POST /clear
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestClearEndpoint:
     """POST /api/maintenance/clear."""
 
@@ -201,6 +208,7 @@ class TestClearEndpoint:
 # ═══════════════════════════════════════════════════════════════════
 # 🚨 GRUPO 5 — POST /release_all (endpoint perigoso)
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestReleaseAll:
     """Endpoint com 3 camadas de segurança."""
@@ -255,6 +263,7 @@ class TestReleaseAll:
 # ═══════════════════════════════════════════════════════════════════
 # 🛡️ GRUPO 6 — Contrato JSON (Sprint 6f regression test)
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestContratoREST:
     """Garante que /api/maintenance retorna LIST (não dict)."""

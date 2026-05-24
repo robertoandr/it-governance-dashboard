@@ -14,12 +14,13 @@ Cria estrutura hierárquica de grupos para governança multi-loja:
         ├─ Impressoras
         └─ Rede
 
-  Por que nested? 
+  Por que nested?
   ├─ Permissões em cascata (futuro: usuário só vê sua loja)
   ├─ Filtros no dashboard por loja/categoria
   ├─ Escalável: adicionar Loja-Norte/Sul depois é trivial
   └─ Relatórios SLA por loja automáticos
 """
+
 import json
 import sys
 import urllib.error
@@ -35,7 +36,6 @@ CONFIG_FILE = Path("/opt/it-gov-dashboard/cftv-setup/.zabbix_config.json")
 HOSTGROUPS = [
     # Topo
     "Lojas",
-
     # Loja Centro — completa
     "Lojas/Centro",
     "Lojas/Centro/CFTV",
@@ -44,7 +44,6 @@ HOSTGROUPS = [
     "Lojas/Centro/Servidores",
     "Lojas/Centro/Impressoras",
     "Lojas/Centro/Rede",
-
     # Categorias transversais (úteis pra dashboards globais)
     "CFTV",
     "CFTV/NVRs",
@@ -59,6 +58,7 @@ def banner(text, char="═", width=64):
     print(char * width)
     print(f"  {text}")
     print(char * width)
+
 
 def zabbix_api(url, method, params, auth=None):
     """Chama API Zabbix 7.0 — auth no header Authorization (HTTPS-aware)."""
@@ -98,6 +98,7 @@ def zabbix_api(url, method, params, auth=None):
 
     return result.get("result")
 
+
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
@@ -119,18 +120,27 @@ def main():
 
     # ─── [2/4] Login ────────────────────────────────────────
     print("\n[2/4] Autenticando")
-    auth_token = zabbix_api(url, "user.login", {
-        "username": user,
-        "password": password,
-    })
+    auth_token = zabbix_api(
+        url,
+        "user.login",
+        {
+            "username": user,
+            "password": password,
+        },
+    )
     print(f"   ✅ Login OK como '{user}'")
 
     # ─── [3/4] Listar grupos existentes ─────────────────────
     print("\n[3/4] Verificando grupos existentes")
-    existing = zabbix_api(url, "hostgroup.get", {
-        "output": ["groupid", "name"],
-        "filter": {"name": HOSTGROUPS},
-    }, auth_token)
+    existing = zabbix_api(
+        url,
+        "hostgroup.get",
+        {
+            "output": ["groupid", "name"],
+            "filter": {"name": HOSTGROUPS},
+        },
+        auth_token,
+    )
 
     existing_names = {g["name"]: g["groupid"] for g in existing}
     print(f"   📊 Já existem: {len(existing_names)} grupo(s)")
@@ -147,9 +157,14 @@ def main():
             skipped.append(name)
             continue
 
-        result = zabbix_api(url, "hostgroup.create", {
-            "name": name,
-        }, auth_token)
+        result = zabbix_api(
+            url,
+            "hostgroup.create",
+            {
+                "name": name,
+            },
+            auth_token,
+        )
         gid = result["groupids"][0]
         created[name] = gid
         print(f"   ✅ Criado ID {gid:>6} → {name}")
@@ -198,10 +213,10 @@ def main():
     banner("✅ FASE 2 CONCLUÍDA — Pronto para Fase 3", char="═")
     print("""
   📌 PRÓXIMO PASSO:
-  
+
      # Confirmar senha do NVR (preserva entre sudo):
      read -rs DVR_PASSWORD && export DVR_PASSWORD
-     
+
      # Rodar Fase 3 (criar NVR + 18 câmeras):
      sudo -E -u zabbix python3 \\
        /opt/it-gov-dashboard/cftv-setup/08_create_nvr_and_cameras.py

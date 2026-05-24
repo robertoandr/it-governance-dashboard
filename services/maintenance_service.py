@@ -7,6 +7,7 @@ Características:
 - Thread-safe via threading.Lock
 - Sem expiração automática (decisão de produto)
 """
+
 from __future__ import annotations
 
 import json
@@ -92,6 +93,7 @@ def _append_history(event: dict) -> None:
 
 # ── API Pública ────────────────────────────────────────────────────────────
 
+
 def list_active_dict() -> dict:
     """
     Retorna dicionário {host_name: info} dos hosts em manutenção.
@@ -126,13 +128,13 @@ def get_info(host_name: str) -> dict | None:
 def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> dict:
     """
     Marca 1+ hosts como em manutenção.
-    
+
     Args:
         hosts: lista de host names (ex: ["CAM-8A-35", "CAM-8A-36"])
         operator: nome do operador (ex: "roberto")
         reason: motivo livre (ex: "Investigação switch 8º andar")
         domain: domínio do dashboard (ex: "cftv", "m365") — default cftv
-    
+
     Returns:
         {"marked": [...], "already_in_maint": [...], "count": N}
     """
@@ -161,18 +163,24 @@ def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> 
                 "domain": domain,
             }
             marked.append(h)
-            _append_history({
-                "action": "mark",
-                "host": h,
-                "by": operator,
-                "reason": reason,
-                "domain": domain,
-            })
+            _append_history(
+                {
+                    "action": "mark",
+                    "host": h,
+                    "by": operator,
+                    "reason": reason,
+                    "domain": domain,
+                }
+            )
 
         if marked:
             _save_state(state)
-            log.info("Manutenção: %d host(s) marcado(s) por %s — motivo: %s",
-                     len(marked), operator, reason)
+            log.info(
+                "Manutenção: %d host(s) marcado(s) por %s — motivo: %s",
+                len(marked),
+                operator,
+                reason,
+            )
 
         return {
             "marked": marked,
@@ -184,7 +192,7 @@ def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> 
 def clear(hosts: list[str], operator: str, note: str = "") -> dict:
     """
     Remove 1+ hosts da manutenção.
-    
+
     Returns:
         {"cleared": [...], "not_found": [...], "count": N}
     """
@@ -208,13 +216,15 @@ def clear(hosts: list[str], operator: str, note: str = "") -> dict:
                 continue
             prev = state["hosts"].pop(h)
             cleared.append(h)
-            _append_history({
-                "action": "clear",
-                "host": h,
-                "by": operator,
-                "note": note,
-                "previous": prev,
-            })
+            _append_history(
+                {
+                    "action": "clear",
+                    "host": h,
+                    "by": operator,
+                    "note": note,
+                    "previous": prev,
+                }
+            )
 
         if cleared:
             _save_state(state)
@@ -252,7 +262,7 @@ def stats() -> dict:
 
     by_domain = {}
     by_operator = {}
-    for h, info in hosts.items():
+    for _h, info in hosts.items():
         d = info.get("domain", "unknown")
         op = info.get("marked_by", "unknown")
         by_domain[d] = by_domain.get(d, 0) + 1
@@ -272,14 +282,15 @@ def stats() -> dict:
 # Filtra/anota dados coletados do Zabbix com info de manutenção
 # manual. Fail-open: qualquer erro retorna data original intacta.
 
+
 def apply_filter(key: str, data):
     """
     Aplica filtro de manutenção manual sobre dados do collector Zabbix.
-    
+
     Args:
         key: "hosts" | "problems" | "triggers" | "cftv"
         data: dados originais retornados pelo ZabbixCollector
-    
+
     Returns:
         Dados enriquecidos/filtrados. Em caso de erro, retorna data original.
     """
@@ -298,13 +309,10 @@ def apply_filter(key: str, data):
             return _mf_filter_cftv(data, in_maint)
         return data
     except Exception as e:
-        try:
-            import logging
-            logging.getLogger(__name__).warning(
-                "apply_filter(%s) falhou: %s — retornando dados originais", key, e
-            )
-        except Exception:
-            pass
+        import logging
+        logging.getLogger(__name__).warning(
+            "apply_filter(%s) falhou: %s — retornando dados originais", key, e
+        )
         return data
 
 
@@ -371,7 +379,6 @@ def _mf_filter_cftv(data: dict, in_maint: set) -> dict:
         if not isinstance(h, dict):
             new_down_list.append(h)
             continue
-        host_key = h.get("host") or h.get("name")
         # checa tanto "host" quanto "name" (CFTV usa ambos)
         if (h.get("host") in in_maint) or (h.get("name") in in_maint):
             h_marked = dict(h)
@@ -392,6 +399,7 @@ def _mf_filter_cftv(data: dict, in_maint: set) -> dict:
     out["maint"] = int(out.get("maint", 0) or 0) + moved
     out["maint_manual_count"] = moved
     return out
+
 
 # ── Sprint 6e: startup banner ──────────────────────────────────────────────
 log.info(

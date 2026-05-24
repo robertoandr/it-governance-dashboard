@@ -10,6 +10,7 @@ Endpoints:
 
 Autenticação: header X-Ops-Pin OU campo "pin" no JSON body.
 """
+
 from __future__ import annotations
 
 import logging
@@ -46,49 +47,59 @@ def _extract_pin() -> str:
 
 def require_pin(fn):
     """Decorator: exige OPS_PIN válido."""
+
     @wraps(fn)
     def wrapper(*args, **kwargs):
         expected = _get_ops_pin()
         if not expected:
             log.error("OPS_PIN não configurado no ambiente — bloqueando escrita")
-            return jsonify({
-                "ok": False,
-                "error": "ops_pin_not_configured",
-                "message": "Servidor sem OPS_PIN definido. Contate o admin.",
-            }), 503
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "ops_pin_not_configured",
+                    "message": "Servidor sem OPS_PIN definido. Contate o admin.",
+                }
+            ), 503
 
         provided = _extract_pin()
         if provided != expected:
-            log.warning("Tentativa de escrita com PIN inválido — IP: %s",
-                        request.remote_addr)
-            return jsonify({
-                "ok": False,
-                "error": "invalid_pin",
-                "message": "PIN inválido.",
-            }), 401
+            log.warning("Tentativa de escrita com PIN inválido — IP: %s", request.remote_addr)
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "invalid_pin",
+                    "message": "PIN inválido.",
+                }
+            ), 401
 
         return fn(*args, **kwargs)
+
     return wrapper
 
 
 # ── Endpoints de leitura (públicos no contexto do dashboard) ────────────
 
+
 @maintenance_bp.get("")
 def list_maintenance():
     """Lista hosts atualmente em manutenção."""
-    return jsonify({
-        "ok": True,
-        "hosts": svc.list_active(),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "hosts": svc.list_active(),
+        }
+    )
 
 
 @maintenance_bp.get("/stats")
 def maintenance_stats():
     """Estatísticas agregadas."""
-    return jsonify({
-        "ok": True,
-        "stats": svc.stats(),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "stats": svc.stats(),
+        }
+    )
 
 
 @maintenance_bp.get("/history")
@@ -100,21 +111,24 @@ def maintenance_history():
         limit = 50
     limit = max(1, min(limit, 500))  # clamp 1..500
 
-    return jsonify({
-        "ok": True,
-        "limit": limit,
-        "events": svc.history(limit=limit),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "limit": limit,
+            "events": svc.history(limit=limit),
+        }
+    )
 
 
 # ── Endpoints de escrita (exigem OPS_PIN) ───────────────────────────────
+
 
 @maintenance_bp.post("/mark")
 @require_pin
 def mark_maintenance():
     """
     Marca 1+ hosts como em manutenção.
-    
+
     Body JSON:
       {
         "pin": "...",              (ou header X-Ops-Pin)
@@ -130,29 +144,35 @@ def mark_maintenance():
     if isinstance(hosts, str):
         hosts = [hosts]
     if not isinstance(hosts, list) or not hosts:
-        return jsonify({
-            "ok": False,
-            "error": "invalid_hosts",
-            "message": "Campo 'hosts' deve ser lista não-vazia.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "invalid_hosts",
+                "message": "Campo 'hosts' deve ser lista não-vazia.",
+            }
+        ), 400
 
     operator = str(data.get("operator", "")).strip()
     reason = str(data.get("reason", "")).strip()
     domain = str(data.get("domain", "cftv")).strip() or "cftv"
 
     if not operator:
-        return jsonify({
-            "ok": False,
-            "error": "missing_operator",
-            "message": "Campo 'operator' é obrigatório.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "missing_operator",
+                "message": "Campo 'operator' é obrigatório.",
+            }
+        ), 400
 
     if not reason:
-        return jsonify({
-            "ok": False,
-            "error": "missing_reason",
-            "message": "Campo 'reason' é obrigatório.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "missing_reason",
+                "message": "Campo 'reason' é obrigatório.",
+            }
+        ), 400
 
     result = svc.mark(hosts=hosts, operator=operator, reason=reason, domain=domain)
     return jsonify({"ok": True, **result})
@@ -163,7 +183,7 @@ def mark_maintenance():
 def clear_maintenance():
     """
     Remove 1+ hosts da manutenção.
-    
+
     Body JSON:
       {
         "pin": "...",
@@ -178,21 +198,25 @@ def clear_maintenance():
     if isinstance(hosts, str):
         hosts = [hosts]
     if not isinstance(hosts, list) or not hosts:
-        return jsonify({
-            "ok": False,
-            "error": "invalid_hosts",
-            "message": "Campo 'hosts' deve ser lista não-vazia.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "invalid_hosts",
+                "message": "Campo 'hosts' deve ser lista não-vazia.",
+            }
+        ), 400
 
     operator = str(data.get("operator", "")).strip()
     note = str(data.get("note", "")).strip()
 
     if not operator:
-        return jsonify({
-            "ok": False,
-            "error": "missing_operator",
-            "message": "Campo 'operator' é obrigatório.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "missing_operator",
+                "message": "Campo 'operator' é obrigatório.",
+            }
+        ), 400
 
     result = svc.clear(hosts=hosts, operator=operator, note=note)
     return jsonify({"ok": True, **result})
@@ -202,6 +226,7 @@ def clear_maintenance():
 # Sprint 6e — Endpoints adicionais
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @maintenance_bp.get("/_debug")
 def maintenance_debug():
     """
@@ -209,6 +234,7 @@ def maintenance_debug():
     NÃO requer PIN (apenas leitura de metadados).
     """
     from datetime import datetime
+
     sf = svc._STATE_FILE
     hf = svc._HISTORY_FILE
     state = svc._load_state()
@@ -218,24 +244,24 @@ def maintenance_debug():
     if sf.exists():
         st = sf.stat()
         state_info["size_bytes"] = st.st_size
-        state_info["mtime"] = datetime.fromtimestamp(
-            st.st_mtime, UTC
-        ).isoformat(timespec="seconds")
+        state_info["mtime"] = datetime.fromtimestamp(st.st_mtime, UTC).isoformat(timespec="seconds")
 
     history_info = {"path": str(hf), "exists": hf.exists()}
     if hf.exists():
         history_info["size_bytes"] = hf.stat().st_size
 
-    return jsonify({
-        "ok": True,
-        "module": "maintenance_service",
-        "state_file": state_info,
-        "history_file": history_info,
-        "active_count": len(hosts),
-        "active_hosts": list(hosts.keys()),
-        "version": state.get("version"),
-        "updated_at": state.get("updated_at"),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "module": "maintenance_service",
+            "state_file": state_info,
+            "history_file": history_info,
+            "active_count": len(hosts),
+            "active_hosts": list(hosts.keys()),
+            "version": state.get("version"),
+            "updated_at": state.get("updated_at"),
+        }
+    )
 
 
 @maintenance_bp.post("/release_all")
@@ -251,36 +277,45 @@ def release_all_maintenance():
     """
     confirm = request.args.get("confirm", "").strip()
     if confirm != "YES_RELEASE_ALL":
-        return jsonify({
-            "ok": False,
-            "error": "confirm_required",
-            "message": "Adicione ?confirm=YES_RELEASE_ALL à URL.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "confirm_required",
+                "message": "Adicione ?confirm=YES_RELEASE_ALL à URL.",
+            }
+        ), 400
 
     data = request.get_json(silent=True) or {}
     operator = str(data.get("operator", "")).strip()
     note = str(data.get("note", "Sprint 6e: release_all")).strip()
 
     if not operator:
-        return jsonify({
-            "ok": False,
-            "error": "missing_operator",
-            "message": "Campo 'operator' é obrigatório.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "missing_operator",
+                "message": "Campo 'operator' é obrigatório.",
+            }
+        ), 400
 
     active = svc.list_active_dict()  # 🔧 Sprint 6f: dict pra .keys()
     if not active:
-        return jsonify({
-            "ok": True,
-            "released": 0,
-            "hosts": [],
-            "message": "Nenhum host em manutenção.",
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "released": 0,
+                "hosts": [],
+                "message": "Nenhum host em manutenção.",
+            }
+        )
 
     hosts_to_release = list(active.keys())
     log.warning(
         "RELEASE_ALL acionado por %s (IP=%s): %d hosts → %s",
-        operator, request.remote_addr, len(hosts_to_release), hosts_to_release
+        operator,
+        request.remote_addr,
+        len(hosts_to_release),
+        hosts_to_release,
     )
 
     result = svc.clear(
@@ -289,9 +324,11 @@ def release_all_maintenance():
         note=f"[release_all] {note}",
     )
 
-    return jsonify({
-        "ok": True,
-        "released": len(hosts_to_release),
-        "hosts": hosts_to_release,
-        **result,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "released": len(hosts_to_release),
+            "hosts": hosts_to_release,
+            **result,
+        }
+    )

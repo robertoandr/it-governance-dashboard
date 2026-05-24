@@ -6,6 +6,7 @@ Endpoints:
   GET /api/governance/organization → nome, título do dashboard
   GET /api/governance/domain/<key> → detalhes de um domínio
 """
+
 import logging
 
 from flask import Blueprint, current_app, jsonify
@@ -27,15 +28,17 @@ def owners():
     """Lista de domínios com owners e SLA (runtime)."""
     cache = _get_cache()
     domains = gs.get_domains_with_runtime(cache)
-    return jsonify({
-        "organization": gs.get_organization(),
-        "domains": domains,
-        "count": {
-            "total": len(domains),
-            "active": sum(1 for d in domains if d.get("status") == "active"),
-            "planned": sum(1 for d in domains if d.get("status") == "planned"),
+    return jsonify(
+        {
+            "organization": gs.get_organization(),
+            "domains": domains,
+            "count": {
+                "total": len(domains),
+                "active": sum(1 for d in domains if d.get("status") == "active"),
+                "planned": sum(1 for d in domains if d.get("status") == "planned"),
+            },
         }
-    })
+    )
 
 
 @governance_bp.route("/organization")

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Cria Template_CFTV_Ping com items ICMP + triggers."""
+
 import sys
 
 sys.path.insert(0, "/opt/it-gov-dashboard")
@@ -14,7 +15,8 @@ TEMPLATE_GROUP_NAME = "Templates"  # grupo padrão de templates no Zabbix
 
 def call(method, params, auth=None):
     body = {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
-    if auth: body["auth"] = auth
+    if auth:
+        body["auth"] = auth
     r = requests.post(ZBX_URL, json=body, timeout=15)
     data = r.json()
     if "error" in data:
@@ -22,16 +24,17 @@ def call(method, params, auth=None):
     return data["result"]
 
 
-token = call("user.login", {
-    "username": config.ZABBIX_USER,
-    "password": config.ZABBIX_PASSWORD
-}, auth=None)
+token = call(
+    "user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None
+)
 print("✓ Login OK")
 
 # 1. Acha o template group "Templates"
-tg = call("templategroup.get", {
-    "output": ["groupid", "name"], "filter": {"name": TEMPLATE_GROUP_NAME}
-}, auth=token)
+tg = call(
+    "templategroup.get",
+    {"output": ["groupid", "name"], "filter": {"name": TEMPLATE_GROUP_NAME}},
+    auth=token,
+)
 if not tg:
     # Zabbix 6+: pode ser que use templategroup.get; em 7.x existe certeza
     raise RuntimeError(f"Template group '{TEMPLATE_GROUP_NAME}' não encontrado")
@@ -39,20 +42,25 @@ tg_id = tg[0]["groupid"]
 print(f"✓ Template group '{TEMPLATE_GROUP_NAME}' = {tg_id}")
 
 # 2. Verifica se template já existe
-existing = call("template.get", {
-    "output": ["templateid", "host"],
-    "filter": {"host": TEMPLATE_NAME}
-}, auth=token)
+existing = call(
+    "template.get",
+    {"output": ["templateid", "host"], "filter": {"host": TEMPLATE_NAME}},
+    auth=token,
+)
 if existing:
     template_id = existing[0]["templateid"]
     print(f"ℹ Template já existe: id={template_id} — vou apenas garantir items/triggers")
 else:
-    result = call("template.create", {
-        "host": TEMPLATE_NAME,
-        "name": "CFTV Ping ICMP",
-        "description": "Monitoramento básico de dispositivos CFTV via ICMP. 1 ping/min, 2 triggers (5min High, 1h Disaster).",
-        "groups": [{"groupid": tg_id}],
-    }, auth=token)
+    result = call(
+        "template.create",
+        {
+            "host": TEMPLATE_NAME,
+            "name": "CFTV Ping ICMP",
+            "description": "Monitoramento básico de dispositivos CFTV via ICMP. 1 ping/min, 2 triggers (5min High, 1h Disaster).",
+            "groups": [{"groupid": tg_id}],
+        },
+        auth=token,
+    )
     template_id = result["templateids"][0]
     print(f"✓ Template criado: id={template_id}")
 
@@ -89,11 +97,15 @@ items_to_create = [
 created_items = []
 for item_def in items_to_create:
     # Verifica se já existe
-    found = call("item.get", {
-        "output": ["itemid", "key_"],
-        "templateids": [template_id],
-        "filter": {"key_": item_def["key_"]}
-    }, auth=token)
+    found = call(
+        "item.get",
+        {
+            "output": ["itemid", "key_"],
+            "templateids": [template_id],
+            "filter": {"key_": item_def["key_"]},
+        },
+        auth=token,
+    )
     if found:
         print(f"  ℹ item '{item_def['key_']}' já existe (id={found[0]['itemid']})")
         created_items.append(found[0]["itemid"])
@@ -123,13 +135,19 @@ triggers_to_create = [
 
 created_triggers = {}
 for tr_def in triggers_to_create:
-    found = call("trigger.get", {
-        "output": ["triggerid", "description"],
-        "templateids": [template_id],
-        "filter": {"description": tr_def["description"]}
-    }, auth=token)
+    found = call(
+        "trigger.get",
+        {
+            "output": ["triggerid", "description"],
+            "templateids": [template_id],
+            "filter": {"description": tr_def["description"]},
+        },
+        auth=token,
+    )
     if found:
-        print(f"  ℹ trigger '{tr_def['description'][:50]}...' já existe (id={found[0]['triggerid']})")
+        print(
+            f"  ℹ trigger '{tr_def['description'][:50]}...' já existe (id={found[0]['triggerid']})"
+        )
         created_triggers[tr_def["priority"]] = found[0]["triggerid"]
         continue
     r = call("trigger.create", tr_def, auth=token)
@@ -142,10 +160,14 @@ if 4 in created_triggers and 5 in created_triggers:
     disaster_id = created_triggers[5]
     # trigger.update permite definir dependencies
     try:
-        call("trigger.update", {
-            "triggerid": disaster_id,
-            "dependencies": [{"triggerid": high_id}],
-        }, auth=token)
+        call(
+            "trigger.update",
+            {
+                "triggerid": disaster_id,
+                "dependencies": [{"triggerid": high_id}],
+            },
+            auth=token,
+        )
         print(f"  ✓ Dependência: Disaster ({disaster_id}) depende de High ({high_id})")
     except Exception as e:
         print(f"  ⚠ dependência não aplicada: {e}")

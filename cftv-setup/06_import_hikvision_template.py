@@ -17,6 +17,7 @@
 ═══════════════════════════════════════════════════════════════════
 """
 
+import contextlib
 import sys
 from pathlib import Path
 
@@ -90,7 +91,7 @@ def call(method, params, auth=None, timeout=60):
         response = requests.post(ZBX_URL, json=body, timeout=timeout)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Falha na conexão com Zabbix: {e}")
+        raise RuntimeError(f"Falha na conexão com Zabbix: {e}") from e
 
     data = response.json()
     if "error" in data:
@@ -311,11 +312,9 @@ def main():
         import_template(token)
         main_template = get_template_ids(token)
 
-        # Logout
-        try:
+        # Logout (best-effort, ignora falhas)
+        with contextlib.suppress(Exception):
             call("user.logout", [], auth=token)
-        except Exception:
-            pass
 
         print_summary(main_template)
 

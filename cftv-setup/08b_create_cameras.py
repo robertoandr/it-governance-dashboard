@@ -31,21 +31,21 @@ EXPECTED_NETWORK = "172.29.11."
 # Estrutura: (canal, ip)
 # Localização vai como tag genérica "a_definir" (atualizar depois)
 CAMERAS = [
-    ("D1",  "172.29.11.151"),
-    ("D2",  "172.29.11.5"),
-    ("D3",  "172.29.11.7"),
-    ("D4",  "172.29.11.6"),
-    ("D5",  "172.29.11.3"),
-    ("D6",  "172.29.11.2"),
-    ("D7",  "172.29.11.4"),
-    ("D8",  "172.29.11.12"),
-    ("D9",  "172.29.11.150"),
+    ("D1", "172.29.11.151"),
+    ("D2", "172.29.11.5"),
+    ("D3", "172.29.11.7"),
+    ("D4", "172.29.11.6"),
+    ("D5", "172.29.11.3"),
+    ("D6", "172.29.11.2"),
+    ("D7", "172.29.11.4"),
+    ("D8", "172.29.11.12"),
+    ("D9", "172.29.11.150"),
     ("D10", "172.29.11.8"),
     ("D11", "172.29.11.13"),
     ("D12", "172.29.11.11"),
     ("D13", "172.29.11.9"),
     ("D14", "172.29.11.15"),
-    ("D15", "192.168.1.124"),   # ⚠️ IP fora da rede (rastreado via tag)
+    ("D15", "192.168.1.124"),  # ⚠️ IP fora da rede (rastreado via tag)
     ("D16", "172.29.11.10"),
     ("D17", "172.29.11.14"),
     ("D18", "172.29.11.148"),
@@ -126,10 +126,14 @@ print(f"   ✅ NVR pai: {nvr_data['host']} (ID {nvr_data['host_id']})")
 
 # ─── [2/7] Autenticar ──────────────────────────────────────────
 print("\n[2/7] Autenticando na API")
-token = zabbix_api(cfg["api_url"], "user.login", {
-    "username": cfg["user"],
-    "password": cfg["password"],
-})
+token = zabbix_api(
+    cfg["api_url"],
+    "user.login",
+    {
+        "username": cfg["user"],
+        "password": cfg["password"],
+    },
+)
 print(f"   ✅ Login OK como '{cfg['user']}'")
 
 # ─── [3/7] Validar grupos ──────────────────────────────────────
@@ -147,10 +151,15 @@ for key in GROUP_KEYS:
 print("\n[4/7] Localizando templates")
 template_ids = []
 for tname in TEMPLATES_DESIRED:
-    tpls = zabbix_api(cfg["api_url"], "template.get", {
-        "output": ["templateid", "name"],
-        "filter": {"name": [tname]},
-    }, auth=token)
+    tpls = zabbix_api(
+        cfg["api_url"],
+        "template.get",
+        {
+            "output": ["templateid", "name"],
+            "filter": {"name": [tname]},
+        },
+        auth=token,
+    )
     if tpls:
         template_ids.append({"templateid": tpls[0]["templateid"]})
         print(f"   ✅ {tname} → ID {tpls[0]['templateid']}")
@@ -176,7 +185,7 @@ print("─" * 64)
 resultados = {"criados": [], "ja_existentes": [], "erros": []}
 
 for idx, (canal, ip) in enumerate(CAMERAS, 1):
-    canal_num = canal.replace("D", "").zfill(2)   # D1 → 01, D15 → 15
+    canal_num = canal.replace("D", "").zfill(2)  # D1 → 01, D15 → 15
     host_tech = f"cam-loja-d{canal_num}"
     host_name = f"Câmera {canal} - Loja Centro (canal {canal})"
 
@@ -184,10 +193,15 @@ for idx, (canal, ip) in enumerate(CAMERAS, 1):
     icon = "⚠️ " if ip_status == "warning" else "  "
 
     # Verificar duplicata
-    existing = zabbix_api(cfg["api_url"], "host.get", {
-        "output": ["hostid", "host"],
-        "filter": {"host": [host_tech]},
-    }, auth=token)
+    existing = zabbix_api(
+        cfg["api_url"],
+        "host.get",
+        {
+            "output": ["hostid", "host"],
+            "filter": {"host": [host_tech]},
+        },
+        auth=token,
+    )
 
     if existing:
         hid = existing[0]["hostid"]
@@ -199,10 +213,16 @@ for idx, (canal, ip) in enumerate(CAMERAS, 1):
     params = {
         "host": host_tech,
         "name": host_name,
-        "interfaces": [{
-            "type": 1, "main": 1, "useip": 1,
-            "ip": ip, "dns": "", "port": "10050",
-        }],
+        "interfaces": [
+            {
+                "type": 1,
+                "main": 1,
+                "useip": 1,
+                "ip": ip,
+                "dns": "",
+                "port": "10050",
+            }
+        ],
         "groups": group_ids,
         "templates": template_ids,
         "tags": [
@@ -236,9 +256,15 @@ for idx, (canal, ip) in enumerate(CAMERAS, 1):
         r = zabbix_api(cfg["api_url"], "host.create", params, auth=token)
         hid = r["hostids"][0]
         print(f" {idx:2d}/18 {icon}✅ {host_tech:20s} {ip:15s} criado (ID {hid})")
-        resultados["criados"].append({
-            "host": host_tech, "id": hid, "ip": ip, "canal": canal, "ip_status": ip_tag,
-        })
+        resultados["criados"].append(
+            {
+                "host": host_tech,
+                "id": hid,
+                "ip": ip,
+                "canal": canal,
+                "ip_status": ip_tag,
+            }
+        )
     except SystemExit:
         print(f" {idx:2d}/18 {icon}❌ {host_tech:20s} {ip:15s} ERRO")
         resultados["erros"].append({"host": host_tech, "ip": ip})
@@ -264,9 +290,9 @@ zabbix_api(cfg["api_url"], "user.logout", [], auth=token)
 banner("✅ FASE 3b CONCLUÍDA")
 print(f"""
   📊 RESULTADO:
-     ✅ Criados:       {len(resultados['criados']):2d}
-     ⏭️  Já existiam:   {len(resultados['ja_existentes']):2d}
-     ❌ Erros:         {len(resultados['erros']):2d}
+     ✅ Criados:       {len(resultados["criados"]):2d}
+     ⏭️  Já existiam:   {len(resultados["ja_existentes"]):2d}
+     ❌ Erros:         {len(resultados["erros"]):2d}
      ⚠️  Anomalias IP:  {anomalias:2d}
      ─────────────────────
      📦 Total:         {len(CAMERAS):2d}
@@ -276,12 +302,12 @@ print(f"""
   1️⃣  Aguardar 1-5 min e validar status no Zabbix Web:
       https://172.29.2.11/zabbix → Monitoring → Hosts
       Filtro: cam-loja-d
-  
+
   2️⃣  Identificar quais ficam OFFLINE:
-      Resultado esperado: 
+      Resultado esperado:
       • D15 (192.168.1.124) → OFFLINE garantido
       • +1 a 2 outras       → conforme suas suspeitas iniciais
-  
+
   3️⃣  Atualizar localizações depois:
       Tag 'localizacao' → editar via web ou via script Fase 3c
 

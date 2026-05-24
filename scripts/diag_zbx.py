@@ -26,8 +26,14 @@ for k, v in env_vars.items():
     print("   " + k + " = " + masked)
 
 token = None
-for cand in ["ZABBIX_TOKEN", "ZABBIX_API_TOKEN", "ZBX_TOKEN",
-             "ZABBIX_AUTH_TOKEN", "API_TOKEN", "TOKEN"]:
+for cand in [
+    "ZABBIX_TOKEN",
+    "ZABBIX_API_TOKEN",
+    "ZBX_TOKEN",
+    "ZABBIX_AUTH_TOKEN",
+    "API_TOKEN",
+    "TOKEN",
+]:
     if env_vars.get(cand):
         token = env_vars[cand]
         print("\nToken encontrado em: " + cand)
@@ -40,19 +46,22 @@ if not token:
     raise SystemExit(1)
 
 print("\nTestando " + str(url) + " ...")
-r = requests.post(url, json={
-    "jsonrpc": "2.0", "method": "apiinfo.version",
-    "params": {}, "id": 1
-}, verify=False, timeout=10).json()
+r = requests.post(
+    url,
+    json={"jsonrpc": "2.0", "method": "apiinfo.version", "params": {}, "id": 1},
+    verify=False,
+    timeout=10,
+).json()
 print("   Versao Zabbix: " + str(r.get("result", "ERRO")))
 
 print("\nTestando auth via Bearer header...")
-r = requests.post(url,
-    json={"jsonrpc": "2.0", "method": "host.get",
-          "params": {"countOutput": True}, "id": 2},
-    headers={"Content-Type": "application/json-rpc",
-             "Authorization": "Bearer " + token},
-    verify=False, timeout=10).json()
+r = requests.post(
+    url,
+    json={"jsonrpc": "2.0", "method": "host.get", "params": {"countOutput": True}, "id": 2},
+    headers={"Content-Type": "application/json-rpc", "Authorization": "Bearer " + token},
+    verify=False,
+    timeout=10,
+).json()
 if "result" in r:
     print("   OK! Total de hosts: " + str(r["result"]))
 else:
