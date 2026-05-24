@@ -9,6 +9,7 @@ import logging
 import threading
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -22,7 +23,7 @@ _yaml_lock = threading.Lock()
 _TTL = 60  # segundos
 
 
-def _load_yaml(force: bool = False) -> dict:
+def _load_yaml(force: bool = False) -> dict[str, Any]:
     """Carrega owners.yaml com cache TTL + invalidação por mtime."""
     with _yaml_lock:
         now = time.time()
@@ -40,11 +41,11 @@ def _load_yaml(force: bool = False) -> dict:
         )
 
         if cache_valid:
-            return _yaml_cache["data"]
+            return cast("dict[str, Any]", _yaml_cache["data"])
 
         try:
             with _OWNERS_FILE.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+                data: dict[str, Any] = yaml.safe_load(f) or {}
             _yaml_cache.update(data=data, loaded_at=now, mtime=current_mtime)
             log.info("owners.yaml recarregado (mtime=%.0f)", current_mtime)
             return data
@@ -53,9 +54,9 @@ def _load_yaml(force: bool = False) -> dict:
             return _yaml_cache.get("data") or {"domains": {}, "organization": {}}
 
 
-def get_organization() -> dict:
+def get_organization() -> dict[str, Any]:
     """Retorna dados da organização."""
-    return _load_yaml().get("organization", {})
+    return cast("dict[str, Any]", _load_yaml().get("organization", {}))
 
 
 def get_domains(include_planned: bool = True) -> list[dict]:

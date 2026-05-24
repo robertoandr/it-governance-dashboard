@@ -15,6 +15,7 @@ import logging
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 log = logging.getLogger("maintenance")
 
@@ -94,12 +95,12 @@ def _append_history(event: dict) -> None:
 # ── API Pública ────────────────────────────────────────────────────────────
 
 
-def list_active_dict() -> dict:
+def list_active_dict() -> dict[str, Any]:
     """
     Retorna dicionário {host_name: info} dos hosts em manutenção.
     🔧 USO INTERNO — para lookups rápidos via .keys()/.get().
     """
-    return _load_state().get("hosts", {})
+    return cast("dict[str, Any]", _load_state().get("hosts", {}))
 
 
 def list_active() -> list:
@@ -120,9 +121,10 @@ def is_in_maintenance(host_name: str) -> bool:
     return host_name in _load_state().get("hosts", {})
 
 
-def get_info(host_name: str) -> dict | None:
+def get_info(host_name: str) -> dict[str, Any] | None:
     """Info de manutenção de um host específico (ou None)."""
-    return _load_state().get("hosts", {}).get(host_name)
+    result = _load_state().get("hosts", {}).get(host_name)
+    return cast("dict[str, Any] | None", result)
 
 
 def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> dict:
@@ -260,8 +262,8 @@ def stats() -> dict:
     state = _load_state()
     hosts = state.get("hosts", {})
 
-    by_domain = {}
-    by_operator = {}
+    by_domain: dict[str, int] = {}
+    by_operator: dict[str, int] = {}
     for _h, info in hosts.items():
         d = info.get("domain", "unknown")
         op = info.get("marked_by", "unknown")
@@ -310,6 +312,7 @@ def apply_filter(key: str, data):
         return data
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning(
             "apply_filter(%s) falhou: %s — retornando dados originais", key, e
         )
