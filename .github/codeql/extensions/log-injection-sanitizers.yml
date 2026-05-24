@@ -1,24 +1,29 @@
-# Models-as-data: ensina o CodeQL a reconhecer app_utils.safe_logging.safe
-# como sanitizer de log-injection (kind "log-injection").
+# Models-as-data (MaD v2) — schema atual do CodeQL.
+# Ensina o CodeQL a tratar app_utils.safe_logging.safe como sanitizer
+# de log-injection (CWE-117).
+#
+# Schemas (CodeQL 2.25+):
+#   summaryModel: type, path, input, output, kind, provenance
+#   neutralModel: type, path, kind
+#
 # Docs: https://codeql.github.com/docs/codeql-language-guides/customizing-library-models-for-python/
 
 extensions:
-  - addsTo:
-      pack: codeql/python-all
-      extensible: sinkModel
-    data: []
-
+  # safe(value) -> ReturnValue propaga taint da Argument[0],
+  # MAS marca o resultado como "sanitizer" para log-injection.
   - addsTo:
       pack: codeql/python-all
       extensible: summaryModel
     data:
-      # package, type, subtypes, name, signature, ext, input, output, kind, provenance
-      - ["app_utils.safe_logging", "", False, "safe", "", "", "Argument[0]", "ReturnValue", "taint", "manual"]
-      - ["app_utils", "", False, "safe", "", "", "Argument[0]", "ReturnValue", "taint", "manual"]
+      # type                       , path           , input          , output       , kind     , provenance
+      - ["app_utils.safe_logging",   "Member[safe]",  "Argument[0]",   "ReturnValue", "taint",   "manual"]
+      - ["app_utils",                "Member[safe]",  "Argument[0]",   "ReturnValue", "taint",   "manual"]
 
+  # Marca a função como neutral / sanitizer para que log-injection NÃO dispare.
   - addsTo:
       pack: codeql/python-all
       extensible: neutralModel
     data:
-      - ["app_utils.safe_logging", "safe", "", "sanitizer", "manual"]
-      - ["app_utils", "safe", "", "sanitizer", "manual"]
+      # type                       , path           , kind
+      - ["app_utils.safe_logging",   "Member[safe]",  "sanitizer"]
+      - ["app_utils",                "Member[safe]",  "sanitizer"]
