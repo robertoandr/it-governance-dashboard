@@ -313,8 +313,8 @@ def release_all_maintenance():
     hosts_to_release = list(active.keys())
     log.warning(
         "RELEASE_ALL acionado por %s (IP=%s): %d hosts → %s",
-        operator,
-        request.remote_addr,
+        safe(operator),
+        safe(request.remote_addr),
         len(hosts_to_release),
         hosts_to_release,
     )

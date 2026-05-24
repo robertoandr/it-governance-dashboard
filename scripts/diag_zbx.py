@@ -41,6 +41,10 @@ for cand in [
 
 url = env_vars.get("ZABBIX_URL")
 
+# SSL verification toggle (default: True). Para Zabbix com cert self-signed:
+#   export ZBX_VERIFY_SSL=false
+_verify_ssl = os.environ.get("ZBX_VERIFY_SSL", "true").strip().lower() not in ("false", "0", "no")
+
 if not token:
     print("\nERRO: nenhum token encontrado no .env")
     raise SystemExit(1)
@@ -49,7 +53,7 @@ print("\nTestando " + str(url) + " ...")
 r = requests.post(
     url,
     json={"jsonrpc": "2.0", "method": "apiinfo.version", "params": {}, "id": 1},
-    verify=False,
+    verify=_verify_ssl,
     timeout=10,
 ).json()
 print("   Versao Zabbix: " + str(r.get("result", "ERRO")))
@@ -59,7 +63,7 @@ r = requests.post(
     url,
     json={"jsonrpc": "2.0", "method": "host.get", "params": {"countOutput": True}, "id": 2},
     headers={"Content-Type": "application/json-rpc", "Authorization": "Bearer " + token},
-    verify=False,
+    verify=_verify_ssl,
     timeout=10,
 ).json()
 if "result" in r:

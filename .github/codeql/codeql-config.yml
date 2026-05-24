@@ -1,0 +1,15 @@
+# Config do CodeQL para this repo.
+name: "IT Governance Dashboard - CodeQL Config"
+
+# Pacotes de query padrão + nossas extensões de modelo
+packs:
+  python:
+    - codeql/python-queries
+
+# Aponta para nossas extensões customizadas (sanitizers, etc.)
+# A pasta extensions/ contém YAMLs de models-as-data.
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/__pycache__/**"
+  - "tests/**"
+  - "scripts/**"  # scripts de diagnóstico interativo

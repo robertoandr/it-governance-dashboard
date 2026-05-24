@@ -1,0 +1,24 @@
+# Models-as-data: ensina o CodeQL a reconhecer app_utils.safe_logging.safe
+# como sanitizer de log-injection (kind "log-injection").
+# Docs: https://codeql.github.com/docs/codeql-language-guides/customizing-library-models-for-python/
+
+extensions:
+  - addsTo:
+      pack: codeql/python-all
+      extensible: sinkModel
+    data: []
+
+  - addsTo:
+      pack: codeql/python-all
+      extensible: summaryModel
+    data:
+      # package, type, subtypes, name, signature, ext, input, output, kind, provenance
+      - ["app_utils.safe_logging", "", False, "safe", "", "", "Argument[0]", "ReturnValue", "taint", "manual"]
+      - ["app_utils", "", False, "safe", "", "", "Argument[0]", "ReturnValue", "taint", "manual"]
+
+  - addsTo:
+      pack: codeql/python-all
+      extensible: neutralModel
+    data:
+      - ["app_utils.safe_logging", "safe", "", "sanitizer", "manual"]
+      - ["app_utils", "safe", "", "sanitizer", "manual"]

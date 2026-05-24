@@ -182,8 +182,8 @@ def mark(hosts: list[str], operator: str, reason: str, domain: str = "cftv") -> 
             log.info(
                 "Manutenção: %d host(s) marcado(s) por %s — motivo: %s",
                 len(marked),
-                operator,
-                reason,
+                safe(operator),
+                safe(reason),
             )
 
         return {
@@ -313,10 +313,10 @@ def apply_filter(key: str, data):
             return _mf_filter_cftv(data, in_maint)
         return data
     except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning(
-            "apply_filter(%s) falhou: %s — retornando dados originais", key, e
+        log.warning(
+            "apply_filter(%s) falhou: %s — retornando dados originais",
+            safe(key),
+            type(e).__name__,
         )
         return data
 

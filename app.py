@@ -147,7 +147,7 @@ def _refresh_once():
         try:
             new_data[name] = fn()
         except Exception as e:
-            log.warning("%s: %s", name, e)
+            log.warning("%s falhou: %s", name, type(e).__name__)
             errors.append(f"{name}: {e}")
 
     for name, fn in [
@@ -159,7 +159,7 @@ def _refresh_once():
         try:
             new_data[name] = fn()
         except Exception as e:
-            log.warning("%s: %s", name, e)
+            log.warning("%s falhou: %s", name, type(e).__name__)
     influx.close()
 
     if config.GRAPH_ENABLED:
@@ -171,7 +171,7 @@ def _refresh_once():
             try:
                 new_data[name] = fn()
             except Exception as e:
-                log.warning("%s: %s", name, e)
+                log.warning("%s falhou: %s", name, type(e).__name__)
                 errors.append(f"{name}: {e}")
 
     if config.GRAFANA_ENABLED:
