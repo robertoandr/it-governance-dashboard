@@ -1,29 +1,30 @@
-# Models-as-data (MaD v2) — schema atual do CodeQL.
-# Ensina o CodeQL a tratar app_utils.safe_logging.safe como sanitizer
-# de log-injection (CWE-117).
+# Models-as-data — schema oficial do codeql/python-all.
+# Fonte: github/codeql/shared/mad/codeql/mad/static/ModelsAsData.qll
 #
-# Schemas (CodeQL 2.25+):
-#   summaryModel: type, path, input, output, kind, provenance
-#   neutralModel: type, path, kind
+# summaryModel:
+#   namespace, type, subtypes, name, signature, ext, input, output, kind, provenance
+# neutralModel:
+#   namespace, type, name, signature, kind, provenance
 #
-# Docs: https://codeql.github.com/docs/codeql-language-guides/customizing-library-models-for-python/
+# Objetivo: ensinar o CodeQL a tratar `app_utils.safe_logging.safe()` como
+# sanitizer de log-injection (CWE-117), eliminando falsos positivos.
 
 extensions:
-  # safe(value) -> ReturnValue propaga taint da Argument[0],
-  # MAS marca o resultado como "sanitizer" para log-injection.
+  # Summary: a função `safe` propaga taint do Argument[0] para ReturnValue
+  # (a string sai sanitizada mas ainda é "a mesma string conceitualmente").
   - addsTo:
       pack: codeql/python-all
       extensible: summaryModel
     data:
-      # type                       , path           , input          , output       , kind     , provenance
-      - ["app_utils.safe_logging",   "Member[safe]",  "Argument[0]",   "ReturnValue", "taint",   "manual"]
-      - ["app_utils",                "Member[safe]",  "Argument[0]",   "ReturnValue", "taint",   "manual"]
+      # namespace                , type, subtypes, name  , signature, ext, input        , output       , kind   , provenance
+      - ["app_utils.safe_logging", ""  , False   , "safe", ""       , "" , "Argument[0]", "ReturnValue", "taint", "manual"]
+      - ["app_utils"             , ""  , False   , "safe", ""       , "" , "Argument[0]", "ReturnValue", "taint", "manual"]
 
-  # Marca a função como neutral / sanitizer para que log-injection NÃO dispare.
+  # Neutral/sanitizer: marca como sanitizer para a query log-injection.
   - addsTo:
       pack: codeql/python-all
       extensible: neutralModel
     data:
-      # type                       , path           , kind
-      - ["app_utils.safe_logging",   "Member[safe]",  "sanitizer"]
-      - ["app_utils",                "Member[safe]",  "sanitizer"]
+      # namespace                , type, name  , signature, kind       , provenance
+      - ["app_utils.safe_logging", ""  , "safe", ""       , "sanitizer", "manual"]
+      - ["app_utils"             , ""  , "safe", ""       , "sanitizer", "manual"]
