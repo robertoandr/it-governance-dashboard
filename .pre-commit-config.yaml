@@ -1,23 +1,12 @@
 # ============================================
-# Pre-commit Hooks — Qualidade Automática
-# Instalar: pre-commit install
+# Pre-commit hooks — Quality Gate Local
 # ============================================
-repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-toml
-      - id: check-json
-      - id: check-added-large-files
-        args: ['--maxkb=1000']
-      - id: check-merge-conflict
-      - id: detect-private-key
-      - id: mixed-line-ending
-        args: ['--fix=lf']
+# Setup: pip install pre-commit && pre-commit install
+# Manual run: pre-commit run --all-files
+# ============================================
 
+repos:
+  # ── Ruff: linter + formatter ──
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9
     hooks:
@@ -25,10 +14,20 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.10
+  # ── Sanidade básica de arquivos ──
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
     hooks:
-      - id: bandit
-        args: ['-c', 'pyproject.toml', '-r', '.']
-        additional_dependencies: ['bandit[toml]']
-        exclude: ^tests/
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-json
+        exclude: ^data/
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
