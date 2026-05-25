@@ -1,0 +1,1 @@
+"""Flask-RESTX API blueprints."""
