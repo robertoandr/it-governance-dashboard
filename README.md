@@ -1,83 +1,48 @@
-# 🏛️ IT Governance Dashboard
+# IT Governance Dashboard v2.0
 
-> Dashboard completo para governança de TI com métricas baseadas em **COBIT**, **ITIL v4** e **ISO/IEC 27001**.
+Dashboard de Governança de TI — **Grafana + TimescaleDB**.
 
-![Status](https://img.shields.io/badge/status-active-success)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+## Arquitetura
 
----
+- TimescaleDB (Postgres 16 + extensão time-series): única fonte de dados
+- Grafana 11.3 OSS: visualização e alerting
+- Python 3.12 + APScheduler: collectors
+- Nginx 1.27: reverse proxy + TLS
 
-## 📸 Preview
-
-> _Adicione um screenshot aqui após o deploy_
-
----
-
-## 🎯 Sobre o Projeto
-
-Plataforma de monitoramento e governança de TI que centraliza indicadores estratégicos, táticos e operacionais, permitindo a gestão executiva visualizar em tempo real:
-
-- **Conformidade** com frameworks de governança
-- **Performance** de serviços de TI (SLA/OLA)
-- **Riscos** e incidentes de segurança
-- **Investimentos** e ROI de iniciativas tecnológicas
-
----
-
-## 🏛️ Frameworks Implementados
-
-| Framework | Domínios Cobertos |
-|-----------|-------------------|
-| **COBIT 2019** | EDM, APO, BAI, DSS, MEA |
-| **ITIL v4** | Service Strategy, Design, Operation |
-| **ISO 27001** | Controles A.5 a A.18 |
-| **NIST CSF** | Identify, Protect, Detect, Respond, Recover |
-
----
-
-## 📊 KPIs Disponíveis
-
-- ✅ Disponibilidade de Serviços (Uptime %)
-- ✅ MTTR (Mean Time to Repair)
-- ✅ MTBF (Mean Time Between Failures)
-- ✅ Taxa de Cumprimento de SLA
-- ✅ Incidentes por Severidade
-- ✅ Vulnerabilidades Críticas Abertas
-- ✅ Aderência a Políticas
-- ✅ Custos de TI vs. Orçamento
-
----
-
-## 🛠️ Stack Tecnológica
-
-- **Frontend:** React + TypeScript + Vite
-- **UI:** TailwindCSS + Shadcn/UI
-- **Gráficos:** Recharts / Chart.js
-- **Estado:** Zustand / Redux Toolkit
-- **Ícones:** Lucide React
-
----
-
-## 🚀 Como Executar Localmente
-
-### Pré-requisitos
-- Node.js 18+
-- npm ou pnpm
-
-### Passos
+## Quick Start
 
 ```bash
-# 1. Clone o repositório
-git clone https://github.com/robertoandr/it-governance-dashboard.git
-cd it-governance-dashboard
+cd /opt/it-gov-dashboard
 
-# 2. Instale as dependências
-npm install
+# Conferir .env (já gerado com senhas aleatórias)
+cat .env
 
-# 3. Configure variáveis de ambiente
-cp .env.example .env
+# IMPORTANTE: editar GITHUB_TOKEN antes de subir
+nano .env
 
-# 4. Inicie o servidor de desenvolvimento
-npm run dev
+# Subir stack
+docker compose up -d
+
+# Acompanhar logs
+docker compose logs -f collector
+```
+
+## Estrutura
+
+```
+/opt/it-gov-dashboard/
+├── docker-compose.yml
+├── .env.example
+├── .gitignore
+├── docs/governance/        # Políticas e inventário de secrets
+├── db/postgres/            # Migrations SQL (TimescaleDB)
+├── collectors/             # Python collectors (APScheduler)
+├── grafana/provisioning/   # Datasources e dashboards provisionados
+└── nginx/                  # Reverse proxy + TLS
+```
+
+## Políticas
+
+- `docs/governance/POLICY-PAT.md` — Política de PATs
+- `docs/governance/POLICY-SECRETS-MGMT.md` — Política de Secrets
+- `docs/governance/SECRETS-INVENTORY.md` — Inventário ativo

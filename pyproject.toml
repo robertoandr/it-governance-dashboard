@@ -43,6 +43,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S", "N802"]   # testes podem usar assert e nomes flexíveis
 "config.py" = ["S105", "S106"]  # secrets em config (vem do .env)
+"collectors/jobs/gitleaks_scan.py" = ["S603", "S404"]  # subprocess necessário para executar gitleaks
 
 [tool.ruff.format]
 quote-style = "double"
@@ -122,4 +123,11 @@ exclude = ["venv", ".venv", "_backups", "tests"]
 # ============================================
 [tool.bandit]
 exclude_dirs = ["tests", "venv", ".venv", "_backups"]
-skips = ["B101"]  # assert_used
+skips = [
+    "B101",  # assert_used — ok em testes
+    "B104",  # hardcoded_bind_all_interfaces — Flask em container usa 0.0.0.0
+    "B110",  # try_except_pass — padrão legado em integrações Zabbix
+    "B310",  # urllib_urlopen — cftv-setup usa urllib diretamente
+    "B501",  # verify=False — scripts de diagnóstico internos
+    "B108",  # hardcoded_tmp_directory — cftv-setup usa /tmp (legado)
+]
