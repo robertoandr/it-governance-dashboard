@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, SecretStr
+from pydantic import Field, PostgresDsn, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,10 +24,15 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: SecretStr = Field(..., min_length=32)
 
-    # InfluxDB v2
+    # Database (PostgreSQL + TimescaleDB)
+    database_url: PostgresDsn = Field(
+        default="postgresql+asyncpg://itgov:itgov@localhost:5432/itgov"
+    )
+
+    # InfluxDB v2 (legacy — kept for backwards compat, to be removed in Sprint 12)
     influx_url: str = "http://localhost:8086"
-    influx_token: SecretStr = Field(...)
-    influx_org: str = Field(...)
+    influx_token: SecretStr = Field(default=SecretStr(""))
+    influx_org: str = ""
     influx_bucket: str = "it-governance"
 
     # GitHub
