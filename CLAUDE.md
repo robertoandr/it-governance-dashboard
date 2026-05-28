@@ -5,10 +5,22 @@
 **Caminho:** <DEPLOY_PATH>
 
 ## Stack
-- Python 3.11+, Flask, Flask-RESTX, Pydantic v2
-- InfluxDB v2 (Flux), structlog
+- Python 3.11+, Flask[async], Flask-RESTX, Pydantic v2
+- **TimescaleDB** (PostgreSQL 16 + extensão TimescaleDB 2.x) — armazenamento único
+- SQLAlchemy 2.x (async, asyncpg), Alembic, structlog
 - Docker, Docker Compose, Kubernetes
 - Auth: Microsoft Entra ID (OAuth2)
+
+## Arquitetura
+- **Flask** — camada de negócio: Fornecedores, Contratos, Hub de Governança, Service Desk
+- **Grafana** — observabilidade embedada: métricas M365, infraestrutura (kiosk iframe)
+- **Nginx** — gateway único: TLS, JWT validation, roteamento `/app/*` → Flask, `/grafana/*` → Grafana
+
+## Módulo Hero
+**Fornecedores & Contratos** (Sprints 9-10) — núcleo do sistema.
+- Schema: `db/migrations/001_fornecedores_contratos.sql`
+- Hypertable: `contratos_eventos` (TimescaleDB) para alertas de vencimento e SLA breach
+- ADRs relevantes: ADR-0004 (storage), ADR-0005 (Flask+Grafana), ADR-0003 (LGPD)
 
 ## Integrações
 - GitHub API, Zabbix JSON-RPC, Zendesk API, MS Graph
@@ -18,6 +30,8 @@
 - app/models/ — Pydantic models
 - app/services/ — Lógica de negócio
 - app/utils/ — Helpers
+- db/migrations/ — SQL migrations (TimescaleDB)
+- docs/adr/ — Architectural Decision Records
 - docker/, k8s/, tests/
 
 ## Regras OBRIGATÓRIAS
@@ -28,6 +42,7 @@
 5. async/await para I/O
 6. Secrets via env vars
 7. Try/except tipado
+8. **Sempre validar saída com git status após cada commit**
 
 ## ⚠️ Cuidados específicos deste servidor
 - NÃO mexer em <ZABBIX_CONFIG_PATH> sem autorização
