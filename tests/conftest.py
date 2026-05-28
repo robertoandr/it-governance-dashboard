@@ -19,6 +19,10 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-padding")
     monkeypatch.setenv("INFLUX_TOKEN", "test-token")
     monkeypatch.setenv("INFLUX_ORG", "test-org")
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://itgov:Z66BroSKNH6LZcEFOghNRspeQH6oI2Bh@172.18.0.2:5432/itgov",
+    )
 
     yield
 
