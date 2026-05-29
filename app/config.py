@@ -29,11 +29,11 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://itgov:itgov@localhost:5432/itgov"
     )
 
-    # InfluxDB v2 (legacy — kept for backwards compat, to be removed in Sprint 12)
+    # InfluxDB v2 — time-series store for SLA metrics
     influx_url: str = "http://localhost:8086"
     influx_token: SecretStr = Field(default=SecretStr(""))
-    influx_org: str = ""
-    influx_bucket: str = "it-governance"
+    influx_org: str = "itgov"
+    influx_bucket: str = "metrics"
 
     # GitHub
     github_token: SecretStr = Field(default=SecretStr(""))

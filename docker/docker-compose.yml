@@ -1,0 +1,176 @@
+name: it-gov-dashboard
+
+# ---------------------------------------------------------------------------
+# Reference stack for the IT Governance Dashboard.
+# Local dev: copy .env.example to .env and fill secrets.
+# Usage:
+#   docker compose up -d              # full stack
+#   docker compose up -d influxdb     # just InfluxDB
+# ---------------------------------------------------------------------------
+
+services:
+  # --------------------------------------------------------------------------
+  # PostgreSQL + TimescaleDB — primary relational store
+  # --------------------------------------------------------------------------
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: itgov-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TS_TUNE_MEMORY: ${TS_TUNE_MEMORY:-4GB}
+      TS_TUNE_NUM_CPUS: ${TS_TUNE_NUM_CPUS:-4}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/postgres:/docker-entrypoint-initdb.d:ro
+    networks:
+      - itgov-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------------------------
+  # InfluxDB v2.7 — time-series store for SLA metrics and operational data
+  # Retention: 90 days (2160h) on the `metrics` bucket.
+  # UI available at http://localhost:8086 after `docker compose up -d influxdb`
+  # --------------------------------------------------------------------------
+  influxdb:
+    image: influxdb:2.7
+    container_name: itgov-influxdb
+    restart: unless-stopped
+    environment:
+      # Automated first-run setup — runs only when the data volume is empty.
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-itgov}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-metrics}
+      DOCKER_INFLUXDB_INIT_RETENTION: 2160h   # 90 days
+      # Pin the admin token so other services can use a predictable value.
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    networks:
+      - itgov-net
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s   # first boot takes longer (DB init)
+
+  # --------------------------------------------------------------------------
+  # Grafana — observability dashboards
+  # --------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana-oss:11.3.0
+    container_name: itgov-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-polystat-panel,grafana-clock-panel"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - itgov-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Collector — pulls GitHub, Zabbix, Zendesk and writes to Postgres
+  # --------------------------------------------------------------------------
+  collector:
+    build: ./collectors
+    container_name: itgov-collector
+    restart: unless-stopped
+    environment:
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG:-itgov}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-metrics}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_ORG: ${GITHUB_ORG}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      - ./collectors:/app:ro
+      - collector_data:/data
+    networks:
+      - itgov-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Flask API — IT Governance Dashboard backend
+  # --------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: itgov-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG:-itgov}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-metrics}
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG:-false}
+    networks:
+      - itgov-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Nginx — TLS termination, reverse proxy for API + Grafana
+  # --------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: itgov-nginx
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+      - "8453:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    networks:
+      - itgov-net
+    depends_on:
+      - grafana
+      - api
+
+volumes:
+  postgres_data:
+  influxdb_data:
+  influxdb_config:
+  grafana_data:
+  collector_data:
+
+networks:
+  itgov-net:
+    driver: bridge
