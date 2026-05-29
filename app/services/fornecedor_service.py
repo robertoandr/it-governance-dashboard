@@ -1,7 +1,7 @@
 """Business logic for the Fornecedor (vendor) resource."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import func, select
@@ -177,7 +177,7 @@ class FornecedorService:
         if fornecedor is None:
             raise FornecedorNotFound(fornecedor_id)
 
-        fornecedor.deleted_at = datetime.now(tz=timezone.utc)
+        fornecedor.deleted_at = datetime.now(tz=UTC)
         await session.flush()
 
         log.info("fornecedor.deleted", id=str(fornecedor_id))

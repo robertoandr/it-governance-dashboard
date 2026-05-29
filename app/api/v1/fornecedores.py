@@ -169,6 +169,7 @@ class FornecedorItem(Resource):
             return uuid.UUID(raw)
         except ValueError:
             ns.abort(400, f"'{raw}' não é um UUID válido")
+            raise AssertionError("unreachable") from None  # ns.abort always raises
 
     @ns.marshal_with(_fornecedor_fields)
     @ns.response(404, "Fornecedor não encontrado")
