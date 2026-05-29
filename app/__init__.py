@@ -17,6 +17,7 @@ def create_app() -> Flask:
         Flask: Configured application instance.
     """
     app = Flask(__name__)
+    app.url_map.strict_slashes = False
 
     from app.config import get_settings
 
