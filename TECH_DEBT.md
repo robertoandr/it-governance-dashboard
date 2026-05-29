@@ -1,6 +1,6 @@
-# Tech Debt — Sprint 10 Backlog
+# Tech Debt — Sprint 10/11 Backlog
 
-Itens identificados durante a Sprint 10 (Fornecedores CRUD) para resolução futura.
+Itens identificados nas Sprints 10/11 para resolução futura.
 Cada item tem prioridade, esforço estimado e critério de aceite.
 
 ---
@@ -75,4 +75,36 @@ bulk-insert irrestrito, impactando disponibilidade e aumentando custo de storage
 
 ---
 
-*Documento gerado em Sprint 10. Revisar prioridades no início da Sprint 11.*
+## TD-004 · Cobertura de testes em influx_client.py
+
+| Campo | Valor |
+|-------|-------|
+| **Status** | ✅ Resolvido em Sprint 11 |
+| **Prioridade** | Alta |
+| **Esforço** | 3 SP |
+| **Sprint alvo** | 11 |
+| **Sprint resolvido** | 11 (commit `49c7157`) |
+
+**Descrição original:** `influx_client.py` tinha 42% de cobertura após a Sprint 10.
+O caminho de retry, a detecção de erros permanentes (4xx) e o parsing de resultados
+Flux não estavam cobertos por testes automatizados.
+
+**Resolução:** `tests/unit/test_influx_client.py` criado com 31 testes usando
+`pytest-mock` e `AsyncMock`. Cobertura subiu de **42% → 98%**.
+
+**Testes adicionados:**
+- Retry exponencial em `ConnectionError` (3 tentativas)
+- Desistência após `_MAX_RETRIES` esgotado
+- Backoff delays verificados explicitamente (0.5 s, 1.0 s)
+- Fail-fast em erros permanentes (4xx — sem sleep, sem retry)
+- Parsing de records Flux (`get_time`, `get_value`, `record.values`)
+- Interpolação de parâmetros no template Flux (UUID, range, window)
+- Parâmetros `bucket` e `org` chegando corretamente via `Settings`
+
+**Fix técnico documentado:** O patch target correto para o cliente async é
+`app.services.influx_client._make_client` (ponto de USO), não
+`influxdb_client.WriteApi.write` (definição da classe errada + classe errada).
+
+---
+
+*Documento atualizado em Sprint 11. Revisar prioridades no início da Sprint 12.*
