@@ -4,16 +4,21 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 log = structlog.get_logger(__name__)
 
-_engine = None
+_engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def _get_engine() -> object:
+def _get_engine() -> AsyncEngine:
     """Return the module-level engine, creating it on first call.
 
     Returns:
@@ -45,7 +50,7 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _session_factory  # noqa: PLW0603
     if _session_factory is None:
         _session_factory = async_sessionmaker(
-            bind=_get_engine(),  # type: ignore[arg-type]
+            bind=_get_engine(),
             class_=AsyncSession,
             expire_on_commit=False,
             autoflush=False,

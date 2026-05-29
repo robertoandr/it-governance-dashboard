@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     secret_key: SecretStr = Field(..., min_length=32)
 
     # Database (PostgreSQL + TimescaleDB)
-    database_url: PostgresDsn = Field(
+    database_url: PostgresDsn = Field(  # type: ignore[assignment]
         default="postgresql+asyncpg://itgov:itgov@localhost:5432/itgov"
     )
 
@@ -62,4 +62,4 @@ def get_settings() -> Settings:
     Returns:
         Settings: application configuration object.
     """
-    return Settings()
+    return Settings()  # type: ignore[call-arg]

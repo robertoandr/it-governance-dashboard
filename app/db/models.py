@@ -149,4 +149,4 @@ class ContratoEvento(Base):
         nullable=False,
     )
     tipo: Mapped[str] = mapped_column(Text, nullable=False)
-    payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
