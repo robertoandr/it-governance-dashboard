@@ -1,7 +1,8 @@
 """SQLAlchemy ORM models for the IT Governance Dashboard."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -82,16 +83,14 @@ class Contrato(TimestampMixin, Base):
     Attributes:
         id: UUID primary key.
         fornecedor_id: FK to fornecedores.
-        numero: Contract reference number.
-        descricao: Optional description.
+        numero_contrato: Unique contract reference number.
+        objeto: Contract scope description.
+        valor_mensal: Monthly value in BRL (required, must be > 0).
         data_inicio: Contract start date.
         data_fim: Contract end date.
-        valor_mensal: Monthly value in the contract currency.
-        moeda: Currency code (default BRL).
-        sla_prometido_pct: Promised SLA percentage (e.g. 99.90).
-        renovacao_auto: Whether the contract auto-renews.
-        anexo_path: Path to the attached PDF.
-        status: Lifecycle status — ativo, inativo, encerrado.
+        status: Lifecycle status — vigente|encerrado|suspenso|renovacao.
+        sla_uptime_pct: Committed uptime percentage (0–100).
+        criticidade: Business criticality — baixa|media|alta|critica.
         fornecedor: Related vendor (many-to-one).
     """
 
@@ -108,16 +107,14 @@ class Contrato(TimestampMixin, Base):
         ForeignKey("fornecedores.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    numero: Mapped[str] = mapped_column(Text, nullable=False)
-    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
-    data_inicio: Mapped[datetime] = mapped_column(Date, nullable=False)
-    data_fim: Mapped[datetime] = mapped_column(Date, nullable=False)
-    valor_mensal: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
-    moeda: Mapped[str] = mapped_column(String(3), default="BRL")
-    sla_prometido_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
-    renovacao_auto: Mapped[bool] = mapped_column(Boolean, default=False)
-    anexo_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(Text, nullable=False, default="ativo")
+    numero_contrato: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    objeto: Mapped[str] = mapped_column(Text, nullable=False)
+    valor_mensal: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    data_inicio: Mapped[date] = mapped_column(Date, nullable=False)
+    data_fim: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="vigente")
+    sla_uptime_pct: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    criticidade: Mapped[str] = mapped_column(Text, nullable=False, default="media")
 
     fornecedor: Mapped["Fornecedor"] = relationship(
         "Fornecedor",

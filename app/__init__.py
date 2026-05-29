@@ -34,9 +34,11 @@ def create_app() -> Flask:
         prefix="/api/v1",
     )
 
+    from app.api.v1.contratos import ns as contratos_ns
     from app.api.v1.fornecedores import ns as fornecedores_ns
 
     api.add_namespace(fornecedores_ns)
+    api.add_namespace(contratos_ns)
 
     log.info("app.created", version=settings.app_version)
     return app

@@ -26,3 +26,19 @@ class InvalidCNPJ(Exception):
             msg += f" — {reason}"
         super().__init__(msg)
         self.cnpj = cnpj
+
+
+class ContratoNotFound(Exception):
+    """Raised when a contrato with the given ID does not exist or was deleted."""
+
+    def __init__(self, contrato_id: object) -> None:
+        super().__init__(f"Contrato '{contrato_id}' não encontrado")
+        self.contrato_id = contrato_id
+
+
+class ContratoAlreadyExists(Exception):
+    """Raised when a contrato with the same numero_contrato already exists."""
+
+    def __init__(self, numero_contrato: str) -> None:
+        super().__init__(f"Contrato com número '{numero_contrato}' já cadastrado")
+        self.numero_contrato = numero_contrato

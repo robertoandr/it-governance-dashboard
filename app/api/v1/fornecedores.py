@@ -11,7 +11,9 @@ from flask_restx import Namespace, Resource, fields
 from pydantic import ValidationError
 
 from app.db.session import get_session
+from app.models.contrato import ContratoResponse
 from app.models.fornecedor import FornecedorCreate, FornecedorResponse, FornecedorUpdate
+from app.services.contrato_service import contrato_service
 from app.services.exceptions import FornecedorAlreadyExists, FornecedorNotFound
 from app.services.fornecedor_service import fornecedor_service
 
@@ -44,6 +46,34 @@ _fornecedor_list_fields = ns.model(
     "FornecedorList",
     {
         "items": fields.List(fields.Nested(_fornecedor_fields)),
+        "total": fields.Integer,
+        "skip": fields.Integer,
+        "limit": fields.Integer,
+    },
+)
+
+_contrato_sub_fields = ns.model(
+    "ContratoSub",
+    {
+        "id": fields.String(readonly=True),
+        "fornecedor_id": fields.String,
+        "numero_contrato": fields.String,
+        "objeto": fields.String,
+        "valor_mensal": fields.Float,
+        "data_inicio": fields.Date,
+        "data_fim": fields.Date,
+        "status": fields.String,
+        "sla_uptime_pct": fields.Float,
+        "criticidade": fields.String,
+        "created_at": fields.DateTime(readonly=True),
+        "updated_at": fields.DateTime(readonly=True),
+    },
+)
+
+_contrato_sub_list_fields = ns.model(
+    "ContratoSubList",
+    {
+        "items": fields.List(fields.Nested(_contrato_sub_fields)),
         "total": fields.Integer,
         "skip": fields.Integer,
         "limit": fields.Integer,
@@ -229,3 +259,65 @@ class FornecedorItem(Resource):
             return "", 204
         except FornecedorNotFound as exc:
             ns.abort(404, str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Sub-resource: GET /api/v1/fornecedores/<id>/contratos
+# ---------------------------------------------------------------------------
+@ns.route("/<string:fornecedor_id>/contratos")
+@ns.param("fornecedor_id", "UUID do fornecedor")
+class FornecedorContratos(Resource):
+    """List all active contracts belonging to a specific fornecedor."""
+
+    @ns.marshal_with(_contrato_sub_list_fields)
+    @ns.doc(
+        params={
+            "skip": "Registros a pular (default 0)",
+            "limit": "Máximo de registros retornados (default 20)",
+        }
+    )
+    @ns.response(200, "OK")
+    @ns.response(404, "Fornecedor não encontrado")
+    def get(self, fornecedor_id: str) -> Any:
+        """List active contratos for a fornecedor."""
+        fid = _parse_fid(fornecedor_id)
+        skip = int(request.args.get("skip", 0))
+        limit = min(int(request.args.get("limit", 20)), 100)
+
+        async def _list() -> Any:
+            async with get_session() as session:
+                items, total = await contrato_service.list_by_fornecedor(
+                    session, fid, skip=skip, limit=limit
+                )
+                return {
+                    "items": [
+                        ContratoResponse.model_validate(c).model_dump(mode="json")
+                        for c in items
+                    ],
+                    "total": total,
+                    "skip": skip,
+                    "limit": limit,
+                }
+
+        try:
+            result = _run(_list())
+            log.info("api.fornecedores.contratos.list", fornecedor_id=str(fid))
+            return result
+        except FornecedorNotFound as exc:
+            ns.abort(404, str(exc))
+
+
+def _parse_fid(raw: str) -> uuid.UUID:
+    """Parse a UUID from a URL path segment, aborting 400 on failure.
+
+    Args:
+        raw: Raw string from the URL.
+
+    Returns:
+        uuid.UUID: Parsed UUID.
+    """
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        ns.abort(400, f"'{raw}' não é um UUID válido")
+        raise AssertionError("unreachable") from None
