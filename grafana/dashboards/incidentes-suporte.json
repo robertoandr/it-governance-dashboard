@@ -1,0 +1,191 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "uid": "itgov-incidents-v1",
+  "title": "🚨 Incidentes & Suporte",
+  "tags": ["governanca", "incidentes", "zabbix", "suporte", "sla"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {"from": "now-24h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "severity",
+        "type": "custom",
+        "label": "Severidade",
+        "query": "not_classified,information,warning,average,high,disaster",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {"selected": true, "text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Incidentes Abertos",
+      "id": 1,
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.state == \"open\")\n  |> sum()",
+        "refId": "A"
+      }],
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 15}]}, "unit": "short"}}
+    },
+    {
+      "type": "stat",
+      "title": "Alta / Desastre",
+      "id": 2,
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.severity == \"high\" or r.severity == \"disaster\")\n  |> sum()",
+        "refId": "A"
+      }],
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}, "unit": "short"}}
+    },
+    {
+      "type": "stat",
+      "title": "Desastres",
+      "id": 3,
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.severity == \"disaster\")\n  |> sum()",
+        "refId": "A"
+      }],
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}, "unit": "short"}}
+    },
+    {
+      "type": "stat",
+      "title": "Não Reconhecidos",
+      "id": 4,
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.acknowledged == \"false\")\n  |> filter(fn: (r) => r.state == \"open\")\n  |> sum()",
+        "refId": "A"
+      }],
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 3}, {"color": "red", "value": 10}]}, "unit": "short"}}
+    },
+    {
+      "type": "stat",
+      "title": "Resolvidos (período)",
+      "id": 5,
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.state == \"resolved\")\n  |> sum()",
+        "refId": "A"
+      }],
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "green", "mode": "fixed"}, "unit": "short"}}
+    },
+    {
+      "type": "stat",
+      "title": "Duração Média de Resolução",
+      "id": 6,
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"duration_seconds\")\n  |> filter(fn: (r) => r.state == \"resolved\")\n  |> filter(fn: (r) => r._value > 0)\n  |> mean()",
+        "refId": "A"
+      }],
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["mean"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3600}, {"color": "orange", "value": 14400}, {"color": "red", "value": 86400}]}, "unit": "s"}}
+    },
+    {
+      "type": "timeseries",
+      "title": "Incidentes por Severidade ao Longo do Tempo",
+      "id": 7,
+      "gridPos": {"h": 9, "w": 16, "x": 0, "y": 4},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.severity == \"disaster\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"disaster\"}))",
+          "refId": "Disaster"
+        },
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.severity == \"high\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"high\"}))",
+          "refId": "High"
+        },
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.severity == \"average\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"average\"}))",
+          "refId": "Average"
+        },
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.severity == \"warning\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"warning\"}))",
+          "refId": "Warning"
+        }
+      ],
+      "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
+      "fieldConfig": {
+        "defaults": {"custom": {"lineWidth": 2, "fillOpacity": 10}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "disaster"}, "properties": [{"id": "color", "value": {"fixedColor": "dark-red", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "high"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "average"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "warning"}, "properties": [{"id": "color", "value": {"fixedColor": "yellow", "mode": "fixed"}}]}
+        ]
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Incidentes por Severidade",
+      "id": 8,
+      "gridPos": {"h": 9, "w": 8, "x": 16, "y": 4},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> group(columns: [\"severity\"])\n  |> sum()\n  |> group()",
+        "refId": "A"
+      }],
+      "options": {"xField": "severity", "barWidth": 0.7, "legend": {"displayMode": "hidden"}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 10}]}, "unit": "short"}}
+    },
+    {
+      "type": "barchart",
+      "title": "Top 10 Hosts com Mais Incidentes",
+      "id": 9,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 13},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> group(columns: [\"host\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
+        "refId": "A"
+      }],
+      "options": {"xField": "host", "barWidth": 0.8, "legend": {"displayMode": "hidden"}},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "orange", "mode": "fixed"}, "unit": "short"}}
+    },
+    {
+      "type": "table",
+      "title": "Incidentes Recentes",
+      "id": 10,
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 13},
+      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "targets": [{
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_problem\")\n  |> filter(fn: (r) => r._field == \"trigger_name\")\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 50)\n  |> keep(columns: [\"_time\", \"host\", \"severity\", \"state\", \"acknowledged\", \"_value\"])\n  |> rename(columns: {_value: \"trigger\", _time: \"timestamp\"})",
+        "refId": "A"
+      }],
+      "options": {"sortBy": [{"displayName": "timestamp", "desc": true}], "footer": {"show": false}},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "auto"}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "severity"}, "properties": [{"id": "custom.width", "value": 100}]},
+          {"matcher": {"id": "byName", "options": "state"}, "properties": [{"id": "custom.width", "value": 80}]},
+          {"matcher": {"id": "byName", "options": "acknowledged"}, "properties": [{"id": "custom.width", "value": 100}]},
+          {"matcher": {"id": "byName", "options": "host"}, "properties": [{"id": "custom.width", "value": 120}]}
+        ]
+      }
+    }
+  ]
+}
