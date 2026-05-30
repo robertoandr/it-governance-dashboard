@@ -22,15 +22,20 @@ class GitHubCollectorSettings(GitHubSettings):
 
     @field_validator("repos", mode="before")
     @classmethod
-    def _parse_repos_json_or_csv(cls, value: object) -> object:
-        """Aceita repos como JSON array ou CSV.
+    def parse_repos(cls, value: object) -> object:
+        """Aceita repos como JSON array ou CSV — substitui validator do pai.
+
+        Mesmo nome que o validator pai (`parse_repos`) garante override via
+        MRO em vez de acumulação: apenas UM validator roda, com ordem
+        previsível. Inclui a lógica CSV do pai mais JSON array.
 
         Exemplos válidos no .env:
-            GITHUB_REPOS=["owner/repo1","owner/repo2"]
-            GITHUB_REPOS=owner/repo1,owner/repo2
+            GITHUB_REPOS=["owner/repo1","owner/repo2"]   # JSON array
+            GITHUB_REPOS=owner/repo1,owner/repo2          # CSV (pai)
         """
         if isinstance(value, str):
             stripped = value.strip()
             if stripped.startswith("["):
                 return json.loads(stripped)
-        return value  # parent validator trata CSV
+            return [r.strip() for r in stripped.split(",") if r.strip()]
+        return value
