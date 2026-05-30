@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import httpx
 
-from app.storage.influxdb.guards import validate_bucket
+from app.storage.influxdb.guards import ALLOWED_BUCKETS
 from app.storage.influxdb.models import GovernancePoint
 
 log = logging.getLogger(__name__)
@@ -30,17 +30,24 @@ class GovernanceInfluxClient:
         influx_url: URL base do InfluxDB (ex: http://localhost:8086).
         token: Token de autenticação InfluxDB v2.
         org: Nome da organização.
+        bucket: Bucket de destino (deve estar em ALLOWED_BUCKETS).
+
+    Raises:
+        ValueError: Se `bucket` não estiver na allowlist — falha no startup,
+            não na primeira escrita.
     """
 
-    def __init__(self, influx_url: str, token: str, org: str) -> None:
+    def __init__(self, influx_url: str, token: str, org: str, bucket: str = _WRITE_BUCKET) -> None:
+        if bucket not in ALLOWED_BUCKETS:
+            raise ValueError(f"Bucket {bucket!r} não está na allowlist. Permitidos: {sorted(ALLOWED_BUCKETS)}")
         self._base = influx_url.rstrip("/")
         self._org = org
+        self._bucket = bucket
         self._headers = {
             "Authorization": f"Token {token}",
             "Content-Type": "text/plain; charset=utf-8",
         }
-        self._write_url = _WRITE_URL_TMPL.format(base=self._base, org=org, bucket=_WRITE_BUCKET)
-        validate_bucket(_WRITE_BUCKET)
+        self._write_url = _WRITE_URL_TMPL.format(base=self._base, org=org, bucket=bucket)
 
     async def write_points(self, points: Sequence[GovernancePoint]) -> None:
         """Escreve um lote de pontos em governance_raw.

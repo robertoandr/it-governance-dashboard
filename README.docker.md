@@ -1,8 +1,11 @@
 # Docker — InfluxDB (portabilidade)
 
+> **Operador:** substitua `<ITGOV_DEV_IP>` pelo IP real do servidor de dev
+> (definido em `.env` local ou runbook — nunca versionado aqui).
+
 ## Contexto
 
-No servidor **itgov-dev** (172.29.2.11) existe um InfluxDB nativo (systemd) em `:8086`,
+No servidor **itgov-dev** (`<ITGOV_DEV_IP>`) existe um InfluxDB nativo (systemd) em `:8086`,
 compartilhado com Grafana e outras stacks. Este compose **não é usado em dev** — serve
 exclusivamente para reproduzir o ambiente em outro host.
 
