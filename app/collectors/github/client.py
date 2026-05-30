@@ -56,7 +56,7 @@ class GitHubCollectorClient(GitHubClient):
 
         params = {
             "state": "all",
-            "per_page": self._settings.per_page,  # type: ignore[attr-defined]
+            "per_page": self._settings.per_page,
             "sort": "updated",
             "direction": "desc",
         }
@@ -83,7 +83,7 @@ class GitHubCollectorClient(GitHubClient):
         if since.tzinfo is None:
             since = since.replace(tzinfo=UTC)
 
-        params = {"per_page": self._settings.per_page}  # type: ignore[attr-defined]
+        params = {"per_page": self._settings.per_page}
         results: list[dict] = []
         async for page in self._paginate(f"/repos/{repo}/actions/runs", params):
             items: list[dict] = page if isinstance(page, list) else page.get("workflow_runs", [])
