@@ -1,0 +1,27 @@
+{
+  "total_count": 2,
+  "workflow_runs": [
+    {
+      "id": 9001,
+      "name": "CI",
+      "head_branch": "main",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "run_started_at": "2026-05-30T08:00:00Z",
+      "updated_at": "2026-05-30T08:10:00Z",
+      "run_attempt": 1
+    },
+    {
+      "id": 9002,
+      "name": "Deploy",
+      "head_branch": "main",
+      "event": "workflow_dispatch",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_started_at": "2026-05-29T12:00:00Z",
+      "updated_at": "2026-05-29T12:08:00Z",
+      "run_attempt": 2
+    }
+  ]
+}

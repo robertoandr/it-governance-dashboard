@@ -1,0 +1,22 @@
+[
+  {
+    "eventid": "1001",
+    "objectid": "501",
+    "name": "Host unavailable",
+    "severity": "4",
+    "clock": 1748000000,
+    "acknowledged": "0",
+    "r_eventid": "0",
+    "r_clock": "0"
+  },
+  {
+    "eventid": "1002",
+    "objectid": "502",
+    "name": "Disk space low",
+    "severity": "2",
+    "clock": 1748001000,
+    "acknowledged": "1",
+    "r_eventid": "2002",
+    "r_clock": "1748002000"
+  }
+]

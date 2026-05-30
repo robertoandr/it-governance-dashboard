@@ -8,6 +8,10 @@ name = "it-gov-dashboard"
 version = "1.0.0"
 description = "Dashboard de Governança de TI - Grupo Gadens"
 requires-python = ">=3.12"
+dependencies = [
+    "httpx[http2]>=0.28.1",
+    "tenacity>=9.1.4",
+]
 
 # ============================================
 # Ruff — Linter + Formatter (substitui black+isort+flake8)
@@ -89,6 +93,7 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
 ]
+asyncio_mode = "auto"
 markers = [
     "slow: testes lentos (>1s)",
     "integration: testes de integração (Flask client)",
@@ -161,4 +166,10 @@ skips = [
     "B104",  # bind 0.0.0.0 (controlado por FLASK_HOST env var)
     "B108",  # /tmp hardcoded (uso controlado em scripts one-shot)
     "B310",  # urllib URL (schemes validados via allowlist runtime)
+]
+
+[dependency-groups]
+dev = [
+    "pytest-httpx>=0.36.2",
+    "respx>=0.23.1",
 ]

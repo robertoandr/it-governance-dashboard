@@ -1,0 +1,14 @@
+[
+  {
+    "triggerid": "501",
+    "description": "Host unavailable",
+    "priority": "4",
+    "hosts": [{"hostid": "201", "host": "srv-core-01", "name": "SRV-CORE-01"}]
+  },
+  {
+    "triggerid": "502",
+    "description": "Disk space low on /var",
+    "priority": "2",
+    "hosts": [{"hostid": "202", "host": "srv-db-01", "name": "SRV-DB-01"}]
+  }
+]
