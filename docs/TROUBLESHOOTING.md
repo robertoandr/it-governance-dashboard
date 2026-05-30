@@ -192,3 +192,48 @@ conn = sqlite3.connect('/tmp/g.db')
 - Acessar sempre via Nginx (`8090`/`8453`), nunca via `:3000` direto
 - Considerar parar o Grafana nativo se não for mais usado:
   `sudo systemctl stop grafana-server && sudo systemctl disable grafana-server`
+
+---
+
+## Resolução Definitiva: Bug #4 (30/05/2026)
+
+### Ação Executada
+Removido completamente o Grafana nativo do servidor:
+
+```bash
+sudo systemctl stop grafana-server
+sudo systemctl disable grafana-server
+sudo apt remove --purge grafana
+sudo rm -rf /usr/share/grafana/ /etc/grafana/ /var/lib/grafana/
+```
+
+### Achado Bônus: Plugin Zabbix Órfão
+Após matar o Grafana nativo, sobrou um processo filho órfão:
+```
+/var/lib/grafana/plugins/alexanderzobnin-zabbix-app/datasource/gpx_zabbix-datasource_linux_amd64
+```
+**Solução:** `sudo kill -9 <pid>` (identificado via `ps aux | grep grafana`).
+
+### Resultado
+- 1.028 GB de disco liberado
+- ~450 MB de RAM liberada
+- Processo plugin Zabbix órfão eliminado
+- Porta 3000 do host: livre
+- Único Grafana ativo: Docker (`itgov-grafana`)
+- Acesso oficial: `http://172.29.2.11:8090` (via Nginx, redireciona para HTTPS :8453)
+
+### Lições Aprendidas
+1. **Auditar serviços nativos antes de containerizar:**
+   ```bash
+   systemctl list-units --type=service --state=running | grep -iE "(grafana|influx|prometheus|zabbix)"
+   ss -tlnp | grep -E ':(3000|8086|9090)\s'
+   ```
+2. **Após remover serviço, checar processos filhos órfãos:**
+   ```bash
+   ps aux | grep -i <servico> | grep -v grep
+   ```
+3. **Testes HTTP devem seguir redirects (-L) ou ir direto no HTTPS:**
+   ```bash
+   curl -sL http://host:porta/api/...     # segue redirects
+   curl -sk https://host:8453/api/...     # vai direto no HTTPS
+   ```
