@@ -1,4 +1,4 @@
-# Troubleshooting — IT Governance Dashboard
+ting — IT Governance Dashboard
 
 ## Bug: "Only one datasource per organization can be marked as default"
 
@@ -110,6 +110,7 @@ git fsck --lost-found
 git show <sha> --stat
 ```
 
+<<<<<<< HEAD
 ### Identificação de Stash Órfã
 Mensagens com padrão:
 - `WIP on <branch>: <sha> <mensagem>`
@@ -145,3 +146,49 @@ git stash push -m "Backup pré-reset - $(date +%H:%M)"
 git stash list
 
 # SÓ ENTÃO faz o que precisa
+
+---
+
+## Bug: Dashboards novos não aparecem — Grafana mostra conteúdo antigo
+
+**Sintoma:** Após provisionar dashboards no Docker Grafana, o browser
+em `http://<HOST>:3000` continua mostrando dashboards antigos ou vazios.
+
+**Causa raiz:** Há **dois Grafanas rodando** no mesmo servidor:
+
+| Instância | Porta | Gerenciamento | Dashboards |
+|-----------|-------|---------------|------------|
+| Nativo (systemd) | `3000` | `/etc/grafana/` | Antigos/nenhum |
+| Docker (`itgov-grafana`) | `3000/tcp` (interno) | `/opt/it-gov-dashboard/grafana/` | Sprint 10A ✅ |
+
+O Grafana Docker **não expõe a porta 3000 para o host** — é acessado
+exclusivamente via Nginx nas portas `8090` (HTTP→HTTPS) e `8453` (HTTPS).
+
+**URL correta do Docker Grafana:**
+```
+http://172.29.2.11:8090   →  redireciona para HTTPS
+https://172.29.2.11:8453  →  Grafana com dashboards do Sprint 10A
+```
+
+**Diagnóstico rápido:**
+```bash
+# Qual processo está na porta 3000?
+ss -tlnp | grep 3000
+systemctl status grafana-server   # se existir = Grafana nativo no host
+
+# Quais containers expõem porta?
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+
+# Dashboards no Docker Grafana (sem precisar de senha):
+docker cp itgov-grafana:/var/lib/grafana/grafana.db /tmp/g.db
+python3 -c "
+import sqlite3
+conn = sqlite3.connect('/tmp/g.db')
+[print(r) for r in conn.execute('SELECT title, uid FROM dashboard WHERE is_folder=0')]
+"
+```
+
+**Prevenção:**
+- Acessar sempre via Nginx (`8090`/`8453`), nunca via `:3000` direto
+- Considerar parar o Grafana nativo se não for mais usado:
+  `sudo systemctl stop grafana-server && sudo systemctl disable grafana-server`
