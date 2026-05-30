@@ -54,6 +54,7 @@ GRAPH_CLIENT_ID = _env("AZURE_CLIENT_ID", required=False)
 GRAPH_CLIENT_SECRET = _env("AZURE_CLIENT_SECRET", required=False)
 GRAPH_ENABLED = bool(GRAPH_TENANT_ID and GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET)
 GRAPH_SCOPES = ["https://graph.microsoft.com/.default"]
+INTUNE_ENABLED = _env_bool("INTUNE_ENABLED", True)
 
 # ── Grafana
 GRAFANA_URL = _env("GRAFANA_URL", required=False)

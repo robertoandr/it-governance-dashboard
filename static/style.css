@@ -1041,3 +1041,139 @@ td.editing input:focus, td.editing select:focus { outline: none; }
   transition: opacity 0.2s;
 }
 .cftv-zbx-btn:hover { opacity: 0.8; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GOVERNANÇA DE TI 360° — overlay refinamentos visuais (append-only, nunca editar acima)
+   Revert: sed -i '/GOVERNANÇA DE TI 360°/,$d' /opt/it-gov-dashboard/static/style.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tabler Icons no sidebar — alinha e dimensiona igual ao <span class="ico"> anterior */
+.sidebar-nav .nav-item i.ti {
+  font-size: 18px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.sidebar-nav .nav-item.active i.ti,
+.sidebar-nav .nav-item:hover i.ti {
+  color: var(--accent);
+}
+
+/* Score Ring SVG */
+.score-ring-layout {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 8px 0;
+}
+.score-ring-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.score-ring-svg {
+  width: 120px;
+  height: 120px;
+  transform: rotate(-90deg);
+}
+.score-ring-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 10;
+}
+.score-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1),
+              stroke 0.4s ease;
+}
+.score-ring-fill.is-critical { stroke: #ef4444; }
+.score-ring-fill.is-warning  { stroke: #f59e0b; }
+.score-ring-fill.is-ok       { stroke: #22c55e; }
+.score-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.score-ring-value {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.score-ring-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  align-self: flex-end;
+  padding-bottom: 4px;
+}
+.score-ring-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.score-ring-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.score-ring-label {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* KPI counter animation — número não quebra durante animação */
+.kpi-value span[id],
+.score-ring-value {
+  display: inline-block;
+  min-width: 2ch;
+  text-align: right;
+}
+
+/* Stagger entrance para kpi-cards no overview */
+@keyframes fadeStagger {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel.active .kpi-card {
+  animation: fadeStagger 0.35s ease both;
+}
+.panel.active .kpi-card:nth-child(1) { animation-delay: 0.00s; }
+.panel.active .kpi-card:nth-child(2) { animation-delay: 0.05s; }
+.panel.active .kpi-card:nth-child(3) { animation-delay: 0.10s; }
+.panel.active .kpi-card:nth-child(4) { animation-delay: 0.15s; }
+.panel.active .kpi-card:nth-child(5) { animation-delay: 0.20s; }
+.panel.active .kpi-card:nth-child(6) { animation-delay: 0.25s; }
+
+
+/* ── Card "Em breve" (feature em roadmap) ───────────────────── */
+.kpi-soon {
+  position: relative;
+  opacity: 0.78;
+  border: 2px dashed rgba(255,165,0,0.45) !important;
+  background: linear-gradient(135deg, rgba(255,165,0,0.06), rgba(80,80,120,0.04)) !important;
+}
+.kpi-soon .kpi-value { font-size: 2.5rem; }
+.kpi-soon::after {
+  content: "ROADMAP";
+  position: absolute; top: 8px; right: 8px;
+  font-size: 0.62rem; padding: 2px 7px;
+  background: #ffa500; color: #1a1a1a;
+  border-radius: 3px; font-weight: 700; letter-spacing: 0.5px;
+}

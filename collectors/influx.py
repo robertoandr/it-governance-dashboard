@@ -32,18 +32,7 @@ class InfluxCollector:
     def _run_flux(self, flux: str) -> list[dict]:
         try:
             r = requests.post(self._query_url, headers=self._headers, data=flux, timeout=15)
-            log.warning(
-                "DEBUG flux url=%s len_resp=%d sample=%s",
-                self._query_url,
-                len(r.text),
-                r.text[:300],
-            )
-            log.warning(
-                "DEBUG flux url=%s len_resp=%d sample=%s",
-                self._query_url,
-                len(r.text),
-                r.text[:300],
-            )
+            log.debug("flux url=%s len_resp=%d sample=%s", self._query_url, len(r.text), r.text[:300])
             if r.status_code != 200:
                 log.warning("Influx HTTP %s: %s", r.status_code, r.text[:200])
                 return []
