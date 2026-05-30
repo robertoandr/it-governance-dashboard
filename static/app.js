@@ -152,19 +152,9 @@ function render(data) {
 
   // ── Score de Saúde ─────────────────────────────────────────
   const hs = data.health_score || {};
-  setText("score-value", hs.score != null ? hs.score : "—");
-  const scoreEl = document.getElementById("score-value");
+  if (hs.score != null) updateScoreRing(hs.score);
   const scoreLabelEl = document.getElementById("score-label");
   if (scoreLabelEl) scoreLabelEl.textContent = hs.label || "—";
-  ["ok", "warn", "crit"].forEach(c => {
-    scoreEl?.classList.remove(c);
-    scoreLabelEl?.classList.remove(c);
-  });
-  let scoreClass = "crit";
-  if (hs.score >= 85) scoreClass = "ok";
-  else if (hs.score >= 60) scoreClass = "warn";
-  scoreEl?.classList.add(scoreClass);
-  scoreLabelEl?.classList.add(scoreClass);
   const scComp = document.getElementById("score-components");
   if (scComp && Array.isArray(hs.components)) {
     scComp.innerHTML = hs.components.map(c => `
@@ -173,23 +163,22 @@ function render(data) {
         <div class="vl">${c.value}${esc(c.unit)}</div>
       </div>`).join("");
   }
-  if (scoreEl) scoreEl.innerHTML = `${hs.score != null ? hs.score : "—"}<span style="font-size:22px;font-weight:700">%</span>`;
 
   // ── Visão Geral ────────────────────────────────────────────
   const ss = data.secure_score || {};
   if (ss.enabled !== false) {
-    setText("kpi-ss", ss.pct);
-    setText("kpi-ss-curr", ss.current);
-    setText("kpi-ss-max", ss.max);
+    animateId("kpi-ss", ss.pct);
+    animateId("kpi-ss-curr", ss.current);
+    animateId("kpi-ss-max", ss.max);
     setBar("bar-ss", ss.pct, T.secure_score);
     setKpiClass("secure_score", classify(ss.pct, T.secure_score));
   }
 
   if (data.hosts) {
-    setText("kpi-hosts-pct", data.hosts.up_pct);
-    setText("kpi-hosts-up", data.hosts.up);
-    setText("kpi-hosts-down", data.hosts.down);
-    setText("kpi-hosts-total", data.hosts.total);
+    animateId("kpi-hosts-pct", data.hosts.up_pct);
+    animateId("kpi-hosts-up", data.hosts.up);
+    animateId("kpi-hosts-down", data.hosts.down);
+    animateId("kpi-hosts-total", data.hosts.total);
     setBar("bar-hosts", data.hosts.up_pct, T.hosts_up_pct);
     setKpiClass("hosts", classify(data.hosts.up_pct, T.hosts_up_pct));
     // aba Hosts
@@ -203,9 +192,9 @@ function render(data) {
   const trs = data.triggers || [];
   const trsCrit = trs.filter(t => t.severity_num >= 4).length;
   const trsAck = trs.filter(t => t.acknowledged).length;
-  setText("kpi-trg-total", trs.length);
-  setText("kpi-trg-crit", trsCrit);
-  setText("kpi-trg-ack", trsAck);
+  animateId("kpi-trg-total", trs.length);
+  animateId("kpi-trg-crit", trsCrit);
+  animateId("kpi-trg-ack", trsAck);
   setKpiClass("triggers", trsCrit > 0 ? "crit" : (trs.length > 0 ? "warn" : "ok"));
   // badge piscante no nav
   const navBadge = document.getElementById("nav-triggers-badge");
@@ -222,9 +211,9 @@ function render(data) {
   }
 
   if (data.mfa) {
-    setText("kpi-mfa", data.mfa.pct);
-    setText("kpi-mfa-on", (data.mfa.habilitados ?? 0) + (data.mfa.enforced ?? 0));
-    setText("kpi-mfa-off", data.mfa.desabilitados);
+    animateId("kpi-mfa", data.mfa.pct);
+    animateId("kpi-mfa-on", (data.mfa.habilitados ?? 0) + (data.mfa.enforced ?? 0));
+    animateId("kpi-mfa-off", data.mfa.desabilitados);
     setBar("bar-mfa", data.mfa.pct, T.mfa);
     setKpiClass("mfa", classify(data.mfa.pct, T.mfa));
     // aba Segurança
@@ -237,9 +226,9 @@ function render(data) {
 
   const it = data.intune || {};
   if (it.enabled !== false) {
-    setText("kpi-intune", it.pct);
-    setText("kpi-intune-c", it.compliant);
-    setText("kpi-intune-t", it.total);
+    animateId("kpi-intune", it.pct);
+    animateId("kpi-intune-c", it.compliant);
+    animateId("kpi-intune-t", it.total);
     setBar("bar-intune", it.pct, T.intune);
     setKpiClass("intune", classify(it.pct, T.intune));
     setText("sec-intune", it.pct);
@@ -249,10 +238,10 @@ function render(data) {
     setKpiClass("security-intune", classify(it.pct, T.intune));
   }
 
-  setText("kpi-inc", (data.incidents || {}).total_ativos);
+  animateId("kpi-inc", (data.incidents || {}).total_ativos);
 
   if (data.users_m365) {
-    setText("kpi-users", data.users_m365.total);
+    animateId("kpi-users", data.users_m365.total);
     setText("kpi-users-sub", `${data.users_m365.ativos ?? 0} ativos · ${data.users_m365.inativos ?? 0} inativos`);
     setText("m365-users-total", data.users_m365.total);
     setText("m365-users-ativos", data.users_m365.ativos);
@@ -749,7 +738,7 @@ function zbxHostLink(hostid, label) {
   const safeLabel = esc(label || "—");
   if (!ZABBIX_FRONT_URL || !hostid) return safeLabel;
   const url = `${ZABBIX_FRONT_URL}/zabbix.php?action=host.view&filter_hostids%5B%5D=${encodeURIComponent(hostid)}&filter_set=1`;
-  return `<a href="${url}" target="_blank" rel="noopener noreferrer" 
+  return `<a href="${url}" target="_blank" rel="noopener noreferrer"
             style="color:var(--accent);text-decoration:none;font-weight:600;">
             🔗 Abrir no Zabbix
           </a>`;
@@ -875,3 +864,66 @@ function renderCFTV(cftv) {
     }
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// GOVERNANÇA DE TI 360° — funções de animação (append-only)
+// ═══════════════════════════════════════════════════════════════
+
+function animateCounter(el, target, duration) {
+  duration = duration || 800;
+  const start = parseFloat(el.textContent) || 0;
+  const end   = parseFloat(target);
+  if (isNaN(end)) { el.textContent = target; return; }
+  const startTime = performance.now();
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    el.textContent = Math.round(start + (end - start) * ease);
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = Number.isInteger(end) ? end : target;
+  }
+  requestAnimationFrame(step);
+}
+
+function animateId(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const num = parseFloat(value);
+  if (!isNaN(num)) animateCounter(el, num);
+  else el.textContent = value ?? "—";
+}
+
+function updateScoreRing(score) {
+  const circumference = 314.16; // 2 * π * 50
+  const fill   = document.getElementById("score-ring-fill");
+  const valEl  = document.getElementById("score-value");
+  const card   = document.getElementById("score-card-wrap");
+  if (!fill || !valEl) return;
+
+  const pct    = Math.max(0, Math.min(100, score));
+  const offset = circumference - (pct / 100) * circumference;
+  fill.style.strokeDashoffset = offset;
+
+  // Cor dinâmica
+  fill.classList.remove("is-critical", "is-warning", "is-ok");
+  if (pct >= 85)      fill.classList.add("is-ok");
+  else if (pct >= 60) fill.classList.add("is-warning");
+  else                fill.classList.add("is-critical");
+
+  // Sincroniza classe no card wrapper para glow
+  if (card) {
+    card.classList.remove("is-ok", "is-warning", "is-critical");
+    if (pct >= 85)      card.classList.add("is-ok");
+    else if (pct >= 60) card.classList.add("is-warning");
+    else                card.classList.add("is-critical");
+  }
+
+  animateCounter(valEl, pct);
+}
+
+// Inicia anel em 0 assim que o DOM carrega (antes do primeiro fetch)
+document.addEventListener("DOMContentLoaded", function () {
+  const fill = document.getElementById("score-ring-fill");
+  if (fill) fill.style.strokeDashoffset = "314.16";
+});
