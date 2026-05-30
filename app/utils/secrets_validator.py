@@ -5,8 +5,15 @@ Roda no startup da aplicação e do smoke test. Fail-fast se detectar lixo.
 
 from __future__ import annotations
 
+import logging
+
 import structlog
 from pydantic import SecretStr
+
+# Fallback handler garante visibilidade em ambientes sem structlog.configure()
+# (ex: testes unitários, CLI standalone, container sem configuração de log)
+if not structlog.is_configured():
+    logging.basicConfig(level=logging.WARNING)
 
 log = structlog.get_logger(__name__)
 
