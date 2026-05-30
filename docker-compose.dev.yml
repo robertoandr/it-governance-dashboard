@@ -1,0 +1,10 @@
+# Overlay de desenvolvimento — expõe o InfluxDB Docker na porta 8087.
+# Porta 8086 reservada para o InfluxDB nativo do servidor.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# NÃO usar em produção.
+
+services:
+  influxdb:
+    ports:
+      - "8087:8086"

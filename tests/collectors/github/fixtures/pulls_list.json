@@ -1,0 +1,30 @@
+[
+  {
+    "number": 42,
+    "title": "feat: add influxdb storage layer",
+    "state": "open",
+    "user": {"login": "dev-alice", "id": 1001},
+    "base": {"ref": "main", "sha": "abc123"},
+    "created_at": "2026-05-28T10:00:00Z",
+    "updated_at": "2026-05-30T09:00:00Z",
+    "merged_at": null,
+    "additions": 0,
+    "deletions": 0,
+    "changed_files": 0,
+    "review_comments": 0
+  },
+  {
+    "number": 41,
+    "title": "fix: zabbix 7 host resolution",
+    "state": "closed",
+    "user": {"login": "dev-bob", "id": 1002},
+    "base": {"ref": "main", "sha": "def456"},
+    "created_at": "2026-05-27T08:00:00Z",
+    "updated_at": "2026-05-29T14:00:00Z",
+    "merged_at": "2026-05-29T14:00:00Z",
+    "additions": 45,
+    "deletions": 12,
+    "changed_files": 3,
+    "review_comments": 2
+  }
+]

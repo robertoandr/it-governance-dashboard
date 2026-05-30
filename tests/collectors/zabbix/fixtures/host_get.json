@@ -1,0 +1,4 @@
+[
+  {"hostid": "201", "host": "srv-core-01", "name": "SRV-CORE-01"},
+  {"hostid": "202", "host": "srv-db-01",   "name": "SRV-DB-01"}
+]

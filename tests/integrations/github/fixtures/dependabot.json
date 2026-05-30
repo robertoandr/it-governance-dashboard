@@ -1,0 +1,15 @@
+[
+  {
+    "number": 1,
+    "state": "open",
+    "dependency": {
+      "package": {"name": "requests", "ecosystem": "pip"}
+    },
+    "security_advisory": {
+      "severity": "high",
+      "cvss": {"score": 8.1}
+    },
+    "created_at": "2026-01-03T12:00:00Z",
+    "fixed_at": null
+  }
+]

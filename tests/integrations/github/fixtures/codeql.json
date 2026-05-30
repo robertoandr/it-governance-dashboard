@@ -1,0 +1,14 @@
+[
+  {
+    "number": 1,
+    "state": "open",
+    "rule": {
+      "id": "py/sql-injection",
+      "severity": "error",
+      "security_severity_level": "high"
+    },
+    "tool": {"name": "CodeQL"},
+    "created_at": "2026-01-01T08:00:00Z",
+    "dismissed_at": null
+  }
+]
