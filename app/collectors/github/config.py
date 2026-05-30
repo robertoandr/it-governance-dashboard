@@ -22,7 +22,7 @@ class GitHubCollectorSettings(GitHubSettings):
 
     @field_validator("repos", mode="before")
     @classmethod
-    def parse_repos(cls, value: object) -> object:
+    def parse_repos(cls, value: str | list[str]) -> list[str]:
         """Aceita repos como JSON array ou CSV — substitui validator do pai.
 
         Mesmo nome que o validator pai (`parse_repos`) garante override via
@@ -36,6 +36,7 @@ class GitHubCollectorSettings(GitHubSettings):
         if isinstance(value, str):
             stripped = value.strip()
             if stripped.startswith("["):
-                return json.loads(stripped)
+                parsed: list[str] = json.loads(stripped)
+                return parsed
             return [r.strip() for r in stripped.split(",") if r.strip()]
-        return value
+        return list(value)
