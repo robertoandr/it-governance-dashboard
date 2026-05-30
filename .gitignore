@@ -33,3 +33,10 @@ docker-compose.override.yml
 # Logs
 *.log
 logs/
+
+# Grafana provisioning — nunca commitar variações de backup
+grafana/provisioning/**/*.bak
+grafana/provisioning/**/*.old
+grafana/provisioning/**/*.tmp
+grafana/provisioning/**/*.orig
+grafana/provisioning/**/*.disabled
