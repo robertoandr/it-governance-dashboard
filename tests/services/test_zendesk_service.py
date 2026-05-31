@@ -142,7 +142,7 @@ class TestCSAT:
         assert summary.csat_pct == pytest.approx(66.7, abs=0.1)
 
     @respx.mock
-    def test_csat_zero_when_no_ratings(self, svc: ZendeskService) -> None:
+    def test_csat_none_when_no_ratings(self, svc: ZendeskService) -> None:
         respx.get(f"{BASE_URL}/api/v2/satisfaction_ratings.json").mock(
             return_value=httpx.Response(
                 200, json={"satisfaction_ratings": [], "meta": {"has_more": False}, "links": {}}
@@ -150,7 +150,8 @@ class TestCSAT:
         )
         summary = svc.get_csat_summary()
         assert summary.total_ratings == 0
-        assert summary.csat_pct == 0.0
+        assert summary.sample_size == 0
+        assert summary.csat_pct is None
 
 
 class TestVolumeByStatus:

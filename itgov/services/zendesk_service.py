@@ -252,14 +252,16 @@ class ZendeskService(SyncAPIClient):
         """Calcula resumo de CSAT (Customer Satisfaction Score).
 
         Returns:
-            CSATSummary com totais e percentual de satisfação.
+            CSATSummary com totais, percentual de satisfação e sample_size.
+            ``csat_pct`` is None when sample_size == 0 — consumers must treat
+            None as "no data", not as "0% satisfaction".
         """
         ratings = self.get_satisfaction_ratings()
         total = len(ratings)
         good = sum(1 for r in ratings if r.score == "good")
         bad = total - good
-        csat_pct = round((good / total) * 100, 1) if total else 0.0
-        return CSATSummary(total_ratings=total, good=good, bad=bad, csat_pct=csat_pct)
+        csat_pct = round((good / total) * 100, 1) if total else None
+        return CSATSummary(total_ratings=total, good=good, bad=bad, csat_pct=csat_pct, sample_size=total)
 
     def get_ticket_volume_by_status(self) -> dict[str, int]:
         """Retorna contagem de tickets por status.
