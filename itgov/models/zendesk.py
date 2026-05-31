@@ -53,8 +53,11 @@ class Ticket(BaseModel):
 
     @property
     def age_hours(self) -> float:
-        delta = datetime.now(UTC) - self.created_at.replace(tzinfo=UTC)
-        return delta.total_seconds() / 3600
+        """Age in hours since ticket creation. Naive timestamps assumed UTC."""
+        created = (
+            self.created_at.replace(tzinfo=UTC) if self.created_at.tzinfo is None else self.created_at.astimezone(UTC)
+        )
+        return (datetime.now(UTC) - created).total_seconds() / 3600
 
 
 class SLAPolicy(BaseModel):
