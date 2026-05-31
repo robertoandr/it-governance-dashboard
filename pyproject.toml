@@ -85,9 +85,10 @@ addopts = [
     "--tb=short",
     "--color=yes",
     "--durations=10",
-    "--cov=.",
+    "--cov=itgov",
     "--cov-report=term-missing",
-    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=60",
 ]
 markers = [
     "slow: testes lentos (>1s)",
@@ -105,7 +106,7 @@ filterwarnings = [
 # Coverage
 # ============================================
 [tool.coverage.run]
-source = ["."]
+source = ["itgov"]
 omit = [
     "tests/*",
     "venv/*",
