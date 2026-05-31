@@ -18,6 +18,12 @@
 - [ ] Não introduz vulnerabilidades (`make security`)
 - [ ] Commit segue Conventional Commits
 
+## 📊 Coverage (`pytest --cov=itgov --cov-report=term-missing`)
+- Before: X%
+- After: Y%
+- Delta: ±Z pp
+- Missing lines (se regressão): `module.py:L10-L20`
+
 ## 🧪 Como testar
 <!-- Passos para reproduzir e validar -->
 
