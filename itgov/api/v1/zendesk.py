@@ -53,7 +53,7 @@ csat_model = ns.model(
 
 volume_model = ns.model(
     "ZendeskVolumeByStatus",
-    {s: fields.Integer for s in ("new", "open", "pending", "hold", "solved", "closed")},
+    dict.fromkeys(("new", "open", "pending", "hold", "solved", "closed"), fields.Integer),
 )
 
 
