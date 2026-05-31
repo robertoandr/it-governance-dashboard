@@ -32,7 +32,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = config._env("SECRET_KEY", required=True)
 
 # Sprint 10D: Security middleware (Talisman + Limiter)
-from app.middleware.security import init_security  # noqa: E402
+from middleware.security import init_security  # noqa: E402
 
 limiter = init_security(app)
 

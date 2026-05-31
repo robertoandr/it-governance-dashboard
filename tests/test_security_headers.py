@@ -22,7 +22,7 @@ def secure_app() -> Flask:
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "test-secret-key-not-real"
 
-    from app.middleware.security import init_security
+    from middleware.security import init_security
 
     init_security(app)
 
@@ -93,7 +93,7 @@ class TestSessionSecurity:
         assert secure_app.config["SESSION_COOKIE_HTTPONLY"] is True
 
     def test_session_cookie_samesite(self, secure_app: Flask) -> None:
-        assert secure_app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+        assert secure_app.config["SESSION_COOKIE_SAMESITE"] == "Strict"
 
     def test_session_lifetime(self, secure_app: Flask) -> None:
         assert secure_app.config["PERMANENT_SESSION_LIFETIME"] == 3600
