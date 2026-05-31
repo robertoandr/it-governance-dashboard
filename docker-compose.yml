@@ -1,4 +1,42 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: itgov-app
+    restart: unless-stopped
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: ${SECRET_KEY}
+      INFLUX_URL: ${INFLUX_URL}
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+      ZABBIX_URL: ${ZABBIX_URL}
+      ZABBIX_USER: ${ZABBIX_USER}
+      ZABBIX_PASSWORD: ${ZABBIX_PASSWORD}
+      ZABBIX_FRONT_URL: ${ZABBIX_FRONT_URL:-""}
+      GRAFANA_URL: ${GRAFANA_URL:-""}
+      GRAFANA_TOKEN: ${GRAFANA_TOKEN:-""}
+      GRAFANA_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    read_only: true
+    volumes:
+      - app_logs:/app/logs
+      - app_tmp:/app/tmp
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
   grafana:
     image: grafana/grafana:11.2.0
     container_name: itgov-grafana
@@ -21,3 +59,7 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+volumes:
+  app_logs:
+  app_tmp:
