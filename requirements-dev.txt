@@ -10,6 +10,7 @@ pytest-flask>=1.3
 pytest-mock>=3.12
 pytest-xdist>=3.5          # paralelização (-n auto)
 pytest-timeout>=2.2        # timeout por teste
+respx>=0.21.0              # mock httpx para testes de integração
 
 # ----- Lint & Format (substituem black+isort+flake8) -----
 ruff>=0.6.0                # linter + formatter ultra-rápido

@@ -5,8 +5,16 @@ DC do domínio grupogadens.com.br: 172.29.1.246
 """
 
 import logging
+import warnings
 
 import config
+
+# Deprecation: migrar para app.services.ldap_service no Sprint 10F. Ver docs/MIGRATION.md.
+warnings.warn(
+    "collectors.ldap_collector is deprecated. Use app.services.ldap_service (Sprint 10F). See docs/MIGRATION.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 log = logging.getLogger(__name__)
 
