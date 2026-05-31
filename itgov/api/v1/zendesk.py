@@ -47,7 +47,10 @@ csat_model = ns.model(
         "total_ratings": fields.Integer,
         "good": fields.Integer,
         "bad": fields.Integer,
-        "csat_pct": fields.Float(description="Percentual de avaliações positivas"),
+        "csat_pct": fields.Float(
+            allow_null=True, description="Percentual de avaliações positivas, ou null se sem dados"
+        ),
+        "sample_size": fields.Integer(description="Surveys respondidas (good + bad) na janela"),
     },
 )
 

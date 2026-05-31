@@ -41,8 +41,9 @@ Changing any of them WILL affect dashboard semantics. Read before
    "bad rating"; counting unoffered as zero penalizes teams for Zendesk
    policy configuration, not actual satisfaction.
    Reference: PR #59.
-   Follow-up: issue #61 exposes ``sample_size`` in the API so consumers
-   can distinguish "0.0 from low sample" vs "0.0 from bad ratings".
+   ``CSATSummary.sample_size`` exposes the denominator so consumers can
+   distinguish "no data" (sample_size=0, csat_pct=None) from "bad ratings"
+   (sample_size>0, csat_pct=0.0). Implemented in PR #66 (issue #61).
 
 5. SLAPolicy model — removed (YAGNI)
    An earlier draft modeled Zendesk SLA Policies as a first-class
@@ -252,14 +253,16 @@ class ZendeskService(SyncAPIClient):
         """Calcula resumo de CSAT (Customer Satisfaction Score).
 
         Returns:
-            CSATSummary com totais e percentual de satisfação.
+            CSATSummary com totais, percentual de satisfação e sample_size.
+            ``csat_pct`` is None when sample_size == 0 — consumers must treat
+            None as "no data", not as "0% satisfaction".
         """
         ratings = self.get_satisfaction_ratings()
         total = len(ratings)
         good = sum(1 for r in ratings if r.score == "good")
         bad = total - good
-        csat_pct = round((good / total) * 100, 1) if total else 0.0
-        return CSATSummary(total_ratings=total, good=good, bad=bad, csat_pct=csat_pct)
+        csat_pct = round((good / total) * 100, 1) if total else None
+        return CSATSummary(total_ratings=total, good=good, bad=bad, csat_pct=csat_pct, sample_size=total)
 
     def get_ticket_volume_by_status(self) -> dict[str, int]:
         """Retorna contagem de tickets por status.

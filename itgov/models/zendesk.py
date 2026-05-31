@@ -79,9 +79,15 @@ class SatisfactionRating(BaseModel):
 
 
 class CSATSummary(BaseModel):
-    """Resumo de satisfação do cliente."""
+    """Resumo de satisfação do cliente.
+
+    ``csat_pct`` is ``None`` when ``sample_size == 0`` (no answered surveys),
+    distinguishing "no data" from "0% satisfaction". Consumers should render
+    ``None`` as "N/A" rather than "0%".
+    """
 
     total_ratings: int
     good: int
     bad: int
-    csat_pct: float = Field(ge=0.0, le=100.0)
+    csat_pct: float | None = Field(default=None, ge=0.0, le=100.0)
+    sample_size: int = Field(default=0, ge=0, description="Answered surveys (good + bad) in the window")
