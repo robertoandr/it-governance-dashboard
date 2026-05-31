@@ -2,13 +2,26 @@
 Coletor Zabbix via JSON-RPC API.
   - get_host_summary, get_problems (originais)
   - get_active_triggers, get_m365_items, acknowledge_event (Sprint 1)
+
+.. deprecated::
+    Este módulo será migrado para ``app.services.zabbix_service`` no Sprint 10F.
+    Não adicione novas funcionalidades aqui — use o novo serviço.
+    Ver: docs/MIGRATION.md
 """
 
 import logging
+import warnings
 
 import requests
 
 import config
+
+# Deprecation: migrar para app.services.zabbix_service no Sprint 10F. Ver docs/MIGRATION.md.
+warnings.warn(
+    "collectors.zabbix is deprecated. Use app.services.zabbix_service (Sprint 10F). See docs/MIGRATION.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 log = logging.getLogger(__name__)
 

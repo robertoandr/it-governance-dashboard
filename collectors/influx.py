@@ -1,15 +1,28 @@
 """
 Coletor InfluxDB - usa HTTP direto pra contornar bug da lib influxdb-client
 que não distingue entre org name (org=) e org ID (orgID=) na query.
+
+.. deprecated::
+    Este módulo será migrado para ``app.services.influx_service`` no Sprint 10F.
+    Não adicione novas funcionalidades aqui — use o novo serviço.
+    Ver: docs/MIGRATION.md
 """
 
 import csv
 import io
 import logging
+import warnings
 
 import requests
 
 import config
+
+# Deprecation: migrar para app.services.influx_service no Sprint 10F. Ver docs/MIGRATION.md.
+warnings.warn(
+    "collectors.influx is deprecated. Use app.services.influx_service (Sprint 10F). See docs/MIGRATION.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 log = logging.getLogger(__name__)
 

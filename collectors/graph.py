@@ -10,12 +10,20 @@ Incidents e Users no InfluxDB. Aqui só buscamos o que falta:
 import json
 import logging
 import re
+import warnings
 from pathlib import Path
 
 import msal
 import requests
 
 import config
+
+# Deprecation: migrar para app.services.graph_service no Sprint 10F. Ver docs/MIGRATION.md.
+warnings.warn(
+    "collectors.graph is deprecated. Use app.services.graph_service (Sprint 10F). See docs/MIGRATION.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 log = logging.getLogger(__name__)
 

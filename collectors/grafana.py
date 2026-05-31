@@ -10,10 +10,18 @@ Pré-requisito no Grafana (uma vez):
 """
 
 import logging
+import warnings
 
 import requests
 
 import config
+
+# Deprecation: migrar para app.services.grafana_service no Sprint 10F. Ver docs/MIGRATION.md.
+warnings.warn(
+    "collectors.grafana is deprecated. Use app.services.grafana_service (Sprint 10F). See docs/MIGRATION.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 log = logging.getLogger(__name__)
 
