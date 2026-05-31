@@ -11,6 +11,12 @@ on:
     branches: [main, develop]
   workflow_dispatch:  # permite rodar manualmente
 
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+  actions: read
+
 # Cancela runs anteriores no mesmo PR/branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
