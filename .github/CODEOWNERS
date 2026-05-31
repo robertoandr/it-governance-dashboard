@@ -5,10 +5,26 @@
 # Owner global (fallback)
 * @robertoandr
 
-# Áreas críticas
+# Áreas críticas — aplicação
+/app/                @robertoandr
+/app/collectors/     @robertoandr
+/app/storage/        @robertoandr
+/app/integrations/   @robertoandr
 /collectors/         @robertoandr
 /services/           @robertoandr
 /routes/             @robertoandr
+
+# Infraestrutura e CI
 /.github/            @robertoandr
+/docker/             @robertoandr
+/grafana/            @robertoandr
+docker-compose*.yml  @robertoandr
+
+# Configuração e deps
 requirements*.txt    @robertoandr
 pyproject.toml       @robertoandr
+.env.example         @robertoandr
+
+# Docs
+/docs/security/      @robertoandr
+/docs/adr/           @robertoandr
