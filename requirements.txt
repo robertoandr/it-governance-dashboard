@@ -11,7 +11,7 @@ flask-talisman>=1.1.0
 flask-limiter>=3.5.0
 structlog>=24.1.0
 
-# Integration HTTP client (Sprint 10E)
+# Integration HTTP client + models (Sprint 10E)
 httpx>=0.27.0
 tenacity>=8.3.0
 pydantic>=2.7.0

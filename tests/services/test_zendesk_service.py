@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 import pytest
 import respx
@@ -104,7 +106,7 @@ class TestSLAMetrics:
     @respx.mock
     def test_no_breaches_when_all_recent(self, svc: ZendeskService) -> None:
         """Tickets recentes não devem ter breach."""
-        now = "2026-05-31T02:00:00Z"
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         raw = [_ticket(status="open", created_at=now, updated_at=now)]
         respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_tickets_page(raw)))
         metric = svc.get_sla_metrics()
