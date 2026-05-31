@@ -41,8 +41,9 @@ Changing any of them WILL affect dashboard semantics. Read before
    "bad rating"; counting unoffered as zero penalizes teams for Zendesk
    policy configuration, not actual satisfaction.
    Reference: PR #59.
-   Follow-up: issue #61 exposes ``sample_size`` in the API so consumers
-   can distinguish "0.0 from low sample" vs "0.0 from bad ratings".
+   ``CSATSummary.sample_size`` exposes the denominator so consumers can
+   distinguish "no data" (sample_size=0, csat_pct=None) from "bad ratings"
+   (sample_size>0, csat_pct=0.0). Implemented in PR #66 (issue #61).
 
 5. SLAPolicy model — removed (YAGNI)
    An earlier draft modeled Zendesk SLA Policies as a first-class
