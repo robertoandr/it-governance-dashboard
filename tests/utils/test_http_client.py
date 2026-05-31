@@ -9,7 +9,7 @@ import httpx
 import pytest
 import respx
 
-from app.utils.http_client import SyncAPIClient
+from itgov.utils.http_client import SyncAPIClient
 
 BASE = "https://api.example.com"
 
