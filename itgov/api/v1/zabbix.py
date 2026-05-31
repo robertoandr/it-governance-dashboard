@@ -161,7 +161,7 @@ class AcknowledgeResource(Resource):
     @ns.expect(ack_request_model)
     @ns.marshal_with(ack_response_model)
     @ns.doc(
-        description="Reconhece um evento no Zabbix. " "Rate limit: 10/min por IP. Requer autenticação SSO.",
+        description="Reconhece um evento no Zabbix. Rate limit: 10/min por IP. Requer autenticação SSO.",
         security="bearer",
     )
     def post(self, eventid: str) -> dict:
