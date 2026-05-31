@@ -9,6 +9,7 @@ import time
 from datetime import UTC, datetime
 
 from flask import Flask, jsonify, render_template, request
+from flask_restx import Api
 
 import config
 from app_utils import safe
@@ -17,6 +18,8 @@ from collectors.graph import GraphCollector
 from collectors.influx import InfluxCollector
 from collectors.ldap_collector import LDAPCollector
 from collectors.zabbix import ZabbixCollector
+from itgov.api.v1.zabbix import ns as zabbix_ns
+from itgov.api.v1.zendesk import ns as zendesk_ns
 
 # Fase 5: Blueprints de Governança
 from routes.governance import governance_bp
@@ -39,6 +42,11 @@ limiter = init_security(app)
 # Fase 5: Registro de Blueprints
 app.register_blueprint(governance_bp)
 app.register_blueprint(maintenance_bp)
+
+# itgov REST API v1 (Flask-RESTX namespaces)
+itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=False)
+itgov_api.add_namespace(zabbix_ns)
+itgov_api.add_namespace(zendesk_ns)
 
 _cache: dict = {
     "hosts": {},
