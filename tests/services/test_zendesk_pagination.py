@@ -5,7 +5,7 @@ Pagination contract:
   - Loop continues while has_more=True AND links.next is present
   - Second+ pages are fetched via full absolute URL (no extra params)
   - Loop stops when has_more=False or links.next is absent/null
-  - No max_pages guard exists — infinite loop test documents this gap
+  - max_pages cap: stops traversal, emits WARN, returns partial results
 
 Mock strategy: respx.get() without query params matches ANY request to
 that path (ignoring query params by default). Multi-page sequences use
@@ -17,6 +17,7 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
+import structlog.testing
 
 from itgov.services.zendesk_service import ZendeskService
 
@@ -125,13 +126,7 @@ class TestPaginationMultiPage:
 class TestPaginationNoMaxPagesGuard:
     @respx.mock
     def test_loop_terminates_on_proper_terminal_page(self, svc: ZendeskService) -> None:
-        """Loop exits when the terminal page arrives (has_more=False).
-
-        NOTE: _paginate has no max_pages guard. An API server bug that
-        perpetually returns has_more=True would cause an infinite loop.
-        This test verifies correct termination under normal conditions.
-        Tracking: add max_pages guard as follow-up to issue #52.
-        """
+        """Loop exits when the terminal page arrives (has_more=False)."""
         route = respx.get(TICKETS_PATH)
         route.side_effect = [
             httpx.Response(200, json=_page([_ticket(1)], has_more=True, next_url=CURSOR_PAGE2)),
@@ -140,3 +135,58 @@ class TestPaginationNoMaxPagesGuard:
         tickets = svc.get_tickets()
         assert len(tickets) == 2
         assert route.call_count == 2
+
+
+class TestPaginationMaxPagesCap:
+    """max_pages safeguard: partial results + WARN on cap, normal below cap."""
+
+    @respx.mock
+    def test_cap_stops_traversal_and_logs_warning(self, svc: ZendeskService) -> None:
+        """Paginator stops at max_pages=2 and emits cap_reached warning."""
+        cursor_p2 = f"{BASE_URL}/api/v2/tickets.json?page[after]=p2"
+        cursor_p3 = f"{BASE_URL}/api/v2/tickets.json?page[after]=p3"
+        route = respx.get(TICKETS_PATH)
+        route.side_effect = [
+            httpx.Response(200, json=_page([_ticket(1), _ticket(2)], has_more=True, next_url=cursor_p2)),
+            httpx.Response(200, json=_page([_ticket(3), _ticket(4)], has_more=True, next_url=cursor_p3)),
+            # Page 3 should never be fetched
+            httpx.Response(200, json=_page([_ticket(5), _ticket(6)])),
+        ]
+
+        with structlog.testing.capture_logs() as log_entries:
+            results = svc._paginate("/api/v2/tickets.json", "tickets", max_pages=2)
+
+        assert len(results) == 4  # 2 pages × 2 tickets, page 3 not fetched
+        assert route.call_count == 2
+        assert any(e.get("event") == "zendesk.pagination.cap_reached" for e in log_entries)
+
+    @respx.mock
+    def test_default_cap_from_env(self, svc: ZendeskService, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Default cap reads ZENDESK_MAX_PAGES at module import time; override via max_pages param."""
+        cursor_p2 = f"{BASE_URL}/api/v2/tickets.json?page[after]=p2"
+        cursor_p3 = f"{BASE_URL}/api/v2/tickets.json?page[after]=p3"
+        route = respx.get(TICKETS_PATH)
+        route.side_effect = [
+            httpx.Response(200, json=_page([_ticket(1)], has_more=True, next_url=cursor_p2)),
+            httpx.Response(200, json=_page([_ticket(2)], has_more=True, next_url=cursor_p3)),
+            httpx.Response(200, json=_page([_ticket(3)])),
+        ]
+        # Bypass module-level constant by passing max_pages directly
+        results = svc._paginate("/api/v2/tickets.json", "tickets", max_pages=2)
+        assert len(results) == 2  # stopped at cap=2
+        assert route.call_count == 2
+
+    @respx.mock
+    def test_completes_normally_below_cap(self, svc: ZendeskService) -> None:
+        """Paginator completes all pages when total < max_pages."""
+        cursor_p2 = f"{BASE_URL}/api/v2/tickets.json?page[after]=p2"
+        cursor_p3 = f"{BASE_URL}/api/v2/tickets.json?page[after]=p3"
+        route = respx.get(TICKETS_PATH)
+        route.side_effect = [
+            httpx.Response(200, json=_page([_ticket(1), _ticket(2)], has_more=True, next_url=cursor_p2)),
+            httpx.Response(200, json=_page([_ticket(3), _ticket(4)], has_more=True, next_url=cursor_p3)),
+            httpx.Response(200, json=_page([_ticket(5), _ticket(6)])),
+        ]
+        results = svc._paginate("/api/v2/tickets.json", "tickets", max_pages=100)
+        assert len(results) == 6  # all 3 pages fetched
+        assert route.call_count == 3

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from typing import Any
 
 import structlog
@@ -19,6 +20,7 @@ from itgov.utils.http_client import SyncAPIClient
 log = structlog.get_logger(__name__)
 
 _PAGE_SIZE = 100  # max permitido pela API Zendesk v2
+_DEFAULT_MAX_PAGES: int = int(os.environ.get("ZENDESK_MAX_PAGES", "100"))
 
 
 class ZendeskService(SyncAPIClient):
@@ -62,24 +64,64 @@ class ZendeskService(SyncAPIClient):
         resp = self.get(path, params=params if params else None)
         return resp.json()
 
-    def _paginate(self, path: str, root_key: str, **params: Any) -> list[dict[str, Any]]:
-        """Coleta todas as páginas de um endpoint paginado (cursor-based)."""
+    def _paginate(
+        self,
+        path: str,
+        root_key: str,
+        *,
+        max_pages: int | None = None,
+        **params: Any,
+    ) -> list[dict[str, Any]]:
+        """Coleta todas as páginas de um endpoint paginado (cursor-based).
+
+        Args:
+            path: Caminho do endpoint (ex: "/api/v2/tickets.json").
+            root_key: Chave raiz da resposta JSON com os registros.
+            max_pages: Cap de páginas. Padrão: ZENDESK_MAX_PAGES (100).
+                100 páginas × 100 tickets/página = 10k registros por chamada.
+                Se excedido, emite WARN estruturado e interrompe (Opção A:
+                dados parciais preferíveis a erro 500 no dashboard).
+            **params: Query params adicionais para a primeira página.
+
+        Returns:
+            Lista acumulada de registros de todas as páginas percorridas.
+        """
+        cap = max_pages if max_pages is not None else _DEFAULT_MAX_PAGES
         results: list[dict[str, Any]] = []
-        params = {"page[size]": _PAGE_SIZE, **params}
+        query_params: dict[str, Any] = {"page[size]": _PAGE_SIZE, **params}
         url: str | None = path
+        page_count = 0
 
         while url:
-            data = self._get_json(url, **params) if url == path else self._get_json(url)
+            if page_count >= cap:
+                log.warning(
+                    "zendesk.pagination.cap_reached",
+                    cap=cap,
+                    pages_traversed=page_count,
+                    last_url=url,
+                    hint="Consider incremental exports for large tenants",
+                )
+                break
+
+            data = self._get_json(url, **query_params) if url == path else self._get_json(url)
             results.extend(data.get(root_key, []))
+            page_count += 1
+
             meta = data.get("meta", {})
             links = data.get("links", {})
             # Cursor-based pagination (API v2)
             if meta.get("has_more") and links.get("next"):
                 url = links["next"]
-                params = {}  # próxima página usa URL completa
+                query_params = {}  # próxima página usa URL completa
             else:
                 url = None
 
+        log.debug(
+            "zendesk.pagination.completed",
+            pages_traversed=page_count,
+            cap=cap,
+            capped=page_count >= cap,
+        )
         return results
 
     # ── Public Methods ────────────────────────────────────────────────────────
