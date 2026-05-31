@@ -29,6 +29,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 log = logging.getLogger("dashboard")
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = config._env("SECRET_KEY", required=True)
+
+# Sprint 10D: Security middleware (Talisman + Limiter)
+from app.middleware.security import init_security  # noqa: E402
+
+limiter = init_security(app)
 
 # Fase 5: Registro de Blueprints
 app.register_blueprint(governance_bp)
