@@ -105,15 +105,19 @@ def init_security(app: Flask) -> Limiter:
 
 
 def _configure_session(app: Flask) -> None:
-    """Configura cookies de sessão com flags de segurança."""
-    app.config.setdefault("SESSION_COOKIE_SECURE", os.getenv("FLASK_ENV") not in ("development", "testing"))
-    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
-    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Strict")
-    app.config.setdefault("PERMANENT_SESSION_LIFETIME", 3600)
-    app.config.setdefault(
-        "SESSION_COOKIE_NAME",
-        "__Host-session" if os.getenv("FLASK_ENV") not in ("development", "testing") else "session",
-    )
+    """Configura cookies de sessão com flags de segurança.
+
+    Usa assignment direto (não setdefault) pois Flask pré-define
+    SESSION_COOKIE_SAMESITE=Lax e PERMANENT_SESSION_LIFETIME=timedelta(days=31).
+    """
+    from datetime import timedelta
+
+    _is_prod = os.getenv("FLASK_ENV") not in ("development", "testing")
+    app.config["SESSION_COOKIE_SECURE"] = _is_prod
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
+    app.config["SESSION_COOKIE_NAME"] = "__Host-session" if _is_prod else "session"
 
 
 def api_limit(limiter: Limiter):

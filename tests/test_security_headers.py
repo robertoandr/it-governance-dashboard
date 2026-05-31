@@ -96,4 +96,6 @@ class TestSessionSecurity:
         assert secure_app.config["SESSION_COOKIE_SAMESITE"] == "Strict"
 
     def test_session_lifetime(self, secure_app: Flask) -> None:
-        assert secure_app.config["PERMANENT_SESSION_LIFETIME"] == 3600
+        from datetime import timedelta
+
+        assert secure_app.config["PERMANENT_SESSION_LIFETIME"] == timedelta(hours=1)
