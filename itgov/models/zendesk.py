@@ -60,16 +60,6 @@ class Ticket(BaseModel):
         return (datetime.now(UTC) - created).total_seconds() / 3600
 
 
-class SLAPolicy(BaseModel):
-    """Política de SLA associada a um ticket."""
-
-    policy_id: int
-    policy_title: str
-    metric: str = Field(description="Ex: first_reply_time, next_reply_time")
-    breach_at: datetime | None = None
-    breached: bool = False
-
-
 class SLAMetric(BaseModel):
     """Métricas de SLA agregadas."""
 
