@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
+import structlog.testing
 
 from itgov.models.zabbix import AcknowledgeRequest, ZabbixSeverity
 from itgov.services.zabbix_service import ZABBIX_JSONRPC_PATH, ZabbixService, _normalize_zabbix_base_url
@@ -207,6 +208,7 @@ class TestNormalizeZabbixBaseURL:
             ("http://srv/zabbix/api_jsonrpc.php", "http://srv/zabbix"),
             ("  https://zbx.corp.com/api_jsonrpc.php  ", "https://zbx.corp.com"),
             ("https://zbx.corp.com", "https://zbx.corp.com"),
+            ("http://user:pass@host:8080/api_jsonrpc.php", "http://user:pass@host:8080"),
         ],
     )
     def test_normalize_variants(self, input_url: str, expected: str) -> None:
@@ -228,13 +230,20 @@ class TestNormalizeZabbixBaseURL:
         with pytest.raises(ValueError, match="host válido"):
             _normalize_zabbix_base_url("http:///api_jsonrpc.php")
 
-    def test_credentials_not_leaked_in_log(self, caplog: pytest.LogCaptureFixture) -> None:
-        import logging
-
-        with caplog.at_level(logging.WARNING):
+    def test_credentials_not_leaked_in_log(self) -> None:
+        with structlog.testing.capture_logs() as logs:
             _normalize_zabbix_base_url("http://user:secret@zbx.corp.com/api_jsonrpc.php")
-        for record in caplog.records:
-            assert "secret" not in str(record.__dict__), "Credenciais vazadas no log"
+        assert logs, "Nenhum log emitido"
+        log_text = str(logs)
+        assert "secret" not in log_text, "Credenciais vazadas no log"
+
+    def test_port_preserved_in_log(self) -> None:
+        with structlog.testing.capture_logs() as logs:
+            _normalize_zabbix_base_url("http://user:secret@host:8080/api_jsonrpc.php")
+        assert logs, "Nenhum log emitido"
+        log_text = str(logs)
+        assert "8080" in log_text, "Porta não preservada no log"
+        assert "secret" not in log_text, "Credenciais vazadas no log"
 
     def test_idempotent(self) -> None:
         url = "https://zbx.corp.com"

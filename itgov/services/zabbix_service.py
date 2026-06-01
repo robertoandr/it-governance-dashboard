@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import httpx
 import structlog
@@ -22,6 +22,20 @@ log = structlog.get_logger(__name__)
 
 _RPC_ID = 1  # stateless — id fixo é suficiente para JSON-RPC 2.0 síncrono
 ZABBIX_JSONRPC_PATH: str = "/api_jsonrpc.php"
+
+
+def _build_safe_netloc(parsed: ParseResult) -> str:
+    """Constrói netloc sem userinfo, preservando porta se presente.
+
+    Args:
+        parsed: Resultado de ``urlparse`` com scheme, netloc e hostname já
+            validados.
+
+    Returns:
+        String ``hostname`` ou ``hostname:port`` (sem credenciais).
+    """
+    host = parsed.hostname or ""
+    return f"{host}:{parsed.port}" if parsed.port else host
 
 
 def _normalize_zabbix_base_url(url: str) -> str:
@@ -64,8 +78,10 @@ def _normalize_zabbix_base_url(url: str) -> str:
     if normalized.endswith(ZABBIX_JSONRPC_PATH):
         stripped = normalized.removesuffix(ZABBIX_JSONRPC_PATH)
         # Loga sem userinfo para evitar vazar credenciais embutidas na URL
-        safe_url = parsed._replace(netloc=parsed.hostname or parsed.netloc).geturl()
-        log.warning("zabbix.base_url.normalized", original=safe_url, normalized=stripped)
+        safe_netloc = _build_safe_netloc(parsed)
+        safe_original = parsed._replace(netloc=safe_netloc).geturl()
+        safe_normalized = parsed._replace(netloc=safe_netloc, path=parsed.path.removesuffix(ZABBIX_JSONRPC_PATH)).geturl().rstrip("/")
+        log.warning("zabbix.base_url.normalized", original=safe_original, normalized=safe_normalized)
         return stripped
 
     return normalized
