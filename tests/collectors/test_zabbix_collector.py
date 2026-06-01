@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import responses as responses_lib
 
+import collectors.zabbix as _zbx_mod
+
 # ── Fixtures / helpers ────────────────────────────────────────────────────────
 
 _BASE_URL = "http://zbx.test"
@@ -77,15 +79,21 @@ class TestZabbixRpcUrl:
 
 
 class TestZabbixCollectorCalls:
-    """Garante que o collector posta para a URL RPC correta."""
+    """Garante que o collector posta para a URL RPC correta.
+
+    Usa patch.object em _ZABBIX_RPC_URL (evita importlib.reload dentro do
+    contexto responses_lib, o que causava flakiness por estado de módulo).
+    A construção correta da URL já é coberta por TestZabbixRpcUrl.
+    """
 
     @responses_lib.activate
     def test_get_host_summary_posts_to_rpc_url(self) -> None:
         responses_lib.add(responses_lib.POST, _RPC_URL, json=LOGIN_RESPONSE)
         responses_lib.add(responses_lib.POST, _RPC_URL, json=HOST_RESULT)
 
-        collector, _ = _make_collector(_BASE_URL)
-        result = collector.get_host_summary()
+        with patch.object(_zbx_mod, "_ZABBIX_RPC_URL", _RPC_URL):
+            collector = _zbx_mod.ZabbixCollector()
+            result = collector.get_host_summary()
 
         assert result["total"] == 2
         assert result["up"] == 1
@@ -99,10 +107,15 @@ class TestZabbixCollectorCalls:
         responses_lib.add(responses_lib.POST, _RPC_URL, json=LOGIN_RESPONSE)
         responses_lib.add(responses_lib.POST, _RPC_URL, json=HOST_RESULT)
 
-        collector, rpc_url = _make_collector(f"{_BASE_URL}/api_jsonrpc.php")
+        # Verifica que _ZABBIX_RPC_URL calculado de URL com sufixo é correto
+        _, rpc_url = _make_collector(f"{_BASE_URL}/api_jsonrpc.php")
         assert rpc_url == _RPC_URL
 
-        result = collector.get_host_summary()
+        # Verifica que o collector efectivamente posta para essa URL
+        with patch.object(_zbx_mod, "_ZABBIX_RPC_URL", _RPC_URL):
+            collector = _zbx_mod.ZabbixCollector()
+            result = collector.get_host_summary()
+
         assert result["total"] == 2
         for call in responses_lib.calls:
             assert call.request.url == _RPC_URL
