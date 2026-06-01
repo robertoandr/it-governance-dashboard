@@ -80,7 +80,9 @@ def _normalize_zabbix_base_url(url: str) -> str:
         # Loga sem userinfo para evitar vazar credenciais embutidas na URL
         safe_netloc = _build_safe_netloc(parsed)
         safe_original = parsed._replace(netloc=safe_netloc).geturl()
-        safe_normalized = parsed._replace(netloc=safe_netloc, path=parsed.path.removesuffix(ZABBIX_JSONRPC_PATH)).geturl().rstrip("/")
+        safe_normalized = (
+            parsed._replace(netloc=safe_netloc, path=parsed.path.removesuffix(ZABBIX_JSONRPC_PATH)).geturl().rstrip("/")
+        )
         log.warning("zabbix.base_url.normalized", original=safe_original, normalized=safe_normalized)
         return stripped
 
