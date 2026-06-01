@@ -15,6 +15,7 @@ import warnings
 import requests
 
 import config
+from itgov.services import ZABBIX_JSONRPC_PATH, normalize_zabbix_base_url
 
 # Deprecation: migrar para app.services.zabbix_service no Sprint 10F. Ver docs/MIGRATION.md.
 warnings.warn(
@@ -24,6 +25,9 @@ warnings.warn(
 )
 
 log = logging.getLogger(__name__)
+
+# URL do endpoint JSON-RPC normalizada: aceita ZABBIX_URL com ou sem sufixo
+_ZABBIX_RPC_URL: str = normalize_zabbix_base_url(config.ZABBIX_URL) + ZABBIX_JSONRPC_PATH
 
 SEVERITY_LABELS = {
     "0": "not_classified",
@@ -43,7 +47,7 @@ class ZabbixCollector:
         body = {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
         if use_auth:
             body["auth"] = self._auth()
-        r = requests.post(config.ZABBIX_URL, json=body, timeout=15)
+        r = requests.post(_ZABBIX_RPC_URL, json=body, timeout=15)
         r.raise_for_status()
         data = r.json()
         if "error" in data:
@@ -51,7 +55,7 @@ class ZabbixCollector:
             if use_auth and ("re-login" in ed or "session" in ed):
                 self._token = None
                 body["auth"] = self._auth()
-                r = requests.post(config.ZABBIX_URL, json=body, timeout=15)
+                r = requests.post(_ZABBIX_RPC_URL, json=body, timeout=15)
                 data = r.json()
             if "error" in data:
                 raise RuntimeError(f"Zabbix API error: {data['error']}")
