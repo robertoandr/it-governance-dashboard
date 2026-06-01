@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -20,6 +21,54 @@ from itgov.utils.http_client import SyncAPIClient
 log = structlog.get_logger(__name__)
 
 _RPC_ID = 1  # stateless — id fixo é suficiente para JSON-RPC 2.0 síncrono
+ZABBIX_JSONRPC_PATH: str = "/api_jsonrpc.php"
+
+
+def _normalize_zabbix_base_url(url: str) -> str:
+    """Normaliza a URL base do Zabbix removendo o sufixo do endpoint JSON-RPC.
+
+    Garante que o base_url passado ao cliente HTTP não inclua o path
+    ``/api_jsonrpc.php``, evitando a duplicação de path quando ``_rpc()``
+    adiciona ``ZABBIX_JSONRPC_PATH`` na requisição.
+
+    Args:
+        url: URL base do servidor Zabbix. Pode ou não terminar com
+            ``/api_jsonrpc.php`` ou barra final.
+
+    Returns:
+        URL normalizada sem trailing slash nem sufixo JSON-RPC.
+
+    Raises:
+        ValueError: Se ``url`` for vazia, o scheme não for ``http``/``https``,
+            ou a URL não tiver host válido.
+
+    Examples:
+        >>> _normalize_zabbix_base_url("https://zbx.corp.com/api_jsonrpc.php")
+        'https://zbx.corp.com'
+        >>> _normalize_zabbix_base_url("http://localhost")
+        'http://localhost'
+        >>> _normalize_zabbix_base_url("http://srv/zabbix/api_jsonrpc.php")
+        'http://srv/zabbix'
+    """
+    url = url.strip()
+    if not url:
+        raise ValueError("Zabbix base URL não pode ser vazia")
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Scheme inválido '{parsed.scheme}': use http ou https")
+    if not parsed.netloc:
+        raise ValueError(f"URL sem host válido: '{url}'")
+
+    normalized = url.rstrip("/")
+    if normalized.endswith(ZABBIX_JSONRPC_PATH):
+        stripped = normalized.removesuffix(ZABBIX_JSONRPC_PATH)
+        # Loga sem userinfo para evitar vazar credenciais embutidas na URL
+        safe_url = parsed._replace(netloc=parsed.hostname or parsed.netloc).geturl()
+        log.warning("zabbix.base_url.normalized", original=safe_url, normalized=stripped)
+        return stripped
+
+    return normalized
 
 
 class ZabbixService(SyncAPIClient):
@@ -44,7 +93,7 @@ class ZabbixService(SyncAPIClient):
         timeout: float = 15.0,
         max_retries: int = 3,
     ) -> None:
-        super().__init__(base_url=url, timeout=timeout, max_retries=max_retries)
+        super().__init__(base_url=_normalize_zabbix_base_url(url), timeout=timeout, max_retries=max_retries)
         self._user = user
         self._password = password
         self._token: str | None = None
@@ -99,7 +148,7 @@ class ZabbixService(SyncAPIClient):
             payload["auth"] = self._get_token()
 
         try:
-            resp = self.post("/api_jsonrpc.php", json=payload)
+            resp = self.post(ZABBIX_JSONRPC_PATH, json=payload)
         except httpx.HTTPStatusError as exc:
             log.error("zabbix_http_error", method=method, status=exc.response.status_code)
             raise
@@ -114,7 +163,7 @@ class ZabbixService(SyncAPIClient):
                 log.warning("zabbix_session_expired", method=method)
                 self._invalidate_token()
                 payload["auth"] = self._get_token()
-                resp = self.post("/api_jsonrpc.php", json=payload)
+                resp = self.post(ZABBIX_JSONRPC_PATH, json=payload)
                 body = resp.json()
                 if "error" in body:
                     raise RuntimeError(f"Zabbix API error: {body['error']}")

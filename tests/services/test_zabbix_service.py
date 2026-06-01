@@ -7,7 +7,7 @@ import pytest
 import respx
 
 from itgov.models.zabbix import AcknowledgeRequest, ZabbixSeverity
-from itgov.services.zabbix_service import ZabbixService
+from itgov.services.zabbix_service import ZABBIX_JSONRPC_PATH, ZabbixService, _normalize_zabbix_base_url
 
 ZABBIX_URL = "https://zabbix.example.com"
 LOGIN_RESPONSE = {"jsonrpc": "2.0", "result": "fake-token-abc123", "id": 1}
@@ -193,3 +193,81 @@ class TestAcknowledge:
         req = AcknowledgeRequest(eventid="999")
         with pytest.raises(RuntimeError, match="Zabbix API error"):
             svc.acknowledge_event(req)
+
+
+class TestNormalizeZabbixBaseURL:
+    @pytest.mark.parametrize(
+        "input_url,expected",
+        [
+            ("http://localhost/api_jsonrpc.php", "http://localhost"),
+            ("http://localhost/api_jsonrpc.php/", "http://localhost"),
+            ("http://localhost", "http://localhost"),
+            ("http://localhost/", "http://localhost"),
+            ("https://zbx.corp.com/api_jsonrpc.php", "https://zbx.corp.com"),
+            ("http://srv/zabbix/api_jsonrpc.php", "http://srv/zabbix"),
+            ("  https://zbx.corp.com/api_jsonrpc.php  ", "https://zbx.corp.com"),
+            ("https://zbx.corp.com", "https://zbx.corp.com"),
+        ],
+    )
+    def test_normalize_variants(self, input_url: str, expected: str) -> None:
+        assert _normalize_zabbix_base_url(input_url) == expected
+
+    def test_empty_string_raises(self) -> None:
+        with pytest.raises(ValueError, match="vazia"):
+            _normalize_zabbix_base_url("")
+
+    def test_whitespace_only_raises(self) -> None:
+        with pytest.raises(ValueError, match="vazia"):
+            _normalize_zabbix_base_url("   ")
+
+    def test_invalid_scheme_raises(self) -> None:
+        with pytest.raises(ValueError, match="Scheme inválido"):
+            _normalize_zabbix_base_url("ftp://zbx.corp.com/api_jsonrpc.php")
+
+    def test_empty_netloc_raises(self) -> None:
+        with pytest.raises(ValueError, match="host válido"):
+            _normalize_zabbix_base_url("http:///api_jsonrpc.php")
+
+    def test_credentials_not_leaked_in_log(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            _normalize_zabbix_base_url("http://user:secret@zbx.corp.com/api_jsonrpc.php")
+        for record in caplog.records:
+            assert "secret" not in str(record.__dict__), "Credenciais vazadas no log"
+
+    def test_idempotent(self) -> None:
+        url = "https://zbx.corp.com"
+        assert _normalize_zabbix_base_url(_normalize_zabbix_base_url(url)) == _normalize_zabbix_base_url(url)
+
+
+class TestZabbixClientURLConstruction:
+    """Testes de regressão para issue #72: double-path URL."""
+
+    @respx.mock
+    def test_no_double_path_when_config_has_suffix(self) -> None:
+        """Regressão #72: base_url com sufixo não deve duplicar o path."""
+        url_with_suffix = "https://zabbix.example.com/api_jsonrpc.php"
+        svc = ZabbixService(url=url_with_suffix, user="Admin", password="secret", max_retries=1)
+
+        _mock_rpc(ZABBIX_URL, [LOGIN_RESPONSE, {"jsonrpc": "2.0", "result": [], "id": 1}])
+
+        svc.get_problems()
+
+        for call in respx.calls:
+            url_str = str(call.request.url)
+            assert "api_jsonrpc.php/api_jsonrpc.php" not in url_str, f"Double-path detectado (issue #72): {url_str}"
+            assert url_str.endswith("/api_jsonrpc.php"), f"Path inesperado: {url_str}"
+
+    @respx.mock
+    def test_works_with_clean_config(self) -> None:
+        """Configs sem sufixo continuam funcionando corretamente."""
+        svc = ZabbixService(url=ZABBIX_URL, user="Admin", password="secret", max_retries=1)
+
+        _mock_rpc(ZABBIX_URL, [LOGIN_RESPONSE, {"jsonrpc": "2.0", "result": [], "id": 1}])
+        svc.get_problems()
+
+        for call in respx.calls:
+            url_str = str(call.request.url)
+            assert "api_jsonrpc.php/api_jsonrpc.php" not in url_str
+            assert ZABBIX_JSONRPC_PATH in url_str
