@@ -88,7 +88,7 @@ addopts = [
     "--cov=itgov",
     "--cov-report=term-missing",
     "--cov-report=xml",
-    "--cov-fail-under=60",
+    "--cov-fail-under=80",
 ]
 markers = [
     "slow: testes lentos (>1s)",
