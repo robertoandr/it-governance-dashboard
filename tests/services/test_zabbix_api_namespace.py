@@ -14,7 +14,6 @@ import pytest
 from flask import Flask
 from flask_restx import Api
 
-from itgov.api.v1 import zabbix as zabbix_ns_module
 from itgov.api.v1.zabbix import _svc, ns
 from itgov.models.zabbix import (
     AcknowledgeRequest,

@@ -72,6 +72,7 @@ from typing import Any
 
 import structlog
 
+import config
 from itgov.models.zendesk import (
     CSATSummary,
     SatisfactionRating,
@@ -79,7 +80,6 @@ from itgov.models.zendesk import (
     Ticket,
     TicketStatus,
 )
-import config
 from itgov.utils.http_client import SyncAPIClient
 
 log = structlog.get_logger(__name__)

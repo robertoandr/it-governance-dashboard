@@ -12,7 +12,6 @@ Exceções documentadas:
 from __future__ import annotations
 
 import ast
-import os
 from pathlib import Path
 
 # Raiz do projeto (dois níveis acima de tests/architecture/)
