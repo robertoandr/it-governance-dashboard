@@ -14,6 +14,7 @@ import pytest
 from flask import Flask
 from flask_restx import Api
 
+from itgov.api.v1 import zabbix as zabbix_ns_module
 from itgov.api.v1.zabbix import _svc, ns
 from itgov.models.zabbix import (
     AcknowledgeRequest,
@@ -83,11 +84,11 @@ def test_svc_uses_config_url(monkeypatch):
         )
 
 
-def test_svc_does_not_read_os_environ_directly():
-    """_svc() não deve importar nem ler os.environ diretamente."""
-    import itgov.api.v1.zabbix as zabbix_mod
+def test_svc_does_not_import_os():
+    """O módulo itgov/api/v1/zabbix.py não deve importar 'os' após refactor #76/#78."""
+    import itgov.api.v1.zabbix as mod
 
-    assert not hasattr(zabbix_mod, "os"), (
+    assert not hasattr(mod, "os"), (
         "itgov/api/v1/zabbix.py não deve importar 'os' — use config.* para variáveis de ambiente"
     )
 
@@ -110,7 +111,7 @@ def test_svc_config_values_propagated(monkeypatch):
 # ── Testes de endpoints ───────────────────────────────────────────────────────
 
 
-def test_hosts_returns_list(client, monkeypatch):
+def test_hosts_returns_list(client):
     """GET /zabbix/hosts retorna lista de hosts serializados."""
     hosts = [_make_host("1", "web01", available=1), _make_host("2", "db01", available=2)]
     mock_svc = MagicMock()
