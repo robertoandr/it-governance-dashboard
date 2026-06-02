@@ -87,3 +87,6 @@ THRESHOLDS = {
 
 # ── FINOPS
 FINOPS_PIN = _env("FINOPS_PIN", "", required=False)
+
+# ── Database (SQLite dev / PostgreSQL prod via env var)
+DATABASE_URL = _env("DATABASE_URL", "sqlite:///itgov.db", required=False)
