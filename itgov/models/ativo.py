@@ -172,7 +172,7 @@ class AtivoUpdate(BaseModel):
         return result
 
     @model_validator(mode="after")
-    def at_least_one_field(self) -> "AtivoUpdate":
+    def at_least_one_field(self) -> AtivoUpdate:
         """Rejeita PATCH vazio — pelo menos um campo deve ser fornecido."""
         provided = {k for k, v in self.model_dump(exclude_unset=False).items() if v is not None}
         if not provided:
