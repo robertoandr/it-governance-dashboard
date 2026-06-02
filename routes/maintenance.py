@@ -14,12 +14,12 @@ Autenticação: header X-Ops-Pin OU campo "pin" no JSON body.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import UTC
 from functools import wraps
 
 from flask import Blueprint, jsonify, request
 
+import config
 from app_utils import safe
 from services import maintenance_service as svc
 
@@ -29,8 +29,8 @@ maintenance_bp = Blueprint("maintenance", __name__, url_prefix="/api/maintenance
 
 
 def _get_ops_pin() -> str:
-    """Lê OPS_PIN do ambiente. Vazio = endpoints de escrita bloqueados."""
-    return os.environ.get("OPS_PIN", "").strip()
+    """Retorna OPS_PIN validado em startup via config. Vazio = escrita bloqueada."""
+    return config.OPS_PIN.strip()
 
 
 def _extract_pin() -> str:
