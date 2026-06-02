@@ -48,6 +48,15 @@ ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
 ZABBIX_USER = _env("ZABBIX_USER")
 ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
 
+# ── Zendesk
+ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN")
+ZENDESK_EMAIL = _env("ZENDESK_EMAIL")
+ZENDESK_API_TOKEN = _env("ZENDESK_API_TOKEN")
+ZENDESK_MAX_PAGES = _env_int("ZENDESK_MAX_PAGES", 100)
+
+# ── Maintenance PIN (vazio = endpoints de escrita bloqueados por design)
+OPS_PIN = _env("OPS_PIN", "", required=False)
+
 # ── Microsoft Graph
 GRAPH_TENANT_ID = _env("AZURE_TENANT_ID", required=False)
 GRAPH_CLIENT_ID = _env("AZURE_CLIENT_ID", required=False)
@@ -78,3 +87,6 @@ THRESHOLDS = {
 
 # ── FINOPS
 FINOPS_PIN = _env("FINOPS_PIN", "", required=False)
+
+# ── Database (SQLite dev / PostgreSQL prod via env var)
+DATABASE_URL = _env("DATABASE_URL", "sqlite:///itgov.db", required=False)

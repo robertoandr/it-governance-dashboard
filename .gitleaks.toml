@@ -1,0 +1,11 @@
+# Gitleaks v8 configuration
+# https://github.com/gitleaks/gitleaks#configuration
+
+title = "IT Governance Dashboard — Gitleaks Config"
+
+[allowlist]
+description = "Arquivos de template/exemplo com valores intencionalmente vazios ou placeholder"
+paths = [
+  '''.env\.example''',
+  '''tests/conftest\.py''',
+]

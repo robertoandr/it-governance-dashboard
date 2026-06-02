@@ -7,6 +7,21 @@
 
 ---
 
+## Triagem e Limpeza Pre-V1.1 (02/06/2026)
+
+Antes do inicio formal do ciclo V1.1, foi executada triagem completa do milestone legado:
+
+| Milestone | Status | Acao |
+|-----------|--------|------|
+| #1 v0.2.0 Integration Layer | Arquivado | 7 issues fechadas (escopo entregue em V1.0) |
+| #2 V1.1 - Go-Live | Ativo | Sprint 11-14 (02/06 → 30/06) |
+
+**Issues triadas:** #27, #28, #29, #30, #31, #32, #34 — fechadas como "not planned"
+**Issue #33 (APScheduler):** movida para backlog V1.2 (nao implementada no codebase)
+**Justificativa:** Funcionalidades entregues por outras rotas durante Sprints 1-10 (commit base `b91bd19`).
+
+---
+
 ## Visao Geral
 
 A V1.1 adiciona tres capacidades novas ao nucleo de Fornecedores e Contratos entregue na V1.0:

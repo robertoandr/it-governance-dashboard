@@ -34,6 +34,7 @@ extend-exclude = [
     "htmlcov",
     "migrations",
     "node_modules",
+    "alembic",          # arquivos gerados pelo Alembic (env.py, versions/)
 ]
 
 [tool.ruff.lint]
@@ -88,7 +89,8 @@ addopts = [
     "--cov=itgov",
     "--cov-report=term-missing",
     "--cov-report=xml",
-    "--cov-fail-under=80",
+    "--cov-report=html",
+    "--cov-fail-under=85",
 ]
 markers = [
     "slow: testes lentos (>1s)",
@@ -107,6 +109,7 @@ filterwarnings = [
 # ============================================
 [tool.coverage.run]
 source = ["itgov"]
+branch = true
 omit = [
     "tests/*",
     "venv/*",
@@ -118,12 +121,15 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@overload",
 ]
 precision = 2
 show_missing = true

@@ -6,9 +6,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, "sprint-*/**", "sprint-*"]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, "sprint-*/**", "sprint-*"]
   workflow_dispatch:  # permite rodar manualmente
 
 permissions:
@@ -209,7 +209,7 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run tests with coverage
+      - name: 🧪 Run tests with coverage gate (≥85%)
         env:
           INFLUX_URL: http://localhost:8086
           INFLUX_TOKEN: ci-fake-token-not-real
@@ -305,6 +305,10 @@ jobs:
           ZABBIX_USER: ci-smoke-user
           ZABBIX_PASSWORD: ci-fake-password-not-real
           ZABBIX_FRONT_URL: http://localhost:8080  # workaround: _env("X", "") bug (see #TBD)
+          # Zendesk (obrigatórias)
+          ZENDESK_SUBDOMAIN: ci-smoke-subdomain
+          ZENDESK_EMAIL: ci-smoke@example.com
+          ZENDESK_API_TOKEN: ci-fake-zendesk-token
         run: |
           python -c "import app; print('✅ App importa OK')"
           python -c "from app import app as flask_app; print(f'✅ Flask app: {flask_app.name}')"

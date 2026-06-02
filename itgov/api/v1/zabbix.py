@@ -6,12 +6,11 @@ rate limit estrito e audit log (write op no Zabbix).
 
 from __future__ import annotations
 
-import os
-
 import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+import config
 from itgov.models.zabbix import AcknowledgeRequest
 from itgov.services.zabbix_service import ZabbixService
 
@@ -91,11 +90,11 @@ ack_response_model = ns.model(
 
 
 def _svc() -> ZabbixService:
-    """Instancia ZabbixService com credenciais do env."""
+    """Instancia ZabbixService com credenciais validadas em startup via config."""
     return ZabbixService(
-        url=os.environ["ZABBIX_URL"],
-        user=os.environ["ZABBIX_USER"],
-        password=os.environ["ZABBIX_PASSWORD"],
+        url=config.ZABBIX_URL,
+        user=config.ZABBIX_USER,
+        password=config.ZABBIX_PASSWORD,
     )
 
 
