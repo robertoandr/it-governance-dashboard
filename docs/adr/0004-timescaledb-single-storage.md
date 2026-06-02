@@ -1,3 +1,16 @@
+> **STATUS: SUPERSEDED** (em 02/06/2026, durante planejamento V1.1)
+>
+> Esta ADR foi substituida pela ADR-0001 (dual storage SQLite + InfluxDB).
+>
+> Motivo: Estrategia hibrida (PostgreSQL CRUD + InfluxDB time-series) provou-se mais
+> eficiente que TimescaleDB unificado, dado que InfluxDB ja estava em producao para
+> metricas Zabbix. A migracao para TimescaleDB nao foi executada e a ADR-0001 permanece
+> como decisao vigente de persistencia.
+>
+> Mantido aqui apenas para registro historico.
+
+---
+
 # ADR-0004: TimescaleDB Single Storage (PostgreSQL + Extension)
 
 **Status:** Accepted  
