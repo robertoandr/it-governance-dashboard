@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
-
 import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+import config
 from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
@@ -64,11 +63,11 @@ volume_model = ns.model(
 
 
 def _svc() -> ZendeskService:
-    """Instancia ZendeskService com credenciais do env."""
+    """Instancia ZendeskService com credenciais validadas em startup via config."""
     return ZendeskService(
-        subdomain=os.environ["ZENDESK_SUBDOMAIN"],
-        email=os.environ["ZENDESK_EMAIL"],
-        api_token=os.environ["ZENDESK_API_TOKEN"],
+        subdomain=config.ZENDESK_SUBDOMAIN,
+        email=config.ZENDESK_EMAIL,
+        api_token=config.ZENDESK_API_TOKEN,
     )
 
 
