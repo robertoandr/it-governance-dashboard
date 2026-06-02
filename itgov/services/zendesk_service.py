@@ -68,7 +68,6 @@ Conventions
 from __future__ import annotations
 
 import base64
-import os
 from typing import Any
 
 import structlog
@@ -80,12 +79,13 @@ from itgov.models.zendesk import (
     Ticket,
     TicketStatus,
 )
+import config
 from itgov.utils.http_client import SyncAPIClient
 
 log = structlog.get_logger(__name__)
 
 _PAGE_SIZE = 100  # max permitido pela API Zendesk v2
-_DEFAULT_MAX_PAGES: int = int(os.environ.get("ZENDESK_MAX_PAGES", "100"))
+_DEFAULT_MAX_PAGES: int = config.ZENDESK_MAX_PAGES
 
 
 class ZendeskService(SyncAPIClient):
