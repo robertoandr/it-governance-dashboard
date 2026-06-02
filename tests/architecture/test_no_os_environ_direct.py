@@ -45,10 +45,7 @@ def _find_python_files(paths: list) -> list[Path]:
         if p.is_file() and p.suffix == ".py":
             result.append(p)
         elif p.is_dir():
-            result.extend(
-                f for f in p.rglob("*.py")
-                if "__pycache__" not in str(f)
-            )
+            result.extend(f for f in p.rglob("*.py") if "__pycache__" not in str(f))
     return result
 
 
@@ -115,13 +112,8 @@ class TestNoOsEnvironDirect:
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source)
             for node in ast.walk(tree):
-                if (
-                    isinstance(node, (ast.Import, ast.ImportFrom))
-                    and isinstance(node, ast.Import)
-                ):
+                if isinstance(node, (ast.Import, ast.ImportFrom)) and isinstance(node, ast.Import):
                     for alias in node.names:
                         if alias.name == "os":
                             still_importing_os.append(f"{path.relative_to(PROJECT_ROOT)}:{node.lineno}")
-        assert not still_importing_os, (
-            f"Módulos migrados ainda importam 'os': {still_importing_os}"
-        )
+        assert not still_importing_os, f"Módulos migrados ainda importam 'os': {still_importing_os}"
