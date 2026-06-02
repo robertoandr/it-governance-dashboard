@@ -6,9 +6,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, "sprint-*/**", "sprint-*"]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, "sprint-*/**", "sprint-*"]
   workflow_dispatch:  # permite rodar manualmente
 
 permissions:

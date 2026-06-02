@@ -6,9 +6,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [main, "sprint-*/**", "sprint-*"]
   pull_request:
-    branches: [main]
+    branches: [main, "sprint-*/**", "sprint-*"]
   schedule:
     - cron: '0 6 * * 1'  # Toda segunda 6h UTC
 
