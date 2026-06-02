@@ -209,7 +209,7 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run tests with coverage
+      - name: 🧪 Run tests with coverage gate (≥85%)
         env:
           INFLUX_URL: http://localhost:8086
           INFLUX_TOKEN: ci-fake-token-not-real
