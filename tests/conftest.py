@@ -40,6 +40,11 @@ os.environ.setdefault("ZABBIX_USER", "test-user")
 os.environ.setdefault("ZABBIX_PASSWORD", "test-password-not-real")
 os.environ.setdefault("ZABBIX_FRONT_URL", "http://localhost/zabbix")
 
+# Zendesk (obrigatórias)
+os.environ.setdefault("ZENDESK_SUBDOMAIN", "test-corp")
+os.environ.setdefault("ZENDESK_EMAIL", "test@test.com")
+os.environ.setdefault("ZENDESK_API_TOKEN", "test-zendesk-token-not-real")
+
 # Flask (boa prática)
 os.environ.setdefault("FLASK_ENV", "testing")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
