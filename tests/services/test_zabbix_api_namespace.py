@@ -14,7 +14,6 @@ import pytest
 from flask import Flask
 from flask_restx import Api
 
-from itgov.api.v1 import zabbix as zabbix_ns_module
 from itgov.api.v1.zabbix import _svc, ns
 from itgov.models.zabbix import (
     AcknowledgeRequest,
@@ -84,12 +83,12 @@ def test_svc_uses_config_url(monkeypatch):
         )
 
 
-def test_svc_does_not_read_os_environ_directly(monkeypatch):
+def test_svc_does_not_read_os_environ_directly():
     """_svc() não deve importar nem ler os.environ diretamente."""
-    import itgov.api.v1.zabbix as mod
+    import itgov.api.v1.zabbix as zabbix_mod
 
-    assert not hasattr(mod, "os"), (
-        "O módulo itgov/api/v1/zabbix.py não deve importar 'os' após o refactor #76"
+    assert not hasattr(zabbix_mod, "os"), (
+        "itgov/api/v1/zabbix.py não deve importar 'os' — use config.* para variáveis de ambiente"
     )
 
 
