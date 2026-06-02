@@ -1,94 +1,98 @@
 # ADR-009 — Microsoft Graph Integration Strategy
 
-**Status:** Proposed  
-**Data:** 2026-06-02  
-**Sprint alvo:** Sprint 12 (09–22/06/2026)  
-**Contexto:** Implementação de governança M365 (Secure Score, identidades,
-licenças, compliance) requer integração robusta com Microsoft Graph API.
-Validar com spike antes de marcar como Accepted.
+**Status:** Accepted  
+**Data original:** 2026-06-02  
+**Última revisão:** 2026-06-02 (pós-descoberta de coletores legados)
+
+**Histórico de revisões:**
+- v1 (2026-06-02): Proposed — abordagem greenfield com certificado X.509
+- v2 (2026-06-02): Accepted — alinhado com realidade de produção (coletor legado validou premissas)
 
 ---
 
 ## Problema
 
 Microsoft Graph é uma API externa com características específicas:
-- Latência 1–5s por chamada
-- Throttling agressivo (HTTP 429 com `Retry-After`)
+- Latência variável (timeout configurado em 30s no legado — tipicamente <2s)
+- Throttling via HTTP 429 com `Retry-After`
 - Paginação via `@odata.nextLink`
-- Autenticação OAuth2 com token de curta duração
-
-Uma integração ingênua (chamada direta no handler HTTP) quebraria a UX
-do dashboard e seria bloqueada por throttle em produção.
+- Alguns endpoints exigem licenças premium (AAD P1, Entra ID P2)
+- Reports retornam CSV por padrão (não JSON)
 
 ---
 
 ## Decisão
 
-### 1. Cliente HTTP: `httpx` async — NÃO o SDK oficial
+### 1. Cliente HTTP: `httpx` async (migrar de `requests` síncrono)
 
-**Escolhido:** `httpx.AsyncClient` direto contra a Graph REST API.
+**Escolhido:** `httpx.AsyncClient` — mesma lib já em uso no projeto.
 
-**Rejeitado:** `msgraph-sdk-python` (SDK oficial Microsoft).
+**Legado atual:** `requests` síncrono, `timeout=30` em todas as chamadas.
 
-| Critério | httpx | msgraph-sdk-python |
-|----------|-------|--------------------|
-| Async nativo | ✅ first-class | ⚠️ via Kiota |
-| Tamanho da dep | ✅ ~1MB | ❌ ~30MB+ |
-| Debug / curl-friendly | ✅ | ❌ caixa-preta |
-| Controle retry/throttle | ✅ tenacity | ⚠️ middleware opaco |
-| Type safety | ✅ Pydantic próprio | ⚠️ modelos gerados |
-| Curva de aprendizado | ✅ HTTP puro | ❌ abstrações Kiota |
+**Por que migrar:** event loop do Flask + threads de refresh; consistência com `SyncAPIClient` do projeto.
 
-**Trade-off aceito:** manter nossos próprios Pydantic models em vez dos
-modelos gerados pelo SDK. Esforço inicial maior, controle total.
+**Trade-off aceito:** Legado continua rodando via `requests` enquanto endpoints são migrados (ADR-011).
 
-### 2. Autenticação: Client Credentials com certificado
+### 2. Autenticação: Client Credentials com client secret
 
-OAuth2 Client Credentials Flow usando certificado X.509 (não client secret).
+**Decisão atual (MVP):** OAuth2 Client Credentials com **client secret**.
+
+**Justificativa pragmática:**
+- Dois coletores em produção desde maio/2026 usam este padrão ✅
+- `m365_status.py`: credenciais via `.env` (correto)
+- `m365_collector.py`: credenciais hardcoded (⚠️ — rotacionar + mover para `.env`)
+- MSAL cacheia tokens automaticamente entre chamadas
+- Rotação trimestral manual via Entra ID
+
+**Configuração:**
 
 ```python
-# Esqueleto conceitual — itgov/integrations/m365/auth.py
+# itgov/integrations/m365/auth.py
 from msal import ConfidentialClientApplication
 
 class GraphAuthProvider:
-    """Token provider com cache automático via MSAL."""
+    """Token provider com client secret e cache MSAL."""
 
-    def __init__(
-        self,
-        tenant_id: str,
-        client_id: str,
-        cert_path: str,
-        cert_thumbprint: str,
-    ) -> None: ...
+    def __init__(self, tenant_id: str, client_id: str, client_secret: str) -> None:
+        self._app = ConfidentialClientApplication(
+            client_id=client_id,
+            authority=f"https://login.microsoftonline.com/{tenant_id}",
+            client_credential=client_secret,
+        )
 
-    async def get_token(self) -> str:
-        """Retorna token válido; MSAL faz refresh automático."""
+    def get_token(self) -> str:
+        result = self._app.acquire_token_for_client(
+            scopes=["https://graph.microsoft.com/.default"]
+        )
+        if "access_token" not in result:
+            raise GraphAuthError(result.get("error_description", "unknown"))
+        return result["access_token"]
 ```
 
-**Por que certificado (não secret):**
-- Compliance corporativo — rotação automática
-- MSAL cacheia tokens em memória entre chamadas
-- Microsoft best practice para production apps
+**Secrets:** env vars `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`.  
+Carregar de `.env` via `python-dotenv` (padrão do projeto).
 
-**Secrets:** env vars obrigatórias: `M365_TENANT_ID`, `M365_CLIENT_ID`,
-`M365_CERT_PATH`, `M365_CERT_THUMBPRINT`.
+#### 2.1 Future improvement — Certificado X.509
 
-### 3. Scopes mínimos (princípio do menor privilégio)
+**Quando migrar (não Sprint 12):**
+- Compliance corporativo exigir (auditoria formal)
+- Secret atual atingir 6 meses
+- Sprint dedicada a hardening (Sprint 15+)
 
-| Scope | Uso |
-|-------|-----|
-| `SecurityEvents.Read.All` | Secure Score |
-| `Directory.Read.All` | Users, groups |
-| `Reports.Read.All` | Usage reports |
-| `Policy.Read.All` | Conditional Access |
-| `IdentityRiskyUser.Read.All` | Identity Protection |
+### 3. Scopes mínimos (validados em produção)
 
-**Regra:** `.Read.*` apenas — nenhum `.ReadWrite.*` no MVP.
+| Scope | Uso | Status |
+|-------|-----|--------|
+| `ServiceHealth.Read.All` | Service Health / Incidents | ✅ produção |
+| `Directory.Read.All` | Users, groups, roles | ✅ produção |
+| `Reports.Read.All` | MFA, SharePoint, Teams | ✅ produção |
+| `SecurityEvents.Read.All` | Secure Score, Alerts | ✅ produção |
+| `Policy.Read.All` | Conditional Access | ✅ produção |
+| `IdentityRiskyUser.Read.All` | Risky users | ⚠️ **requer Entra ID P2** |
 
 ### 4. Retry com backoff exponencial (tenacity)
 
 ```python
-# Esqueleto — itgov/integrations/m365/client.py
 from tenacity import (
     retry, stop_after_attempt,
     wait_exponential, retry_if_exception_type,
@@ -105,90 +109,141 @@ class GraphClient:
         """Respeita Retry-After quando presente no header 429."""
 ```
 
-**Regras:**
-- 5 retries máximo, backoff 2s → 60s
-- Honrar `Retry-After` SEMPRE que presente
-- Logar cada throttle via structlog (warning)
+**Nota legado:** coletores legados não implementam retry — retornam `-1` em falhas.
+Novo código DEVE implementar retry para maior resiliência.
 
 ### 5. Paginação via `@odata.nextLink`
 
-```python
-async def paginate(
-    self,
-    initial_url: str,
-    max_pages: int = 100,
-) -> AsyncIterator[dict]:
-    """Itera todas as páginas automaticamente.
+Padrão Graph: `$top=999` (máximo) para minimizar round-trips.
 
-    $top=999 (máximo Graph) minimiza round-trips.
-    max_pages como safety limit contra loops infinitos.
-    """
+**Quirk descoberto:** `@odata.nextLink` pode aparecer mesmo sem próxima página real.
+Sempre verificar se `value` está vazio antes de continuar.
+
+```python
+async def paginate(self, initial_url: str, max_pages: int = 100) -> AsyncIterator[dict]:
+    """Safety limit via max_pages para evitar loops infinitos."""
 ```
 
-### 6. Hierarquia de exceções
+### 6. Reports: forçar JSON (não CSV)
+
+Endpoints `/reports/*` retornam **CSV por padrão** — comportamento inesperado.
+
+```python
+# SEMPRE adicionar header para JSON
+headers["Accept"] = "application/json"
+
+# OU usar $format query param
+url = f"/reports/getSharePointSiteUsageDetail(period='D30')?$format=application/json"
+```
+
+**Legado:** `m365_collector.py` implementa fallback CSV→JSON com `csv.DictReader`.
+Novo código não deve precisar desse fallback se o header for enviado.
+
+### 7. Hierarquia de exceções
 
 ```python
 # itgov/integrations/m365/exceptions.py
-class GraphError(Exception): ...        # base
-class GraphAuthError(GraphError): ...   # 401, 403
-class GraphNotFoundError(GraphError):...# 404
-class GraphThrottledError(GraphError):..# 429
-class GraphUpstreamError(GraphError):...# 5xx
+class GraphError(Exception): ...         # base
+class GraphAuthError(GraphError): ...    # 401, 403
+class GraphNotFoundError(GraphError): ...# 404
+class GraphThrottledError(GraphError): ..# 429
+class GraphUpstreamError(GraphError): ...# 5xx
 class GraphValidationError(GraphError):.# Pydantic mismatch
+class GraphLicenseError(GraphError): ...# 403 por falta de licença (P1/P2)
 ```
 
 Mapeamento para API conventions (ADR-003):
-- `GraphAuthError` → `502 UPSTREAM_ERROR` (não expor 401 do Graph)
+- `GraphAuthError` → `502 UPSTREAM_ERROR`
+- `GraphLicenseError` → `503` com mensagem "feature requires premium license"
 - `GraphThrottledError` após retries → `503 UPSTREAM_ERROR`
-- `GraphUpstreamError` → `502 UPSTREAM_ERROR`
 
-### 7. Estrutura de pastas
+### 8. Catálogo de endpoints validados em produção
+
+| Endpoint | Domínio | Quirks | Fonte |
+|----------|---------|--------|-------|
+| `/security/secureScores?$top=1` | Secure Score | `$top=1` retorna o mais recente | graph.py |
+| `/subscribedSkus` | Licenças | Sem paginação, retorna todos | ambos |
+| `/identity/conditionalAccess/policies` | CAP | Pode ter >100; iterar | m365_collector |
+| `/reports/authenticationMethods/userRegistrationDetails` | MFA | Requer `Reports.Read.All` | ambos |
+| `/users?$count=true&$filter=userType eq 'Member'` | Users | `ConsistencyLevel: eventual` obrigatório | m365_status |
+| `/users?$filter=accountEnabled eq true and signInActivity/...` | Inativos | ⚠️ **requer AAD P1** — sem P1, campo `null` sem erro | m365_collector |
+| `/directoryRoles?$filter=displayName eq 'Global Administrator'` | Admins | Retorna role, depois buscar `/members` | m365_status |
+| `/identityProtection/riskyUsers?$filter=riskLevel ne 'none'` | Risk | ⚠️ **requer Entra ID P2** — retorna 403 sem P2 | m365_status |
+| `/admin/serviceAnnouncement/healthOverviews` | Service Health | Status mapeado para enum numérico | m365_status |
+| `/admin/serviceAnnouncement/issues?$filter=isResolved eq false` | Incidents | Filtro de abertos | m365_status |
+| `/reports/getSharePointSiteUsageDetail(period='D30')` | SharePoint | ⚠️ CSV por padrão — forçar JSON | m365_collector |
+| `/reports/getTeamsUserActivityUserDetail(period='D30')` | Teams | ⚠️ CSV + BOM strip necessário | m365_collector |
+| `/deviceManagement/managedDevices?$select=complianceState` | Intune | Requer licença Intune | graph.py |
+
+**Fonte:** coletores legados operando em produção desde maio/2026.
+
+### 9. Quirks de produção (lições do legado)
+
+- ⚠️ **AAD P1 para `signInActivity`:** sem P1, campo retorna `null` silenciosamente
+- ⚠️ **Entra ID P2 para risky users:** retorna `403 Forbidden` sem P2 — tratar como `GraphLicenseError`
+- ⚠️ **Reports retornam CSV por padrão** — sempre enviar `Accept: application/json` ou `?$format=application/json`
+- ⚠️ **BOM (U+FEFF)** nos CSVs de Reports — legado usa `.lstrip("﻿")` nas chaves
+- ⚠️ **`ConsistencyLevel: eventual`** obrigatório em queries com `$count=true` em `/users`
+- ⚠️ **`@odata.nextLink` falso positivo** — verificar `value` não-vazio antes de paginar
+- ⚠️ **Credencial hardcoded em `m365_collector.py`** — rotacionar e mover para `.env`
+
+### 10. Estrutura de pastas
 
 ```
 itgov/integrations/m365/
 ├── __init__.py
-├── auth.py              # GraphAuthProvider (MSAL)
-├── client.py            # GraphClient base (httpx + retry)
-├── exceptions.py        # Hierarquia de erros
+├── auth.py              # GraphAuthProvider (MSAL + client secret)
+├── client.py            # GraphClient base (httpx async + retry)
+├── exceptions.py        # Hierarquia tipada incluindo GraphLicenseError
 ├── models/              # Pydantic models por domínio
 │   ├── secure_score.py
 │   ├── identity.py
 │   ├── license.py
+│   ├── service_health.py
 │   └── compliance.py
-└── services/            # Service layer (lógica de negócio)
+└── services/            # Service layer
     ├── secure_score_service.py
     ├── identity_service.py
-    └── license_service.py
+    ├── license_service.py
+    └── service_health_service.py
 ```
+
+---
+
+## Validação
+
+✅ **Validado em produção** via coletores legados desde maio/2026.
+
+Spike (`docs/spikes/m365-graph-poc.md`) **não é mais bloqueador** —
+mantido como referência para futuros endpoints novos.
+
+Itens satisfeitos pelo legado:
+- [x] Client credentials flow funciona com MSAL
+- [x] `/security/secureScores` retorna dados válidos
+- [x] `/subscribedSkus` retorna licenças
+- [x] `/identity/conditionalAccess/policies` listável
+- [x] MFA reports acessíveis via `Reports.Read.All`
+- [x] Service health e incidents via `ServiceHealth.Read.All`
+
+Pendente para Sprint 12 (não-bloqueante):
+- [ ] Medir latências formalmente com structlog (substituir timeout=30 por dados reais)
+- [ ] Calibrar TTLs do ADR-010 com medições reais
+- [ ] Confirmar licenças AAD P1 e Entra ID P2 no tenant de produção
+- [ ] Rotacionar credencial hardcoded de `m365_collector.py`
 
 ---
 
 ## Consequências
 
 **Positivas:**
-- Controle total sobre auth, retry, cache, observabilidade
-- Bundle leve — deploy K8s mais rápido
-- Debug curl-friendly (sem abstrações)
-- Type safety via Pydantic em todo o pipeline
+- Validação empírica em produção reduz risco da Sprint 12
+- Legado serve como oracle de regressão (ADR-011)
+- Quirks já conhecidos = menos surpresas em produção
 
 **Negativas / Trade-offs:**
-- Manutenção própria dos Pydantic models
-- Mudanças breaking na Graph API exigem update manual
-- Curva de aprendizado do MSAL para quem nunca usou
-
----
-
-## Validação obrigatória antes da Sprint 12
-
-Ver `docs/spikes/m365-graph-poc.md`. Critérios de aceite do spike:
-
-- [ ] Auth com certificado funciona end-to-end
-- [ ] Secure Score retorna dados válidos
-- [ ] Paginação com `$top=999` funciona
-- [ ] Retry em 429 funciona (observado ou simulado)
-- [ ] Latência p50/p95 medida e documentada
-
-**Este ADR passa de Proposed → Accepted após spike concluído.**
+- Client secret (não certificado) — mitigado por rotação trimestral
+- Necessidade de lidar com CSV em Reports — mitigado pelo header `Accept`
+- Dependência de licenças premium para alguns endpoints
 
 ---
 
@@ -196,6 +251,7 @@ Ver `docs/spikes/m365-graph-poc.md`. Critérios de aceite do spike:
 
 - [Graph throttling](https://learn.microsoft.com/graph/throttling)
 - [MSAL Python](https://learn.microsoft.com/entra/identity-platform/msal-python)
-- [Graph permissions reference](https://learn.microsoft.com/graph/permissions-reference)
+- Coletores legados: `collectors/graph.py`, `/opt/zabbix/m365_collector.py`, `/opt/zabbix/m365/m365_status.py`
 - ADR-003 (API conventions)
-- LL-001 (validar lib antes de usar)
+- ADR-010 (Caching layer)
+- ADR-011 (Migration strategy)

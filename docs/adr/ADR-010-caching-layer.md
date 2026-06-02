@@ -53,22 +53,26 @@ class CacheClient:
     async def invalidate_pattern(self, pattern: str) -> int: ...
 ```
 
-### 3. TTL por domínio
+### 3. TTL por domínio (calibrado com contexto de produção)
 
-| Domínio | TTL | Justificativa |
-|---------|-----|---------------|
-| Secure Score | 6h | Atualiza 1×/dia no Graph |
-| Users (lista) | 1h | Mudanças raras, volume alto |
-| Licenses | 1h | Muda por compras/atribuições |
-| Compliance reports | 12h | Reports diários |
-| Conditional Access | 30min | Admin pode alterar a qualquer hora |
-| Risky users | 15min | Dado de segurança — frescor importa |
-| Token MSAL | `exp` do token | MSAL gerencia internamente |
+| Domínio | TTL | Latência típica | Justificativa |
+|---------|-----|-----------------|---------------|
+| Secure Score | 6h | `<2s` | Atualiza 1×/dia no Graph |
+| Service Health | 5min | `<1s` | Incidentes mudam rápido |
+| Users (lista total) | 1h | `<2s` | Mudanças raras, volume alto |
+| Licenses | 1h | `<1s` | Muda por compras/atribuições |
+| MFA reports | 4h | `<3s` | Reports diários (timeout=30 no legado) |
+| Conditional Access | 30min | `<2s` | Admin pode mudar a qualquer hora |
+| Risky users | 15min | `<2s` | Segurança — frescor importa |
+| Admin roles/members | 2h | `<1s` | Muda raramente |
+| Intune compliance | 30min | `<3s` | Refresh por ciclo de sync Intune |
+| Token MSAL | `exp` do token | n/a | MSAL gerencia internamente |
+
+**Nota:** latências marcadas como `<Xs` são estimativas do legado
+(timeout=30s configurado, não medido formalmente). Medir com structlog
+em Sprint 12 e ajustar TTLs com dados reais.
 
 **Regra geral:** TTL = (frequência de atualização upstream) ÷ 2
-
-Os TTLs acima são ponto de partida. **Ajustar após executar o spike**
-com latência e volume real do tenant de produção.
 
 ### 4. Convenção de chaves
 
