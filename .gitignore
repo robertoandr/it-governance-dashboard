@@ -142,3 +142,4 @@ grafana/provisioning/**/*.old
 grafana/provisioning/**/*.tmp
 grafana/provisioning/**/*.orig
 grafana/provisioning/**/*.disabled
+CLAUDE.md.bkp-*
