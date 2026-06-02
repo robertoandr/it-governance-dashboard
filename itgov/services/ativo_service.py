@@ -6,6 +6,7 @@ provides idempotent ingestion from external sources.
 
 Aligned with ADR-008 (Asset Inventory Strategy) and ADR-0003 (LGPD).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
