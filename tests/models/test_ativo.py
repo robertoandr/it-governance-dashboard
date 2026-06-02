@@ -232,8 +232,20 @@ class TestAtivo:
     def test_model_dump_inclui_todos_campos(self):
         a = make_ativo()
         d = a.model_dump()
-        for campo in ("id", "tipo", "nome", "ambiente", "criticidade", "owner",
-                      "tags", "metadata", "contrato_id", "created_at", "updated_at", "deleted_at"):
+        for campo in (
+            "id",
+            "tipo",
+            "nome",
+            "ambiente",
+            "criticidade",
+            "owner",
+            "tags",
+            "metadata",
+            "contrato_id",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        ):
             assert campo in d
 
 
