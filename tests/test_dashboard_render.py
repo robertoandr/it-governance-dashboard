@@ -6,6 +6,7 @@ inventory panel: nav item, panel section, KPI element IDs, JS fetch call.
 Uses the shared `client` fixture from conftest.py which boots the full
 Flask app in testing mode.
 """
+
 from __future__ import annotations
 
 import pytest
