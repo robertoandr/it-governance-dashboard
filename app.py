@@ -18,6 +18,7 @@ from collectors.graph import GraphCollector
 from collectors.influx import InfluxCollector
 from collectors.ldap_collector import LDAPCollector
 from collectors.zabbix import ZabbixCollector
+from itgov.api.v1.ativos import ns as ativos_ns
 from itgov.api.v1.zabbix import ns as zabbix_ns
 from itgov.api.v1.zendesk import ns as zendesk_ns
 
@@ -47,6 +48,7 @@ app.register_blueprint(maintenance_bp)
 itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=False)
 itgov_api.add_namespace(zabbix_ns)
 itgov_api.add_namespace(zendesk_ns)
+itgov_api.add_namespace(ativos_ns)
 
 _cache: dict = {
     "hosts": {},
