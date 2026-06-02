@@ -36,6 +36,7 @@
     <div class="nav-section-title">Governança</div>
     <div class="nav-item" data-tab="security"><i class="ti ti-shield-check"></i><span>Segurança</span></div>
     <div class="nav-item" data-tab="finops"><i class="ti ti-chart-dots-3"></i><span>FINOPS / Custos</span></div>
+    <div class="nav-item" data-tab="inventory" id="nav-inventory"><i class="ti ti-box"></i><span>Inventário</span><span class="badge" id="nav-inventory-badge" style="display:none">!</span></div>
 
     <div class="nav-section-title">Vigilância</div>
     <div class="nav-item" data-tab="cftv"><i class="ti ti-device-cctv"></i><span>CFTV</span></div>
@@ -537,6 +538,132 @@
     setInterval(updateCFTV, 30000);
   </script>
 </section>
+
+  {# ─────────── INVENTÁRIO DE ATIVOS ─────────── #}
+  <section class="panel" data-panel="inventory" id="panel-inventory">
+    <h2 class="panel-title">Inventário de Ativos de TI</h2>
+
+    {# Skeleton loading #}
+    <div id="inv-skeleton" class="kpi-grid" aria-label="Carregando inventário…">
+      <div class="kpi-card" style="opacity:.4"><div class="kpi-label">Total</div><div class="kpi-value">—</div></div>
+      <div class="kpi-card" style="opacity:.4"><div class="kpi-label">Sem owner</div><div class="kpi-value">—</div></div>
+      <div class="kpi-card" style="opacity:.4"><div class="kpi-label">Sem contrato</div><div class="kpi-value">—</div></div>
+    </div>
+
+    {# Error boundary #}
+    <div id="inv-error" style="display:none" role="alert"
+         class="kpi-card" style="border-left:4px solid var(--crit);color:var(--crit)">
+      <div class="kpi-label">⚠️ Erro ao carregar inventário</div>
+      <div id="inv-error-msg" class="kpi-sub">Verifique a conectividade com /api/v1/ativos/stats</div>
+    </div>
+
+    {# Main content (hidden until loaded) #}
+    <div id="inv-content" style="display:none">
+      <div class="kpi-grid">
+        <div class="kpi-card" data-key="inv-total" data-tip="Total de ativos ativos (não deletados)">
+          <div class="kpi-label">Total de Ativos</div>
+          <div class="kpi-value"><span id="inv-total">—</span></div>
+          <div class="kpi-sub">ativos registrados</div>
+        </div>
+
+        <div class="kpi-card" id="inv-sem-owner-card" data-key="inv-sem-owner">
+          <div class="kpi-label">Sem Owner <span id="inv-sem-owner-badge" class="badge" style="display:none">!</span></div>
+          <div class="kpi-value" id="inv-sem-owner">—</div>
+          <div class="kpi-sub">ativos sem responsável</div>
+        </div>
+
+        <div class="kpi-card" data-key="inv-sem-contrato">
+          <div class="kpi-label">Sem Contrato</div>
+          <div class="kpi-value"><span id="inv-sem-contrato">—</span></div>
+          <div class="kpi-sub">sem vínculo Hero V1.0</div>
+        </div>
+      </div>
+
+      <div class="kpi-grid" style="margin-top:12px">
+        <div class="card" style="grid-column:span 2">
+          <div class="card-title">Por Criticidade</div>
+          <div id="inv-criticidade-list" style="display:flex;flex-direction:column;gap:8px;padding:4px 0"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Por Tipo</div>
+          <div id="inv-tipo-list" style="display:flex;flex-direction:column;gap:6px;padding:4px 0"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const CRITICIDADE_COLOR = { alta: 'var(--crit)', media: 'var(--warn)', baixa: 'var(--ok)' };
+
+        function invBar(label, count, total, color) {
+          const pct = total > 0 ? Math.round(count / total * 100) : 0;
+          return `<div style="display:flex;align-items:center;gap:10px">
+            <span style="min-width:70px;font-size:13px;color:var(--text-muted)">${label}</span>
+            <div style="flex:1;background:var(--border);border-radius:4px;height:8px">
+              <div style="width:${pct}%;background:${color};border-radius:4px;height:8px;transition:width .4s"></div>
+            </div>
+            <span style="min-width:36px;text-align:right;font-size:13px;font-weight:600">${count}</span>
+          </div>`;
+        }
+
+        async function updateInventory() {
+          try {
+            const res = await fetch('/api/v1/ativos/stats', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const d = await res.json();
+
+            document.getElementById('inv-total').innerText = d.total ?? 0;
+
+            const semOwner = d.sem_owner ?? 0;
+            document.getElementById('inv-sem-owner').innerText = semOwner;
+            const ownerBadge = document.getElementById('inv-sem-owner-badge');
+            const navBadge   = document.getElementById('nav-inventory-badge');
+            const ownerCard  = document.getElementById('inv-sem-owner-card');
+            if (semOwner > 0) {
+              ownerBadge.style.display = 'inline';
+              ownerBadge.innerText = semOwner;
+              navBadge.style.display = 'inline';
+              navBadge.innerText = semOwner;
+              ownerCard.style.borderLeft = '4px solid var(--crit)';
+            } else {
+              ownerBadge.style.display = 'none';
+              navBadge.style.display = 'none';
+              ownerCard.style.borderLeft = '';
+            }
+
+            document.getElementById('inv-sem-contrato').innerText = d.sem_contrato ?? 0;
+
+            const total = d.total || 1;
+            const crit = d.por_criticidade || {};
+            document.getElementById('inv-criticidade-list').innerHTML =
+              ['alta', 'media', 'baixa']
+                .map(k => invBar(k, crit[k] ?? 0, total, CRITICIDADE_COLOR[k] || 'var(--accent)'))
+                .join('');
+
+            const tipos = d.por_tipo || {};
+            document.getElementById('inv-tipo-list').innerHTML =
+              Object.entries(tipos)
+                .sort(([,a],[,b]) => b - a)
+                .map(([k, v]) => invBar(k, v, total, 'var(--accent)'))
+                .join('') || '<span style="opacity:.5;font-size:13px">Nenhum ativo</span>';
+
+            document.getElementById('inv-skeleton').style.display = 'none';
+            document.getElementById('inv-error').style.display   = 'none';
+            document.getElementById('inv-content').style.display = 'block';
+
+          } catch (e) {
+            document.getElementById('inv-skeleton').style.display = 'none';
+            document.getElementById('inv-content').style.display  = 'none';
+            document.getElementById('inv-error-msg').innerText = e.message || 'Erro desconhecido';
+            document.getElementById('inv-error').style.display    = 'block';
+          }
+        }
+
+        setTimeout(updateInventory, 600);
+        setInterval(updateInventory, 60000);
+      })();
+    </script>
+  </section>
 
 </main>
 
