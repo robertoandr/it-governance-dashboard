@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
+
+import config
 
 BUCKET = "m365_security"
 
@@ -14,12 +15,7 @@ RETENTION_SECONDS = 90 * 24 * 3600
 
 
 def get_client() -> InfluxDBClient:
-    # Lazy reads — avoids import-time failures in test environments
-    return InfluxDBClient(
-        url=os.environ["INFLUX_URL"],
-        token=os.environ["INFLUX_TOKEN"],
-        org=os.environ["INFLUX_ORG"],
-    )
+    return InfluxDBClient(url=config.INFLUX_URL, token=config.INFLUX_TOKEN, org=config.INFLUX_ORG)
 
 
 def write_sp_risk(sp: dict, write_api=None) -> None:

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import AsyncIterator
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,11 @@ class GraphRateLimitError(Exception):
 
 
 def _get_credentials() -> tuple[str, str, str]:
-    """Read credentials from env — never log the returned values."""
+    """Read credentials from config — never log the returned values."""
     return (
-        os.environ["AZURE_TENANT_ID"],
-        os.environ["AZURE_CLIENT_ID"],
-        os.environ["AZURE_CLIENT_SECRET"],
+        config.GRAPH_TENANT_ID,
+        config.GRAPH_CLIENT_ID,
+        config.GRAPH_CLIENT_SECRET,
     )
 
 
@@ -137,6 +138,6 @@ class GraphClient:
 async def iter_service_principals(timeout: float = 60.0) -> AsyncIterator[dict]:
     """Yield all Service Principals via delta full-scan (no persistence)."""
     client = GraphClient(timeout=timeout)
-    tenant_id = os.environ.get("AZURE_TENANT_ID", "unknown")
+    tenant_id = config.GRAPH_TENANT_ID or "unknown"
     async for sp in client.get_service_principals_delta(tenant_id):
         yield sp
