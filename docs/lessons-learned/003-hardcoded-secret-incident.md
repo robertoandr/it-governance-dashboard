@@ -57,30 +57,14 @@ invalidar todos exceto o atual.
 | 2 | Backup protegido do arquivo original (`chmod 600`) | ✅ |
 | 3 | Remoção do hardcoded — substituído por `_load_env_file("/opt/zabbix/m365/.env")` | ✅ |
 | 4 | Validação: sintaxe Python OK, sem literal de credencial | ✅ |
-| 5 | **Gerar novo secret no Entra ID** | ⏳ Pendente (portal) |
-| 6 | **Atualizar `/opt/zabbix/m365/.env` com novo secret** | ⏳ Pendente |
-| 7 | **Invalidar todos os secrets antigos no Entra ID** | ⏳ Pendente (portal) |
-| 8 | Auditoria de sign-in logs (30 dias) | ⏳ Pendente (portal) |
+| 5 | Gerar novo secret no Entra ID (`prod-2026-06-02-rotation`, 6 meses) | ✅ |
+| 6 | Atualizar `/opt/zabbix/m365/.env` com novo secret | ✅ |
+| 7 | Invalidar todos os secrets antigos no Entra ID (4 secrets removidos) | ✅ |
+| 8 | Auditoria sign-in logs (30 dias): **limpa, sem atividade suspeita** | ✅ |
 
-## Passos pendentes (executar no portal Entra ID)
+**Status: ✅ FECHADO em 2026-06-02T23:59 BRT — MTTR ~2h30min**
 
-```
-1. https://entra.microsoft.com →
-   Applications → App registrations → buscar CLIENT_ID 46d42f0b-...
-
-2. Certificates & secrets → listar secrets ativos
-   → Quantos estão ativos? (máx 2 simultâneos)
-
-3. New client secret:
-   Description: "prod-2026-06-02-rotation"
-   Expires: 6 months (não 24)
-   → Copiar Value IMEDIATAMENTE para password manager
-
-4. Atualizar /opt/zabbix/m365/.env com novo secret:
-   sudo -u zabbix nano /opt/zabbix/m365/.env
-   AZURE_CLIENT_SECRET=<NOVO_VALUE>
-
-5. Testar: sudo -u zabbix python3 /opt/zabbix/m365_collector.py
+Ver timeline completa: `docs/incidents/LL-003-secret-rotation.md`
 
 6. Deletar TODOS os secrets antigos (inclusive pK78Q~...)
 
