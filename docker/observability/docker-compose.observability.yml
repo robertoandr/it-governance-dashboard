@@ -10,12 +10,7 @@ services:
       - "4318:4318"    # OTLP HTTP
       - "13133:13133"  # health_check
       - "8889:8889"    # Prometheus metrics
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 5s
+    # distroless image — no wget/shell; validate health from host: curl http://localhost:13133/
     restart: unless-stopped
 
   tempo:
