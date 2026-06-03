@@ -13,8 +13,8 @@
 
 # ADR-0004: TimescaleDB Single Storage (PostgreSQL + Extension)
 
-**Status:** Accepted  
-**Date:** 2026-02-05  
+**Status:** Accepted
+**Date:** 2026-02-05
 **Author:** Roberto Andrade
 
 ---
