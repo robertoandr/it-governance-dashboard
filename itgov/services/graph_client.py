@@ -5,9 +5,11 @@ from urllib.parse import urlparse
 
 import httpx
 import structlog
+from opentelemetry.trace import StatusCode
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 import config
+from itgov.observability import get_tracer
 
 log = structlog.get_logger(__name__)
 
@@ -47,21 +49,34 @@ def _url_host(url: str) -> str:
 
 
 async def _fetch_token(client: httpx.AsyncClient) -> str:
-    tenant_id, client_id, client_secret = _get_credentials()
-    resp = await client.post(
-        f"{LOGIN_URL}/{tenant_id}/oauth2/v2.0/token",
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "scope": "https://graph.microsoft.com/.default",
-        },
-    )
-    if resp.status_code != 200:
-        # Log status only — never log body (may contain token details)
-        log.error("graph.token.failed", status_code=resp.status_code)
-        raise GraphAuthError(f"Token request failed: HTTP {resp.status_code}")
-    return resp.json()["access_token"]
+    tracer = get_tracer("itgov.graph")
+    with tracer.start_as_current_span("graph.auth.token_fetch") as span:
+        tenant_id, client_id, client_secret = _get_credentials()
+        span.set_attribute("graph.auth.method", "client_credentials")
+        span.set_attribute("graph.tenant_id", tenant_id or "")
+        span.set_attribute("http.request.method", "POST")
+        span.set_attribute("server.address", "login.microsoftonline.com")
+        span.set_attribute("url.path", f"/{tenant_id}/oauth2/v2.0/token")
+
+        resp = await client.post(
+            f"{LOGIN_URL}/{tenant_id}/oauth2/v2.0/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scope": "https://graph.microsoft.com/.default",
+            },
+        )
+        if resp.status_code != 200:
+            exc = GraphAuthError(f"Token request failed: HTTP {resp.status_code}")
+            span.set_status(StatusCode.ERROR, f"HTTP {resp.status_code}")
+            span.set_attribute("graph.error.type", "auth")
+            span.set_attribute("http.response.status_code", resp.status_code)
+            span.record_exception(exc)
+            log.error("graph.token.failed", status_code=resp.status_code)
+            raise exc
+        span.set_attribute("http.response.status_code", 200)
+        return resp.json()["access_token"]
 
 
 @retry(
@@ -109,6 +124,8 @@ class GraphClient:
         mode = "delta" if delta_link is not None else "full"
         log.info("graph.sp_delta.start", tenant_id=tenant_id, mode=mode)
 
+        tracer = get_tracer("itgov.graph")
+
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             token = await _fetch_token(client)
             url: str | None = start_url
@@ -116,7 +133,28 @@ class GraphClient:
 
             while url:
                 page += 1
-                data = await _get(client, url, token)
+                with tracer.start_as_current_span("graph.api.get") as get_span:
+                    get_span.set_attribute("http.request.method", "GET")
+                    get_span.set_attribute("url.path", _url_path(url))
+                    get_span.set_attribute("server.address", _url_host(url))
+                    get_span.set_attribute("graph.page_number", page)
+
+                    try:
+                        data = await _get(client, url, token)
+                    except GraphRateLimitError as exc:
+                        get_span.set_status(StatusCode.ERROR, "rate_limited")
+                        get_span.set_attribute("graph.error.type", "rate_limit")
+                        get_span.set_attribute("graph.retry_after_seconds", exc.retry_after)
+                        raise
+                    except Exception as exc:
+                        get_span.record_exception(exc)
+                        get_span.set_status(StatusCode.ERROR, str(exc))
+                        raise
+
+                    get_span.set_attribute("http.response.status_code", 200)
+                    get_span.set_attribute("graph.has_next_page", bool(data.get("@odata.nextLink")))
+                    get_span.set_attribute("graph.delta_link_present", bool(data.get("@odata.deltaLink")))
+
                 items = data.get("value", [])
                 log.debug("graph.sp_delta.page", page=page, count=len(items))
 
