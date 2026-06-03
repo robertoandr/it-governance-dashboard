@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Executive Summary — Sprint 11 + Security Incident LL-003</title>
+<style>
+  @page { margin: 2cm; size: A4; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; max-width: 800px; margin: 0 auto; padding: 20px; font-size: 13px; }
+  h1 { font-size: 22px; color: #0f3460; border-bottom: 3px solid #e94560; padding-bottom: 8px; margin-top: 0; }
+  h2 { font-size: 15px; color: #16213e; background: #f0f4ff; padding: 6px 10px; border-left: 4px solid #0f3460; margin-top: 24px; }
+  h3 { font-size: 13px; color: #0f3460; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+  th { background: #0f3460; color: white; padding: 6px 10px; text-align: left; }
+  td { padding: 5px 10px; border-bottom: 1px solid #e8e8f0; }
+  tr:nth-child(even) td { background: #f8f9ff; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
+  .kpi { background: #f0f4ff; border: 1px solid #c8d4f8; border-radius: 6px; padding: 10px 14px; text-align: center; }
+  .kpi .value { font-size: 26px; font-weight: 900; color: #0f3460; }
+  .kpi .label { font-size: 11px; color: #666; margin-top: 2px; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .warn { color: #e67e22; font-weight: 600; }
+  .crit { color: #e94560; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-ok { background: #d4f5dc; color: #1a7f37; }
+  .badge-warn { background: #fff3cd; color: #856404; }
+  .badge-crit { background: #fce8e8; color: #c0392b; }
+  .badge-info { background: #e8f4fd; color: #1565c0; }
+  .meta { color: #888; font-size: 11px; }
+  .section-note { background: #fffbea; border-left: 3px solid #f39c12; padding: 8px 12px; font-size: 12px; margin: 8px 0; }
+  .incident-box { background: #fff0f0; border: 2px solid #e94560; border-radius: 6px; padding: 12px 16px; margin: 12px 0; }
+  .timeline { margin: 0; padding-left: 20px; }
+  .timeline li { margin: 4px 0; }
+  footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ddd; color: #888; font-size: 11px; text-align: center; }
+  @media print { body { max-width: 100%; } .kpi-grid { display: grid; } }
+</style>
+</head>
+<body>
+
+<h1>📊 Executive Summary — IT Governance Dashboard</h1>
+<p class="meta">
+  <strong>Grupo Gadens</strong> · Sprint 11 Retrospective + Security Incident LL-003<br>
+  Gerado em: 2026-06-02 · Período: 02–08/06/2026 (Sprint 11) · Versão: v1.1.0-alpha
+</p>
+
+<!-- KPIs DA SPRINT -->
+<h2>🏆 Sprint 11 — Resultados</h2>
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="value ok">5/5</div>
+    <div class="label">Issues entregues</div>
+  </div>
+  <div class="kpi">
+    <div class="value">390</div>
+    <div class="label">Testes automatizados</div>
+  </div>
+  <div class="kpi">
+    <div class="value ok">93%</div>
+    <div class="label">Branch coverage</div>
+  </div>
+  <div class="kpi">
+    <div class="value">0</div>
+    <div class="label">Conflitos de merge</div>
+  </div>
+  <div class="kpi">
+    <div class="value ok">5/5</div>
+    <div class="label">CI first-try verde</div>
+  </div>
+  <div class="kpi">
+    <div class="value">1 dia</div>
+    <div class="label">Velocity (est. 14 dias)</div>
+  </div>
+</div>
+
+<table>
+  <tr><th>Issue</th><th>PR</th><th>Entrega</th><th>Status</th></tr>
+  <tr><td>#89</td><td>#95</td><td>CI coverage gate 85%</td><td><span class="badge badge-ok">✅ Mergeado</span></td></tr>
+  <tr><td>#84</td><td>#96</td><td>AtivoDB schema (SQLAlchemy 2.0 + Alembic + soft delete)</td><td><span class="badge badge-ok">✅ Mergeado</span></td></tr>
+  <tr><td>#85</td><td>#97</td><td>AtivoService CRUD + upsert idempotente + get_stats</td><td><span class="badge badge-ok">✅ Mergeado</span></td></tr>
+  <tr><td>#86</td><td>#98</td><td>REST API /api/v1/ativos — 6 endpoints + OpenAPI</td><td><span class="badge badge-ok">✅ Mergeado</span></td></tr>
+  <tr><td>#88</td><td>#99</td><td>UI Widget Inventário (skeleton loading + auto-refresh 60s)</td><td><span class="badge badge-ok">✅ Mergeado</span></td></tr>
+</table>
+
+<!-- QUALIDADE -->
+<h2>📐 Qualidade &amp; Arquitetura</h2>
+
+<table>
+  <tr><th>Indicador</th><th>Valor</th><th>Meta</th><th>Status</th></tr>
+  <tr><td>Testes automatizados</td><td>390</td><td>≥350</td><td class="ok">✅</td></tr>
+  <tr><td>Branch coverage</td><td>93.10%</td><td>≥85%</td><td class="ok">✅</td></tr>
+  <tr><td>Gate de coverage (CI)</td><td>85% enforced</td><td>Ativo</td><td class="ok">✅</td></tr>
+  <tr><td>PRs sem conflito</td><td>6/6</td><td>100%</td><td class="ok">✅</td></tr>
+  <tr><td>ADRs documentados</td><td>11 (+ 4 novos esta sprint)</td><td>—</td><td class="ok">✅</td></tr>
+</table>
+
+<div class="section-note">
+  <strong>ADRs criados esta sprint:</strong> ADR-003 (API Conventions), ADR-009 (M365 Graph — Accepted),
+  ADR-010 (Redis Caching), ADR-011 (Migration Strategy).
+</div>
+
+<!-- INCIDENTE P0 -->
+<h2>🚨 Incidente de Segurança — LL-003 (P0)</h2>
+
+<div class="incident-box">
+  <strong>Tipo:</strong> Credential Exposure — Client Secret M365 hardcoded<br>
+  <strong>Descoberto:</strong> 2026-06-02 durante auditoria de arquitetura<br>
+  <strong>Janela de exposição:</strong> ~24 dias (09/05 → 02/06)<br>
+  <strong>MTTR:</strong> ~2h30min &nbsp;|&nbsp; <strong>Status:</strong> <span class="badge badge-ok">✅ FECHADO</span>
+</div>
+
+<h3>Ações executadas (2026-06-02)</h3>
+<ul class="timeline">
+  <li><span class="ok">✅</span> Hardcoded removido: <code>CLIENT_SECRET="..."</code> → <code>_load_env_file("/opt/zabbix/m365/.env")</code></li>
+  <li><span class="ok">✅</span> Novo secret gerado no Entra ID (6 meses, não 24)</li>
+  <li><span class="ok">✅</span> <code>/opt/zabbix/m365/.env</code> atualizado com novo secret</li>
+  <li><span class="ok">✅</span> Coletor testado e funcionando</li>
+  <li><span class="ok">✅</span> 4 secrets antigos invalidados no Entra ID</li>
+  <li><span class="ok">✅</span> Sign-in logs (30 dias): <strong>limpos, sem atividade suspeita</strong></li>
+</ul>
+
+<h3>Impacto real</h3>
+<p>Nenhuma evidência de uso indevido. Arquivo restrito ao servidor interno, nunca em repositório Git. Rotação executada preventivamente.</p>
+
+<h3>Ações preventivas planejadas</h3>
+<table>
+  <tr><th>Ação</th><th>Sprint</th><th>Status</th></tr>
+  <tr><td>ADR-009 v2: credentials SEMPRE via env</td><td>Sprint 12</td><td class="ok">✅ Documentado</td></tr>
+  <tr><td>Deprecar coletor legado (strangler fig)</td><td>Sprint 13</td><td><span class="badge badge-info">📋 Planejado</span></td></tr>
+  <tr><td>gitleaks em pre-commit global</td><td>Sprint 13</td><td><span class="badge badge-info">📋 Planejado</span></td></tr>
+  <tr><td>Rotação trimestral de secrets (calendário)</td><td>Ongoing</td><td class="warn">⏳ Criar</td></tr>
+  <tr><td>Azure Key Vault para novo código M365</td><td>Sprint 15+</td><td><span class="badge badge-info">🔮 Futuro</span></td></tr>
+</table>
+
+<!-- SPRINT 12 -->
+<h2>🔭 Sprint 12 — Próximos passos (09–22/06/2026)</h2>
+
+<p><strong>Foco:</strong> Governança M365 — 6 Pilares de Segurança via Microsoft Graph</p>
+
+<table>
+  <tr><th>Issue</th><th>Endpoint M365</th><th>Complexidade</th></tr>
+  <tr><td>#104</td><td>/security/secureScores</td><td><span class="badge badge-ok">Baixa</span></td></tr>
+  <tr><td>#105</td><td>/subscribedSkus (Licenses)</td><td><span class="badge badge-ok">Baixa</span></td></tr>
+  <tr><td>#106</td><td>/identity/conditionalAccess/policies</td><td><span class="badge badge-warn">Média</span></td></tr>
+  <tr><td>#107</td><td>/users + counts (Active/Guest/MFA)</td><td><span class="badge badge-crit">Alta</span></td></tr>
+  <tr><td>#108</td><td>/reports/authenticationMethods</td><td><span class="badge badge-warn">Média</span></td></tr>
+  <tr><td>#109</td><td>/admin/serviceAnnouncement</td><td><span class="badge badge-ok">Baixa</span></td></tr>
+</table>
+
+<div class="section-note">
+  <strong>Estratégia:</strong> Strangler Fig (ADR-011) — migrar endpoint por endpoint do coletor legado,
+  com diff vs legado como oracle de regressão. Spike não mais necessário — legado valida premissas.
+</div>
+
+<h2>📅 Roadmap V1.1 — Status</h2>
+
+<table>
+  <tr><th>Sprint</th><th>Período</th><th>Foco</th><th>Status</th></tr>
+  <tr><td>11</td><td>02–08/06</td><td>Tech Debt + Inventário de Ativos</td><td class="ok">✅ Concluída (v1.1.0-alpha)</td></tr>
+  <tr><td>12</td><td>09–22/06</td><td>Governança M365 (6 Pilares)</td><td><span class="badge badge-warn">🔄 Em preparação</span></td></tr>
+  <tr><td>13</td><td>23–27/06</td><td>Hub SharePoint + 8 Triggers SMTP</td><td><span class="badge badge-info">📋 Planejado</span></td></tr>
+  <tr><td>14</td><td>28–30/06</td><td>Polimento + Go-Live</td><td><span class="badge badge-info">📋 Planejado</span></td></tr>
+</table>
+
+<p><strong>Metas V1.1 (deadline 30/06/2026):</strong></p>
+<table>
+  <tr><th>Meta</th><th>Alvo</th><th>Sprint 11</th><th>Projeção</th></tr>
+  <tr><td>Coverage</td><td>≥90%</td><td>93.10% ✅</td><td class="ok">OK</td></tr>
+  <tr><td>Testes</td><td>≥350</td><td>390 ✅</td><td class="ok">OK</td></tr>
+  <tr><td>Secure Score M365</td><td>≥60%</td><td>—</td><td><span class="warn">Sprint 12</span></td></tr>
+  <tr><td>MFA Administradores</td><td>100%</td><td>—</td><td><span class="warn">Sprint 12</span></td></tr>
+</table>
+
+<footer>
+  IT Governance Dashboard · Grupo Gadens · Versão v1.1.0-alpha · 2026-06-02<br>
+  Documento gerado automaticamente — não contém dados sensíveis
+</footer>
+
+</body>
+</html>
