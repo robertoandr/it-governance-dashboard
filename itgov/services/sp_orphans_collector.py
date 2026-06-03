@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import structlog
+from opentelemetry.trace import StatusCode
 
+from itgov.observability import get_tracer
 from itgov.services.delta_token_store import DeltaTokenStore
 from itgov.services.graph_client import GraphClient
 from itgov.services.influx_schema import write_sp_risk, write_summary_snapshot
@@ -125,74 +128,102 @@ class SPOrphansCollector:
 
         log.info("collection.start", tenant_id=tenant_id, mode=mode)
 
-        counters: dict[str, int] = {"total": 0, "critical": 0, "high": 0, "medium": 0, "ok": 0}
-        score_sum = 0
+        tracer = get_tracer("itgov.m365")
+        t0 = time.monotonic()
 
-        try:
-            async for sp in self._graph.get_service_principals_delta(tenant_id, previous_delta):
-                record = _build_sp_record(sp, tenant_id)
-                log.debug(
-                    "sp.processed",
-                    sp_object_id=record["sp_object_id"],
-                    risk_level=record["risk_level"],
-                    risk_score=record["risk_score"],
-                )
-                write_sp_risk(record)
-                counters["total"] += 1
-                score_sum += record["risk_score"]
-                counters[record["risk_level"].lower()] += 1
+        with tracer.start_as_current_span("m365.sp_orphans.collect") as span:
+            span.set_attribute("m365.tenant_id", tenant_id)
+            span.set_attribute("m365.delta.token_used", not is_first_run)
 
-        except Exception:
-            # Preserve previous delta on failure — next run retries from same point
-            log.exception("collection.failed", tenant_id=tenant_id, mode=mode)
-            raise
+            counters: dict[str, int] = {
+                "total": 0,
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "ok": 0,
+            }
+            score_sum = 0
 
-        # Persist new delta only after successful full iteration
-        if self._graph.last_delta_link:
-            await self._store.set(_RESOURCE, tenant_id, self._graph.last_delta_link)
+            try:
+                async for sp in self._graph.get_service_principals_delta(tenant_id, previous_delta):
+                    record = _build_sp_record(sp, tenant_id)
+                    log.debug(
+                        "sp.processed",
+                        sp_object_id=record["sp_object_id"],
+                        risk_level=record["risk_level"],
+                        risk_score=record["risk_score"],
+                    )
+                    write_sp_risk(record)
+                    counters["total"] += 1
+                    score_sum += record["risk_score"]
+                    counters[record["risk_level"].lower()] += 1
 
-        avg_score = score_sum / counters["total"] if counters["total"] else 0.0
-        write_summary_snapshot(
-            tenant_id,
-            {
-                "total_sps": counters["total"],
-                "critical_count": counters["critical"],
-                "high_count": counters["high"],
-                "medium_count": counters["medium"],
-                "ok_count": counters["ok"],
-                "avg_risk_score": avg_score,
-            },
-        )
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(StatusCode.ERROR, str(exc))
+                # Preserve previous delta on failure — next run retries from same point
+                log.exception("collection.failed", tenant_id=tenant_id, mode=mode)
+                raise
 
-        result = CollectionResult(
-            mode=mode,
-            count=counters["total"],
-            tenant_id=tenant_id,
-            critical=counters["critical"],
-            high=counters["high"],
-            medium=counters["medium"],
-            ok=counters["ok"],
-            avg_risk_score=avg_score,
-        )
-        log.info(
-            "collection.done",
-            tenant_id=tenant_id,
-            mode=mode,
-            sps_processed=result.count,
-            critical=result.critical,
-            high=result.high,
-        )
-        return result
+            # Persist new delta only after successful full iteration
+            if self._graph.last_delta_link:
+                await self._store.set(_RESOURCE, tenant_id, self._graph.last_delta_link)
+
+            avg_score = score_sum / counters["total"] if counters["total"] else 0.0
+            write_summary_snapshot(
+                tenant_id,
+                {
+                    "total_sps": counters["total"],
+                    "critical_count": counters["critical"],
+                    "high_count": counters["high"],
+                    "medium_count": counters["medium"],
+                    "ok_count": counters["ok"],
+                    "avg_risk_score": avg_score,
+                },
+            )
+
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            span.set_attribute("m365.sps.total_scanned", counters["total"])
+            span.set_attribute("m365.sps.risk_critical", counters["critical"])
+            span.set_attribute("m365.sps.risk_high", counters["high"])
+            span.set_attribute("m365.sps.risk_medium", counters["medium"])
+            span.set_attribute("m365.sps.risk_low", counters["ok"])
+            span.set_attribute("m365.sps.orphans_actionable", counters["critical"] + counters["high"])
+            span.set_attribute("m365.duration_ms", duration_ms)
+
+            result = CollectionResult(
+                mode=mode,
+                count=counters["total"],
+                tenant_id=tenant_id,
+                critical=counters["critical"],
+                high=counters["high"],
+                medium=counters["medium"],
+                ok=counters["ok"],
+                avg_risk_score=avg_score,
+            )
+            log.info(
+                "collection.done",
+                tenant_id=tenant_id,
+                mode=mode,
+                sps_processed=result.count,
+                critical=result.critical,
+                high=result.high,
+            )
+            return result
 
 
 # Module-level convenience used by legacy entrypoint
 async def run_collection(tenant_id: str) -> dict:
-    result = await SPOrphansCollector().collect(tenant_id)
-    return {
-        "total_sps": result.count,
-        "critical_count": result.critical,
-        "high_count": result.high,
-        "medium_count": result.medium,
-        "ok_count": result.ok,
-        "avg_risk_score": result.avg_risk_score,
-    }
+    tracer = get_tracer("itgov.m365")
+    with tracer.start_as_current_span("m365.run_collection") as span:
+        span.set_attribute("m365.tenant_id", tenant_id)
+        span.set_attribute("m365.collector", "sp_orphans")
+        result = await SPOrphansCollector().collect(tenant_id)
+        return {
+            "total_sps": result.count,
+            "critical_count": result.critical,
+            "high_count": result.high,
+            "medium_count": result.medium,
+            "ok_count": result.ok,
+            "avg_risk_score": result.avg_risk_score,
+        }
