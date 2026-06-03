@@ -112,7 +112,7 @@ class TestNoOsEnvironDirect:
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source)
             for node in ast.walk(tree):
-                if isinstance(node, (ast.Import, ast.ImportFrom)) and isinstance(node, ast.Import):
+                if isinstance(node, ast.Import | ast.ImportFrom) and isinstance(node, ast.Import):
                     for alias in node.names:
                         if alias.name == "os":
                             still_importing_os.append(f"{path.relative_to(PROJECT_ROOT)}:{node.lineno}")
