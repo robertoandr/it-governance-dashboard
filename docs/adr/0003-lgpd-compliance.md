@@ -1,7 +1,7 @@
 # ADR-0003: LGPD Compliance Strategy
 
-**Status:** Accepted  
-**Date:** 2026-01-22  
+**Status:** Accepted
+**Date:** 2026-01-22
 **Author:** Roberto Andrade
 
 ---

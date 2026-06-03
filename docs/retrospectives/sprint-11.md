@@ -1,8 +1,8 @@
 # Sprint 11 Retrospective — Tech Debt & Asset Inventory
 
-**Período planejado:** 02–08/06/2026  
-**Período real:** 02/06/2026 (1 dia)  
-**Velocity ratio:** 7× acima do estimado  
+**Período planejado:** 02–08/06/2026
+**Período real:** 02/06/2026 (1 dia)
+**Velocity ratio:** 7× acima do estimado
 **Status:** ✅ 5/5 issues entregues — Sprint fechada
 
 ---
@@ -92,13 +92,13 @@ TODOS os status codes esperados antes de considerar a implementação done.
 
 ## Insights estratégicos
 
-**"Slow is smooth, smooth is fast" — confirmado.**  
+**"Slow is smooth, smooth is fast" — confirmado.**
 Planejamento detalhado por issue + execução disciplinada > improvisação rápida.
 
-**Coverage 93% pode mascarar testes superficiais.**  
+**Coverage 93% pode mascarar testes superficiais.**
 Linha coberta ≠ comportamento testado. Avaliar `mutmut` (mutation testing) no roadmap Q3.
 
-**Service layer antes de API/UI — padrão a manter.**  
+**Service layer antes de API/UI — padrão a manter.**
 A inversão teria gerado mocks desnecessários ou acoplamento prematuro.
 
 ---

@@ -1,10 +1,10 @@
 # Incident LL-003 — M365 Client Secret Rotation
 
-**Tipo:** Security Incident — Credential Exposure  
-**Severidade:** P0 (High)  
-**Status:** ✅ FECHADO  
-**Abertura:** 2026-06-02T21:30 BRT (descoberta)  
-**Fechamento:** 2026-06-02T23:59 BRT  
+**Tipo:** Security Incident — Credential Exposure
+**Severidade:** P0 (High)
+**Status:** ✅ FECHADO
+**Abertura:** 2026-06-02T21:30 BRT (descoberta)
+**Fechamento:** 2026-06-02T23:59 BRT
 **MTTR:** ~2h30min
 
 ---
