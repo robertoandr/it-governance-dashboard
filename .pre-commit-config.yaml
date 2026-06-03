@@ -31,3 +31,9 @@ repos:
       - id: detect-private-key
       - id: mixed-line-ending
         args: ['--fix=lf']
+
+  # ── Gitleaks: secrets scanner ──
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
