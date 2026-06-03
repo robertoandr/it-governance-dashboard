@@ -1,11 +1,110 @@
 # Gitleaks v8 configuration
 # https://github.com/gitleaks/gitleaks#configuration
+# Execução: gitleaks detect --source . --config .gitleaks.toml
 
 title = "IT Governance Dashboard — Gitleaks Config"
 
+[extend]
+# Herda todas as regras default do Gitleaks v8
+useDefault = true
+
+# ═══════════════════════════════════════════════════════════════════
+# REGRAS CUSTOMIZADAS DO PROJETO
+# ═══════════════════════════════════════════════════════════════════
+
+[[rules]]
+id = "influxdb-token"
+description = "InfluxDB v2 API Token"
+regex = '''(?i)(influxdb[_-]?token|influx[_-]?api[_-]?key)['\"\s:=]+([a-zA-Z0-9_\-=]{40,})'''
+tags = ["influxdb", "token"]
+secretGroup = 2
+
+[[rules]]
+id = "zabbix-api-token"
+description = "Zabbix API Token (hex 64 chars)"
+regex = '''(?i)(zabbix[_-]?(api[_-]?)?token|zbx[_-]?token)['\"\s:=]+([a-f0-9]{64})'''
+tags = ["zabbix", "token"]
+secretGroup = 3
+
+[[rules]]
+id = "zendesk-api-token"
+description = "Zendesk API Token"
+regex = '''(?i)(zendesk[_-]?(api[_-]?)?token)['\"\s:=]+([a-zA-Z0-9]{40,})'''
+tags = ["zendesk", "token"]
+secretGroup = 3
+
+[[rules]]
+id = "entra-client-secret"
+description = "Microsoft Entra ID / Azure AD Client Secret (formato ~Q)"
+regex = '''(?i)(entra|azure|aad|m365)[_-]?client[_-]?secret['\"\s:=]+([a-zA-Z0-9~._\-]{34,})'''
+tags = ["entra", "azure", "secret"]
+secretGroup = 2
+
+[[rules]]
+id = "msal-client-secret-inline"
+description = "MSAL client_secret hardcoded inline"
+regex = '''client_credential\s*=\s*['"]([a-zA-Z0-9~._\-]{34,})['"]'''
+tags = ["msal", "azure", "secret"]
+secretGroup = 1
+
+[[rules]]
+id = "github-pat-classic"
+description = "GitHub Personal Access Token (classic)"
+regex = '''ghp_[a-zA-Z0-9]{36}'''
+tags = ["github", "pat"]
+
+[[rules]]
+id = "github-pat-fine-grained"
+description = "GitHub Fine-grained PAT"
+regex = '''github_pat_[a-zA-Z0-9_]{82}'''
+tags = ["github", "pat"]
+
+[[rules]]
+id = "ldap-password-inline"
+description = "LDAP password hardcoded"
+regex = '''(?i)ldap[_-]?password['\"\s:=]+([^\s'"]{8,})'''
+tags = ["ldap", "password"]
+secretGroup = 1
+
+# ═══════════════════════════════════════════════════════════════════
+# ALLOWLIST — Falsos positivos conhecidos e documentados
+# ═══════════════════════════════════════════════════════════════════
+
 [allowlist]
-description = "Arquivos de template/exemplo com valores intencionalmente vazios ou placeholder"
+description = "Arquivos, padrões e commits ignorados (falsos positivos documentados)"
+
 paths = [
-  '''.env\.example''',
-  '''tests/conftest\.py''',
+    # Arquivos de exemplo/template — valores intencionalmente vazios
+    '''\.env\.example''',
+    '''\.env\.local\.example''',
+    # .env local (em .gitignore — nunca commitado; scan --no-git pode ver)
+    '''\.env$''',
+    '''\.env\.local$''',
+    # Testes — valores de mock/CI conhecidos e não reais
+    '''tests/conftest\.py''',
+    # Documentação — pode mencionar secrets em contexto educativo
+    '''docs/.*''',
+    '''.*\.md''',
+    # Gerados automaticamente (bytecode, coverage, migrations)
+    '''.*/__pycache__/.*''',
+    '''.*\.pyc$''',
+    '''htmlcov/.*''',
+    '''coverage\.xml''',
+    '''alembic/versions/.*''',
+    # Dependências
+    '''\.venv/.*''',
+    '''venv/.*''',
+    '''node_modules/.*''',
+]
+
+regexes = [
+    # Placeholders explícitos usados em CI e testes
+    '''(?i)(test|fake|dummy|placeholder|example|sample|ci-fake|ci-smoke|ci-test)[-_]?(token|secret|key|password)''',
+    # UUIDs genéricos usados como exemplo
+    '''00000000-0000-0000-0000-000000000000''',
+    # Formatos de template sem valor real
+    '''<(TOKEN|SECRET|KEY|API_KEY|PASSWORD)>''',
+    '''\$\{[A-Z_]+\}''',
+    # Valores em comentários com formato "ex:" ou "example:"
+    '''(?i)#.*(?:ex:|example:|e\.g\.)''',
 ]
