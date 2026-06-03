@@ -145,13 +145,9 @@ print("\n[2/5] Buscando hosts CFTV (NVRs + Câmeras)")
 nvr_gid = str(groups["CFTV/NVRs"])
 cam_gid = str(groups["CFTV/Cameras"])
 
-nvrs = api(
-    cfg["api_url"], "host.get", {"groupids": [nvr_gid], "output": ["hostid", "host"]}, auth=tok
-)
+nvrs = api(cfg["api_url"], "host.get", {"groupids": [nvr_gid], "output": ["hostid", "host"]}, auth=tok)
 
-cams = api(
-    cfg["api_url"], "host.get", {"groupids": [cam_gid], "output": ["hostid", "host"]}, auth=tok
-)
+cams = api(cfg["api_url"], "host.get", {"groupids": [cam_gid], "output": ["hostid", "host"]}, auth=tok)
 
 print(f"   ✅ NVRs: {len(nvrs)}")
 print(f"   ✅ Câmeras: {len(cams)}")

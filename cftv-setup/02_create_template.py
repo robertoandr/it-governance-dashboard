@@ -24,9 +24,7 @@ def call(method, params, auth=None):
     return data["result"]
 
 
-token = call(
-    "user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None
-)
+token = call("user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None)
 print("✓ Login OK")
 
 # 1. Acha o template group "Templates"
@@ -145,9 +143,7 @@ for tr_def in triggers_to_create:
         auth=token,
     )
     if found:
-        print(
-            f"  ℹ trigger '{tr_def['description'][:50]}...' já existe (id={found[0]['triggerid']})"
-        )
+        print(f"  ℹ trigger '{tr_def['description'][:50]}...' já existe (id={found[0]['triggerid']})")
         created_triggers[tr_def["priority"]] = found[0]["triggerid"]
         continue
     r = call("trigger.create", tr_def, auth=token)
