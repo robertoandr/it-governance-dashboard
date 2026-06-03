@@ -13,13 +13,14 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
-        exclude: '\.md$'
+        types_or: [python, pyi, jupyter]  # exclui .md (ruff >=0.6 tenta formatar md, requer --preview)
 
   # ── Sanidade básica de arquivos ──
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']  # permite "  " no fim de linha .md (hard line break)
       - id: end-of-file-fixer
       - id: check-yaml
         args: [--allow-multiple-documents]

@@ -1,7 +1,7 @@
 """create ativos table
 
 Revision ID: 4a2c8e291c96
-Revises: 
+Revises:
 Create Date: 2026-06-02 12:34:57.702254
 
 """
