@@ -26,15 +26,11 @@ def call(method, params, auth=None):
 
 
 # Login
-token = call(
-    "user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None
-)
+token = call("user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None)
 print("✓ Login OK")
 
 # Busca IDs de template e grupos
-tpl = call(
-    "template.get", {"output": ["templateid"], "filter": {"host": TEMPLATE_NAME}}, auth=token
-)
+tpl = call("template.get", {"output": ["templateid"], "filter": {"host": TEMPLATE_NAME}}, auth=token)
 if not tpl:
     raise RuntimeError(f"Template {TEMPLATE_NAME} não encontrado")
 tpl_id = tpl[0]["templateid"]
@@ -57,9 +53,7 @@ DVRS = [
 created, existing = [], []
 for d in DVRS:
     # Verifica se já existe
-    found = call(
-        "host.get", {"output": ["hostid", "host"], "filter": {"host": d["host"]}}, auth=token
-    )
+    found = call("host.get", {"output": ["hostid", "host"], "filter": {"host": d["host"]}}, auth=token)
     if found:
         existing.append(f"{d['host']} (id={found[0]['hostid']})")
         continue

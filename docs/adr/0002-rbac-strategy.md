@@ -1,7 +1,7 @@
 # ADR-0002: RBAC Strategy
 
-**Status:** Accepted  
-**Date:** 2026-01-15  
+**Status:** Accepted
+**Date:** 2026-01-15
 **Author:** Roberto Andrade
 
 ---

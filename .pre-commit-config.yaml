@@ -7,12 +7,23 @@
 
 repos:
   # ── Ruff: linter + formatter ──
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+  # Using repo:local to avoid pip 26.1.1 venv isolation bug on Python 3.12
+  # (virtualenv 21.4.2 bundles pip-26.1.1 which has broken requests.compat).
+  # System ruff (0.15.15) matches requirements-dev.txt and CI.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        name: ruff
+        language: system
+        entry: ruff check --fix --exit-non-zero-on-fix
+        types_or: [python, pyi, jupyter]
+        require_serial: true
       - id: ruff-format
+        name: ruff-format
+        language: system
+        entry: ruff format
+        types_or: [python, pyi, jupyter]
+        require_serial: true
 
   # ── Sanidade básica de arquivos ──
   - repo: https://github.com/pre-commit/pre-commit-hooks

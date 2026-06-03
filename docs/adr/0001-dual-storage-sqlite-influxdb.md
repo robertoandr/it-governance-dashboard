@@ -1,7 +1,7 @@
 # ADR-0001: Dual Storage — SQLite + InfluxDB
 
-**Status:** Superseded by ADR-0004  
-**Date:** 2026-01-10  
+**Status:** Superseded by ADR-0004
+**Date:** 2026-01-10
 **Author:** Roberto Andrade
 
 ---

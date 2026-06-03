@@ -1,8 +1,8 @@
 # Spike — Microsoft Graph PoC
 
-**Objetivo:** validar premissas de ADR-009 e ADR-010 antes da Sprint 12.  
-**Duração estimada:** 2–3h  
-**Responsável:** executar antes de 09/06/2026  
+**Objetivo:** validar premissas de ADR-009 e ADR-010 antes da Sprint 12.
+**Duração estimada:** 2–3h
+**Responsável:** executar antes de 09/06/2026
 **Output:** este documento atualizado + `scripts/spike_graph.py` executado
 
 ---
@@ -293,10 +293,10 @@ Com base nos resultados, atualizar antes de iniciar Sprint 12:
 
 **Scopes ADR-009 completos?** ___
 
-**Algum endpoint mais lento que esperado?** ___  
+**Algum endpoint mais lento que esperado?** ___
 → Se sim, priorizar cache agressivo nesse endpoint.
 
-**Throttling mais agressivo que esperado?** ___  
+**Throttling mais agressivo que esperado?** ___
 → Se sim, reduzir concorrência máxima em GraphClient.
 
 **Após spike concluído:** atualizar status de ADR-009 e ADR-010 para **Accepted**.

@@ -28,10 +28,7 @@ try:
 
     import config
 except ImportError as e:
-    sys.exit(
-        f"❌ Falha ao importar dependências: {e}\n"
-        f"   Verifique se /opt/it-gov-dashboard/config.py existe."
-    )
+    sys.exit(f"❌ Falha ao importar dependências: {e}\n   Verifique se /opt/it-gov-dashboard/config.py existe.")
 
 # ══════════════════════════════════════════════════════════════════
 # CONFIGURAÇÕES
@@ -96,9 +93,7 @@ def call(method, params, auth=None, timeout=60):
     data = response.json()
     if "error" in data:
         raise RuntimeError(
-            f"API erro em {method}: "
-            f"{data['error'].get('message', '')} | "
-            f"{data['error'].get('data', '')}"
+            f"API erro em {method}: {data['error'].get('message', '')} | {data['error'].get('data', '')}"
         )
     return data["result"]
 

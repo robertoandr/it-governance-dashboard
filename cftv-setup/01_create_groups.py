@@ -23,9 +23,7 @@ def call(method, params, auth=None):
 
 
 # Login
-token = call(
-    "user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None
-)
+token = call("user.login", {"username": config.ZABBIX_USER, "password": config.ZABBIX_PASSWORD}, auth=None)
 print("✓ Login OK")
 
 groups_to_create = [
@@ -40,9 +38,7 @@ groups_to_create = [
 created, existing = [], []
 for name in groups_to_create:
     # Verifica se já existe
-    found = call(
-        "hostgroup.get", {"output": ["groupid", "name"], "filter": {"name": name}}, auth=token
-    )
+    found = call("hostgroup.get", {"output": ["groupid", "name"], "filter": {"name": name}}, auth=token)
     if found:
         existing.append(f"{name} (id={found[0]['groupid']})")
         continue
@@ -60,9 +56,7 @@ for g in existing:
 # Lista grupos CFTV no fim
 print()
 print("=== Estado atual dos grupos CFTV ===")
-all_cftv = call(
-    "hostgroup.get", {"output": ["groupid", "name"], "search": {"name": "CFTV"}}, auth=token
-)
+all_cftv = call("hostgroup.get", {"output": ["groupid", "name"], "search": {"name": "CFTV"}}, auth=token)
 for g in sorted(all_cftv, key=lambda x: x["name"]):
     print(f"  {g['groupid']:>5}  {g['name']}")
 
