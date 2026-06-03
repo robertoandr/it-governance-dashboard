@@ -1,0 +1,65 @@
+# ──────────────────────────────────────────────
+# Stage 1 — builder: compile deps with build tools
+# ──────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+COPY requirements.txt .
+
+RUN apt-get update --no-install-recommends -q && \
+    apt-get install -y --no-install-recommends gcc libffi-dev && \
+    pip install --upgrade pip && \
+    pip install --prefix=/install --no-cache-dir -r requirements.txt && \
+    apt-get purge -y --auto-remove gcc libffi-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# ──────────────────────────────────────────────
+# Stage 2 — runtime: minimal image, no build tools
+# ──────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PORT=8080
+
+# Non-root user UID 1000
+RUN groupadd --gid 1000 collector && \
+    useradd --uid 1000 --gid collector --no-create-home --shell /sbin/nologin collector && \
+    # /tmp is needed for readOnlyRootFilesystem; gunicorn writes .pid there
+    mkdir -p /tmp && chown collector:collector /tmp
+
+WORKDIR /app
+
+# Copy installed packages from builder (no gcc/build tools in final layer)
+COPY --from=builder /install /usr/local
+
+# /data is the PVC mount point for SQLite delta token store
+# Pre-create with correct ownership so the PVC mount inherits it
+RUN mkdir -p /data && chown collector:collector /data
+
+# Copy only required application files
+COPY --chown=collector:collector app/ ./app/
+
+USER collector
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+
+# gunicorn writes tmp files to /tmp — compatible with readOnlyRootFilesystem
+ENTRYPOINT ["python", "-m", "gunicorn", \
+    "--bind", "0.0.0.0:8080", \
+    "--workers", "2", \
+    "--timeout", "120", \
+    "--pid", "/tmp/gunicorn.pid", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-", \
+    "app.main:app"]
