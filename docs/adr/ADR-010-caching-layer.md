@@ -1,8 +1,8 @@
 # ADR-010 — Caching Layer for Slow Upstream APIs
 
-**Status:** Proposed  
-**Data:** 2026-06-02  
-**Sprint alvo:** Sprint 12  
+**Status:** Proposed
+**Data:** 2026-06-02
+**Sprint alvo:** Sprint 12
 **Contexto:** Microsoft Graph tem latência 1–5s por chamada e throttling
 agressivo. O dashboard precisa ser responsivo (<200ms p95). Sem cache,
 cada abertura de aba M365 faria 3–8 chamadas Graph em série.

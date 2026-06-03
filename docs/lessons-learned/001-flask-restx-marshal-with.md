@@ -1,8 +1,8 @@
 # LL-001 — Flask-RESTX 1.3.x: @marshal_with não respeita objetos Response
 
-**Data:** 2026-06-02  
-**Descoberto em:** PR #98 (Issue #86 — REST API /ativos)  
-**Severidade:** Média — silent failure sem mensagem de erro clara  
+**Data:** 2026-06-02
+**Descoberto em:** PR #98 (Issue #86 — REST API /ativos)
+**Severidade:** Média — silent failure sem mensagem de erro clara
 **Contexto:** Rotas Flask-RESTX com múltiplos status codes (200 + 4xx)
 
 ---
@@ -25,7 +25,7 @@ def get(self, ativo_id):
         return make_response(jsonify({"error": "not found"}), 404)  # ← 200 na prática
 ```
 
-**Sintoma:** `resp.status_code == 200` quando se espera 404.  
+**Sintoma:** `resp.status_code == 200` quando se espera 404.
 Nenhuma exceção, nenhum warning — falha silenciosa.
 
 ---
