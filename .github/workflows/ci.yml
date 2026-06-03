@@ -219,7 +219,7 @@ jobs:
           OPS_PIN: TEST_PIN_1234
           FLASK_ENV: testing
         run: |
-          pytest --junitxml=junit.xml
+          pytest --cov-fail-under=85 --junitxml=junit.xml
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'

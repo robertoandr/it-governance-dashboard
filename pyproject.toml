@@ -90,7 +90,6 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--cov-report=html",
-    "--cov-fail-under=85",
 ]
 markers = [
     "slow: testes lentos (>1s)",
@@ -123,7 +122,6 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
