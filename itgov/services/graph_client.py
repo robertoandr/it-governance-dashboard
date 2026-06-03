@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncIterator
+from urllib.parse import urlparse
 
 import httpx
+import structlog
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 import config
 
-logger = logging.getLogger(__name__)
+log = structlog.get_logger(__name__)
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 LOGIN_URL = "https://login.microsoftonline.com"
@@ -36,6 +37,15 @@ def _get_credentials() -> tuple[str, str, str]:
     )
 
 
+def _url_path(url: str) -> str:
+    """Return the path component of a URL (strips query string)."""
+    return urlparse(url).path
+
+
+def _url_host(url: str) -> str:
+    return urlparse(url).hostname or "graph.microsoft.com"
+
+
 async def _fetch_token(client: httpx.AsyncClient) -> str:
     tenant_id, client_id, client_secret = _get_credentials()
     resp = await client.post(
@@ -49,7 +59,7 @@ async def _fetch_token(client: httpx.AsyncClient) -> str:
     )
     if resp.status_code != 200:
         # Log status only — never log body (may contain token details)
-        logger.error("Token request failed with status %d", resp.status_code)
+        log.error("graph.token.failed", status_code=resp.status_code)
         raise GraphAuthError(f"Token request failed: HTTP {resp.status_code}")
     return resp.json()["access_token"]
 
@@ -97,7 +107,7 @@ class GraphClient:
         self.last_delta_link = None
         start_url = delta_link if delta_link is not None else _SP_DELTA_URL
         mode = "delta" if delta_link is not None else "full"
-        logger.info("graph.sp_delta.start tenant=%s mode=%s", tenant_id, mode)
+        log.info("graph.sp_delta.start", tenant_id=tenant_id, mode=mode)
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             token = await _fetch_token(client)
@@ -105,10 +115,10 @@ class GraphClient:
             page = 0
 
             while url:
-                data = await _get(client, url, token)
                 page += 1
+                data = await _get(client, url, token)
                 items = data.get("value", [])
-                logger.debug("graph.sp_delta.page page=%d items=%d", page, len(items))
+                log.debug("graph.sp_delta.page", page=page, count=len(items))
 
                 for sp in items:
                     yield sp
@@ -117,7 +127,6 @@ class GraphClient:
                 delta_link_response = data.get("@odata.deltaLink")
 
                 if delta_link_response:
-                    # End of this sync cycle — store the deltaLink for next run
                     self.last_delta_link = delta_link_response
                     url = None
                 elif next_link:
@@ -125,12 +134,12 @@ class GraphClient:
                 else:
                     url = None
 
-        logger.info(
-            "graph.sp_delta.done tenant=%s mode=%s pages=%d delta_obtained=%s",
-            tenant_id,
-            mode,
-            page,
-            self.last_delta_link is not None,
+        log.info(
+            "graph.sp_delta.done",
+            tenant_id=tenant_id,
+            mode=mode,
+            pages=page,
+            delta_obtained=self.last_delta_link is not None,
         )
 
 
