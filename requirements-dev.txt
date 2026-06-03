@@ -12,6 +12,7 @@ pytest-xdist>=3.5          # paralelização (-n auto)
 pytest-timeout>=2.2        # timeout por teste
 respx>=0.21.0              # mock httpx para testes de integração
 responses>=0.25.0          # mock requests para testes de collectors
+pytest-asyncio>=0.23.0     # suporte async/await em testes
 
 # ----- Lint & Format (substituem black+isort+flake8) -----
 ruff>=0.6.0                # linter + formatter ultra-rápido
