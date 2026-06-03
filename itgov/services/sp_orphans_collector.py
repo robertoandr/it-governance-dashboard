@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+import structlog
+
+from itgov.services.delta_token_store import DeltaTokenStore
+from itgov.services.graph_client import GraphClient
+from itgov.services.influx_schema import write_sp_risk, write_summary_snapshot
+from itgov.utils.risk_scoring import calculate_risk_score
+
+log = structlog.get_logger(__name__)
+
+_RESOURCE = "servicePrincipals"
+
+DANGEROUS_PERMISSIONS = {
+    "Application.ReadWrite.All",
+    "Directory.ReadWrite.All",
+    "RoleManagement.ReadWrite.Directory",
+    "AppRoleAssignment.ReadWrite.All",
+    "Group.ReadWrite.All",
+    "User.ReadWrite.All",
+    "Mail.ReadWrite",
+    "Files.ReadWrite.All",
+    "Sites.FullControl.All",
+    "Exchange.ManageAsApp",
+}
+
+
+@dataclass
+class CollectionResult:
+    mode: str  # "full" or "delta"
+    count: int
+    tenant_id: str
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    ok: int = 0
+    avg_risk_score: float = 0.0
+
+
+def _days_since(dt_str: str | None) -> int | None:
+    if not dt_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(dt_str.rstrip("Z")).replace(tzinfo=UTC)
+        return (datetime.now(UTC) - dt).days
+    except ValueError:
+        return None
+
+
+def _has_expired_creds(sp: dict) -> bool:
+    now = datetime.now(UTC)
+    for cred in sp.get("passwordCredentials", []) + sp.get("keyCredentials", []):
+        end_str = cred.get("endDateTime")
+        if not end_str:
+            continue
+        try:
+            end = datetime.fromisoformat(end_str.rstrip("Z")).replace(tzinfo=UTC)
+            if end < now:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _extract_permissions(sp: dict) -> list[str]:
+    return [role.get("value", "") for role in sp.get("appRoles", []) if role.get("value")]
+
+
+def _build_sp_record(sp: dict, tenant_id: str) -> dict:
+    permissions = _extract_permissions(sp)
+    dangerous_count = sum(1 for p in permissions if p in DANGEROUS_PERMISSIONS)
+    sp_age_days = _days_since(sp.get("createdDateTime")) or 0
+    days_since_sign_in = _days_since((sp.get("signInActivity") or {}).get("lastSignInDateTime"))
+    has_expired = _has_expired_creds(sp)
+
+    risk_score, risk_level = calculate_risk_score(
+        {
+            "sp_age_days": sp_age_days,
+            "days_since_sign_in": days_since_sign_in,
+            "permissions": permissions,
+            "permission_count": len(permissions),
+            "has_expired_creds": has_expired,
+        }
+    )
+
+    return {
+        "sp_object_id": sp["id"],
+        "tenant_id": tenant_id,
+        "sp_type": sp.get("servicePrincipalType", "Application"),
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "days_since_sign_in": days_since_sign_in if days_since_sign_in is not None else -1,
+        "permission_count": len(permissions),
+        "dangerous_perm_count": dangerous_count,
+        "has_expired_creds": has_expired,
+    }
+
+
+class SPOrphansCollector:
+    """Collects M365 Service Principal risk data using Graph API delta queries."""
+
+    def __init__(
+        self,
+        graph: GraphClient | None = None,
+        store: DeltaTokenStore | None = None,
+    ) -> None:
+        self._graph = graph or GraphClient()
+        self._store = store or DeltaTokenStore()
+
+    async def collect(self, tenant_id: str) -> CollectionResult:
+        """Run one collection cycle (full or incremental).
+
+        Args:
+            tenant_id: Microsoft tenant ID to collect for.
+
+        Returns:
+            CollectionResult with run statistics.
+        """
+        previous_delta = await self._store.get(_RESOURCE, tenant_id)
+        is_first_run = previous_delta is None
+        mode = "full" if is_first_run else "delta"
+
+        log.info("collection.start", tenant_id=tenant_id, mode=mode)
+
+        counters: dict[str, int] = {"total": 0, "critical": 0, "high": 0, "medium": 0, "ok": 0}
+        score_sum = 0
+
+        try:
+            async for sp in self._graph.get_service_principals_delta(tenant_id, previous_delta):
+                record = _build_sp_record(sp, tenant_id)
+                log.debug(
+                    "sp.processed",
+                    sp_object_id=record["sp_object_id"],
+                    risk_level=record["risk_level"],
+                    risk_score=record["risk_score"],
+                )
+                write_sp_risk(record)
+                counters["total"] += 1
+                score_sum += record["risk_score"]
+                counters[record["risk_level"].lower()] += 1
+
+        except Exception:
+            # Preserve previous delta on failure — next run retries from same point
+            log.exception("collection.failed", tenant_id=tenant_id, mode=mode)
+            raise
+
+        # Persist new delta only after successful full iteration
+        if self._graph.last_delta_link:
+            await self._store.set(_RESOURCE, tenant_id, self._graph.last_delta_link)
+
+        avg_score = score_sum / counters["total"] if counters["total"] else 0.0
+        write_summary_snapshot(
+            tenant_id,
+            {
+                "total_sps": counters["total"],
+                "critical_count": counters["critical"],
+                "high_count": counters["high"],
+                "medium_count": counters["medium"],
+                "ok_count": counters["ok"],
+                "avg_risk_score": avg_score,
+            },
+        )
+
+        result = CollectionResult(
+            mode=mode,
+            count=counters["total"],
+            tenant_id=tenant_id,
+            critical=counters["critical"],
+            high=counters["high"],
+            medium=counters["medium"],
+            ok=counters["ok"],
+            avg_risk_score=avg_score,
+        )
+        log.info(
+            "collection.done",
+            tenant_id=tenant_id,
+            mode=mode,
+            sps_processed=result.count,
+            critical=result.critical,
+            high=result.high,
+        )
+        return result
+
+
+# Module-level convenience used by legacy entrypoint
+async def run_collection(tenant_id: str) -> dict:
+    result = await SPOrphansCollector().collect(tenant_id)
+    return {
+        "total_sps": result.count,
+        "critical_count": result.critical,
+        "high_count": result.high,
+        "medium_count": result.medium,
+        "ok_count": result.ok,
+        "avg_risk_score": result.avg_risk_score,
+    }
