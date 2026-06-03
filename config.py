@@ -90,3 +90,10 @@ FINOPS_PIN = _env("FINOPS_PIN", "", required=False)
 
 # ── Database (SQLite dev / PostgreSQL prod via env var)
 DATABASE_URL = _env("DATABASE_URL", "sqlite:///itgov.db", required=False)
+
+# ── OpenTelemetry
+OTEL_ENABLED = _env_bool("OTEL_ENABLED", False)
+OTEL_SERVICE_NAME = _env("OTEL_SERVICE_NAME", "itgov", required=False)
+OTEL_SERVICE_VERSION = _env("OTEL_SERVICE_VERSION", "dev", required=False)
+OTEL_ENVIRONMENT = _env("OTEL_ENVIRONMENT", "development", required=False)
+OTEL_ENDPOINT = _env("OTEL_ENDPOINT", "localhost:4317", required=False)

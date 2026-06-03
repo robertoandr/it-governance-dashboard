@@ -1,8 +1,8 @@
 # ADR-003 — Convenções de REST API
 
-**Status:** Accepted  
-**Data:** 2026-06-02  
-**Autores:** Sprint 11 (Issues #86, #87)  
+**Status:** Accepted
+**Data:** 2026-06-02
+**Autores:** Sprint 11 (Issues #86, #87)
 **Contexto:** PR #98 estabeleceu o primeiro CRUD REST completo do projeto.
 Este ADR formaliza as convenções antes de Sprint 12 (M365 Graph) multiplicar
 o número de endpoints.

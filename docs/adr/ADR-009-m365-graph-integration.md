@@ -1,7 +1,7 @@
 # ADR-009 — Microsoft Graph Integration Strategy
 
-**Status:** Accepted  
-**Data original:** 2026-06-02  
+**Status:** Accepted
+**Data original:** 2026-06-02
 **Última revisão:** 2026-06-02 (pós-descoberta de coletores legados)
 
 **Histórico de revisões:**
@@ -69,7 +69,7 @@ class GraphAuthProvider:
         return result["access_token"]
 ```
 
-**Secrets:** env vars `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`.  
+**Secrets:** env vars `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`.
 Carregar de `.env` via `python-dotenv` (padrão do projeto).
 
 #### 2.1 Future improvement — Certificado X.509

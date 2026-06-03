@@ -1,10 +1,10 @@
 # Postmortem — Force-push acidental no main
 
-**Data do incidente:** 2026-05-22 ~23:00 BRT  
-**Detecção:** 2026-05-23 13:30 BRT  
-**Resolução:** 2026-05-23 14:30 BRT  
-**Duração:** ~14h  
-**Severidade:** 🟡 Média  
+**Data do incidente:** 2026-05-22 ~23:00 BRT
+**Detecção:** 2026-05-23 13:30 BRT
+**Resolução:** 2026-05-23 14:30 BRT
+**Duração:** ~14h
+**Severidade:** 🟡 Média
 **Autor:** Roberto Andrade
 
 ## 📋 Resumo

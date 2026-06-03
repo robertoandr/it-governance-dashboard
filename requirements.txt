@@ -25,3 +25,11 @@ alembic>=1.13,<2.0
 
 # Delta token persistence (Sprint 12 — M365 SP Orphans)
 aiosqlite>=0.20.0
+
+# OpenTelemetry — distributed tracing + metrics (Sprint 12)
+opentelemetry-api>=1.42.1
+opentelemetry-sdk>=1.42.1
+opentelemetry-exporter-otlp-proto-grpc>=1.42.1
+opentelemetry-instrumentation-flask>=0.63b0
+opentelemetry-instrumentation-httpx>=0.63b0
+opentelemetry-instrumentation-sqlalchemy>=0.63b0

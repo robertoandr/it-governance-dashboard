@@ -1,7 +1,7 @@
 # ADR-0005: Flask + Grafana Coexistence Architecture
 
-**Status:** Accepted  
-**Date:** 2026-02-12  
+**Status:** Accepted
+**Date:** 2026-02-12
 **Author:** Roberto Andrade
 
 ---

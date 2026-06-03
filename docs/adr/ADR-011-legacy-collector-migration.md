@@ -1,8 +1,8 @@
 # ADR-011 — Migração do Coletor M365 Legado (Strangler Fig)
 
-**Status:** Accepted  
-**Data:** 2026-06-02  
-**Sprint alvo:** Sprint 12–13  
+**Status:** Accepted
+**Data:** 2026-06-02
+**Sprint alvo:** Sprint 12–13
 **Contexto:** Dois coletores M365 em produção desde maio/2026
 (`collectors/graph.py` e `/opt/zabbix/m365_collector.py`) usam
 `requests` síncrono, sem cache, sem Pydantic, sem structlog.

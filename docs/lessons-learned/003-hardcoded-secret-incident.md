@@ -1,9 +1,9 @@
 # LL-003 — Client Secret M365 Hardcoded em Coletor Legado
 
-**Data do incidente:** 2026-05-09 (criação do arquivo)  
-**Data da descoberta:** 2026-06-02 (durante auditoria de arquitetura Sprint 12)  
-**Severidade:** P0 (alta) — secret com acesso Read a todo o tenant M365  
-**Status:** ✅ Remediado em 2026-06-02  
+**Data do incidente:** 2026-05-09 (criação do arquivo)
+**Data da descoberta:** 2026-06-02 (durante auditoria de arquitetura Sprint 12)
+**Severidade:** P0 (alta) — secret com acesso Read a todo o tenant M365
+**Status:** ✅ Remediado em 2026-06-02
 **Tempo de exposição:** ~24 dias
 
 ---
