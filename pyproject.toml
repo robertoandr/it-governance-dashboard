@@ -98,6 +98,8 @@ markers = [
     "unit: testes unitários puros",
     "smoke: testes críticos de fumaça",
 ]
+asyncio_mode = "auto"
+
 filterwarnings = [
     "ignore::DeprecationWarning:flask",
     "ignore::DeprecationWarning:werkzeug",
