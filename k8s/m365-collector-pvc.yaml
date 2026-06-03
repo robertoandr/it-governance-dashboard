@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: m365-delta-storage
+  namespace: monitoring
+  labels:
+    app: m365-collector
+    component: delta-persistence
+  annotations:
+    description: "SQLite storage for Graph API delta tokens — survives pod restarts"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard  # adjust to cluster StorageClass (e.g. gp2, managed-premium)
