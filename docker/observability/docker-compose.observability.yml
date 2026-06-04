@@ -47,11 +47,15 @@ services:
     image: prom/prometheus:v2.54.0
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=1h"
+      - "--storage.tsdb.retention.time=6h"
+      - "--web.enable-remote-write-receiver"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      # host port 9091 avoids conflict with native prometheus on :9090
+      - "9091:9090"
+    dns:
+      - "127.0.0.11"   # Docker internal resolver; prevents host systemd-resolved bleed
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
       interval: 5s
@@ -68,6 +72,7 @@ services:
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
     depends_on:

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import structlog
 from opentelemetry.trace import StatusCode
 
-from itgov.observability import get_tracer
+from itgov.observability import get_meter, get_tracer
 from itgov.services.delta_token_store import DeltaTokenStore
 from itgov.services.graph_client import GraphClient
 from itgov.services.influx_schema import write_sp_risk, write_summary_snapshot
@@ -16,6 +16,40 @@ from itgov.utils.risk_scoring import calculate_risk_score
 log = structlog.get_logger(__name__)
 
 _RESOURCE = "servicePrincipals"
+_METER_NAME = "itgov.m365"
+
+
+def _collections_counter():
+    return get_meter(_METER_NAME).create_counter(
+        "m365_collections_total",
+        unit="1",
+        description="Total SP collection cycles by tenant and status.",
+    )
+
+
+def _collection_duration_histogram():
+    return get_meter(_METER_NAME).create_histogram(
+        "m365_collection_duration_seconds",
+        unit="s",
+        description="SP collection cycle duration by tenant.",
+    )
+
+
+def _risk_count_gauge():
+    return get_meter(_METER_NAME).create_gauge(
+        "m365_sps_risk_count",
+        unit="{SP}",  # avoid Prometheus _ratio suffix (unit "1" triggers it)
+        description="Current SP count by tenant and risk_level.",
+    )
+
+
+def _orphans_actionable_gauge():
+    return get_meter(_METER_NAME).create_gauge(
+        "m365_sps_orphans_actionable",
+        unit="{SP}",  # avoid Prometheus _ratio suffix
+        description="Current count of critical+high risk SPs (orphans requiring action) by tenant.",
+    )
+
 
 DANGEROUS_PERMISSIONS = {
     "Application.ReadWrite.All",
@@ -130,6 +164,7 @@ class SPOrphansCollector:
 
         tracer = get_tracer("itgov.m365")
         t0 = time.monotonic()
+        collection_status = "error"
 
         with tracer.start_as_current_span("m365.sp_orphans.collect") as span:
             span.set_attribute("m365.tenant_id", tenant_id)
@@ -157,6 +192,8 @@ class SPOrphansCollector:
                     counters["total"] += 1
                     score_sum += record["risk_score"]
                     counters[record["risk_level"].lower()] += 1
+                # Mark success inside try so finally sees correct status
+                collection_status = "success"
 
             except Exception as exc:
                 span.record_exception(exc)
@@ -164,6 +201,11 @@ class SPOrphansCollector:
                 # Preserve previous delta on failure — next run retries from same point
                 log.exception("collection.failed", tenant_id=tenant_id, mode=mode)
                 raise
+            finally:
+                # Emit duration + status in all paths (success AND error)
+                duration = time.monotonic() - t0
+                _collection_duration_histogram().record(duration, {"tenant": tenant_id})
+                _collections_counter().add(1, {"tenant": tenant_id, "status": collection_status})
 
             # Persist new delta only after successful full iteration
             if self._graph.last_delta_link:
@@ -183,6 +225,17 @@ class SPOrphansCollector:
             )
 
             duration_ms = int((time.monotonic() - t0) * 1000)
+
+            # Gauges: current risk distribution snapshot
+            for level, key in [
+                ("critical", "critical"),
+                ("high", "high"),
+                ("medium", "medium"),
+                ("low", "ok"),
+            ]:
+                _risk_count_gauge().set(counters[key], {"tenant": tenant_id, "risk_level": level})
+            _orphans_actionable_gauge().set(counters["critical"] + counters["high"], {"tenant": tenant_id})
+
             span.set_attribute("m365.sps.total_scanned", counters["total"])
             span.set_attribute("m365.sps.risk_critical", counters["critical"])
             span.set_attribute("m365.sps.risk_high", counters["high"])
