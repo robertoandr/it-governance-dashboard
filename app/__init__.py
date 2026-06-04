@@ -69,6 +69,20 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     api.add_namespace(overview_ns, path="/overview")
     api.add_namespace(pillars_ns, path="/pillars")
 
+    # Legacy itgov namespaces (Sprint 10E) — preserved under /api/v1/ path
+    try:
+        from itgov.api.v1.ativos import ns as ativos_ns
+        from itgov.api.v1.zabbix import ns as zabbix_ns
+        from itgov.api.v1.zendesk import ns as zendesk_ns
+
+        api.add_namespace(zabbix_ns, path="/v1/zabbix")
+        api.add_namespace(zendesk_ns, path="/v1/zendesk")
+        api.add_namespace(ativos_ns, path="/v1/ativos")
+        app.extensions["itgov_api"] = api
+        log.info("itgov_legacy_namespaces_registered")
+    except Exception as _e:
+        log.warning("itgov_legacy_api_unavailable", error=str(_e))
+
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 
@@ -135,3 +149,35 @@ def _render_error(template: str, code: int) -> Any:
     from flask import render_template
 
     return render_template(template), code
+
+
+# Backward-compat: `from app import app` and `from app import itgov_api`
+# used by legacy tests that predate the factory pattern.
+def _get_legacy_app() -> Flask:
+    """Return a cached module-level Flask instance for legacy test imports."""
+    import sys
+
+    _mod = sys.modules[__name__]
+    if not hasattr(_mod, "_legacy_app_instance"):
+        _mod._legacy_app_instance = create_app()  # type: ignore[attr-defined]
+    return _mod._legacy_app_instance  # type: ignore[return-value]
+
+
+class _LegacyAppProxy:
+    """Proxy that forwards attribute access to the cached Flask instance."""
+
+    def __getattr__(self, name: str):  # type: ignore[override]
+        return getattr(_get_legacy_app(), name)
+
+    def __call__(self, *args, **kwargs):  # type: ignore[override]
+        return _get_legacy_app()(*args, **kwargs)
+
+
+app = _LegacyAppProxy()  # type: ignore[assignment]
+
+
+def __getattr__(name: str):  # module-level __getattr__ (PEP 562)
+    if name == "itgov_api":
+        flask_app = _get_legacy_app()
+        return flask_app.extensions.get("itgov_api")
+    raise AttributeError(f"module 'app' has no attribute {name!r}")
