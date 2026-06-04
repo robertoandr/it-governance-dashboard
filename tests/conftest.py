@@ -234,6 +234,68 @@ def fake_cache_runtime():
     }
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 🏛️ FIXTURES — NEW APP FACTORY (feature/foundation-5-pillars)
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture(scope="session")
+def test_settings():
+    """AppSettings configured for testing (in-memory SQLite, no external deps)."""
+    from app.config import AppConfig, AppSettings, DatabaseConfig, LoggingConfig
+
+    return AppSettings(
+        app=AppConfig(environment="testing", testing=True, debug=False, secret_key="test-secret"),
+        db=DatabaseConfig(url="sqlite:///:memory:"),
+        logging=LoggingConfig(level="WARNING", format="console"),
+    )
+
+
+@pytest.fixture(scope="session")
+def factory_app(test_settings, tmp_path_factory):
+    """Flask app created via factory with test settings."""
+    from pathlib import Path
+
+    # Point data_dir to a temp location so schema.sql is applied
+    tmp = tmp_path_factory.mktemp("data")
+    import shutil
+
+    schema_src = Path(__file__).resolve().parent.parent / "data" / "schema.sql"
+    schema_dst = tmp / "schema.sql"
+    if schema_src.exists():
+        shutil.copy(schema_src, schema_dst)
+
+    from app.config import AppConfig, AppSettings, DatabaseConfig, LoggingConfig
+
+    settings = AppSettings(
+        app=AppConfig(environment="testing", testing=True, secret_key="test-secret"),
+        db=DatabaseConfig(url=f"sqlite:///{tmp}/test.db", data_dir=tmp),
+        logging=LoggingConfig(level="WARNING", format="console"),
+    )
+
+    # Patch schema path
+    import app.services.db as db_module
+
+    original_schema = db_module._SCHEMA_PATH
+    db_module._SCHEMA_PATH = schema_dst
+
+    from app import create_app
+
+    flask_app = create_app(settings)
+    flask_app.config["TESTING"] = True
+
+    yield flask_app
+
+    db_module._SCHEMA_PATH = original_schema
+
+
+@pytest.fixture
+def factory_client(factory_app):
+    """Test client for the new factory app."""
+    with factory_app.test_client() as c:
+        yield c
+
+
 @pytest.fixture
 def gov_client(fake_owners_yaml, monkeypatch, fake_cache_runtime):
     """

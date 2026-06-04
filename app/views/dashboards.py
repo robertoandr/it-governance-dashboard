@@ -1,0 +1,63 @@
+"""HTML view routes for the governance dashboard."""
+
+from __future__ import annotations
+
+import asyncio
+
+import structlog
+from flask import Blueprint, abort, render_template
+
+from app.services.metrics_aggregator import MetricsAggregator
+
+log = structlog.get_logger(__name__)
+
+bp = Blueprint("dashboards", __name__)
+
+_VALID_PILLAR_IDS = {
+    "strategic_alignment",
+    "value_delivery",
+    "risk_management",
+    "resource_management",
+    "performance_measure",
+}
+
+
+def _get_governance() -> dict:
+    aggregator = MetricsAggregator()
+    governance = asyncio.run(aggregator.calculate_full_score())
+    return governance.model_dump(mode="json")
+
+
+@bp.route("/")
+def overview() -> str:
+    """Render governance overview dashboard."""
+    data = _get_governance()
+    return render_template("dashboards/overview.html", governance=data)
+
+
+@bp.route("/pillars")
+def pillars() -> str:
+    """Render all pillars detail page."""
+    data = _get_governance()
+    return render_template("dashboards/pillars.html", governance=data)
+
+
+@bp.route("/pillars/<string:pillar_id>")
+def pillar_detail(pillar_id: str) -> str:
+    """Render drill-down page for a single pillar.
+
+    Args:
+        pillar_id: One of the five pillar identifiers.
+    """
+    if pillar_id not in _VALID_PILLAR_IDS:
+        abort(404)
+
+    data = _get_governance()
+    pillar = next(
+        (p for p in data.get("pillars", []) if p["id"] == pillar_id),
+        None,
+    )
+    if pillar is None:
+        abort(404)
+
+    return render_template("dashboards/pillar_detail.html", pillar=pillar, governance=data)
