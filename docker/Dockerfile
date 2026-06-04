@@ -3,7 +3,7 @@ FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /build
 
-# Instala apenas o necessário para compilar dependências C (ldap3, etc.)
+# Build-time deps for C extensions (ldap3, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libldap2-dev \
@@ -12,54 +12,66 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# Instala deps em /install (isolado do sistema)
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# Build wheels into /install (isolated from system)
+# Removes pip from runtime; strips __pycache__ to save space
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt && \
+    pip install --no-cache-dir --prefix=/install gunicorn && \
+    find /install -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /install -name "*.pyc" -delete 2>/dev/null || true
 
 
 # ─── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim-bookworm AS runtime
 
-# Libdeps de runtime (ldap3 precisa de libldap em runtime)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libldap-2.5-0 \
-    libsasl2-2 \
+LABEL org.opencontainers.image.title="IT Governance Dashboard" \
+      org.opencontainers.image.description="5-pillar COBIT governance dashboard" \
+      org.opencontainers.image.url="https://github.com/robertoandr/it-governance-dashboard" \
+      org.opencontainers.image.source="https://github.com/robertoandr/it-governance-dashboard"
+
+# Runtime libs required by ldap3 + curl for healthcheck
+# apt-get upgrade patches fixable CVEs (e.g. libgnutls30 CVE-2026-33845)
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
+    apt-get install -y --no-install-recommends \
+        libldap-2.5-0 \
+        libsasl2-2 \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root user (UID/GID 1000)
+# Remove pip from runtime image (not needed, saves ~7MB)
+RUN pip uninstall -y pip setuptools wheel 2>/dev/null || true
+
+# Non-root user UID/GID 1000
 RUN groupadd --gid 1000 appgroup \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /bin/false appuser
 
 WORKDIR /app
 
-# Deps do builder
+# Copy wheels from builder (no pip, no cache)
 COPY --from=builder /install /usr/local
 
-# Código da aplicação (chown para non-root)
+# Copy application code
 COPY --chown=appuser:appgroup . .
 
-# Diretórios graváveis para runtime (logs, cache)
-RUN mkdir -p /app/tmp /app/logs \
-    && chown -R appuser:appgroup /app/tmp /app/logs
+# Writable runtime dirs (data, logs, tmp)
+RUN mkdir -p /app/data /app/logs /app/tmp \
+    && chown -R appuser:appgroup /app/data /app/logs /app/tmp
 
 USER appuser
 
-EXPOSE 8080
+EXPOSE 5000
 
-# Health check via endpoint /api/health
+# Healthcheck against the /health endpoint (factory app)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c \
-        "import urllib.request; \
-         r = urllib.request.urlopen('http://localhost:8080/api/health', timeout=4); \
-         exit(0 if r.status == 200 else 1)" \
-    || exit 1
+    CMD curl -fs http://localhost:5000/health || exit 1
 
-# Gunicorn: 2 workers síncronos (app usa threads internas para refresh)
-CMD ["python", "-m", "gunicorn", \
-     "--bind", "0.0.0.0:8080", \
-     "--workers", "2", \
-     "--threads", "4", \
-     "--timeout", "60", \
+# gunicorn: 4 workers × gthread, timeout 30s
+ENTRYPOINT ["python", "-m", "gunicorn"]
+CMD ["--bind", "0.0.0.0:5000", \
+     "--workers", "4", \
+     "--worker-class", "gthread", \
+     "--threads", "2", \
+     "--timeout", "30", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--log-level", "info", \
-     "app:app"]
+     "wsgi:application"]

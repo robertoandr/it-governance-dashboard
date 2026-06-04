@@ -4,8 +4,9 @@
 
 ![Status](https://img.shields.io/badge/status-active-success)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+[![CI](https://github.com/robertoandr/it-governance-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/robertoandr/it-governance-dashboard/actions/workflows/ci.yml)
+[![Docker](https://github.com/robertoandr/it-governance-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/robertoandr/it-governance-dashboard/actions/workflows/docker.yml)
+[![GHCR](https://img.shields.io/badge/ghcr.io-latest-blue?logo=github)](https://github.com/robertoandr/it-governance-dashboard/pkgs/container/it-governance-dashboard)
 
 ---
 
