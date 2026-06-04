@@ -1,0 +1,21 @@
+# CVEs sem fix disponível no debian:bookworm em 2026-06-04
+# Revisado com: trivy image --ignore-unfixed itgov-app:local
+
+# zlib1g — integer overflow, marcado will_not_fix pela Debian
+CVE-2023-45853
+
+# libsqlite3-0 — sem fix upstream disponível
+CVE-2025-7458
+
+# curl — sem fix no branch bookworm
+CVE-2026-5773
+
+# libssh2-1 — sem fix no branch bookworm
+CVE-2026-7598
+
+# perl-base — sem fix disponível
+CVE-2026-42496
+CVE-2026-42497
+
+# libgnutls30 — HIGH, sem fix na versão instalada
+CVE-2026-33846

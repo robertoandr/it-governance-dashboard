@@ -35,6 +35,14 @@ build
 .env.*
 !.env.example
 
+# TLS certificates & private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+nginx/certs/
+
 # Logs & temp
 *.log
 *.bak

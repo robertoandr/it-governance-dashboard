@@ -42,6 +42,14 @@ virtualenv/
 *.orig
 secrets/
 credentials/
+
+# TLS certs & private keys (never commit)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+nginx/certs/
 *.pem
 *.key
 *.crt
