@@ -25,10 +25,13 @@ def get_db() -> sqlite3.Connection:
 
 
 def _open_connection(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    # busy_timeout: wait up to 5s before raising OperationalError on lock
+    # Required for gunicorn multi-worker: each worker calls init_db concurrently.
+    conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
