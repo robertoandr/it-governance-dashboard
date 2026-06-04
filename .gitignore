@@ -74,6 +74,8 @@ safety-report.json
 
 # ===== Dados / Backups / Logs =====
 data/
+!data/schema.sql
+!data/seed.py
 _backups/
 backups/
 *.db

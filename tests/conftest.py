@@ -95,14 +95,33 @@ def isolated_state(tmp_path, monkeypatch):
 # ─────────────────────────────────────────────────────────────────────
 # 🌐 Flask test client (com state isolado)
 # ─────────────────────────────────────────────────────────────────────
+def _load_legacy_flask_app():
+    """Load the monolithic app.py directly, bypassing the app/ package.
+
+    The app/ package now shadows app.py for new code. Legacy tests that
+    expect the monolithic Flask instance (with maintenance/governance routes
+    and dashboard-ti.html) must use this loader instead of `from app import app`.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_legacy_app_module",
+        str(PROJECT_ROOT / "app.py"),
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError("Could not load legacy app.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module.app
+
+
 @pytest.fixture
 def client(isolated_state):
     """
     Flask test client com state isolado.
-    Importa app DEPOIS de configurar o env (OPS_PIN).
+    Carrega o app.py monolítico diretamente para não conflitar com app/ package.
     """
-    from app import app as flask_app
-
+    flask_app = _load_legacy_flask_app()
     flask_app.config["TESTING"] = True
     with flask_app.test_client() as c:
         yield c
@@ -232,6 +251,68 @@ def fake_cache_runtime():
             {"service": "Teams", "status": "serviceOperational"},
         ],
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 🏛️ FIXTURES — NEW APP FACTORY (feature/foundation-5-pillars)
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture(scope="session")
+def test_settings():
+    """AppSettings configured for testing (in-memory SQLite, no external deps)."""
+    from app.config import AppConfig, AppSettings, DatabaseConfig, LoggingConfig
+
+    return AppSettings(
+        app=AppConfig(environment="testing", testing=True, debug=False, secret_key="test-secret"),
+        db=DatabaseConfig(url="sqlite:///:memory:"),
+        logging=LoggingConfig(level="WARNING", format="console"),
+    )
+
+
+@pytest.fixture(scope="session")
+def factory_app(test_settings, tmp_path_factory):
+    """Flask app created via factory with test settings."""
+    from pathlib import Path
+
+    # Point data_dir to a temp location so schema.sql is applied
+    tmp = tmp_path_factory.mktemp("data")
+    import shutil
+
+    schema_src = Path(__file__).resolve().parent.parent / "data" / "schema.sql"
+    schema_dst = tmp / "schema.sql"
+    if schema_src.exists():
+        shutil.copy(schema_src, schema_dst)
+
+    from app.config import AppConfig, AppSettings, DatabaseConfig, LoggingConfig
+
+    settings = AppSettings(
+        app=AppConfig(environment="testing", testing=True, secret_key="test-secret"),
+        db=DatabaseConfig(url=f"sqlite:///{tmp}/test.db", data_dir=tmp),
+        logging=LoggingConfig(level="WARNING", format="console"),
+    )
+
+    # Patch schema path
+    import app.services.db as db_module
+
+    original_schema = db_module._SCHEMA_PATH
+    db_module._SCHEMA_PATH = schema_dst
+
+    from app import create_app
+
+    flask_app = create_app(settings)
+    flask_app.config["TESTING"] = True
+
+    yield flask_app
+
+    db_module._SCHEMA_PATH = original_schema
+
+
+@pytest.fixture
+def factory_client(factory_app):
+    """Test client for the new factory app."""
+    with factory_app.test_client() as c:
+        yield c
 
 
 @pytest.fixture

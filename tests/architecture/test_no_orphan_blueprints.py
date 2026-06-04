@@ -131,6 +131,7 @@ class TestNoOrphanBlueprintsInApp:
         known_blueprints = {
             "governance",
             "maintenance",
+            "dashboards",  # added: Sprint 11 foundation-5-pillars (app/views/dashboards.py)
             "restx_doc",  # internal Flask-RESTX
         }
 
