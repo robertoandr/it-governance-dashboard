@@ -38,7 +38,7 @@ def _collection_duration_histogram():
 def _risk_count_gauge():
     return get_meter(_METER_NAME).create_gauge(
         "m365_sps_risk_count",
-        unit="1",
+        unit="{SP}",  # avoid Prometheus _ratio suffix (unit "1" triggers it)
         description="Current SP count by tenant and risk_level.",
     )
 
@@ -46,7 +46,7 @@ def _risk_count_gauge():
 def _orphans_actionable_gauge():
     return get_meter(_METER_NAME).create_gauge(
         "m365_sps_orphans_actionable",
-        unit="1",
+        unit="{SP}",  # avoid Prometheus _ratio suffix
         description="Current count of critical+high risk SPs (orphans requiring action) by tenant.",
     )
 

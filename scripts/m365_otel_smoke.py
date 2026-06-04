@@ -1,20 +1,27 @@
-"""M365 OTel smoke runner — generates a complete trace without real Graph API creds.
+"""M365 OTel smoke runner — generates traces and metrics without real Graph API creds.
 
 Patches GraphClient with a 2-page mock response, runs one full collection cycle,
-and exports the trace to the local OTLP collector (localhost:4317).
+and exports to the local OTLP collector (localhost:4317).
 
 Usage:
-    python scripts/m365_otel_smoke.py [tenant_id] [otlp_endpoint]
+    python scripts/m365_otel_smoke.py [tenant_id] [otlp_endpoint] [--emit-metrics]
 
 Defaults:
     tenant_id     = itgov-smoke-tenant
     otlp_endpoint = localhost:4317
 
-Trace emitted:
-    m365.run_collection
-      └─ m365.sp_orphans.collect
-           ├─ graph.auth.token_fetch     (mocked)
-           └─ graph.api.get ×2 pages    (mocked)
+Signals emitted:
+    Traces:
+        m365.run_collection
+          └─ m365.sp_orphans.collect
+               ├─ graph.auth.token_fetch     (mocked httpx layer)
+               └─ graph.api.get ×2 pages
+
+    Metrics (with --emit-metrics):
+        m365_collections_total, m365_collection_duration_seconds
+        m365_graph_requests_total, m365_graph_errors_total,
+        m365_graph_request_duration_seconds
+        m365_sps_risk_count, m365_sps_orphans_actionable
 """
 
 from __future__ import annotations
@@ -25,8 +32,15 @@ import sys
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# ── Parse CLI args BEFORE imports ─────────────────────────────────────────────
+_args = [a for a in sys.argv[1:] if not a.startswith("--")]
+_flags = {a for a in sys.argv[1:] if a.startswith("--")}
+
+_TENANT_ID = _args[0] if len(_args) > 0 else "itgov-smoke-tenant"
+_OTLP_ENDPOINT = _args[1] if len(_args) > 1 else "localhost:4317"
+_EMIT_METRICS = "--emit-metrics" in _flags
+
 # ── Stub missing required env vars BEFORE config.py is imported ───────────────
-# config.py requires these vars even when the M365 collector doesn't use them.
 for _var, _val in {
     "ZABBIX_FRONT_URL": "http://localhost",
     "ZABBIX_PASSWORD": "stub-zbx-pass",
@@ -37,13 +51,10 @@ for _var, _val in {
     "AZURE_CLIENT_ID": "stub-client",
     "AZURE_CLIENT_SECRET": "stub-secret",
 }.items():
-    os.environ[_var] = os.environ.get(_var) or _val  # override empty strings
+    os.environ[_var] = os.environ.get(_var) or _val
 
-# ── Bootstrap OTel BEFORE any itgov import so get_tracer() is ready ──────────
-_TENANT_ID = sys.argv[1] if len(sys.argv) > 1 else "itgov-smoke-tenant"
-_OTLP_ENDPOINT = sys.argv[2] if len(sys.argv) > 2 else "localhost:4317"
-
-from itgov.observability import configure_observability  # noqa: E402
+# ── Bootstrap OTel traces ─────────────────────────────────────────────────────
+from itgov.observability import configure_observability, shutdown  # noqa: E402
 
 configure_observability(
     service_name="itgov-m365-collector",
@@ -52,6 +63,19 @@ configure_observability(
     otlp_endpoint=_OTLP_ENDPOINT,
     insecure=True,
 )
+
+# ── Bootstrap OTel metrics (optional) ────────────────────────────────────────
+if _EMIT_METRICS:
+    from itgov.observability import setup_metrics, shutdown_metrics
+
+    setup_metrics(
+        service_name="itgov-m365-collector",
+        service_version="smoke",
+        environment="dev",
+        otlp_endpoint=_OTLP_ENDPOINT,
+        insecure=True,
+        export_interval_ms=5_000,  # flush quickly in smoke context
+    )
 
 from itgov.services.sp_orphans_collector import run_collection  # noqa: E402
 
@@ -73,7 +97,7 @@ _PAGE1 = [
     for i in range(20)
 ]
 
-_PAGE2_RISKY = [
+_PAGE2 = [
     {
         "id": "sp-smoke-critical-001",
         "displayName": "DangerousApp-WriteAll",
@@ -84,7 +108,7 @@ _PAGE2_RISKY = [
         ],
         "passwordCredentials": [],
         "keyCredentials": [],
-        "signInActivity": None,  # never signed in → inactivity score max
+        "signInActivity": None,
         "createdDateTime": "2020-03-01T00:00:00Z",
     },
     {
@@ -92,12 +116,7 @@ _PAGE2_RISKY = [
         "displayName": "HighRiskApp-GroupWrite",
         "servicePrincipalType": "Application",
         "appRoles": [{"value": "Group.ReadWrite.All"}],
-        "passwordCredentials": [
-            {
-                "endDateTime": "2022-01-01T00:00:00Z",  # expired
-                "keyId": "cred-expired-001",
-            }
-        ],
+        "passwordCredentials": [{"endDateTime": "2022-01-01T00:00:00Z", "keyId": "cred-expired-001"}],
         "keyCredentials": [],
         "signInActivity": {"lastSignInDateTime": "2021-01-01T00:00:00Z"},
         "createdDateTime": "2019-06-01T00:00:00Z",
@@ -114,65 +133,37 @@ _PAGE2_RISKY = [
     },
 ]
 
-_PAGE2 = _PAGE2_RISKY
 _ALL_SPS = _PAGE1 + _PAGE2
 _NEXT_LINK = "https://graph.microsoft.com/v1.0/servicePrincipals/delta?$skiptoken=smoke-page2"
 
-
-async def _mock_delta_iterator(tenant_id: str, delta_link=None):
-    """2-page mock: page1 (20 normal SPs) then page2 (3 risky SPs)."""
-    print(f"  [mock] page 1 → {len(_PAGE1)} SPs")
-    for sp in _PAGE1:
-        yield sp
-    print(f"  [mock] page 2 → {len(_PAGE2)} SPs (includes critical + high risk)")
-    for sp in _PAGE2:
-        yield sp
-
-
-# ── Patch _fetch_token and _get so graph spans still fire ─────────────────────
-
-_MOCK_TOKEN_RESP = MagicMock()
-_MOCK_TOKEN_RESP.status_code = 200
-_MOCK_TOKEN_RESP.json.return_value = {"access_token": "smoke-token-not-real"}
-
-
-async def _mock_get_page1(client, url, token):
-    return {"value": _PAGE1, "@odata.nextLink": _NEXT_LINK}
-
-
-async def _mock_get_page2(client, url, token):
-    return {"value": _PAGE2, "@odata.deltaLink": _DELTA_LINK}
-
-
-_mock_get_calls = [_mock_get_page1, _mock_get_page2]
+_mock_get_calls = [
+    lambda client, url, token: {"value": _PAGE1, "@odata.nextLink": _NEXT_LINK},
+    lambda client, url, token: {"value": _PAGE2, "@odata.deltaLink": _DELTA_LINK},
+]
 _call_idx = 0
 
 
-async def _mock_get(client, url, token):
+async def _mock_get(client, url, token):  # type: ignore[no-untyped-def]
     global _call_idx
     fn = _mock_get_calls[min(_call_idx, len(_mock_get_calls) - 1)]
     _call_idx += 1
-    return await fn(client, url, token)
+    return fn(client, url, token)
 
 
 async def main() -> None:
     print(f"\n{'=' * 60}")
     print("  M365 OTel Smoke Runner")
-    print(f"  tenant_id  : {_TENANT_ID}")
-    print(f"  endpoint   : {_OTLP_ENDPOINT}")
-    print(f"  total SPs  : {len(_ALL_SPS)}  (page1={len(_PAGE1)}, page2={len(_PAGE2)})")
+    print(f"  tenant_id    : {_TENANT_ID}")
+    print(f"  endpoint     : {_OTLP_ENDPOINT}")
+    print(f"  emit_metrics : {_EMIT_METRICS}")
+    print(f"  total SPs    : {len(_ALL_SPS)}  (page1={len(_PAGE1)}, page2={len(_PAGE2)})")
     print(f"{'=' * 60}\n")
 
-    t0 = time.monotonic()
-
-    # Mock DeltaTokenStore (no real SQLite needed)
-    mock_store = AsyncMock()
-    mock_store.get.return_value = None  # first run → full mode
-
-    # Patch at the httpx layer so _fetch_token's OTel span still fires
     mock_token_resp = MagicMock()
     mock_token_resp.status_code = 200
     mock_token_resp.json.return_value = {"access_token": "smoke-token-not-real"}
+    mock_store = AsyncMock()
+    mock_store.get.return_value = None
 
     with (
         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_token_resp)),
@@ -184,9 +175,9 @@ async def main() -> None:
             return_value=mock_store,
         ),
     ):
+        t0 = time.monotonic()
         result = await run_collection(_TENANT_ID)
-
-    elapsed = int((time.monotonic() - t0) * 1000)
+        elapsed = int((time.monotonic() - t0) * 1000)
 
     print(f"\n{'=' * 60}")
     print("  Collection result:")
@@ -195,16 +186,21 @@ async def main() -> None:
     print(f"  wall_ms  : {elapsed}")
     print(f"{'=' * 60}")
 
-    # Give BatchSpanProcessor time to flush
-    print("\n  Waiting 3s for OTLP export...")
-    await asyncio.sleep(3)
-
-    from itgov.observability import shutdown
+    flush_wait = 8 if _EMIT_METRICS else 3
+    print(f"\n  Waiting {flush_wait}s for OTLP export...")
+    await asyncio.sleep(flush_wait)
 
     shutdown()
-    print("\n  ✅ Trace exported → check Grafana/Tempo for 'm365.run_collection'")
-    print("     Tempo search: service.name=itgov-m365-collector")
-    print("     Grafana URL : http://localhost:3000/explore (datasource: Tempo)")
+    if _EMIT_METRICS:
+        shutdown_metrics()  # type: ignore[name-defined]
+
+    print("\n  ✅ Signals exported.")
+    print("     Traces  → Grafana/Tempo: service.name=itgov-m365-collector")
+    if _EMIT_METRICS:
+        print("     Metrics → Prometheus :9091")
+        print(
+            "       curl -s 'http://172.29.2.11:9091/api/v1/query?query=itgov_m365_collections_total' | python3 -m json.tool"
+        )
 
 
 if __name__ == "__main__":

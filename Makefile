@@ -82,6 +82,28 @@ pre-commit: ## Roda pre-commit em todos os arquivos
 pre-commit-update: ## Atualiza versões dos hooks
 	pre-commit autoupdate
 
+# ===== Observabilidade =====
+smoke: ## Roda smoke de traces M365 (sem creds reais)
+	python scripts/m365_otel_smoke.py
+
+smoke-metrics: ## Roda smoke de traces + metrics M365 e valida no Prometheus
+	python scripts/m365_otel_smoke.py --emit-metrics
+	@echo ""
+	@echo "$(CYAN)Aguardando 15s para o Prometheus raspar o OTel Collector...$(RESET)"
+	@sleep 15
+	@echo "$(GREEN)Verificando métricas no Prometheus:$(RESET)"
+	@curl -s 'http://localhost:9091/api/v1/query?query=itgov_m365_collections_total' | python3 -c "import sys,json; d=json.load(sys.stdin); print('  m365_collections_total:', d['data']['result'][:2])" || echo "  (sem dados ainda — aguarde mais um ciclo)"
+	@curl -s 'http://localhost:9091/api/v1/query?query=itgov_m365_sps_orphans_actionable' | python3 -c "import sys,json; d=json.load(sys.stdin); print('  m365_sps_orphans_actionable:', d['data']['result'][:2])" || echo "  (sem dados ainda)"
+
+obs-up: ## Sobe a stack de observabilidade
+	docker compose -f docker/observability/docker-compose.observability.yml up -d
+
+obs-down: ## Para a stack de observabilidade (preserva volumes)
+	docker compose -f docker/observability/docker-compose.observability.yml down
+
+obs-status: ## Status dos containers de observabilidade
+	docker compose -f docker/observability/docker-compose.observability.yml ps
+
 # ===== Execução =====
 run: ## Roda servidor Flask (dev)
 	python app.py
