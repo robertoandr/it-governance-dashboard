@@ -1,28 +1,56 @@
+# Version control
 .git
 .github
+.gitignore
+
+# Virtual environments
 .venv
 venv
+env
+ENV
+
+# Python bytecode
 __pycache__
 *.pyc
 *.pyo
+*.pyd
+*.so
+
+# Test & tooling caches
 .pytest_cache
 .mypy_cache
 .ruff_cache
-htmlcov
-*.egg-info
-dist
-build
-.env
-.env.*
-!.env.example
-*.log
-*.bak
-*.tmp
-backups/
-_backups/
-data/
-docs/
-tests/
 .coverage
 coverage.xml
 junit.xml
+htmlcov
+
+# Build artifacts
+*.egg-info
+dist
+build
+
+# Secrets (never in image)
+.env
+.env.*
+!.env.example
+
+# Logs & temp
+*.log
+*.bak
+*.tmp
+
+# SQLite DBs (seeder runs at startup)
+*.db
+*.sqlite
+data/govti.db
+
+# Docs & tests (not needed at runtime)
+docs/
+tests/
+
+# Dev data & overrides
+backups/
+_backups/
+grafana/data/
+docker-compose.override.yml

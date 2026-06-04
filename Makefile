@@ -4,7 +4,8 @@
 # ============================================
 
 .PHONY: help install install-dev test test-fast test-cov lint format \
-        security audit clean run pre-commit setup all check typecheck
+        security audit clean run pre-commit setup all check typecheck \
+        build up down logs shell prod image-size
 
 CYAN := \033[36m
 GREEN := \033[32m
@@ -110,6 +111,31 @@ run: ## Roda servidor Flask (dev)
 
 run-prod: ## Roda com gunicorn (produção)
 	gunicorn -w 4 -b 0.0.0.0:5000 app:app
+
+# ===== Docker =====
+build: ## Build da imagem Docker
+	docker build -f docker/Dockerfile -t itgov-app:local .
+	@echo "$(GREEN)✓ Imagem construída$(RESET)"
+
+up: ## Sobe stack dev (app + redis + influxdb)
+	docker compose up -d
+	@echo "$(CYAN)→ App: http://localhost:5000$(RESET)"
+
+down: ## Para e remove containers (preserva volumes)
+	docker compose down
+
+logs: ## Tail dos logs do app
+	docker compose logs -f app
+
+shell: ## Shell interativo no container app
+	docker compose exec app /bin/sh
+
+prod: ## Sobe stack completa com nginx (profile prod)
+	docker compose --profile prod up -d
+	@echo "$(CYAN)→ App: http://localhost (via nginx)$(RESET)"
+
+image-size: ## Exibe tamanho da imagem local
+	@docker images itgov-app:local --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
 # ===== Limpeza =====
 clean: ## Remove caches e temporários
