@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from urllib.parse import urlparse
 
@@ -9,7 +10,7 @@ from opentelemetry.trace import StatusCode
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 import config
-from itgov.observability import get_tracer
+from itgov.observability import get_meter, get_tracer
 
 log = structlog.get_logger(__name__)
 
@@ -18,6 +19,33 @@ LOGIN_URL = "https://login.microsoftonline.com"
 
 _SP_SELECT = "id,displayName,appId,servicePrincipalType,signInActivity,passwordCredentials,keyCredentials,appRoles"
 _SP_DELTA_URL = f"{GRAPH_BASE}/servicePrincipals/delta?$select={_SP_SELECT}&$top=999"
+
+# ── OTel Metric instruments (created lazily; SDK deduplicates by name) ────────
+_METER_NAME = "itgov.graph"
+
+
+def _requests_counter():
+    return get_meter(_METER_NAME).create_counter(
+        "m365_graph_requests_total",
+        unit="1",
+        description="Total Graph API requests by tenant, endpoint and status_code.",
+    )
+
+
+def _errors_counter():
+    return get_meter(_METER_NAME).create_counter(
+        "m365_graph_errors_total",
+        unit="1",
+        description="Total Graph API errors by tenant and error_type.",
+    )
+
+
+def _request_duration_histogram():
+    return get_meter(_METER_NAME).create_histogram(
+        "m365_graph_request_duration_seconds",
+        unit="s",
+        description="Graph API request latency distribution by tenant and endpoint.",
+    )
 
 
 class GraphAuthError(Exception):
@@ -73,6 +101,7 @@ async def _fetch_token(client: httpx.AsyncClient) -> str:
             span.set_attribute("graph.error.type", "auth")
             span.set_attribute("http.response.status_code", resp.status_code)
             span.record_exception(exc)
+            _errors_counter().add(1, {"tenant": tenant_id or "", "error_type": "auth"})
             log.error("graph.token.failed", status_code=resp.status_code)
             raise exc
         span.set_attribute("http.response.status_code", 200)
@@ -133,9 +162,12 @@ class GraphClient:
 
             while url:
                 page += 1
+                endpoint = _url_path(url)
+                t0 = time.monotonic()
+
                 with tracer.start_as_current_span("graph.api.get") as get_span:
                     get_span.set_attribute("http.request.method", "GET")
-                    get_span.set_attribute("url.path", _url_path(url))
+                    get_span.set_attribute("url.path", endpoint)
                     get_span.set_attribute("server.address", _url_host(url))
                     get_span.set_attribute("graph.page_number", page)
 
@@ -145,15 +177,38 @@ class GraphClient:
                         get_span.set_status(StatusCode.ERROR, "rate_limited")
                         get_span.set_attribute("graph.error.type", "rate_limit")
                         get_span.set_attribute("graph.retry_after_seconds", exc.retry_after)
+                        _errors_counter().add(1, {"tenant": tenant_id, "error_type": "rate_limit"})
+                        _requests_counter().add(
+                            1,
+                            {"tenant": tenant_id, "endpoint": endpoint, "status_code": "429"},
+                        )
+                        raise
+                    except httpx.TransportError as exc:
+                        get_span.record_exception(exc)
+                        get_span.set_status(StatusCode.ERROR, str(exc))
+                        _errors_counter().add(1, {"tenant": tenant_id, "error_type": "network"})
+                        _requests_counter().add(
+                            1,
+                            {"tenant": tenant_id, "endpoint": endpoint, "status_code": "0"},
+                        )
                         raise
                     except Exception as exc:
                         get_span.record_exception(exc)
                         get_span.set_status(StatusCode.ERROR, str(exc))
+                        _errors_counter().add(1, {"tenant": tenant_id, "error_type": "other"})
+                        _requests_counter().add(
+                            1,
+                            {"tenant": tenant_id, "endpoint": endpoint, "status_code": "0"},
+                        )
                         raise
 
                     get_span.set_attribute("http.response.status_code", 200)
                     get_span.set_attribute("graph.has_next_page", bool(data.get("@odata.nextLink")))
                     get_span.set_attribute("graph.delta_link_present", bool(data.get("@odata.deltaLink")))
+
+                duration = time.monotonic() - t0
+                _requests_counter().add(1, {"tenant": tenant_id, "endpoint": endpoint, "status_code": "200"})
+                _request_duration_histogram().record(duration, {"tenant": tenant_id, "endpoint": endpoint})
 
                 items = data.get("value", [])
                 log.debug("graph.sp_delta.page", page=page, count=len(items))
