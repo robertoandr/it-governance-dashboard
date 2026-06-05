@@ -40,9 +40,48 @@ from middleware.security import init_security  # noqa: E402
 
 limiter = init_security(app)
 
+# Sprint 6: Flask-Session (server-side, filesystem dev / Redis prod)
+from datetime import timedelta  # noqa: E402
+
+from flask_session import Session  # noqa: E402
+
+app.config["SESSION_TYPE"] = config.SESSION_TYPE
+app.config["SESSION_FILE_DIR"] = config.SESSION_FILE_DIR
+app.config["SESSION_COOKIE_SECURE"] = not config.FLASK_DEBUG
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(seconds=config.PERMANENT_SESSION_LIFETIME)
+Session(app)
+
 # Fase 5: Registro de Blueprints
 app.register_blueprint(governance_bp)
 app.register_blueprint(maintenance_bp)
+
+# Sprint 6: Auth blueprint
+if config.AZURE_SSO_ENABLED:
+    from app.auth.routes import auth_bp
+
+    app.register_blueprint(auth_bp)
+
+    from app.auth.session import get_current_user
+
+    _PUBLIC_PREFIXES = ("/health", "/api/health", "/auth/", "/static/")
+
+    @app.before_request
+    def _require_login() -> None:  # type: ignore[return]
+        """Redirect unauthenticated users to /auth/login for all protected routes."""
+        path = request.path
+        if any(path == p or path.startswith(p) for p in _PUBLIC_PREFIXES):
+            return None
+        if get_current_user() is None:
+            from flask import redirect, url_for
+
+            from app.auth.session import save_next_url
+
+            save_next_url(request.url)
+            return redirect(url_for("auth.login"))
+        return None
+
 
 # itgov REST API v1 (Flask-RESTX namespaces)
 itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=False)
