@@ -1,0 +1,58 @@
+[Unit]
+Description=IT Governance Dashboard (Gunicorn)
+Documentation=https://github.com/robertoandr/it-governance-dashboard
+After=network.target
+
+[Service]
+Type=notify
+# ── Identity ──────────────────────────────────────────────────────────────────
+User=zabbix
+Group=zabbix
+
+# ── Working directory & environment ───────────────────────────────────────────
+WorkingDirectory=/opt/it-gov-dashboard
+EnvironmentFile=/opt/it-gov-dashboard/.env
+
+# ── Process ───────────────────────────────────────────────────────────────────
+ExecStart=/opt/it-gov-dashboard/.venv/bin/gunicorn \
+    -c deploy/gunicorn.conf.py \
+    wsgi_prod:app
+
+# Graceful reload: send SIGHUP to master — workers drain in-flight requests
+# before restarting. Zero downtime for configuration/code changes.
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# ── Restart policy ────────────────────────────────────────────────────────────
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+# stdout/stderr captured by journald. Access via:
+#   journalctl -u it-gov-dashboard -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=it-gov-dashboard
+
+# ── Security hardening ────────────────────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+# Directories the app must write to at runtime
+ReadWritePaths=/opt/it-gov-dashboard/logs
+ReadWritePaths=/opt/it-gov-dashboard/data
+ReadWritePaths=/opt/it-gov-dashboard/data/sessions
+
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
