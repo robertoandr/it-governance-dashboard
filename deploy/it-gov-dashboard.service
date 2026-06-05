@@ -4,7 +4,7 @@ Documentation=https://github.com/robertoandr/it-governance-dashboard
 After=network.target
 
 [Service]
-Type=notify
+Type=simple
 # ── Identity ──────────────────────────────────────────────────────────────────
 User=zabbix
 Group=zabbix
@@ -21,6 +21,12 @@ ExecStart=/opt/it-gov-dashboard/.venv/bin/gunicorn \
 # Graceful reload: send SIGHUP to master — workers drain in-flight requests
 # before restarting. Zero downtime for configuration/code changes.
 ExecReload=/bin/kill -s HUP $MAINPID
+
+# ── Kill / orphan prevention ──────────────────────────────────────────────────
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+SendSIGKILL=yes
 
 # ── Restart policy ────────────────────────────────────────────────────────────
 Restart=on-failure

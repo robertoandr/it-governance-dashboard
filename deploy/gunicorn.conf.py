@@ -43,6 +43,9 @@ preload_app = True
 # ── Server mechanics ───────────────────────────────────────────────────────────
 # systemd sends SIGTERM on stop — graceful_timeout handles in-flight requests.
 # PID file not needed (systemd tracks PIDs directly via cgroups).
+# PrivateTmp=true in the systemd unit gives gunicorn its own /tmp mount,
+# preventing "Permission denied: /home/zabbix" from the control socket.
+worker_tmp_dir = "/tmp"
 forwarded_allow_ips = "127.0.0.1"  # only trust X-Forwarded-* from localhost nginx
 proxy_protocol = False
 
