@@ -132,6 +132,7 @@ class TestNoOrphanBlueprintsInApp:
             "governance",
             "maintenance",
             "restx_doc",  # internal Flask-RESTX
+            "auth",  # Sprint 6 — SSO Microsoft Entra ID
         }
 
         with app.app_context():

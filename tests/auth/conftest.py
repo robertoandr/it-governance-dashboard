@@ -2,18 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import time
 
 import pytest
-
-# Required env vars before any app import
-os.environ.setdefault("AZURE_TENANT_ID", "test-tenant-id")
-os.environ.setdefault("AZURE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AZURE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("AZURE_REDIRECT_URI", "http://localhost:5000/auth/callback")
-os.environ["AZURE_SSO_ENABLED"] = "1"
-
 
 SAMPLE_CLAIMS = {
     "oid": "oid-abc-123",
@@ -27,16 +18,30 @@ SAMPLE_CLAIMS = {
     "exp": int(time.time()) + 3600,
 }
 
+_AZURE_ENV = {
+    "AZURE_TENANT_ID": "test-tenant-id",
+    "AZURE_CLIENT_ID": "test-client-id",
+    "AZURE_CLIENT_SECRET": "test-client-secret",
+    "AZURE_REDIRECT_URI": "http://localhost:5000/auth/callback",
+}
+
+
+@pytest.fixture(autouse=True)
+def _azure_env(monkeypatch):
+    """Set AZURE_* env vars for each auth test, cleaned up automatically."""
+    for k, v in _AZURE_ENV.items():
+        monkeypatch.setenv(k, v)
+
 
 @pytest.fixture()
-def azure_settings():
-    from config import get_azure_settings
+def azure_settings(_azure_env):
+    from config import AzureSettings
 
-    return get_azure_settings()
+    return AzureSettings()  # type: ignore[call-arg]
 
 
 @pytest.fixture()
-def auth_app(tmp_path):
+def auth_app(tmp_path, _azure_env):
     """Minimal Flask app with auth_bp registered and filesystem session in tmp_path."""
     from flask import Flask
     from flask_session import Session

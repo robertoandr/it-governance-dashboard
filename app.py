@@ -58,29 +58,36 @@ app.register_blueprint(governance_bp)
 app.register_blueprint(maintenance_bp)
 
 # Sprint 6: Auth blueprint
-if config.AZURE_SSO_ENABLED:
-    from itgov.auth.routes import auth_bp
+# Always register the blueprint + hook so tests that import app.py after
+# AZURE_* vars are set still work. The hook performs a dynamic env-var check
+# so that it is a no-op when SSO is disabled (avoids test-ordering issues).
+from itgov.auth.routes import auth_bp  # noqa: E402
 
-    app.register_blueprint(auth_bp)
+app.register_blueprint(auth_bp)
 
-    from itgov.auth.session import get_current_user
+from itgov.auth.session import get_current_user  # noqa: E402
 
-    _PUBLIC_PREFIXES = ("/health", "/api/health", "/auth/", "/static/")
+_PUBLIC_PREFIXES = ("/health", "/api/health", "/auth/", "/static/")
 
-    @app.before_request
-    def _require_login() -> None:  # type: ignore[return]
-        """Redirect unauthenticated users to /auth/login for all protected routes."""
-        path = request.path
-        if any(path == p or path.startswith(p) for p in _PUBLIC_PREFIXES):
-            return None
-        if get_current_user() is None:
-            from flask import redirect, url_for
 
-            from itgov.auth.session import save_next_url
+@app.before_request
+def _require_login() -> None:  # type: ignore[return]
+    """Redirect unauthenticated users to /auth/login when SSO is enabled."""
+    import os
 
-            save_next_url(request.url)
-            return redirect(url_for("auth.login"))
+    if not (os.getenv("AZURE_TENANT_ID") and os.getenv("AZURE_CLIENT_ID") and os.getenv("AZURE_CLIENT_SECRET")):
         return None
+    path = request.path
+    if any(path == p or path.startswith(p) for p in _PUBLIC_PREFIXES):
+        return None
+    if get_current_user() is None:
+        from flask import redirect, url_for
+
+        from itgov.auth.session import save_next_url
+
+        save_next_url(request.url)
+        return redirect(url_for("auth.login"))
+    return None
 
 
 # itgov REST API v1 (Flask-RESTX namespaces)
