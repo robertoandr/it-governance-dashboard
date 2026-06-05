@@ -24,6 +24,16 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.environ["OPS_PIN"] = "TEST_PIN_1234"
 
 # ─────────────────────────────────────────────────────────────────────
+# 🔒 SSO: garantir desabilitado por default em testes não-auth
+# Seta vars Azure como string vazia antes de load_dotenv() rodar em
+# config.py. load_dotenv usa override=False, então não sobrescreve vars
+# já presentes no os.environ — mesmo que .env real tenha credenciais.
+# tests/auth/conftest.py usa monkeypatch.setenv() para reativar por teste.
+# ─────────────────────────────────────────────────────────────────────
+for _k in ("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"):
+    os.environ.setdefault(_k, "")
+
+# ─────────────────────────────────────────────────────────────────────
 # 🧪 Variáveis de infra MOCK para testes
 # Satisfaz config.py:_env() que valida envs obrigatórias no import.
 # NENHUM teste deve conectar de verdade — use mocks/monkeypatch.

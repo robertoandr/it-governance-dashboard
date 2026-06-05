@@ -5,8 +5,11 @@ Lê variáveis de ambiente do .env e expõe como constantes Python.
 
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings
 
 # Carrega .env do diretório do app
 BASE_DIR = Path(__file__).resolve().parent
@@ -44,9 +47,9 @@ INFLUX_BUCKET = _env("INFLUX_BUCKET")
 
 # ── Zabbix
 ZABBIX_URL = _env("ZABBIX_URL")
-ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
+ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "", required=False)
 ZABBIX_USER = _env("ZABBIX_USER")
-ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
+ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD", "", required=False)
 
 # ── Zendesk
 ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN")
@@ -97,3 +100,62 @@ OTEL_SERVICE_NAME = _env("OTEL_SERVICE_NAME", "itgov", required=False)
 OTEL_SERVICE_VERSION = _env("OTEL_SERVICE_VERSION", "dev", required=False)
 OTEL_ENVIRONMENT = _env("OTEL_ENVIRONMENT", "development", required=False)
 OTEL_ENDPOINT = _env("OTEL_ENDPOINT", "localhost:4317", required=False)
+
+
+# ── Microsoft Entra ID (Sprint 6 — SSO)
+class AzureSettings(BaseSettings):
+    """Microsoft Entra ID OAuth2 configuration (Authorization Code + PKCE)."""
+
+    tenant_id: str = Field(..., description="Azure AD Tenant ID")
+    client_id: str = Field(..., description="App Registration Client ID")
+    client_secret: SecretStr = Field(..., description="App Registration Secret")
+    redirect_uri: str = Field(
+        default="http://localhost:5000/auth/callback",
+        description="OAuth2 redirect URI registered in App Registration",
+    )
+    scopes: list[str] = Field(
+        # openid and profile are reserved by MSAL and added automatically.
+        # email gives us the email claim; User.Read allows Graph profile reads.
+        default=["email", "User.Read"],
+    )
+
+    @property
+    def authority(self) -> str:
+        return f"https://login.microsoftonline.com/{self.tenant_id}"
+
+    @property
+    def logout_uri(self) -> str:
+        return f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/logout"
+
+    model_config: Any = {
+        "env_prefix": "AZURE_",
+        "env_file": ".env",
+        "extra": "ignore",
+    }
+
+
+def get_azure_settings() -> AzureSettings:
+    """Return AzureSettings, raises ValidationError if env vars are missing."""
+    return AzureSettings()  # type: ignore[call-arg]
+
+
+AZURE_SSO_ENABLED = bool(
+    os.getenv("AZURE_TENANT_ID") and os.getenv("AZURE_CLIENT_ID") and os.getenv("AZURE_CLIENT_SECRET")
+)
+
+# ── Flask-Session (server-side sessions)
+SESSION_TYPE = _env("SESSION_TYPE", "filesystem", required=False)
+SESSION_FILE_DIR = _env("SESSION_FILE_DIR", "./data/sessions", required=False)
+PERMANENT_SESSION_LIFETIME = _env_int("PERMANENT_SESSION_LIFETIME", 3600)
+
+# ── Production SSO guard
+# Fails fast at startup when FLASK_ENV=production and SSO credentials are absent.
+# Prevents the catastrophic scenario where credentials are accidentally removed in
+# production, leaving the dashboard exposed without authentication.
+_FLASK_ENV = _env("FLASK_ENV", "development", required=False).lower()
+if _FLASK_ENV in ("production", "prod") and not AZURE_SSO_ENABLED:
+    raise RuntimeError(
+        "SSO is mandatory in production. "
+        "Set AZURE_TENANT_ID, AZURE_CLIENT_ID and AZURE_CLIENT_SECRET in the environment, "
+        "or set FLASK_ENV=development to run without authentication."
+    )
