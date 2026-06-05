@@ -59,15 +59,9 @@ ZENDESK_ENABLED = bool(ZENDESK_SUBDOMAIN and ZENDESK_EMAIL and ZENDESK_API_TOKEN
 OPS_PIN = _env("OPS_PIN", "", required=False)
 
 # ── Microsoft Graph
-# GRAPH_CLIENT_SECRET reads GRAPH_CLIENT_SECRET first, falling back to
-# AZURE_CLIENT_SECRET for deployments that predate the rename.
 GRAPH_TENANT_ID = _env("AZURE_TENANT_ID", required=False)
 GRAPH_CLIENT_ID = _env("AZURE_CLIENT_ID", required=False)
-GRAPH_CLIENT_SECRET = _env(
-    "GRAPH_CLIENT_SECRET",
-    default=os.getenv("AZURE_CLIENT_SECRET", ""),
-    required=False,
-)
+GRAPH_CLIENT_SECRET = _env("AZURE_CLIENT_SECRET", required=False)
 GRAPH_ENABLED = bool(GRAPH_TENANT_ID and GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET)
 GRAPH_SCOPES = ["https://graph.microsoft.com/.default"]
 INTUNE_ENABLED = _env_bool("INTUNE_ENABLED", True)
