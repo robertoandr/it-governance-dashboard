@@ -145,3 +145,15 @@ AZURE_SSO_ENABLED = bool(
 SESSION_TYPE = _env("SESSION_TYPE", "filesystem", required=False)
 SESSION_FILE_DIR = _env("SESSION_FILE_DIR", "./data/sessions", required=False)
 PERMANENT_SESSION_LIFETIME = _env_int("PERMANENT_SESSION_LIFETIME", 3600)
+
+# ── Production SSO guard
+# Fails fast at startup when FLASK_ENV=production and SSO credentials are absent.
+# Prevents the catastrophic scenario where credentials are accidentally removed in
+# production, leaving the dashboard exposed without authentication.
+_FLASK_ENV = _env("FLASK_ENV", "development", required=False).lower()
+if _FLASK_ENV in ("production", "prod") and not AZURE_SSO_ENABLED:
+    raise RuntimeError(
+        "SSO is mandatory in production. "
+        "Set AZURE_TENANT_ID, AZURE_CLIENT_ID and AZURE_CLIENT_SECRET in the environment, "
+        "or set FLASK_ENV=development to run without authentication."
+    )
