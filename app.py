@@ -59,11 +59,11 @@ app.register_blueprint(maintenance_bp)
 
 # Sprint 6: Auth blueprint
 if config.AZURE_SSO_ENABLED:
-    from app.auth.routes import auth_bp
+    from itgov.auth.routes import auth_bp
 
     app.register_blueprint(auth_bp)
 
-    from app.auth.session import get_current_user
+    from itgov.auth.session import get_current_user
 
     _PUBLIC_PREFIXES = ("/health", "/api/health", "/auth/", "/static/")
 
@@ -76,7 +76,7 @@ if config.AZURE_SSO_ENABLED:
         if get_current_user() is None:
             from flask import redirect, url_for
 
-            from app.auth.session import save_next_url
+            from itgov.auth.session import save_next_url
 
             save_next_url(request.url)
             return redirect(url_for("auth.login"))
