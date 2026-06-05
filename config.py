@@ -47,9 +47,9 @@ INFLUX_BUCKET = _env("INFLUX_BUCKET")
 
 # ── Zabbix
 ZABBIX_URL = _env("ZABBIX_URL")
-ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
+ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "", required=False)
 ZABBIX_USER = _env("ZABBIX_USER")
-ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
+ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD", "", required=False)
 
 # ── Zendesk
 ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN")
@@ -114,7 +114,9 @@ class AzureSettings(BaseSettings):
         description="OAuth2 redirect URI registered in App Registration",
     )
     scopes: list[str] = Field(
-        default=["openid", "profile", "email", "User.Read"],
+        # openid and profile are reserved by MSAL and added automatically.
+        # email gives us the email claim; User.Read allows Graph profile reads.
+        default=["email", "User.Read"],
     )
 
     @property
