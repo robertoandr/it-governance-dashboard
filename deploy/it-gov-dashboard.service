@@ -16,7 +16,7 @@ EnvironmentFile=/opt/it-gov-dashboard/.env
 # ── Process ───────────────────────────────────────────────────────────────────
 ExecStart=/opt/it-gov-dashboard/.venv/bin/gunicorn \
     -c deploy/gunicorn.conf.py \
-    app:app
+    wsgi_prod:app
 
 # Graceful reload: send SIGHUP to master — workers drain in-flight requests
 # before restarting. Zero downtime for configuration/code changes.

@@ -48,11 +48,12 @@ ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
 ZABBIX_USER = _env("ZABBIX_USER")
 ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
 
-# ── Zendesk
-ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN")
-ZENDESK_EMAIL = _env("ZENDESK_EMAIL")
-ZENDESK_API_TOKEN = _env("ZENDESK_API_TOKEN")
+# ── Zendesk (optional integration — disabled when vars are absent)
+ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN", required=False)
+ZENDESK_EMAIL = _env("ZENDESK_EMAIL", required=False)
+ZENDESK_API_TOKEN = _env("ZENDESK_API_TOKEN", required=False)
 ZENDESK_MAX_PAGES = _env_int("ZENDESK_MAX_PAGES", 100)
+ZENDESK_ENABLED = bool(ZENDESK_SUBDOMAIN and ZENDESK_EMAIL and ZENDESK_API_TOKEN)
 
 # ── Maintenance PIN (vazio = endpoints de escrita bloqueados por design)
 OPS_PIN = _env("OPS_PIN", "", required=False)
