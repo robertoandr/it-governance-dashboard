@@ -83,6 +83,9 @@ def _require_login() -> None:  # type: ignore[return]
     if get_current_user() is None:
         from flask import redirect, url_for
 
+        _is_api = request.path.startswith("/api/") or "application/json" in request.headers.get("Accept", "")
+        if _is_api:
+            return jsonify({"error": "Unauthorized", "login_url": url_for("auth.login")}), 401  # type: ignore[return-value]
         from itgov.auth.session import save_next_url
 
         save_next_url(request.url)
