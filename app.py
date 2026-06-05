@@ -40,9 +40,58 @@ from middleware.security import init_security  # noqa: E402
 
 limiter = init_security(app)
 
+# Sprint 6: Flask-Session (server-side, filesystem dev / Redis prod)
+from datetime import timedelta  # noqa: E402
+
+from flask_session import Session  # noqa: E402
+
+app.config["SESSION_TYPE"] = config.SESSION_TYPE
+app.config["SESSION_FILE_DIR"] = config.SESSION_FILE_DIR
+app.config["SESSION_COOKIE_SECURE"] = not config.FLASK_DEBUG
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(seconds=config.PERMANENT_SESSION_LIFETIME)
+Session(app)
+
 # Fase 5: Registro de Blueprints
 app.register_blueprint(governance_bp)
 app.register_blueprint(maintenance_bp)
+
+# Sprint 6: Auth blueprint
+# Always register the blueprint + hook so tests that import app.py after
+# AZURE_* vars are set still work. The hook performs a dynamic env-var check
+# so that it is a no-op when SSO is disabled (avoids test-ordering issues).
+from itgov.auth.routes import auth_bp  # noqa: E402
+
+app.register_blueprint(auth_bp)
+
+from itgov.auth.session import get_current_user  # noqa: E402
+
+_PUBLIC_PREFIXES = ("/health", "/api/health", "/auth/", "/static/")
+
+
+@app.before_request
+def _require_login() -> None:  # type: ignore[return]
+    """Redirect unauthenticated users to /auth/login when SSO is enabled."""
+    import os
+
+    if not (os.getenv("AZURE_TENANT_ID") and os.getenv("AZURE_CLIENT_ID") and os.getenv("AZURE_CLIENT_SECRET")):
+        return None
+    path = request.path
+    if any(path == p or path.startswith(p) for p in _PUBLIC_PREFIXES):
+        return None
+    if get_current_user() is None:
+        from flask import redirect, url_for
+
+        _is_api = request.path.startswith("/api/") or "application/json" in request.headers.get("Accept", "")
+        if _is_api:
+            return jsonify({"error": "Unauthorized", "login_url": url_for("auth.login")}), 401  # type: ignore[return-value]
+        from itgov.auth.session import save_next_url
+
+        save_next_url(request.url)
+        return redirect(url_for("auth.login"))
+    return None
+
 
 # itgov REST API v1 (Flask-RESTX namespaces)
 itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=False)
