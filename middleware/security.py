@@ -1,4 +1,4 @@
-"""Security middleware: Talisman (headers/CSP) + Limiter (rate limiting).
+"""Security middleware: Talisman (headers/CSP) + Limiter (rate limiting) + ProxyFix.
 
 Registrado em app.py via init_security(app).
 """
@@ -12,6 +12,7 @@ import structlog
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -23,14 +24,11 @@ _GRAFANA_ORIGIN = os.getenv("GRAFANA_ROOT_URL", "http://localhost:8090")
 
 CONTENT_SECURITY_POLICY: dict[str, str | list[str]] = {
     "default-src": "'self'",
-    # Nonce injetado pelo Talisman via {{ csp_nonce() }} nos templates.
-    # 'unsafe-inline' omitido: browsers que suportam nonce ignoram unsafe-inline.
     "script-src": ["'self'", "'strict-dynamic'"],
     "style-src": ["'self'"],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": "'self'",
     "connect-src": "'self'",
-    # Permite iframe do Grafana via Nginx
     "frame-src": ["'self'", _GRAFANA_ORIGIN],
     "frame-ancestors": ["'self'"],
     "object-src": "'none'",
@@ -38,10 +36,19 @@ CONTENT_SECURITY_POLICY: dict[str, str | list[str]] = {
     "form-action": "'self'",
 }
 
-# Rate limits por endpoint
 _DEFAULT_LIMITS = ["200 per day", "60 per hour", "20 per minute"]
 _API_LIMITS = ["500 per day", "100 per hour", "30 per minute"]
 _AUTH_LIMITS = ["20 per hour", "5 per minute"]
+
+
+def _is_behind_proxy() -> bool:
+    """True quando o app roda atrás de reverse proxy (nginx/traefik)."""
+    return os.getenv("BEHIND_PROXY", "false").lower() in ("true", "1", "yes")
+
+
+def _is_production() -> bool:
+    """True em produção (não dev/testing)."""
+    return os.getenv("FLASK_ENV") not in ("development", "testing")
 
 
 def _get_limiter(app: Flask) -> Limiter:
@@ -63,7 +70,7 @@ def _get_limiter(app: Flask) -> Limiter:
 
 
 def init_security(app: Flask) -> Limiter:
-    """Inicializa Talisman + Limiter no app Flask.
+    """Inicializa ProxyFix + Talisman + Limiter no app Flask.
 
     Args:
         app: Instância Flask configurada.
@@ -71,13 +78,30 @@ def init_security(app: Flask) -> Limiter:
     Returns:
         Instância do Limiter (para decorar rotas com limites específicos).
     """
-    _is_https = os.getenv("FLASK_ENV") not in ("development", "testing")
+    behind_proxy: bool = _is_behind_proxy()
+    is_prod: bool = _is_production()
+
+    # 1) ProxyFix DEVE vir antes — confiar nos X-Forwarded-* do nginx
+    if behind_proxy:
+        app.wsgi_app = ProxyFix(  # type: ignore[assignment]
+            app.wsgi_app,
+            x_for=1,
+            x_proto=1,
+            x_host=1,
+            x_prefix=1,
+        )
+        log.info("proxyfix_applied", trusted_hops=1)
+
+    # 2) Talisman — Em prod atrás de proxy, nginx cuida do HTTPS.
+    #    Forçar HTTPS aqui causaria 302 -> https://127.0.0.1 (loop / 502).
+    force_https: bool = is_prod and not behind_proxy
 
     Talisman(
         app,
-        force_https=_is_https,
-        strict_transport_security=_is_https,
-        strict_transport_security_max_age=31536000,
+        force_https=force_https,
+        force_https_permanent=False,
+        strict_transport_security=is_prod,
+        strict_transport_security_max_age=31_536_000,
         strict_transport_security_include_subdomains=True,
         content_security_policy=CONTENT_SECURITY_POLICY,
         content_security_policy_nonce_in=["script-src"],
@@ -89,16 +113,18 @@ def init_security(app: Flask) -> Limiter:
         },
         x_content_type_options=True,
         x_xss_protection=True,
-        frame_options="SAMEORIGIN",
+        # ⚠️ NÃO setar frame_options — sobrescreve frame-ancestors do CSP.
+        frame_options=None,
     )
 
     limiter = _get_limiter(app)
-
     _configure_session(app)
 
     log.info(
         "security_middleware_initialized",
-        https_enforced=_is_https,
+        https_enforced=force_https,
+        behind_proxy=behind_proxy,
+        production=is_prod,
         rate_limit_default=_DEFAULT_LIMITS[2],
     )
     return limiter
@@ -107,17 +133,17 @@ def init_security(app: Flask) -> Limiter:
 def _configure_session(app: Flask) -> None:
     """Configura cookies de sessão com flags de segurança.
 
-    Usa assignment direto (não setdefault) pois Flask pré-define
-    SESSION_COOKIE_SAMESITE=Lax e PERMANENT_SESSION_LIFETIME=timedelta(days=31).
+    SAMESITE=Lax para não quebrar OAuth callbacks do Microsoft Entra.
+    Cookie name sem prefixo __Host- para funcionar em subpath /governanca.
     """
     from datetime import timedelta
 
-    _is_prod = os.getenv("FLASK_ENV") not in ("development", "testing")
-    app.config["SESSION_COOKIE_SECURE"] = _is_prod
+    is_prod = _is_production()
+    app.config["SESSION_COOKIE_SECURE"] = is_prod
     app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
-    app.config["SESSION_COOKIE_NAME"] = "__Host-session" if _is_prod else "session"
+    app.config["SESSION_COOKIE_NAME"] = "session"
 
 
 def api_limit(limiter: Limiter):
