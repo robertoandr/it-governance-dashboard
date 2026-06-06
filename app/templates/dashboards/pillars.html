@@ -52,7 +52,7 @@
         </div>
         {% endfor %}
       </div>
-      <a href="/pillars/{{ p.id }}"
+      <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
          class="mt-4 inline-block text-xs text-blue-600 hover:underline">
         Ver detalhes →
       </a>

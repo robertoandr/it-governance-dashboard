@@ -11,7 +11,20 @@ from app.services.metrics_aggregator import MetricsAggregator
 
 log = structlog.get_logger(__name__)
 
-bp = Blueprint("dashboards", __name__)
+bp = Blueprint("dashboards", __name__, template_folder="../templates")
+
+
+@bp.context_processor
+def _inject_globals() -> dict:
+    """Provide app_version and environment when running inside legacy app.py."""
+    from flask import current_app
+
+    return {
+        "app_version": current_app.config.get("APP_VERSION", "1.1.0"),
+        "app_name": current_app.config.get("APP_NAME", "IT Governance Dashboard"),
+        "environment": current_app.config.get("APP_ENVIRONMENT", "production"),
+    }
+
 
 _VALID_PILLAR_IDS = {
     "strategic_alignment",

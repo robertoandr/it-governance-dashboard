@@ -44,6 +44,14 @@ limiter = init_security(app)
 app.register_blueprint(governance_bp)
 app.register_blueprint(maintenance_bp)
 
+# Sprint 11: Governance Score Dashboard (COBIT 5 pilares) em /gov
+try:
+    from app.views.dashboards import bp as _gov_dash_bp
+
+    app.register_blueprint(_gov_dash_bp, url_prefix="/gov")
+except Exception as _gov_err:
+    log.warning("governance_dash_blueprint_unavailable: %s", _gov_err)
+
 # itgov REST API v1 (Flask-RESTX namespaces)
 itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=False)
 itgov_api.add_namespace(zabbix_ns)

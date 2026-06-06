@@ -39,7 +39,7 @@
 <!-- Pillar Cards Grid -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
   {% for p in governance.pillars %}
-  <a href="/pillars/{{ p.id }}"
+  <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
      class="bg-white rounded-xl shadow p-5 hover:shadow-md transition-shadow block group">
     <div class="flex items-center justify-between mb-3">
       <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ p.color }}"></span>

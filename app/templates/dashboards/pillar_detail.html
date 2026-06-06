@@ -6,9 +6,9 @@
 {% block content %}
 <!-- Breadcrumb -->
 <nav class="text-xs text-gray-400 mb-4">
-  <a href="/" class="hover:text-blue-600">Início</a>
+  <a href="{{ url_for('dashboards.overview') }}" class="hover:text-blue-600">Início</a>
   <span class="mx-1">/</span>
-  <a href="/pillars" class="hover:text-blue-600">Pilares</a>
+  <a href="{{ url_for('dashboards.pillars') }}" class="hover:text-blue-600">Pilares</a>
   <span class="mx-1">/</span>
   <span class="text-gray-600">{{ pillar.label }}</span>
 </nav>
