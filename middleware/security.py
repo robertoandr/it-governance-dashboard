@@ -25,7 +25,9 @@ _GRAFANA_ORIGIN = os.getenv("GRAFANA_ROOT_URL", "http://localhost:8090")
 CONTENT_SECURITY_POLICY: dict[str, str | list[str]] = {
     "default-src": "'self'",
     "script-src": ["'self'", "'strict-dynamic'"],
-    "style-src": ["'self'"],
+    # Tailwind CDN injeta <style> dinamicamente via JS (não tem nonce).
+    # 'unsafe-inline' é necessário aqui; mitigado pelo strict-dynamic nos scripts.
+    "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": "'self'",
     "connect-src": "'self'",

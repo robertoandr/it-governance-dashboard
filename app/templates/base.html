@@ -4,13 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}IT Governance Dashboard{% endblock %}</title>
-  <!-- TailwindCSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- TailwindCSS CDN — nonce obrigatório para passar no CSP strict-dynamic -->
+  <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce() }}"></script>
   <!-- Alpine.js -->
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" nonce="{{ csp_nonce() }}"></script>
   <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="{{ csp_nonce() }}"></script>
+  <!-- Tailwind CDN injeta <style> via JS — nonce propagado pelo strict-dynamic -->
+  <style nonce="{{ csp_nonce() }}">
     [x-cloak] { display: none !important; }
     .status-OPERACIONAL { @apply text-green-600; }
     .status-DEGRADADO    { @apply text-yellow-500; }
