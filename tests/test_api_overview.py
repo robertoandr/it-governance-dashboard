@@ -6,16 +6,27 @@ import json
 
 
 class TestHealth:
-    def test_health_200(self, factory_client) -> None:
-        resp = factory_client.get("/health")
+    def test_liveness_200(self, factory_client) -> None:
+        resp = factory_client.get("/api/health")
         assert resp.status_code == 200
 
-    def test_health_json(self, factory_client) -> None:
-        resp = factory_client.get("/health")
+    def test_liveness_json(self, factory_client) -> None:
+        resp = factory_client.get("/api/health")
         data = json.loads(resp.data)
-        assert data["status"] == "healthy"
-        assert "version" in data
-        assert "environment" in data
+        assert data["status"] == "alive"
+        assert "timestamp" in data
+
+    def test_readiness_200_no_deps_enabled(self, factory_client) -> None:
+        """Readiness must be 200 in test env where no external deps are enabled."""
+        resp = factory_client.get("/api/health/ready")
+        assert resp.status_code == 200
+
+    def test_readiness_json_structure(self, factory_client) -> None:
+        resp = factory_client.get("/api/health/ready")
+        data = json.loads(resp.data)
+        assert data["status"] in {"ready", "not_ready"}
+        assert "checks" in data
+        assert "timestamp" in data
 
 
 class TestOverview:
