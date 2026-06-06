@@ -64,10 +64,12 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     )
 
     from app.api.dashboards import ns as overview_ns
+    from app.api.health import ns as health_ns
     from app.api.pillars import ns as pillars_ns
 
     api.add_namespace(overview_ns, path="/overview")
     api.add_namespace(pillars_ns, path="/pillars")
+    api.add_namespace(health_ns, path="/health")
 
     # Legacy itgov namespaces (Sprint 10E) — preserved under /api/v1/ path
     try:
@@ -87,17 +89,6 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.views.dashboards import bp as dashboards_bp
 
     app.register_blueprint(dashboards_bp)
-
-    # Health endpoint
-    @app.route("/health")
-    def health() -> Any:
-        return jsonify(
-            {
-                "status": "healthy",
-                "version": settings.app.version,
-                "environment": settings.app.environment,
-            }
-        )
 
     # Error handlers
     @app.errorhandler(404)
