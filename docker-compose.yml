@@ -96,6 +96,8 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_ADMIN_PASSWORD:-ChangeMe2026!}
       DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-gadens}
       DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-govti}
+      # Token DEFINIDO NO .env — o fallback abaixo é apenas emergência.
+      # Source of truth: grep "^INFLUX_TOKEN=" .env | cut -d= -f2-
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-dev-token-change-in-prod}
     volumes:
       - influxdb_data:/var/lib/influxdb2
@@ -144,7 +146,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ChangeMe!2026}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
-      INFLUX_TOKEN: ${INFLUX_TOKEN:-dev-token-change-in-prod}
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-dev-token-change-in-prod}  # source of truth: .env
       INFLUX_URL: http://influxdb:8086
       INFLUX_ORG: ${INFLUX_ORG:-gadens}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-govti}
