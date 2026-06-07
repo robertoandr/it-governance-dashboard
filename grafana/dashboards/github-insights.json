@@ -1,24 +1,38 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
   "uid": "itgov-github-v1",
   "title": "🐙 GitHub Insights",
-  "tags": ["governanca", "github", "pr", "actions", "codeql"],
+  "tags": [
+    "governanca",
+    "github",
+    "pr",
+    "actions",
+    "codeql"
+  ],
   "timezone": "America/Sao_Paulo",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "5m",
-  "time": {"from": "now-7d", "to": "now"},
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "repo",
         "type": "query",
         "label": "Repositório",
-        "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+        "datasource": {
+          "type": "influxdb",
+          "uid": "InfluxDB-Governanca"
+        },
         "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"governance_raw\", tag: \"repo\", predicate: (r) => r._measurement == \"gov_github_pr\")",
         "includeAll": true,
         "allValue": ".*",
@@ -33,86 +47,283 @@
       "type": "stat",
       "title": "Total PRs",
       "id": 1,
-      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
-        "refId": "A"
-      }],
-      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "unit": "short"}}
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "unit": "short"
+        }
+      }
     },
     {
       "type": "stat",
       "title": "PRs Merged",
       "id": 2,
-      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
-        "refId": "A"
-      }],
-      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "green", "mode": "fixed"}, "unit": "short"}}
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "unit": "short"
+        }
+      }
     },
     {
       "type": "stat",
       "title": "Tempo Médio para Merge",
       "id": 3,
-      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"time_to_merge_seconds\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> filter(fn: (r) => r._value > 0)\n  |> mean()",
-        "refId": "A"
-      }],
-      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["mean"]}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "yellow", "mode": "fixed"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 86400}, {"color": "red", "value": 604800}]}}}
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"time_to_merge_seconds\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> filter(fn: (r) => r._value > 0)\n  |> mean()",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "yellow",
+            "mode": "fixed"
+          },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 86400
+              },
+              {
+                "color": "red",
+                "value": 604800
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "type": "stat",
       "title": "Actions - Total Runs",
       "id": 4,
-      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
-        "refId": "A"
-      }],
-      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "purple", "mode": "fixed"}, "unit": "short"}}
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "unit": "short"
+        }
+      }
     },
     {
       "type": "stat",
       "title": "Actions - Runs com Sucesso",
       "id": 5,
-      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.conclusion == \"success\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
-        "refId": "A"
-      }],
-      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "green", "mode": "fixed"}, "unit": "short"}}
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.conclusion == \"success\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "unit": "short"
+        }
+      }
     },
     {
       "type": "stat",
       "title": "Actions - Falhas",
       "id": 6,
-      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.conclusion == \"failure\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
-        "refId": "A"
-      }],
-      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["sum"]}},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}, "unit": "short"}}
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.conclusion == \"failure\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> sum()",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      }
     },
     {
       "type": "timeseries",
       "title": "PRs ao Longo do Tempo",
       "id": 7,
-      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 4},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
       "targets": [
         {
           "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"merged\"}))",
@@ -127,13 +338,68 @@
           "refId": "Closed"
         }
       ],
-      "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
       "fieldConfig": {
-        "defaults": {"custom": {"lineWidth": 2, "fillOpacity": 10}},
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
         "overrides": [
-          {"matcher": {"id": "byName", "options": "merged"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
-          {"matcher": {"id": "byName", "options": "open"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]},
-          {"matcher": {"id": "byName", "options": "closed"}, "properties": [{"id": "color", "value": {"fixedColor": "gray", "mode": "fixed"}}]}
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "merged"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "open"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "gray",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
         ]
       }
     },
@@ -141,21 +407,84 @@
       "type": "timeseries",
       "title": "GitHub Actions - Runs por Conclusão",
       "id": 8,
-      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 4},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
       "targets": [
         {
           "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> group(columns: [\"conclusion\"])\n  |> map(fn: (r) => ({r with _field: r.conclusion}))",
           "refId": "A"
         }
       ],
-      "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
       "fieldConfig": {
-        "defaults": {"custom": {"lineWidth": 2, "fillOpacity": 10}},
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
         "overrides": [
-          {"matcher": {"id": "byName", "options": "success"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
-          {"matcher": {"id": "byName", "options": "failure"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]},
-          {"matcher": {"id": "byName", "options": "cancelled"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]}
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failure"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cancelled"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
         ]
       }
     },
@@ -163,27 +492,297 @@
       "type": "barchart",
       "title": "PRs por Repositório",
       "id": 9,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> group(columns: [\"repo\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
-        "refId": "A"
-      }],
-      "options": {"xField": "repo", "barWidth": 0.8, "legend": {"displayMode": "list", "placement": "bottom"}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "unit": "short"}}
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> group(columns: [\"repo\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "xField": "repo",
+        "barWidth": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "unit": "short"
+        }
+      }
     },
     {
       "type": "barchart",
       "title": "Workflows por Nome",
       "id": 10,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
-      "datasource": {"type": "influxdb", "uid": "InfluxDB-Governanca"},
-      "targets": [{
-        "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> group(columns: [\"workflow_name\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
-        "refId": "A"
-      }],
-      "options": {"xField": "workflow_name", "barWidth": 0.8, "legend": {"displayMode": "list", "placement": "bottom"}},
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "purple", "mode": "fixed"}, "unit": "short"}}
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_workflow\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> filter(fn: (r) => r.repo =~ /^${repo:regex}$/)\n  |> group(columns: [\"workflow_name\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "xField": "workflow_name",
+        "barWidth": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "barchart",
+      "title": "PR Size Distribution (LOC)",
+      "description": "Distribuição de tamanho de PRs merged (additions + deletions). PRs grandes indicam risco de review.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "options": {
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "orientation": "auto",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r._field == \"additions\" or r._field == \"deletions\")\n  |> filter(fn: (r) => r.repo =~ /^$/)\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: r._field}))"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Avg Review Comments por PR",
+      "description": "Média de comentários de review por PR merged — indica engajamento do time no processo de code review.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 3
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r._field == \"review_comments\")\n  |> filter(fn: (r) => r.repo =~ /^$/)\n  |> mean()"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Cycle Time por Team (DORA)",
+      "description": "Tempo médio do PR criado ao merge, agrupado por author_team. DORA elite: <1 dia.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r._field == \"cycle_time_seconds\")\n  |> filter(fn: (r) => r.repo =~ /^$/)\n  |> group(columns: [\"author_team\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: r.author_team}))"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Changed Files Trend (média 7d)",
+      "description": "Média móvel de arquivos alterados por PR merged. Alta complexidade sustentada pode indicar PRs difíceis de revisar.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 36
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_github_pr\")\n  |> filter(fn: (r) => r.state == \"merged\")\n  |> filter(fn: (r) => r._field == \"changed_files\")\n  |> filter(fn: (r) => r.repo =~ /^$/)\n  |> aggregateWindow(every: 7d, fn: mean, createEmpty: false)"
+        }
+      ]
     }
   ]
 }
