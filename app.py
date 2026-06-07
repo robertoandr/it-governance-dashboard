@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import UTC, datetime
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request
 from flask_restx import Api
 
 import config
@@ -392,6 +392,24 @@ _start()
 def v2_home():
     """Home v2 - visão geral consolidada de governança."""
     return render_template("v2/home.html")
+
+
+# ─── Deprecation redirect ────────────────────────────────────────────────────
+# Este arquivo (app.py) só é carregado via wsgi_prod.py ou python app.py.
+# O entrypoint de produção (Docker) usa wsgi.py → create_app() do factory.
+# Manter este redirect até v1.2.0 para não quebrar bookmarks de quem ainda
+# acessa via app.py direto.
+@app.route("/dashboard")
+def legacy_dashboard_redirect():
+    """Redirect permanente do dashboard legado para o novo (factory app).
+
+    Remove em v1.2.0 após confirmar que nenhum bookmark/integração usa este path.
+    """
+    log.warning(
+        "legacy_dashboard_accessed",
+        extra={"referrer": request.referrer, "remote_addr": request.remote_addr},
+    )
+    return redirect("/", code=301)
 
 
 if __name__ == "__main__":
