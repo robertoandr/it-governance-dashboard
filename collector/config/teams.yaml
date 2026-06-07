@@ -1,0 +1,12 @@
+# GitHub login → team mapping
+# Usado pelo gov_github_pr collector para popular a tag author_team.
+# Edite sem precisar de deploy — recarregado a cada execução do collector.
+# Logins não mapeados recebem team="unknown".
+version: "1.0"
+
+teams:
+  backend:
+    - robertoandr
+  frontend: []
+  devops: []
+  qa: []
