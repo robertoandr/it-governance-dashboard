@@ -5,7 +5,7 @@ datasources:
     uid: InfluxDB-Governanca
     type: influxdb
     access: proxy
-    url: http://172.29.2.11:8086
+    url: http://influxdb:8086
     isDefault: false
     jsonData:
       version: Flux
