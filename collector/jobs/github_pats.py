@@ -1,121 +1,34 @@
-import json
-import logging
+"""GitHub PAT inventory collector — writes gov_github_pat to InfluxDB governance_raw.
+
+Schema:
+  measurement: gov_github_pat
+  tags:        org=<github_org>, available=true|false
+  fields:      total, with_expiration, no_expiration,
+               expiring_7d, expiring_30d
+  timestamp:   collection time (now)
+
+Note: fine-grained PAT listing requires GitHub org with PAT policy enabled.
+Personal accounts and orgs without the policy return 404 → fields written as 0
+with tag available=false so the dashboard reflects the gap explicitly.
+"""
+
+from __future__ import annotations
+
 from datetime import UTC, datetime
 
-import psycopg
-import requests
+import httpx
+import structlog
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 from config import settings
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger(__name__)
 
-GITHUB_API = "https://api.github.com"
-
-
-def collect_github_pats():
-    log.info("Coletando inventário de PATs do GitHub...")
-
-    headers = {
-        "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-    url = f"{GITHUB_API}/orgs/{settings.GITHUB_ORG}/personal-access-tokens"
-    pats = []
-
-    try:
-        while url:
-            r = requests.get(url, headers=headers, timeout=30)
-            if r.status_code == 404:
-                log.warning("Org sem fine-grained PAT policy. Pulando.")
-                return
-            r.raise_for_status()
-            pats.extend(r.json())
-            url = r.links.get("next", {}).get("url")
-    except requests.RequestException as e:
-        log.exception("Erro na API GitHub: %s", e)
-        return
-
-    log.info("%d PATs encontrados", len(pats))
-
-    if not settings.POSTGRES_DSN:
-        log.warning("POSTGRES_DSN not configured — skipping DB write")
-        return
-
-    now = datetime.now(UTC)
-    org_tag = json.dumps({"org": settings.GITHUB_ORG})
-
-    with psycopg.connect(settings.POSTGRES_DSN) as conn:
-        with conn.cursor() as cur:
-            for pat in pats:
-                cur.execute(
-                    """
-                    INSERT INTO governance.pats (
-                        platform, token_id, token_hint, token_type,
-                        owner_login, name, scopes, created_at, expires_at,
-                        last_used_at, status
-                    ) VALUES (
-                        'github', %s, %s, 'fine_grained',
-                        %s, %s, %s, %s, %s, %s, 'active'
-                    )
-                    ON CONFLICT (platform, token_id) DO UPDATE SET
-                        expires_at = EXCLUDED.expires_at,
-                        last_used_at = EXCLUDED.last_used_at,
-                        status = EXCLUDED.status,
-                        collected_at = NOW()
-                """,
-                    (
-                        str(pat["id"]),
-                        pat.get("token_last_eight"),
-                        pat["owner"]["login"],
-                        pat.get("name"),
-                        json.dumps(pat.get("permissions", {})),
-                        pat.get("created_at"),
-                        pat.get("expires_at"),
-                        pat.get("last_used_at"),
-                    ),
-                )
-
-            metrics = [
-                (now, "github_pats_total", "github", org_tag, len(pats)),
-                (
-                    now,
-                    "github_pats_with_expiration",
-                    "github",
-                    org_tag,
-                    sum(1 for p in pats if p.get("expires_at")),
-                ),
-                (
-                    now,
-                    "github_pats_expiring_7d",
-                    "github",
-                    org_tag,
-                    sum(1 for p in pats if _expiring_within(p.get("expires_at"), 7)),
-                ),
-                (
-                    now,
-                    "github_pats_expiring_30d",
-                    "github",
-                    org_tag,
-                    sum(1 for p in pats if _expiring_within(p.get("expires_at"), 30)),
-                ),
-            ]
-            cur.executemany(
-                """
-                INSERT INTO governance.metrics
-                    (time, metric_name, source, tags, value_num)
-                VALUES (%s, %s, %s, %s, %s)
-            """,
-                metrics,
-            )
-
-        conn.commit()
-
-    log.info("Inventário concluído (%d métricas gravadas)", len(metrics))
+_GITHUB_API = "https://api.github.com"
 
 
-def _expiring_within(expires_at_str, days: int) -> bool:
+def _expiring_within(expires_at_str: str | None, days: int) -> bool:
     if not expires_at_str:
         return False
     try:
@@ -124,3 +37,94 @@ def _expiring_within(expires_at_str, days: int) -> bool:
         return 0 <= delta.days <= days
     except (ValueError, TypeError):
         return False
+
+
+def _fetch_org_pats(org: str, token: str) -> tuple[list[dict], bool]:
+    """Fetch fine-grained PATs for a GitHub org.
+
+    Returns (pats, available). available=False when org doesn't support the API.
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    url = f"{_GITHUB_API}/orgs/{org}/personal-access-tokens"
+    pats: list[dict] = []
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            while url:
+                resp = client.get(url, headers=headers)
+                if resp.status_code in (404, 403):
+                    log.warning(
+                        "github_pat_api_unavailable",
+                        org=org,
+                        status=resp.status_code,
+                        reason="org_policy_not_enabled_or_personal_account",
+                    )
+                    return [], False
+                resp.raise_for_status()
+                pats.extend(resp.json())
+                url = resp.links.get("next", {}).get("url")
+    except httpx.RequestError as exc:
+        log.error("github_pat_request_error", org=org, error=str(exc))
+        return [], False
+
+    return pats, True
+
+
+def _build_point(org: str, pats: list[dict], available: bool) -> Point:
+    now = datetime.now(UTC)
+    total = len(pats)
+    with_exp = sum(1 for p in pats if p.get("expires_at"))
+    no_exp = total - with_exp
+    exp_7d = sum(1 for p in pats if _expiring_within(p.get("expires_at"), 7))
+    exp_30d = sum(1 for p in pats if _expiring_within(p.get("expires_at"), 30))
+
+    return (
+        Point("gov_github_pat")
+        .tag("org", org)
+        .tag("available", str(available).lower())
+        .field("total", total)
+        .field("with_expiration", with_exp)
+        .field("no_expiration", no_exp)
+        .field("expiring_7d", exp_7d)
+        .field("expiring_30d", exp_30d)
+        .time(now, WritePrecision.S)
+    )
+
+
+def _write_point(point: Point) -> None:
+    client = InfluxDBClient(
+        url=settings.INFLUX_URL,
+        token=settings.INFLUX_TOKEN,
+        org=settings.INFLUX_ORG,
+    )
+    try:
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+        write_api.write(
+            bucket=settings.INFLUX_BUCKET_RAW,
+            org=settings.INFLUX_ORG,
+            record=[point],
+        )
+    finally:
+        client.close()
+
+
+def collect_github_pats() -> None:
+    """Collect PAT inventory for the configured GitHub org and write to InfluxDB."""
+    org = settings.GITHUB_ORG
+    log.info("github_pat_collector_start", org=org)
+
+    pats, available = _fetch_org_pats(org, settings.GITHUB_TOKEN)
+
+    point = _build_point(org, pats, available)
+    _write_point(point)
+
+    log.info(
+        "github_pat_collector_done",
+        org=org,
+        total=len(pats),
+        available=available,
+    )

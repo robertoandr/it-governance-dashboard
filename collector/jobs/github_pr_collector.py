@@ -2,9 +2,19 @@
 
 Schema (Grafana-compatible):
   measurement: gov_github_pr
-  tags:        repo=<owner>/<repo>, state=merged|open|closed
-  fields:      count=1, time_to_merge_seconds=<N> (merged only)
+  tags:        repo=<owner>/<repo>, state=merged|open|closed,
+               author_team=<team>|unknown
+  fields:      count=1,
+               time_to_merge_seconds=<N> (merged, backward-compat),
+               cycle_time_seconds=<N> (merged, DORA alias),
+               review_comments=<N>,
+               additions=<N> (merged, from individual PR endpoint),
+               deletions=<N> (merged, from individual PR endpoint),
+               changed_files=<N> (merged, from individual PR endpoint)
   timestamp:   merged_at (merged) | updated_at (open/closed)
+
+Note: additions/deletions/changed_files require one extra API call per
+merged PR (individual endpoint). open/closed PRs skip this enrichment.
 """
 
 from __future__ import annotations
@@ -20,6 +30,7 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
+from utils.team_mapper import get_team
 
 from config import settings
 
@@ -45,8 +56,15 @@ class GitHubPR(BaseModel):
     deletions: int = 0
     changed_files: int = 0
     review_comments: int = Field(default=0, alias="review_comments")
+    author_login: str = ""
 
     model_config = {"populate_by_name": True}
+
+    @classmethod
+    def from_api_item(cls, item: dict) -> GitHubPR:
+        """Construct from a GitHub API PR list item, extracting author login."""
+        author_login = (item.get("user") or {}).get("login", "")
+        return cls(**{**item, "author_login": author_login})
 
     @property
     def resolved_state(self) -> str:
@@ -69,17 +87,26 @@ class GitHubPR(BaseModel):
         return (self.merged_at - self.created_at).total_seconds()
 
 
-def pr_to_point(repo: str, pr: GitHubPR) -> Point:
+def pr_to_point(repo: str, pr: GitHubPR, author_login: str = "") -> Point:
     """Convert a GitHubPR to an InfluxDB Point with the Grafana-compatible schema."""
+    author_team = get_team(author_login) if author_login else "unknown"
     p = (
         Point("gov_github_pr")
         .tag("repo", repo)
         .tag("state", pr.resolved_state)
+        .tag("author_team", author_team)
         .field("count", 1)
+        .field("review_comments", pr.review_comments)
         .time(pr.reference_timestamp, WritePrecision.S)
     )
     if pr.time_to_merge_seconds is not None:
-        p = p.field("time_to_merge_seconds", pr.time_to_merge_seconds)
+        p = (
+            p.field("time_to_merge_seconds", pr.time_to_merge_seconds)
+            .field("cycle_time_seconds", pr.time_to_merge_seconds)
+            .field("additions", pr.additions)
+            .field("deletions", pr.deletions)
+            .field("changed_files", pr.changed_files)
+        )
     return p
 
 
@@ -99,6 +126,32 @@ async def _fetch_page(
         return resp
     resp.raise_for_status()
     return resp
+
+
+async def _fetch_pr_detail(
+    client: httpx.AsyncClient,
+    repo: str,
+    pr_number: int,
+    headers: dict[str, str],
+) -> dict[str, int]:
+    """Fetch additions/deletions/changed_files from the individual PR endpoint.
+
+    Returns a dict with those three keys, or empty dict on error.
+    """
+    url = f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}"
+    try:
+        resp = await _fetch_page(client, url, headers, {})
+        if resp.status_code == 304:
+            return {}
+        data = resp.json()
+        return {
+            "additions": data.get("additions", 0),
+            "deletions": data.get("deletions", 0),
+            "changed_files": data.get("changed_files", 0),
+        }
+    except Exception as exc:
+        log.warning("pr_detail_fetch_failed", repo=repo, pr=pr_number, error=str(exc))
+        return {}
 
 
 async def fetch_prs(repo: str, state: str, since: datetime) -> list[GitHubPR]:
@@ -154,7 +207,7 @@ async def fetch_prs(repo: str, state: str, since: datetime) -> list[GitHubPR]:
                 if updated < since:
                     stop = True
                     break
-                prs.append(GitHubPR(**item))
+                prs.append(GitHubPR.from_api_item(item))
 
             log_ctx.debug("github_page_fetched", page=page, count=len(items))
 
@@ -182,21 +235,46 @@ def _write_points(points: list[Point]) -> None:
         client.close()
 
 
+async def _enrich_merged_pr(
+    client: httpx.AsyncClient,
+    repo: str,
+    pr: GitHubPR,
+    headers: dict[str, str],
+) -> GitHubPR:
+    """Fetch additions/deletions/changed_files for a merged PR and return enriched copy."""
+    detail = await _fetch_pr_detail(client, repo, pr.number, headers)
+    if not detail:
+        return pr
+    return pr.model_copy(update=detail)
+
+
 async def _collect_repo(repo: str, since: datetime) -> int:
     """Collect all states for one repo and write to InfluxDB. Returns point count."""
     all_points: list[Point] = []
+    headers = {
+        "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
 
-    for state in ("open", "closed"):  # closed includes merged
-        try:
-            prs = await fetch_prs(repo, state, since)
-        except Exception as exc:
-            log.warning("fetch_failed", repo=repo, state=state, error=str(exc))
-            continue
+    async with httpx.AsyncClient() as client:
+        for state in ("open", "closed"):  # closed includes merged
+            try:
+                prs = await fetch_prs(repo, state, since)
+            except Exception as exc:
+                log.warning("fetch_failed", repo=repo, state=state, error=str(exc))
+                continue
 
-        for pr in prs:
-            all_points.append(pr_to_point(repo, pr))
+            enriched: list[GitHubPR] = []
+            for pr in prs:
+                if pr.resolved_state == "merged":
+                    pr = await _enrich_merged_pr(client, repo, pr, headers)
+                enriched.append(pr)
 
-        log.info("prs_fetched", repo=repo, state=state, count=len(prs))
+            for pr in enriched:
+                all_points.append(pr_to_point(repo, pr, author_login=pr.author_login))
+
+            log.info("prs_fetched", repo=repo, state=state, count=len(prs))
 
     if all_points:
         _write_points(all_points)
