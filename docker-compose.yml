@@ -153,6 +153,9 @@ services:
       INFLUX_TOKEN: "${INFLUX_TOKEN}"
       INFLUX_ORG: "${INFLUX_ORG:-grupogadens}"
       INFLUX_BUCKET_RAW: "${INFLUX_BUCKET_RAW:-governance_raw}"
+      # Zabbix is on the Docker host — reachable via the bridge gateway IP
+      ZABBIX_URL: "${ZABBIX_COLLECTOR_URL:-http://172.21.0.1:8080/api_jsonrpc.php}"
+      ZABBIX_TOKEN: "${ZABBIX_TOKEN:-}"
       POSTGRES_DSN: "${POSTGRES_DSN:-}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       TZ: "${TZ:-America/Sao_Paulo}"

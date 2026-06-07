@@ -14,6 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=2 \
-    CMD python -c "import jobs.github_pr_collector, jobs.github_pats, jobs.gitleaks_scan" || exit 1
+    CMD python -c "import jobs.github_pr_collector, jobs.github_pats, jobs.gitleaks_scan, jobs.zabbix_collector" || exit 1
 
 CMD ["python", "-u", "main.py"]
