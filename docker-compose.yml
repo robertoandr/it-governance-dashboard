@@ -16,6 +16,7 @@ volumes:
   influxdb_data:
   influxdb_config:
   grafana_data:
+  collector_data:
 
 services:
 
@@ -133,6 +134,33 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    networks:
+      - itgov-net
+
+  # ─── Collector (APScheduler: GitHub PR + PATs + Gitleaks) ────────────────────
+  collector:
+    build:
+      context: ./collector
+      dockerfile: Dockerfile
+    image: it-gov-dashboard-collector:latest
+    container_name: itgov-collector-new
+    restart: unless-stopped
+    environment:
+      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+      GITHUB_ORG: "${GITHUB_ORG:-robertoandr}"
+      GITHUB_REPOS: "${GITHUB_REPOS:-}"
+      INFLUX_URL: "http://influxdb:8086"
+      INFLUX_TOKEN: "${INFLUX_TOKEN}"
+      INFLUX_ORG: "${INFLUX_ORG:-grupogadens}"
+      INFLUX_BUCKET_RAW: "${INFLUX_BUCKET_RAW:-governance_raw}"
+      POSTGRES_DSN: "${POSTGRES_DSN:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      TZ: "${TZ:-America/Sao_Paulo}"
+    volumes:
+      - collector_data:/data
+    depends_on:
+      influxdb:
+        condition: service_healthy
     networks:
       - itgov-net
 
