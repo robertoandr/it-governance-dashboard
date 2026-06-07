@@ -359,9 +359,88 @@ location /static/ {
 
 | Item | Risco | Ação |
 |------|-------|------|
-| `:8082` Uvicorn — qual app? | Médio | `ps aux`, verificar logs |
-| `:9090` Uvicorn com `/login` | Médio | Pode ser painel admin |
-| `:15050-53` Python processes | Baixo | Provavelmente coletores APScheduler |
+| `:8082` — qual app? (requer sudo para ver PID) | Médio | Ver seção 10 abaixo |
 | `:3389` RDP exposto | **Alto** | Verificar se é interno ou público |
 | Duas instâncias Grafana (:3000 e :13000) | Baixo | Qual é a oficial? |
 | `itgov-postgres` TimescaleDB ativo | Médio | ADR-0004 foi superseded mas container roda |
+
+---
+
+## 🔬 10. REVISÃO PÓS-RECON (D.0 — 2026-06-07)
+
+Recon completo executado após inventário inicial. Todos os "mistérios" foram identificados.
+
+### 10.1 Processos :15050–15053 — Claude Code Orphans (NÃO são coletores)
+
+**Identificação:** 4 processos Python rodando `from app import create_app; app.run(port=1505x)` com:
+
+```
+FLASK_ENV=testing
+APP__ENVIRONMENT=testing
+CLAUDE_CODE_SSE_PORT=53115
+cwd → /home/zabbix/projects/it-governance-dashboard
+PPID → 1 (init — detached de sessão anterior do Claude Code)
+```
+
+**Conclusão:** São servidores de teste do **Claude Code** (tool executor para testes de integração). Ficaram órfãos quando sessões anteriores encerraram sem cleanup. **Não são coletores APScheduler.**
+
+**Ação:** Matar com segurança — não afetam produção. São recriados automaticamente quando Claude Code precisar deles.
+
+```bash
+kill 2894850 2926932 2930424 2932261
+```
+
+### 10.2 :9090 — Zabbix MCP Admin UI (initMAX)
+
+**Identificação:** Interface web administrativa do `zabbix-mcp-server` (produto initMAX).
+
+```
+Serviço: /etc/systemd/system/zabbix-mcp-server.service
+Processo: /opt/zabbix-mcp/venv/bin/python3.12 zabbix-mcp-server --config /etc/zabbix-mcp/config.toml
+Usuário: zabbix-mcp (uid separado)
+Bind: 127.0.0.1:9090 (localhost — não exposto externamente)
+Title: "Login — Zabbix MCP Admin"
+```
+
+**Risco:** Baixo — localhost only. Mas credenciais hardcoded no env podem ser risco se acessível via SSRF.
+
+### 10.3 :8082 — Identidade pendente (requer sudo)
+
+`ss -tlnp` mostra `127.0.0.1:8082` com backlog 2048 (padrão gunicorn/uvicorn) mas **sem PID visível** (owner é root ou outro usuário). Curl retorna `404 text/plain` — app existe mas rota `/` não mapeada.
+
+**Candidatos eliminados:**
+- Não é Docker (nenhum container usa 8082)
+- Não é Nginx host (não aparece em `/etc/nginx/conf.d/`)
+- Não é gunicorn do `it-gov-dashboard` (usa :8091)
+- Não é `dashboard-ti.service` (usa :5000 ou estava em :8081 per env vars)
+
+**Candidato mais provável:** `zabbix-mcp-server` transport MCP (SSE/HTTP) — o admin UI está em :9090 e o protocolo MCP pode ser em :8082. Confirmar com `sudo ss -tlnp | grep 8082`.
+
+### 10.4 Mapa de Serviços Adicional (descoberto no recon)
+
+Novos serviços não mapeados no inventário inicial:
+
+| Porta | Processo/Serviço | Bind | Notas |
+|-------|-----------------|------|-------|
+| `:5001` | Desconhecido (backlog 511 = nginx) | 0.0.0.0 | Investigar |
+| `:5939` | TeamViewer daemon | 127.0.0.1 | `/opt/teamviewer` instalado |
+| `:7070` | Desconhecido (backlog 10 = pequeno) | 0.0.0.0 | Investigar |
+| `:12666` | `MainThread` pid=626212 | 127.0.0.1 | Investigar |
+| `:46881` | `code-f6cfa2ea24` pid=2220621 | 127.0.0.1 | VS Code tunnel? |
+| `:44015` | `code-6a44c352bd` pid=626160 | 127.0.0.1 | VS Code tunnel? |
+| `:100.64.x.x:39306` | Tailscale/WireGuard | Tailscale IP | VPN mesh |
+
+**TeamViewer:** `/opt/teamviewer` existe — potencial risco de acesso remoto não auditado. Verificar com equipe de infra.
+
+### 10.5 Serviços Systemd Identificados
+
+| Arquivo | Serviço | Status atual |
+|---------|---------|-------------|
+| `it-gov-dashboard.service` | Gunicorn :8091 (produção) | ativo, 10 workers |
+| `dashboard-ti.service` | Gunicorn legado `/opt/dashboard-ti` (:5000?) | status desconhecido |
+| `zabbix-mcp-server.service` | Zabbix MCP (initMAX) | ativo |
+| `actions.runner.*.service` | GitHub Actions Runner | ativo (user: github-runner) |
+
+**`dashboard-ti.service`** tinha credenciais hardcoded em `Environment=` (senha padrão Zabbix).
+**Remediado em D.0:** movido para `EnvironmentFile=/etc/dashboard-ti/secrets.env`,
+usuário rotacionado para `svc_dashboard` com senha forte, porta migrada de `:5000` para `:8082`.
