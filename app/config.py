@@ -43,6 +43,7 @@ class InfluxConfig(BaseSettings):
     token: SecretStr = SecretStr("")
     org: str = "gadens"
     bucket: str = "govti"
+    bucket_raw: str = "governance_raw"
     enabled: bool = False
 
 

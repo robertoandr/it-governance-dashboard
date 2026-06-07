@@ -7,6 +7,7 @@ from typing import Any
 
 import structlog
 
+from app.config import get_settings
 from app.models.governance import GovernanceScore, PillarID
 from app.services.mock_data import MockMetricsProvider
 from app.services.score_calculator import ScoreCalculator
@@ -14,11 +15,23 @@ from app.services.score_calculator import ScoreCalculator
 log = structlog.get_logger(__name__)
 
 
+def _build_provider() -> MockMetricsProvider:
+    """Return an InfluxDBMetricsProvider when InfluxDB is enabled, else mock."""
+    settings = get_settings()
+    if settings.influx.enabled:
+        from app.services.influxdb_provider import InfluxDBMetricsProvider
+
+        log.info("metrics_provider", kind="influxdb")
+        return InfluxDBMetricsProvider()  # type: ignore[return-value]
+    log.info("metrics_provider", kind="mock")
+    return MockMetricsProvider()
+
+
 class MetricsAggregator:
     """Collects metrics from all sources and returns a full GovernanceScore.
 
     Args:
-        provider: Metrics source; defaults to MockMetricsProvider.
+        provider: Metrics source; defaults to provider selected by config.
         calculator: Score engine; defaults to ScoreCalculator.
     """
 
@@ -27,7 +40,7 @@ class MetricsAggregator:
         provider: MockMetricsProvider | None = None,
         calculator: ScoreCalculator | None = None,
     ) -> None:
-        self._provider = provider or MockMetricsProvider()
+        self._provider = provider or _build_provider()
         self._calculator = calculator or ScoreCalculator()
 
     async def calculate_full_score(self) -> GovernanceScore:
