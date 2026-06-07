@@ -116,28 +116,106 @@ Dashboard não provisionado automaticamente.
 
 ---
 
-## 🔮 Evoluções Previstas
+## ✅ Evoluções Concluídas (2026-06-07)
 
-- **Rota O+ (Value Delivery+):** enriquecer `gov_github_pr` com campos
-  DORA-like: `additions`, `deletions`, `changed_files`, `review_comments`,
-  `cycle_time_seconds`, tag `author_team` via `config/teams.yaml`.
-  PR: `feat(collector): enrich gov_github_pr with DORA-like metrics`
+### Rota A — Risk Management (PR #141, merged main)
 
-- **Rota A (Risk Management):** surfaçar dados órfãos de PATs e Gitleaks
-  em dashboard `risk-management.json` com 6 painéis (3 PATs + 3 secrets).
+Dados órfãos de PATs e Gitleaks surfaçados no Grafana.
 
-- **ETag persistence:** mover cache de ETags para volume Docker (arquivo JSON)
-  eliminando re-fetch completo a cada restart.
+**O que foi feito:**
+- `github_pats.py` reescrito: PostgreSQL → InfluxDB (`gov_github_pat`).
+  Escreve `total`, `with_expiration`, `no_expiration`, `expiring_7d`, `expiring_30d`
+  com tag `available=true|false`. Graceful 404 para contas pessoais sem org policy.
+- `gitleaks_scan.py` reescrito: PostgreSQL → `gov_gitleaks_finding` +
+  `gov_gitleaks_summary`. GitHub Secret Scanning API como fonte primária.
+- `grafana/dashboards/risk-management.json` criado (uid `risk-mgmt-001`)
+  com 6 painéis auto-provisionados.
+- 18 novos testes (pats + gitleaks).
 
-- **Paginação GitHub API:** implementar loop de paginação para repos com
-  >100 PRs fechados, eliminando truncagem silenciosa (Bug #6).
+**Lacunas de coleta documentadas (backlog):**
+- PATs: requer GitHub org com fine-grained PAT policy (conta pessoal → 404)
+- Secret Scanning: requer scope `security_events` no token
+- gitleaks local: requer volume `/data/scan-targets` no docker-compose
+
+**Bug adicional descoberto (Bug #9):**
+PATs e Gitleaks escreviam em PostgreSQL sem POSTGRES_DSN configurado →
+jobs rodavam, aparência de sucesso nos logs, zero dados gravados.
+Princípio: validar o destino de escrita no startup, não no runtime.
+
+---
+
+### Rota O+ — Value Delivery DORA (PR #142, merged main)
+
+`gov_github_pr` enriquecido com métricas DORA-like.
+
+**O que foi feito:**
+- `GitHubPR.from_api_item()`: extrai `author_login` do campo `user.login`
+- `_fetch_pr_detail()`: endpoint individual GitHub para merged PRs
+- `_enrich_merged_pr()`: enrichment async apenas para merged (sem overhead em open/closed)
+- `pr_to_point()`: 5 novos campos + tag `author_team`
+- `collector/utils/team_mapper.py`: `get_team(login)` com `lru_cache`, fallback `"unknown"`
+- `collector/config/teams.yaml`: mapping login → team
+- 4 novos painéis no `github-insights.json` (ids 11-14)
+- 32 testes (24 PR collector + 8 team_mapper)
+
+**Schema final `gov_github_pr`:**
+
+| Campo/Tag | Tipo | Disponível em |
+|-----------|------|---------------|
+| `count` | field int | open, closed, merged |
+| `time_to_merge_seconds` | field float | merged (backward compat) |
+| `review_comments` | field int | open, closed, merged |
+| `cycle_time_seconds` | field float | merged (DORA alias) |
+| `additions` | field int | merged |
+| `deletions` | field int | merged |
+| `changed_files` | field int | merged |
+| `repo` | tag | todos |
+| `state` | tag | todos |
+| `author_team` | tag | todos |
+
+**Validação query Flux:**
+```flux
+from(bucket:"governance_raw")
+  |> range(start:-30d)
+  |> filter(fn:(r) => r._measurement == "gov_github_pr" and r.state == "merged")
+  |> filter(fn:(r) => contains(value:r._field,
+       set:["additions","cycle_time_seconds","review_comments"]))
+  |> last()
+// Resultado: additions=686, cycle_time_seconds=1916, review_comments=0
+//            author_team=backend (robertoandr mapeado), author_team=unknown (outros)
+```
+
+**Bug adicional descoberto (Bug #10):**
+`teams.yaml` em `config/` (raiz do projeto) não era copiado para o container Docker
+(`COPY . .` copia `collector/` apenas). Fix: mover para `collector/config/teams.yaml`.
+Princípio: validar paths de config no build da imagem, não no runtime.
+
+---
+
+## 🔮 Próximas Evoluções (Backlog)
+
+- **ETag persistence:** mover cache de ETags para arquivo JSON em volume Docker,
+  eliminando re-fetch completo a cada restart de container.
+
+- **Paginação GitHub API:** loop de paginação para repos com >100 PRs fechados,
+  eliminando truncagem silenciosa (Bug #6).
+
+- **Scope `security_events` no token:** habilitar GitHub Secret Scanning API
+  para popular `gov_gitleaks_finding` com dados reais (atualmente available=false).
+
+- **Volume `scan-targets`:** montar `/data/scan-targets` no docker-compose para
+  habilitar gitleaks local scan.
 
 ---
 
 ## 📚 Referências
 
-- `app/jobs/github_pr_collector.py` — implementação atual do coletor
-- `grafana/dashboards/github-insights.json` — dashboard Value Delivery
-- `docker-compose.yml` — configuração do container `itgov-collector`
-- `app/core/config.py` — AppSettings com `env_nested_delimiter`
+- `collector/jobs/github_pr_collector.py` — coletor de PRs (enriquecido)
+- `collector/jobs/github_pats.py` — inventário PATs → InfluxDB
+- `collector/jobs/gitleaks_scan.py` — secret scanning → InfluxDB
+- `collector/utils/team_mapper.py` — mapeamento login → team
+- `collector/config/teams.yaml` — configuração de times editável sem deploy
+- `grafana/dashboards/github-insights.json` — dashboard Value Delivery (14 painéis)
+- `grafana/dashboards/risk-management.json` — dashboard Risk Management (6 painéis)
+- `docker-compose.yml` — configuração dos containers
 - LL-003 — Incident de hardcoded secret (contexto de segurança)
