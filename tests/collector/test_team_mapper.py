@@ -8,12 +8,18 @@ from pathlib import Path
 
 import pytest
 
-# Patch config (needed because team_mapper imports structlog which may pull config)
+# Patch config (needed because team_mapper imports structlog which may pull config).
+# Manually save/restore only "config" so collector modules stay in sys.modules.
 _mock_config = types.ModuleType("config")
-sys.modules.setdefault("config", _mock_config)
 
-# team_mapper itself has no sys.modules dependency, but needs the collector path
+_config_before = sys.modules.get("config")
+sys.modules["config"] = _mock_config
 from collector.utils.team_mapper import _load_mapping, get_team  # noqa: E402
+
+if _config_before is None:
+    sys.modules.pop("config", None)
+else:
+    sys.modules["config"] = _config_before
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
