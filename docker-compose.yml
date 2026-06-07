@@ -33,6 +33,16 @@ services:
       APP__HOST: "0.0.0.0"
       APP__PORT: "5000"
       LOGGING__FORMAT: json
+      # InfluxDB — override single-underscore .env vars with double-underscore
+      # so Pydantic nested settings (env_nested_delimiter="__") picks them up.
+      # INFLUX_URL in .env points to native host InfluxDB; inside Docker the
+      # service is reachable as http://influxdb:8086 on the itgov-net network.
+      INFLUX__URL: "http://influxdb:8086"
+      INFLUX__TOKEN: "${INFLUX_TOKEN}"
+      INFLUX__ORG: "${INFLUX_ORG:-gadens}"
+      INFLUX__BUCKET: "${INFLUX_BUCKET:-govti}"
+      INFLUX__BUCKET_RAW: "${INFLUX_BUCKET_RAW:-governance_raw}"
+      INFLUX__ENABLED: "true"
     ports:
       - "${APP_PORT:-5000}:5000"
     volumes:
