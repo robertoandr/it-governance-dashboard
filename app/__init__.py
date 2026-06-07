@@ -86,6 +86,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_legacy_api_unavailable", error=str(_e))
 
+    # Custom Jinja2 filters
+    from app.utils.template_filters import register_filters
+
+    register_filters(app)
+
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 

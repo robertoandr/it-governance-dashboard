@@ -31,8 +31,8 @@
     {% endif %}
   </div>
   <div class="text-right text-sm text-gray-400">
-    <p>Calculado em</p>
-    <p class="font-mono">{{ governance.computed_at[:19] | replace('T',' ') }}</p>
+    <p>Atualizado em</p>
+    <p class="font-mono">{{ governance.computed_at | datetime_br }}</p>
   </div>
 </div>
 

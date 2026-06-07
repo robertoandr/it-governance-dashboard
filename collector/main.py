@@ -10,6 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
+from jobs.zabbix_collector import collect_zabbix_ops
 
 from config import settings
 
@@ -56,6 +57,16 @@ if __name__ == "__main__":
         name="Gitleaks Secret Scan",
         max_instances=1,
         coalesce=True,
+    )
+
+    scheduler.add_job(
+        collect_zabbix_ops,
+        IntervalTrigger(minutes=5),
+        id="zabbix_ops_collector",
+        name="Zabbix Ops & Infra Collector",
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(),
     )
 
     signal.signal(signal.SIGINT, shutdown)
