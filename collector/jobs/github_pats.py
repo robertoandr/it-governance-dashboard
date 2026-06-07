@@ -1,15 +1,18 @@
-"""GitHub PAT inventory collector — writes gov_github_pat to InfluxDB governance_raw.
+"""GitHub PAT inventory collector — DISABLED (D.0, 2026-06-07).
 
-Schema:
+Reason: GET /orgs/{org}/personal-access-tokens requires GitHub Enterprise
++ org owner role with PAT policy enabled. Org `robertoandr` is personal →
+endpoint returns 404, polluting governance_raw with available=false every 6h.
+
+Tracking: Issue #150 — replace with viable collectors for personal orgs:
+  - rate_limit, dependabot_alerts, code_scanning, actions_runs.
+
+Schema (preserved for reference):
   measurement: gov_github_pat
   tags:        org=<github_org>, available=true|false
   fields:      total, with_expiration, no_expiration,
                expiring_7d, expiring_30d
   timestamp:   collection time (now)
-
-Note: fine-grained PAT listing requires GitHub org with PAT policy enabled.
-Personal accounts and orgs without the policy return 404 → fields written as 0
-with tag available=false so the dashboard reflects the gap explicitly.
 """
 
 from __future__ import annotations
@@ -112,8 +115,24 @@ def _write_point(point: Point) -> None:
         client.close()
 
 
+COLLECTOR_ENABLED: bool = False  # disabled in D.0 — see module docstring
+
+
 def collect_github_pats() -> None:
-    """Collect PAT inventory for the configured GitHub org and write to InfluxDB."""
+    """Collect PAT inventory for the configured GitHub org and write to InfluxDB.
+
+    Returns:
+        None. Skips execution when COLLECTOR_ENABLED is False.
+    """
+    if not COLLECTOR_ENABLED:
+        log.info(
+            "collector_skipped",
+            collector="gov_github_pat",
+            reason="org_personal_lacks_enterprise_endpoint",
+            tracking_issue=150,
+        )
+        return
+
     org = settings.GITHUB_ORG
     log.info("github_pat_collector_start", org=org)
 
