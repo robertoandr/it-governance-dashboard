@@ -66,7 +66,7 @@ def _fetch_problems() -> list[dict]:
     return _zabbix_rpc(
         "problem.get",
         {
-            "output": ["problemid", "severity"],
+            "output": ["eventid", "severity"],
             "recent": True,
             "suppressed": False,
         },
