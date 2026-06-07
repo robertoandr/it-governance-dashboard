@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import TYPE_CHECKING, Any
 
-from flask import Flask, jsonify
+from flask import Flask, g, jsonify
 
 from app.utils.logging import configure_logging
 
@@ -110,13 +111,27 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             return jsonify({"error": "Internal server error"}), 500
         return _render_error("errors/500.html", 500)
 
-    # Security headers
+    # Per-request CSP nonce — generated once per request, stored in g
+    @app.before_request
+    def _generate_nonce() -> None:
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    # Security headers (including CSP with nonce for script-src)
     @app.after_request
     def add_security_headers(response: Any) -> Any:
+        nonce = getattr(g, "csp_nonce", "")
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            f"default-src 'self'; "
+            f"script-src 'nonce-{nonce}' 'strict-dynamic' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
+            f"style-src 'self' 'unsafe-inline'; "
+            f"img-src 'self' data:; "
+            f"connect-src 'self'; "
+            f"frame-ancestors 'none'"
+        )
         return response
 
     # Context processors
@@ -126,6 +141,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             "app_version": settings.app.version,
             "app_name": settings.app.name,
             "environment": settings.app.environment,
+            "csp_nonce": lambda: getattr(g, "csp_nonce", ""),
         }
 
     log.info(
