@@ -20,16 +20,21 @@ _mock_settings.INFLUX_TOKEN = "influx-tok"
 _mock_settings.INFLUX_ORG = "testorg"
 _mock_settings.INFLUX_BUCKET_RAW = "governance_raw"
 _mock_config.settings = _mock_settings
-sys.modules.setdefault("config", _mock_config)
 
 # Mock utils.team_mapper so tests run outside the collector container context
 _mock_utils = types.ModuleType("utils")
 _mock_team_mapper = types.ModuleType("utils.team_mapper")
 _mock_team_mapper.get_team = lambda login: "unknown"
 _mock_utils.team_mapper = _mock_team_mapper
-sys.modules.setdefault("utils", _mock_utils)
-sys.modules.setdefault("utils.team_mapper", _mock_team_mapper)
 
+# Manually save/restore only mocked keys so collector modules stay in sys.modules
+# and patch() calls inside tests can still resolve them.
+_config_before = sys.modules.get("config")
+_utils_before = sys.modules.get("utils")
+_team_mapper_before = sys.modules.get("utils.team_mapper")
+sys.modules["config"] = _mock_config
+sys.modules["utils"] = _mock_utils
+sys.modules["utils.team_mapper"] = _mock_team_mapper
 from collector.jobs.github_pr_collector import (  # noqa: E402
     GitHubPR,
     _enrich_merged_pr,
@@ -37,6 +42,16 @@ from collector.jobs.github_pr_collector import (  # noqa: E402
     pr_to_point,
     run,
 )
+
+for _key, _before in [
+    ("config", _config_before),
+    ("utils", _utils_before),
+    ("utils.team_mapper", _team_mapper_before),
+]:
+    if _before is None:
+        sys.modules.pop(_key, None)
+    else:
+        sys.modules[_key] = _before
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 

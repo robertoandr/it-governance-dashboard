@@ -6,7 +6,9 @@ import sys
 import types
 from unittest.mock import MagicMock
 
-# Patch config before importing the module under test
+# Patch config before importing the module under test.
+# Manually save/restore only "config" so collector modules stay in sys.modules
+# and patch() calls inside tests can still resolve them.
 _mock_config = types.ModuleType("config")
 _mock_settings = MagicMock()
 _mock_settings.GITHUB_TOKEN = "tok"
@@ -17,8 +19,9 @@ _mock_settings.INFLUX_TOKEN = "influx-tok"
 _mock_settings.INFLUX_ORG = "testorg"
 _mock_settings.INFLUX_BUCKET_RAW = "governance_raw"
 _mock_config.settings = _mock_settings
-sys.modules.setdefault("config", _mock_config)
 
+_config_before = sys.modules.get("config")
+sys.modules["config"] = _mock_config
 from collector.jobs.gitleaks_scan import (  # noqa: E402
     _alert_to_severity,
     _build_github_points,
@@ -26,6 +29,11 @@ from collector.jobs.gitleaks_scan import (  # noqa: E402
     _severity_from_rule,
     run_gitleaks_scan,
 )
+
+if _config_before is None:
+    sys.modules.pop("config", None)
+else:
+    sys.modules["config"] = _config_before
 
 # ── severity helpers ────────────────────────────────────────────────────────
 
