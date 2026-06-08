@@ -10,13 +10,15 @@ import os
 bind = os.getenv("GUNICORN_BIND", "127.0.0.1:8091")
 
 # ── Workers ────────────────────────────────────────────────────────────────────
-# Formula: (2 × cpu_count) + 1, capped at 9 to avoid memory bloat.
-# Flask is sync but gthread allows concurrent requests within a worker
-# without needing an async framework.
+# FIX(#156): workers=1 required because the refresh thread must run in the same
+# process that serves HTTP requests. With preload_app=True and multiple workers,
+# threads start in the master and never survive fork() — workers see a frozen
+# _cache (last_refresh: null) forever. Single worker + many threads maintains
+# concurrency without the fork-isolation bug.
 _cpu = multiprocessing.cpu_count()
-workers = min(_cpu * 2 + 1, 9)
+workers = 1
 worker_class = "gthread"
-threads = 4
+threads = min(_cpu * 4, 16)
 
 # ── Timeouts ───────────────────────────────────────────────────────────────────
 timeout = 60  # kill worker if silent for 60 s (handles stuck requests)
@@ -35,10 +37,12 @@ loglevel = os.getenv("LOG_LEVEL", "info")
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" rt=%(L)ss'
 
 # ── Performance ────────────────────────────────────────────────────────────────
-# Load application code once in the master process and fork workers from it.
-# Cuts per-worker startup time and total RSS; safe because Flask has no
-# pre-fork state that must be isolated.
-preload_app = True
+# FIX(#156): preload_app disabled. With preload_app=True, _start() runs in the
+# master and the refresh thread starts there — but threads don't survive fork(),
+# so workers always have a stale _cache. With preload_app=False, each worker
+# imports the app independently and _start() runs in the worker process.
+# With workers=1 (above), there's exactly one refresh thread serving requests.
+preload_app = False
 
 # ── Server mechanics ───────────────────────────────────────────────────────────
 # systemd sends SIGTERM on stop — graceful_timeout handles in-flight requests.
