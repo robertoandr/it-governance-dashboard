@@ -1,0 +1,52 @@
+# Template — copiar para /etc/systemd/system/dashboard-ti.service
+# Variáveis: substituir {{ }} antes de instalar
+# Instalação: sudo cp dashboard-ti.service.template /etc/systemd/system/dashboard-ti.service
+#             sudo systemctl daemon-reload && sudo systemctl restart dashboard-ti
+#
+# Postmortem ref: 2026-06-07 — crash loop silencioso detectado tarde demais
+
+[Unit]
+Description=IT Governance Dashboard (legacy)
+After=network-online.target
+Wants=network-online.target
+# Evita crash loop silencioso: falha se reiniciar >3x em 60s
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=notify
+User={{ SERVICE_USER }}
+Group={{ SERVICE_GROUP }}
+WorkingDirectory={{ WORKDIR }}
+EnvironmentFile={{ ENV_FILE }}
+ExecStart={{ VENV_PATH }}/bin/gunicorn \
+  --bind 127.0.0.1:8082 \
+  --workers 2 \
+  --worker-class sync \
+  --timeout 30 \
+  --access-logfile - \
+  --error-logfile - \
+  app:app
+
+# Watchdog: app precisa chamar sd_notify("WATCHDOG=1") a cada 30s
+# Se não chamar em 60s, systemd mata e reinicia
+WatchdogSec=60
+
+# Reinício automático com backoff
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ LOG_DIR }} {{ DATA_DIR }}
+
+# Limites de recursos
+LimitNOFILE=4096
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

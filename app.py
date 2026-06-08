@@ -245,6 +245,12 @@ def api_data():
         return jsonify(_cache)
 
 
+@app.route("/health")
+def health_liveness():
+    """Liveness probe para Zabbix self-monitoring e systemd watchdog."""
+    return jsonify({"status": "ok", "service": "dashboard-ti", "port": 8082}), 200
+
+
 @app.route("/api/health")
 def api_health():
     with _cache_lock:
