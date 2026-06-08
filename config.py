@@ -46,7 +46,9 @@ INFLUX_BUCKET = _env("INFLUX_BUCKET")
 ZABBIX_URL = _env("ZABBIX_URL")
 ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
 ZABBIX_USER = _env("ZABBIX_USER")
-ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
+# ZABBIX_PASSWORD is optional when ZABBIX_TOKEN is used for API authentication
+ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD", "", required=False)
+ZABBIX_TOKEN = _env("ZABBIX_TOKEN", "", required=False)
 
 # ── Zendesk (optional integration — disabled when vars are absent)
 ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN", required=False)
