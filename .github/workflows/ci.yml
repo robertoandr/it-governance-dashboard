@@ -218,6 +218,15 @@ jobs:
           SECRET_KEY: ci-test-secret-key
           OPS_PIN: TEST_PIN_1234
           FLASK_ENV: testing
+          # Zabbix stubs — config.py requires these at import time;
+          # conftest.py setdefault is not guaranteed to run before module import.
+          ZABBIX_URL: http://localhost:8080/api_jsonrpc.php
+          ZABBIX_USER: ci-test-user
+          ZABBIX_PASSWORD: ci-fake-password-not-real
+          ZABBIX_FRONT_URL: http://localhost:8080
+          ZENDESK_SUBDOMAIN: ci-test-corp
+          ZENDESK_EMAIL: ci@test.com
+          ZENDESK_API_TOKEN: ci-fake-zendesk-token-not-real
         run: |
           pytest --cov-fail-under=85 --junitxml=junit.xml
 
