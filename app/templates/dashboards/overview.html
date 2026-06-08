@@ -40,7 +40,7 @@
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
   {% for p in governance.pillars %}
   <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
-     class="bg-white rounded-xl shadow p-5 hover:shadow-md transition-shadow block group">
+     class="bg-white rounded-xl shadow p-5 hover:shadow-md transition-shadow block group{% if p.data_source == 'mock' %} opacity-75{% endif %}">
     <div class="flex items-center justify-between mb-3">
       <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ p.color }}"></span>
       <span class="text-xs text-gray-400">{{ (p.weight * 100) | int }}%</span>
@@ -60,23 +60,87 @@
       {% else %}text-red-600{% endif %}">
       {{ p.status }}
     </span>
+    <!-- Data source badge -->
+    <div class="mt-2">
+      {% if p.data_source == 'live' %}
+        <span class="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5"
+              title="Dados 100% reais de coletores ativos">
+          ✅ ao vivo
+          {% if p.last_collected %}
+            · {{ p.last_collected.strftime('%H:%M') }}
+          {% endif %}
+        </span>
+      {% elif p.data_source == 'partial' %}
+        <span class="inline-flex items-center gap-1 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5"
+              title="Mix de dados reais e simulados — coletor parcialmente ativo">
+          🟡 parcial
+          {% if p.last_collected %}
+            · {{ p.last_collected.strftime('%H:%M') }}
+          {% endif %}
+        </span>
+      {% else %}
+        <span class="inline-flex items-center gap-1 text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5"
+              title="Sem coletor configurado — valores simulados{% if p.collector_eta %} · {{ p.collector_eta }}{% endif %}">
+          ⚠️ simulado{% if p.collector_eta %} · {{ p.collector_eta }}{% endif %}
+        </span>
+      {% endif %}
+    </div>
   </a>
   {% endfor %}
 </div>
 
-<!-- KPI Footer -->
+<!-- KPI Footer — valores dinâmicos extraídos dos pilares -->
+{% set avail = namespace(val='--', unit='%') %}
+{% set mttr = namespace(val='--', unit='h') %}
+{% set sla = namespace(val='--', unit='%') %}
+{% set incidents = namespace(val='--', unit='') %}
+{% for p in governance.pillars %}
+  {% if p.id.value == 'performance_measure' %}
+    {% for c in p.components %}
+      {% if c.id == 'availability' and c.raw_value is not none %}{% set avail.val = c.raw_value %}{% endif %}
+      {% if c.id == 'mttr' and c.raw_value is not none %}{% set mttr.val = c.raw_value %}{% endif %}
+    {% endfor %}
+  {% endif %}
+  {% if p.id.value == 'value_delivery' %}
+    {% for c in p.components %}
+      {% if c.id == 'sla_compliance' and c.raw_value is not none %}{% set sla.val = c.raw_value %}{% endif %}
+    {% endfor %}
+  {% endif %}
+  {% if p.id.value == 'risk_management' %}
+    {% for c in p.components %}
+      {% if c.id == 'incidents_critical' and c.raw_value is not none %}{% set incidents.val = c.raw_value %}{% endif %}
+    {% endfor %}
+  {% endif %}
+{% endfor %}
+
 <div class="bg-white rounded-xl shadow p-5 grid grid-cols-2 md:grid-cols-4 gap-6">
-  {% set kpis = [
-    ('Disponibilidade', '99.2%', 'text-green-600'),
-    ('MTTR', '2.4h', 'text-blue-600'),
-    ('SLA Geral', '91.3%', 'text-green-600'),
-    ('Vulns Críticas', '12', 'text-red-600'),
-  ] %}
-  {% for label, value, color in kpis %}
   <div class="text-center">
-    <p class="text-xs text-gray-500">{{ label }}</p>
-    <p class="text-2xl font-bold {{ color }}">{{ value }}</p>
+    <p class="text-xs text-gray-500">Disponibilidade</p>
+    <p class="text-2xl font-bold text-green-600">
+      {% if avail.val != '--' %}{{ avail.val | round(1) }}%{% else %}--{% endif %}
+    </p>
+    <p class="text-xs text-gray-400 mt-0.5">Zabbix · ao vivo</p>
   </div>
-  {% endfor %}
+  <div class="text-center">
+    <p class="text-xs text-gray-500">MTTR</p>
+    <p class="text-2xl font-bold text-blue-600">
+      {% if mttr.val != '--' %}{{ mttr.val }}h{% else %}--{% endif %}
+    </p>
+    <p class="text-xs text-gray-400 mt-0.5">simulado</p>
+  </div>
+  <div class="text-center">
+    <p class="text-xs text-gray-500">SLA Geral</p>
+    <p class="text-2xl font-bold text-green-600">
+      {% if sla.val != '--' %}{{ sla.val | round(1) }}%{% else %}--{% endif %}
+    </p>
+    <p class="text-xs text-gray-400 mt-0.5">Zabbix · ao vivo</p>
+  </div>
+  <div class="text-center">
+    <p class="text-xs text-gray-500">Incidentes Críticos</p>
+    <p class="text-2xl font-bold text-red-600">
+      {% if incidents.val != '--' %}{{ incidents.val | int }}{% else %}--{% endif %}
+    </p>
+    <p class="text-xs text-gray-400 mt-0.5">Zabbix · ao vivo</p>
+  </div>
 </div>
 {% endblock %}

@@ -6,6 +6,7 @@ for pillars that do not yet have real measurements.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -119,6 +120,7 @@ class InfluxDBMetricsProvider:
             log.warning("value_no_real_data", fallback="mock")
             return self._mock.get_value_metrics()
 
+        now = datetime.now(UTC)
         mock = self._mock.get_value_metrics()
         exclude = {"project_delivery"}
         if sla_component:
@@ -164,7 +166,11 @@ class InfluxDBMetricsProvider:
                 ]
             )
 
-        return {"previous_score": mock["previous_score"], "components": real_components}
+        return {
+            "_meta": {"data_source": "partial", "last_collected": now, "collector_eta": None},
+            "previous_score": mock["previous_score"],
+            "components": real_components,
+        }
 
     def get_strategic_metrics(self) -> dict[str, Any]:
         return self._mock.get_strategic_metrics()
@@ -176,6 +182,7 @@ class InfluxDBMetricsProvider:
             log.warning("zabbix_no_data", fallback="mock", pillar="risk")
             return self._mock.get_risk_metrics()
 
+        now = datetime.now(UTC)
         disaster = int(zabbix.get("problems_disaster", 0))
         high = int(zabbix.get("problems_high", 0))
         incidents_raw = disaster + high
@@ -202,7 +209,11 @@ class InfluxDBMetricsProvider:
                 "trend": "stable",
             }
         )
-        return {"previous_score": mock["previous_score"], "components": real_components}
+        return {
+            "_meta": {"data_source": "partial", "last_collected": now, "collector_eta": None},
+            "previous_score": mock["previous_score"],
+            "components": real_components,
+        }
 
     def get_resource_metrics(self) -> dict[str, Any]:
         return self._mock.get_resource_metrics()
@@ -214,6 +225,7 @@ class InfluxDBMetricsProvider:
             log.warning("zabbix_no_data", fallback="mock", pillar="performance")
             return self._mock.get_performance_metrics()
 
+        now = datetime.now(UTC)
         hosts = zabbix.get("hosts_total", 1) or 1
         disaster = zabbix.get("problems_disaster", 0)
 
@@ -255,7 +267,11 @@ class InfluxDBMetricsProvider:
         ]
         # Keep mock components we don't yet have real sources for
         real_components.extend(c for c in mock["components"] if c["id"] not in ("availability", "monitoring_coverage"))
-        return {"previous_score": mock["previous_score"], "components": real_components}
+        return {
+            "_meta": {"data_source": "partial", "last_collected": now, "collector_eta": None},
+            "previous_score": mock["previous_score"],
+            "components": real_components,
+        }
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 

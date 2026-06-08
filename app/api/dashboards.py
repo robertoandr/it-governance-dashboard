@@ -41,6 +41,9 @@ _pillar_model = ns.model(
         "trend": fields.String,
         "previous_score": fields.Float(allow_null=True),
         "components": fields.List(fields.Nested(_component_model)),
+        "data_source": fields.String(description="live | partial | mock"),
+        "last_collected": fields.String(allow_null=True, description="ISO-8601 UTC timestamp"),
+        "collector_eta": fields.String(allow_null=True, description="Sprint milestone for future collector"),
     },
 )
 

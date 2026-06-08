@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
@@ -65,6 +66,14 @@ class ComponentMetric(BaseModel):
     trend: str = "stable"
 
 
+class DataSource(StrEnum):
+    """Classifies how a pillar's data was obtained."""
+
+    LIVE = "live"  # all components from real collectors
+    PARTIAL = "partial"  # mix of real and mock components
+    MOCK = "mock"  # no collector yet — all values are simulated
+
+
 class PillarScore(BaseModel):
     """Computed score for a single governance pillar."""
 
@@ -77,6 +86,9 @@ class PillarScore(BaseModel):
     trend: str
     components: list[ComponentMetric] = Field(default_factory=list)
     previous_score: float | None = None
+    data_source: DataSource = DataSource.MOCK
+    last_collected: datetime | None = None
+    collector_eta: str | None = None
 
     @field_validator("score", mode="before")
     @classmethod
