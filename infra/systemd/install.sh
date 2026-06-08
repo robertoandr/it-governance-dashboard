@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Instala/atualiza o serviço dashboard-ti.service no host
+# Instala/atualiza o serviço it-gov-dashboard.service no host
 #
 # Uso:
 #   sudo bash install.sh              — instala/atualiza
 #   bash install.sh --dry-run         — substitui variáveis + verifica, sem instalar
 #
 # Variáveis de ambiente (opcional, têm defaults):
-#   SERVICE_USER, WORKDIR, VENV_PATH, ENV_FILE, LOG_DIR, DATA_DIR
+#   SERVICE_USER, WORKDIR, VENV_PATH, ENV_FILE, LOG_DIR
 
 set -euo pipefail
 
 TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVICE_NAME="dashboard-ti"
+SERVICE_NAME="it-gov-dashboard"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 BACKUP_FILE="${SERVICE_FILE}.bak-$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=false
@@ -19,12 +19,11 @@ DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
 # Valores padrão — ajustar conforme ambiente
-SERVICE_USER="${SERVICE_USER:-dashboard-ti}"
-WORKDIR="${WORKDIR:-/opt/dashboard-ti-legacy}"
-VENV_PATH="${VENV_PATH:-/opt/dashboard-ti-legacy/venv}"
-ENV_FILE="${ENV_FILE:-/etc/dashboard-ti/secrets.env}"
-LOG_DIR="${LOG_DIR:-/var/log/dashboard-ti}"
-DATA_DIR="${DATA_DIR:-/opt/dashboard-ti-legacy/data}"
+SERVICE_USER="${SERVICE_USER:-zabbix}"
+WORKDIR="${WORKDIR:-/opt/it-gov-dashboard}"
+VENV_PATH="${VENV_PATH:-/opt/it-gov-dashboard/.venv}"
+ENV_FILE="${ENV_FILE:-/opt/it-gov-dashboard/.env}"
+LOG_DIR="${LOG_DIR:-/var/log/it-gov-dashboard}"
 
 if $DRY_RUN; then
     echo "[DRY-RUN] Variáveis que serão aplicadas:"
@@ -33,7 +32,7 @@ if $DRY_RUN; then
     echo "  VENV_PATH    = $VENV_PATH"
     echo "  ENV_FILE     = $ENV_FILE"
     echo "  LOG_DIR      = $LOG_DIR"
-    echo "  DATA_DIR     = $DATA_DIR"
+    echo "  LOG_DIR      = $LOG_DIR"
     echo ""
 fi
 
@@ -52,18 +51,17 @@ sed -e "s|{{ SERVICE_USER }}|$SERVICE_USER|g" \
     -e "s|{{ VENV_PATH }}|$VENV_PATH|g" \
     -e "s|{{ ENV_FILE }}|$ENV_FILE|g" \
     -e "s|{{ LOG_DIR }}|$LOG_DIR|g" \
-    -e "s|{{ DATA_DIR }}|$DATA_DIR|g" \
-    "${TEMPLATE_DIR}/dashboard-ti.service.template" > /tmp/dashboard-ti.service
+    "${TEMPLATE_DIR}/it-gov-dashboard.service.template" > /tmp/it-gov-dashboard.service
 
-echo "      Gerado em /tmp/dashboard-ti.service"
+echo "      Gerado em /tmp/it-gov-dashboard.service"
 if $DRY_RUN; then
     echo "      Conteúdo:"
-    cat /tmp/dashboard-ti.service
+    cat /tmp/it-gov-dashboard.service
     echo ""
 fi
 
 echo "[3/5] Validando com systemd-analyze verify..."
-systemd-analyze verify /tmp/dashboard-ti.service || {
+systemd-analyze verify /tmp/it-gov-dashboard.service || {
     echo "ERRO: systemd-analyze verify falhou. Abortando."
     exit 1
 }
@@ -77,7 +75,7 @@ if $DRY_RUN; then
 fi
 
 echo "[4/5] Instalando e recarregando systemd..."
-cp /tmp/dashboard-ti.service "$SERVICE_FILE"
+cp /tmp/it-gov-dashboard.service "$SERVICE_FILE"
 systemctl daemon-reload
 systemctl restart "$SERVICE_NAME"
 

@@ -1,53 +1,57 @@
 # systemd Service Templates
 
-## dashboard-ti.service
+## it-gov-dashboard.service (ativo — V1.1)
 
-Serviço gunicorn do dashboard legado na porta 8082.
+Serviço gunicorn do IT Governance Dashboard V1.1 na porta 8091.
 
 ### Instalação
 
 ```bash
-# Substitui variáveis antes de copiar
-SERVICE_USER=dashboard-ti
-WORKDIR=/opt/dashboard-ti-legacy
-VENV_PATH=/opt/dashboard-ti-legacy/venv
-ENV_FILE=/etc/dashboard-ti/secrets.env
-LOG_DIR=/var/log/dashboard-ti
-DATA_DIR=/opt/dashboard-ti-legacy/data
+# Dry-run (valida sem instalar)
+bash infra/systemd/install.sh --dry-run
 
-sed -e "s|{{ SERVICE_USER }}|$SERVICE_USER|g" \
-    -e "s|{{ SERVICE_GROUP }}|$SERVICE_USER|g" \
-    -e "s|{{ WORKDIR }}|$WORKDIR|g" \
-    -e "s|{{ VENV_PATH }}|$VENV_PATH|g" \
-    -e "s|{{ ENV_FILE }}|$ENV_FILE|g" \
-    -e "s|{{ LOG_DIR }}|$LOG_DIR|g" \
-    -e "s|{{ DATA_DIR }}|$DATA_DIR|g" \
-    dashboard-ti.service.template > /tmp/dashboard-ti.service
+# Instalação real
+sudo bash infra/systemd/install.sh
 
-sudo systemd-analyze verify /tmp/dashboard-ti.service
-sudo cp /tmp/dashboard-ti.service /etc/systemd/system/dashboard-ti.service
-sudo systemctl daemon-reload
-sudo systemctl restart dashboard-ti
-sudo systemctl status dashboard-ti
+# Sobrescrever variáveis padrão
+SERVICE_USER=zabbix \
+WORKDIR=/opt/it-gov-dashboard \
+VENV_PATH=/opt/it-gov-dashboard/.venv \
+ENV_FILE=/opt/it-gov-dashboard/.env \
+LOG_DIR=/var/log/it-gov-dashboard \
+sudo -E bash infra/systemd/install.sh
 ```
 
 ### Validação pós-instalação
 
 ```bash
 # Verifica watchdog e limites
-systemctl show dashboard-ti -p WatchdogUSec,RestartUSec,StartLimitBurst,MemoryMax
+systemctl show it-gov-dashboard \
+  -p WatchdogUSec,RestartUSec,StartLimitBurst,MemoryMax,CPUQuota
 
-# Teste de crash loop (deve reiniciar em <10s)
-sudo kill -9 $(pgrep -f gunicorn | head -1)
-sleep 5 && systemctl is-active dashboard-ti
+# Teste de crash (deve reiniciar em <10s)
+OLD_PID=$(pgrep -f "gunicorn.*wsgi_prod" | head -1)
+sudo kill -9 $OLD_PID
+sleep 10 && systemctl is-active it-gov-dashboard
 
 # Health check
-curl -s http://127.0.0.1:8082/health | python3 -m json.tool
+curl -s http://127.0.0.1:8091/health | python3 -m json.tool
 ```
 
-### Mudanças vs versão anterior
+### Mudanças vs dashboard-ti V1.0
 
 - `WatchdogSec=60`: detecta travamento mesmo sem crash explícito
-- `StartLimitBurst=3`: evita crash loop silencioso
-- `NoNewPrivileges/ProtectSystem/PrivateTmp`: hardening de segurança
+- `StartLimitBurst=3`: evita crash loop silencioso (parava no 664º restart)
+- `NoNewPrivileges/ProtectSystem=full/PrivateTmp`: hardening de segurança
 - `MemoryMax=512M / CPUQuota=50%`: proteção de recursos do host
+
+## dashboard-ti.service (DEPRECADO — 2026-06-07)
+
+O serviço `dashboard-ti` foi deprecado em 2026-06-07.
+Ver `docs/architecture/DEPRECATION-dashboard-ti-v1.md` para histórico completo.
+
+Arquivos preservados em quarentena no servidor:
+- `/opt/_deprecated/dashboard-ti-v1.0-20260607/`
+- `/etc/systemd/system/dashboard-ti.service.deprecated-20260607`
+
+Remoção definitiva: 2026-07-07

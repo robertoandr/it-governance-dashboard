@@ -1,0 +1,80 @@
+---
+# Template Zabbix: auto-monitoramento do it-gov-dashboard (V1.1)
+# Importar via: Zabbix UI > Configuration > Templates > Import
+#
+# Postmortem ref: 2026-06-07 — crash loop detectado tarde demais
+# Nota: dashboard-ti V1.0 deprecado em 2026-06-07 (664 restarts)
+# Meta: detecção de incidente < 1min (antes: horas/dias)
+
+zabbix_export:
+  version: '7.0'
+  templates:
+    - template: 'Template App IT-Gov-Dashboard Self-Monitoring'
+      name: 'IT-Gov-Dashboard Self-Monitoring'
+      description: |
+        Auto-monitoramento do it-gov-dashboard V1.1 (porta 8091).
+        Detecta: service down, health endpoint down, crash loop, latência.
+        Ref: postmortem 2026-06-07.
+      groups:
+        - name: 'Templates/Applications'
+
+      items:
+        - name: 'IT-Gov-Dashboard: systemd active state'
+          key: 'systemd.unit.info[it-gov-dashboard.service,ActiveState]'
+          delay: 30s
+          history: 7d
+          value_type: CHAR
+          description: 'Estado ativo do serviço (active/inactive/failed/activating)'
+
+        - name: 'IT-Gov-Dashboard: número de restarts'
+          key: 'systemd.unit.info[it-gov-dashboard.service,NRestarts]'
+          delay: 1m
+          history: 30d
+          value_type: UNSIGNED
+          description: 'Contador acumulado de restarts desde o boot'
+
+        - name: 'IT-Gov-Dashboard: HTTP /health'
+          key: 'web.page.regexp[http://127.0.0.1:8091/health,"\"status\": \"ok\"",,,200]'
+          delay: 1m
+          history: 30d
+          value_type: UNSIGNED
+          description: 'Retorna 1 se /health responde 200 com status ok, 0 caso contrário'
+
+        - name: 'IT-Gov-Dashboard: tempo de resposta /health'
+          key: 'net.tcp.service.perf[http,127.0.0.1,8091]'
+          delay: 1m
+          history: 30d
+          value_type: FLOAT
+          units: s
+          description: 'Tempo de conexão TCP à porta 8091'
+
+      triggers:
+        - name: 'IT-Gov-Dashboard: serviço systemd não está ativo'
+          expression: >-
+            last(/Template App IT-Gov-Dashboard Self-Monitoring/systemd.unit.info[it-gov-dashboard.service,ActiveState])<>"active"
+          priority: HIGH
+          description: 'Serviço it-gov-dashboard.service fora do estado active. Ver journalctl -u it-gov-dashboard.'
+          manual_close: 'YES'
+
+        - name: 'IT-Gov-Dashboard: health endpoint com falha'
+          expression: >-
+            last(/Template App IT-Gov-Dashboard Self-Monitoring/web.page.regexp[http://127.0.0.1:8091/health,"\"status\": \"ok\"",,,200])=0
+          priority: HIGH
+          description: 'O endpoint /health não retornou 200 ou JSON inválido. App pode estar travado sem crash.'
+          manual_close: 'YES'
+          dependencies:
+            - name: 'IT-Gov-Dashboard: serviço systemd não está ativo'
+
+        - name: 'IT-Gov-Dashboard: crash loop detectado (≥3 restarts em 5min)'
+          expression: >-
+            change(/Template App IT-Gov-Dashboard Self-Monitoring/systemd.unit.info[it-gov-dashboard.service,NRestarts])>=3
+          priority: AVERAGE
+          description: 'Serviço reiniciou 3+ vezes. Provável crash loop. Ver journalctl -u it-gov-dashboard -n 100.'
+          manual_close: 'YES'
+
+        - name: 'IT-Gov-Dashboard: latência alta no /health (>2s)'
+          expression: >-
+            last(/Template App IT-Gov-Dashboard Self-Monitoring/net.tcp.service.perf[http,127.0.0.1,8091])>2
+          priority: WARNING
+          description: 'Tempo de conexão TCP > 2s indica sobrecarga ou travamento parcial.'
+          manual_close: 'YES'
