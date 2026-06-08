@@ -153,3 +153,18 @@ grafana/provisioning/**/*.tmp
 grafana/provisioning/**/*.orig
 grafana/provisioning/**/*.disabled
 CLAUDE.md.bkp-*
+
+# ===== Tooling local (Claude Code, agents) =====
+.agents/
+.claude/
+skills-lock.json
+
+# ===== Backups de .env (gerados por scripts de segurança) =====
+.env.backup-*
+*.env.backup*
+*-backup-[0-9]*
+
+# ===== detect-secrets (versionado, não o cache) =====
+.secrets.baseline.tmp
+cftv-setup/.zabbix_config.json
+cftv-setup/.zabbix_config.*.json

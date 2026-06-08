@@ -37,3 +37,40 @@ repos:
     rev: v8.21.2
     hooks:
       - id: gitleaks
+
+  # ── detect-secrets: heurística + baseline (camada 2) ──
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            .*\.lock|
+            docs/postmortems/.*\.md|
+            \.secrets\.baseline
+          )$
+
+  # ── Bloqueia commit direto em main/master ──
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+
+  # ── Mypy: type checking ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic, types-requests, types-PyYAML]
+        args: [--ignore-missing-imports, --explicit-package-bases]
+        # Tech debt pré-existente excluído até mypy-cleanup PR
+        exclude: ^(tests/|docs/|app\.py$|alembic/|cftv-setup/|collectors/|collector/|services/|itgov/|scripts/|app/services/metrics_aggregator\.py)
+
+  # ── Hadolint: Dockerfile lint ──
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.0-beta
+    hooks:
+      - id: hadolint-docker
+        files: Dockerfile.*

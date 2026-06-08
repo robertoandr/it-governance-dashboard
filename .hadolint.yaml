@@ -1,0 +1,7 @@
+# hadolint configuration
+# DL3008/DL3013 (unpinned apt/pip) tracked as tech-debt — not blocking in pre-commit
+failure-threshold: error
+ignore:
+  - DL3008
+  - DL3013
+  - DL4006
