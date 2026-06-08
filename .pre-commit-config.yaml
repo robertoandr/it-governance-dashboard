@@ -48,7 +48,8 @@ repos:
           (?x)^(
             .*\.lock|
             docs/postmortems/.*\.md|
-            \.secrets\.baseline
+            \.secrets\.baseline|
+            cftv-setup/\.zabbix_config\.json
           )$
 
   # ── Bloqueia commit direto em main/master ──
