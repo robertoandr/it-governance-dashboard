@@ -50,6 +50,15 @@ os.environ.setdefault("FLASK_ENV", "testing")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 
 # ─────────────────────────────────────────────────────────────────────
+# 🔒 Pré-importar o config legado (./config.py) com todas as env vars
+# já definidas acima. Isso garante que sys.modules["config"] aponte
+# para o config correto ANTES que tests/collector/* injetem mocks via
+# sys.modules.setdefault("config", ...). Sem isso, o mock (sem
+# ZABBIX_URL / ZENDESK_MAX_PAGES) vaza e quebra collectors/zabbix.py
+# e itgov/services/zendesk_service.py na coleta.
+import config as _config_preload  # noqa: F401, E402
+
+# ─────────────────────────────────────────────────────────────────────
 # 🧪 Variáveis de infra MOCK — evita falha no import de config.py
 # Nenhum teste deve conectar de verdade ao InfluxDB/AD/M365.
 # Estes valores existem APENAS para satisfazer _env() em config.py.

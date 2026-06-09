@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
 
 import pytest
 
-# Patch config (needed because team_mapper imports structlog which may pull config)
-_mock_config = types.ModuleType("config")
-sys.modules.setdefault("config", _mock_config)
-
 # team_mapper itself has no sys.modules dependency, but needs the collector path
-from collector.utils.team_mapper import _load_mapping, get_team  # noqa: E402
+from collector.utils.team_mapper import _load_mapping, get_team
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

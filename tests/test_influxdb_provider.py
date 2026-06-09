@@ -102,20 +102,25 @@ class TestGetValueMetrics:
         for comp in result["components"]:
             assert 0.0 <= comp["value"] <= 100.0, f"Component {comp['id']} out of range"
 
-    def test_no_data_falls_back_to_mock(self, provider: InfluxDBMetricsProvider) -> None:
+    def test_no_data_returns_coming_soon(self, provider: InfluxDBMetricsProvider) -> None:
         with _patch_query(provider, []):
             result = provider.get_value_metrics()
 
-        mock = MockMetricsProvider()
-        assert {c["id"] for c in result["components"]} == {c["id"] for c in mock.get_value_metrics()["components"]}
+        # Sprint 12: sem dados reais → coming_soon (sem fake numbers), não mock completo.
+        assert result["_meta"]["data_source"] == "coming_soon"
+        ids = {c["id"] for c in result["components"]}
+        assert "ticket_resolution_rate" in ids
+        assert "user_satisfaction" in ids
 
-    def test_influxdb_error_falls_back_to_mock(self, provider: InfluxDBMetricsProvider) -> None:
-        # _query catches exceptions internally and returns [] → triggers mock fallback
+    def test_influxdb_error_returns_coming_soon(self, provider: InfluxDBMetricsProvider) -> None:
+        # _query captura exceções internamente e retorna [] → coming_soon (sem fake numbers).
         with _patch_query(provider, []):
             result = provider.get_value_metrics()
 
-        mock = MockMetricsProvider()
-        assert {c["id"] for c in result["components"]} == {c["id"] for c in mock.get_value_metrics()["components"]}
+        assert result["_meta"]["data_source"] == "coming_soon"
+        ids = {c["id"] for c in result["components"]}
+        assert "ticket_resolution_rate" in ids
+        assert "user_satisfaction" in ids
 
     def test_source_is_github(self, provider: InfluxDBMetricsProvider) -> None:
         rows = _make_rows([7200.0, 14400.0])
