@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-_mock_config = types.ModuleType("config")
+import config as _cfg
+
 _mock_settings = MagicMock()
 _mock_settings.GITHUB_TOKEN = "tok"
 _mock_settings.GITHUB_ORG = "testorg"
@@ -19,8 +20,7 @@ _mock_settings.INFLUX_URL = "http://localhost:8086"
 _mock_settings.INFLUX_TOKEN = "influx-tok"
 _mock_settings.INFLUX_ORG = "testorg"
 _mock_settings.INFLUX_BUCKET_RAW = "governance_raw"
-_mock_config.settings = _mock_settings
-sys.modules.setdefault("config", _mock_config)
+_cfg.settings = _mock_settings
 
 # Mock utils.team_mapper so tests run outside the collector container context
 _mock_utils = types.ModuleType("utils")

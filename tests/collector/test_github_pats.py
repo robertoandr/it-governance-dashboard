@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import config as _cfg
+
 # Patch config before importing the module under test
-_mock_config = types.ModuleType("config")
 _mock_settings = MagicMock()
 _mock_settings.GITHUB_TOKEN = "tok"
 _mock_settings.GITHUB_ORG = "testorg"
@@ -17,8 +16,7 @@ _mock_settings.INFLUX_URL = "http://localhost:8086"
 _mock_settings.INFLUX_TOKEN = "influx-tok"
 _mock_settings.INFLUX_ORG = "testorg"
 _mock_settings.INFLUX_BUCKET_RAW = "governance_raw"
-_mock_config.settings = _mock_settings
-sys.modules.setdefault("config", _mock_config)
+_cfg.settings = _mock_settings
 
 from collector.jobs.github_pats import (  # noqa: E402
     _build_point,
@@ -90,6 +88,7 @@ def test_collect_github_pats_404(monkeypatch):
     def fake_write(point):
         written.append(point)
 
+    monkeypatch.setattr("collector.jobs.github_pats.COLLECTOR_ENABLED", True)
     monkeypatch.setattr("collector.jobs.github_pats._fetch_org_pats", fake_fetch)
     monkeypatch.setattr("collector.jobs.github_pats._write_point", fake_write)
 
@@ -110,6 +109,7 @@ def test_collect_github_pats_with_data(monkeypatch):
     ]
     written = []
 
+    monkeypatch.setattr("collector.jobs.github_pats.COLLECTOR_ENABLED", True)
     monkeypatch.setattr("collector.jobs.github_pats._fetch_org_pats", lambda o, t: (pats, True))
     monkeypatch.setattr("collector.jobs.github_pats._write_point", lambda p: written.append(p))
 

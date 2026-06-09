@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from unittest.mock import MagicMock
 
+import config as _cfg
+
 # Patch config before importing the module under test
-_mock_config = types.ModuleType("config")
 _mock_settings = MagicMock()
 _mock_settings.GITHUB_TOKEN = "tok"
 _mock_settings.GITHUB_ORG = "testorg"
@@ -16,8 +15,7 @@ _mock_settings.INFLUX_URL = "http://localhost:8086"
 _mock_settings.INFLUX_TOKEN = "influx-tok"
 _mock_settings.INFLUX_ORG = "testorg"
 _mock_settings.INFLUX_BUCKET_RAW = "governance_raw"
-_mock_config.settings = _mock_settings
-sys.modules.setdefault("config", _mock_config)
+_cfg.settings = _mock_settings
 
 from collector.jobs.gitleaks_scan import (  # noqa: E402
     _alert_to_severity,

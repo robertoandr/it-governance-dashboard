@@ -53,9 +53,11 @@ class TestSecurityHeaders:
         r = client.get("/ping")
         assert "X-XSS-Protection" in r.headers
 
-    def test_x_frame_options_sameorigin(self, client: FlaskClient) -> None:
+    def test_frame_ancestors_in_csp(self, client: FlaskClient) -> None:
         r = client.get("/ping")
-        assert r.headers.get("X-Frame-Options") == "SAMEORIGIN"
+        csp = r.headers.get("Content-Security-Policy", "")
+        # Talisman usa frame-ancestors no CSP (não X-Frame-Options separado).
+        assert "frame-ancestors" in csp
 
     def test_content_security_policy_present(self, client: FlaskClient) -> None:
         r = client.get("/ping")
@@ -93,7 +95,8 @@ class TestSessionSecurity:
         assert secure_app.config["SESSION_COOKIE_HTTPONLY"] is True
 
     def test_session_cookie_samesite(self, secure_app: Flask) -> None:
-        assert secure_app.config["SESSION_COOKIE_SAMESITE"] == "Strict"
+        # Lax (não Strict) para não quebrar OAuth callbacks do Microsoft Entra.
+        assert secure_app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
 
     def test_session_lifetime(self, secure_app: Flask) -> None:
         from datetime import timedelta
