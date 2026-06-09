@@ -439,11 +439,11 @@ from(bucket: "{self._bucket_raw}")
             return {}
         row = rows[-1]
         return {
-            "hosts": int(row.get("hosts", 0)),
-            "disaster": int(row.get("disaster", 0)),
-            "high": int(row.get("high", 0)),
-            "average": int(row.get("average", 0)),
-            "warning": int(row.get("warning", 0)),
+            "hosts": int(row.get("hosts_total", 0)),
+            "disaster": int(row.get("problems_disaster", 0)),
+            "high": int(row.get("problems_high", 0)),
+            "average": int(row.get("problems_average", 0)),
+            "warning": int(row.get("problems_warning", 0)),
             "_time": row.get("_time"),
         }
 
