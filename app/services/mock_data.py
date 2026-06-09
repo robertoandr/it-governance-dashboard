@@ -5,6 +5,12 @@ from __future__ import annotations
 import random
 from typing import Any
 
+_COMING_SOON_META: dict[str, Any] = {
+    "data_source": "coming_soon",
+    "last_collected": None,
+    "collector_eta": None,
+}
+
 
 class MockMetricsProvider:
     """Provides realistic mock metrics for all five governance pillars.
@@ -23,6 +29,7 @@ class MockMetricsProvider:
         """Return mock metrics for the Strategic Alignment pillar."""
         previous = self._jitter(74.0)
         return {
+            "_meta": _COMING_SOON_META,
             "previous_score": previous,
             "components": [
                 {
@@ -62,6 +69,7 @@ class MockMetricsProvider:
         """Return mock metrics for the Value Delivery pillar."""
         previous = self._jitter(78.0)
         return {
+            "_meta": _COMING_SOON_META,
             "previous_score": previous,
             "components": [
                 {
@@ -111,6 +119,7 @@ class MockMetricsProvider:
         """Return mock metrics for the Risk Management pillar."""
         previous = self._jitter(65.0)
         return {
+            "_meta": _COMING_SOON_META,
             "previous_score": previous,
             "components": [
                 {
@@ -170,6 +179,7 @@ class MockMetricsProvider:
         """Return mock metrics for the Resource Management pillar."""
         previous = self._jitter(71.0)
         return {
+            "_meta": _COMING_SOON_META,
             "previous_score": previous,
             "components": [
                 {
@@ -219,6 +229,7 @@ class MockMetricsProvider:
         """Return mock metrics for the Performance Measurement pillar."""
         previous = self._jitter(80.0)
         return {
+            "_meta": _COMING_SOON_META,
             "previous_score": previous,
             "components": [
                 {
