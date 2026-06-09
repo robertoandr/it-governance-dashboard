@@ -27,7 +27,7 @@ bandit[toml]>=1.7          # análise estática de segurança
 pip-audit>=2.7             # auditoria de vulnerabilidades (substitui safety)
 
 # ----- Pre-commit -----
-pre-commit>=3.7
+pre-commit>=4.6.0
 
 # ----- Dev Utils -----
 ipython>=8.20              # REPL melhorado
