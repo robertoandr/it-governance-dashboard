@@ -8,7 +8,7 @@ from typing import Any
 import structlog
 
 from app.config import get_settings
-from app.models.governance import GovernanceScore, PillarID
+from app.models.governance import DataSource, GovernanceScore, PillarID, PillarScore
 from app.services.mock_data import MockMetricsProvider
 from app.services.score_calculator import ScoreCalculator
 
@@ -25,6 +25,35 @@ def _build_provider() -> MockMetricsProvider:
         return InfluxDBMetricsProvider()  # type: ignore[return-value]
     log.info("metrics_provider", kind="mock")
     return MockMetricsProvider()
+
+
+def _apply_meta(pillar: PillarScore, data: dict[str, Any]) -> PillarScore:
+    """Apply _meta from provider data onto the computed PillarScore."""
+    meta = data.get("_meta")
+    if not meta:
+        return pillar
+
+    updates: dict[str, Any] = {}
+    ds_raw = meta.get("data_source")
+    if ds_raw:
+        try:
+            updates["data_source"] = DataSource(ds_raw)
+        except ValueError:
+            log.warning("unknown_data_source", value=ds_raw)
+
+    if "last_collected" in meta:
+        updates["last_collected"] = meta["last_collected"]
+    if "collector_eta" in meta:
+        updates["collector_eta"] = meta["collector_eta"]
+
+    if updates.get("data_source") == DataSource.COMING_SOON:
+        log.warning(
+            "serving_coming_soon_pillar",
+            pillar=pillar.id.value,
+            eta=updates.get("collector_eta"),
+        )
+
+    return pillar.model_copy(update=updates)
 
 
 class MetricsAggregator:
@@ -68,7 +97,7 @@ class MetricsAggregator:
                     pillar=pillar_id.value,
                     error=str(result),
                 )
-                from app.models.governance import PILLAR_META, PillarScore
+                from app.models.governance import PILLAR_META
 
                 meta = PILLAR_META[pillar_id]
                 pillar_scores.append(
@@ -82,6 +111,7 @@ class MetricsAggregator:
                         trend="down",
                         components=[],
                         previous_score=None,
+                        data_source=DataSource.COMING_SOON,
                     )
                 )
             else:
@@ -94,44 +124,49 @@ class MetricsAggregator:
     async def _collect_strategic(self) -> Any:
         log.debug("collecting_pillar", pillar="strategic_alignment")
         data = self._provider.get_strategic_metrics()
-        return self._calculator.calculate_pillar(
+        pillar = self._calculator.calculate_pillar(
             PillarID.STRATEGIC_ALIGNMENT,
             data["components"],
             data.get("previous_score"),
         )
+        return _apply_meta(pillar, data)
 
     async def _collect_value(self) -> Any:
         log.debug("collecting_pillar", pillar="value_delivery")
         data = self._provider.get_value_metrics()
-        return self._calculator.calculate_pillar(
+        pillar = self._calculator.calculate_pillar(
             PillarID.VALUE_DELIVERY,
             data["components"],
             data.get("previous_score"),
         )
+        return _apply_meta(pillar, data)
 
     async def _collect_risk(self) -> Any:
         log.debug("collecting_pillar", pillar="risk_management")
         data = self._provider.get_risk_metrics()
-        return self._calculator.calculate_pillar(
+        pillar = self._calculator.calculate_pillar(
             PillarID.RISK_MANAGEMENT,
             data["components"],
             data.get("previous_score"),
         )
+        return _apply_meta(pillar, data)
 
     async def _collect_resource(self) -> Any:
         log.debug("collecting_pillar", pillar="resource_management")
         data = self._provider.get_resource_metrics()
-        return self._calculator.calculate_pillar(
+        pillar = self._calculator.calculate_pillar(
             PillarID.RESOURCE_MANAGEMENT,
             data["components"],
             data.get("previous_score"),
         )
+        return _apply_meta(pillar, data)
 
     async def _collect_performance(self) -> Any:
         log.debug("collecting_pillar", pillar="performance_measure")
         data = self._provider.get_performance_metrics()
-        return self._calculator.calculate_pillar(
+        pillar = self._calculator.calculate_pillar(
             PillarID.PERFORMANCE_MEASURE,
             data["components"],
             data.get("previous_score"),
         )
+        return _apply_meta(pillar, data)

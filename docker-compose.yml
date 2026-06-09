@@ -156,6 +156,9 @@ services:
       POSTGRES_DSN: "${POSTGRES_DSN:-}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       TZ: "${TZ:-America/Sao_Paulo}"
+      AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
+      AZURE_CLIENT_ID: "${AZURE_CLIENT_ID:-}"
+      AZURE_CLIENT_SECRET: "${AZURE_CLIENT_SECRET:-}"
     volumes:
       - collector_data:/data
     depends_on:
