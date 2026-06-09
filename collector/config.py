@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     INFLUX_BUCKET_RAW: str = "governance_raw"
     LOG_LEVEL: str = "INFO"
     TZ: str = "America/Sao_Paulo"
+    # Microsoft Entra ID (Azure AD) — required for Entra ID collector
+    AZURE_TENANT_ID: str = ""
+    AZURE_CLIENT_ID: str = ""
+    AZURE_CLIENT_SECRET: str = ""
 
     class Config:
         env_file = ".env"
