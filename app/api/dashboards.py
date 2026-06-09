@@ -41,6 +41,9 @@ _pillar_model = ns.model(
         "trend": fields.String,
         "previous_score": fields.Float(allow_null=True),
         "components": fields.List(fields.Nested(_component_model)),
+        "data_source": fields.String(description="live | manual | partial | coming_soon"),
+        "last_collected": fields.String(allow_null=True, description="ISO 8601 timestamp of last real data"),
+        "collector_eta": fields.String(allow_null=True, description="When real data is expected"),
     },
 )
 

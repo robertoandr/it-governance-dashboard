@@ -67,10 +67,12 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.api.dashboards import ns as overview_ns
     from app.api.health import ns as health_ns
     from app.api.pillars import ns as pillars_ns
+    from app.api.pmo import ns as pmo_ns
 
     api.add_namespace(overview_ns, path="/overview")
     api.add_namespace(pillars_ns, path="/pillars")
     api.add_namespace(health_ns, path="/health")
+    api.add_namespace(pmo_ns, path="/pmo")
 
     # Legacy itgov namespaces (Sprint 10E) — preserved under /api/v1/ path
     try:
