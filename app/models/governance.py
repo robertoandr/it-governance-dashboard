@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class DataSource(StrEnum):
+    """Reliability of the data backing a governance pillar."""
+
+    LIVE = "live"
+    MANUAL = "manual"
+    PARTIAL = "partial"
+    COMING_SOON = "coming_soon"
 
 
 class PillarID(StrEnum):
@@ -60,7 +70,7 @@ class ComponentMetric(BaseModel):
     value: float = Field(ge=0.0, le=100.0)
     raw_value: float | None = None
     unit: str = "%"
-    source: str = "mock"
+    source: str = "coming_soon"
     weight: float = Field(default=1.0, gt=0.0)
     trend: str = "stable"
 
@@ -77,11 +87,35 @@ class PillarScore(BaseModel):
     trend: str
     components: list[ComponentMetric] = Field(default_factory=list)
     previous_score: float | None = None
+    data_source: DataSource = DataSource.COMING_SOON
+    last_collected: datetime | None = None
+    collector_eta: str | None = None
 
     @field_validator("score", mode="before")
     @classmethod
     def clamp_score(cls, v: float) -> float:
         return max(0.0, min(100.0, float(v)))
+
+
+class EntraIdMetrics(BaseModel):
+    """Snapshot of Microsoft Entra ID identity metrics."""
+
+    total_users: int
+    guest_users: int
+    mfa_enabled_pct: float
+    stale_accounts_90d: int
+    privileged_roles_count: int
+    ca_policies_count: int
+    collected_at: datetime
+
+
+class PmoManualInput(BaseModel):
+    """Manually entered PMO governance score."""
+
+    score: float = Field(ge=0.0, le=100.0)
+    notes: str = ""
+    updated_by: str = ""
+    updated_at: datetime | None = None
 
 
 class GovernanceScore(BaseModel):
