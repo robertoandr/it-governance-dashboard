@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from itgov.models.db.alert import ActiveAlert, AlertLog
 from itgov.services.teams_notifier import TeamsNotifier
+from itgov.services.teams_notifier import notify as teams_notify
 from itgov.services.zabbix_hierarchy import HierarchyCache, HierarchyTree, HostNode
 
 log = structlog.get_logger(__name__)
@@ -205,7 +206,7 @@ class AlertEngine:
         log.warning("alerta_disparado", hostid=node.hostid, tipo=tipo, msg=msg)
 
         if self._notifier:
-            self._enviar_notificacao(node, tipo, msg, n_filhos)
+            self._enviar_notificacao(node, tipo, severidade, msg, n_filhos)
 
     def _resolver_alerta(self, node: HostNode, session: Session) -> None:
         agora = datetime.now(UTC)
@@ -239,19 +240,35 @@ class AlertEngine:
         log.info("alerta_resolvido", hostid=node.hostid, msg=msg)
 
         if self._notifier:
-            try:
-                self._notifier.notify_recovery(node.ramo, node.name, msg)
-            except Exception as exc:
-                log.error("notificacao_recovery_falhou", error=str(exc))
+            teams_notify(
+                {
+                    "tipo": "RECOVERY",
+                    "severidade": "recovery",
+                    "titulo": f"{node.name} RECUPERADO",
+                    "unidade": node.ramo,
+                    "ramo": node.ramo,
+                    "host": node.name,
+                    "qtd_afetados": 0,
+                    "mensagem": msg,
+                    "timestamp": agora.strftime("%d/%m/%Y %H:%M UTC"),
+                }
+            )
 
-    def _enviar_notificacao(self, node: HostNode, tipo: str, msg: str, n_filhos: int) -> None:
-        try:
-            if tipo == "DVR_DOWN":
-                self._notifier.notify_dvr_down(node.ramo, node.name, n_filhos, msg)  # type: ignore[union-attr]
-            else:
-                self._notifier.notify_individual_down(node.ramo, node.name, tipo, msg)  # type: ignore[union-attr]
-        except Exception as exc:
-            log.error("notificacao_falhou", error=str(exc), tipo=tipo)
+    def _enviar_notificacao(self, node: HostNode, tipo: str, severidade: str, msg: str, n_filhos: int) -> None:
+        sev_teams = "critico" if severidade == "critical" else "warning"
+        teams_notify(
+            {
+                "tipo": tipo,
+                "severidade": sev_teams,
+                "titulo": f"{node.name} DOWN" if tipo != "DVR_DOWN" else f"{node.name} DOWN — CAUSA-RAIZ",
+                "unidade": node.ramo,
+                "ramo": node.ramo,
+                "host": node.name,
+                "qtd_afetados": n_filhos,
+                "mensagem": msg,
+                "timestamp": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
+            }
+        )
 
 
 def _formatar_alerta(node: HostNode, n_filhos: int) -> tuple[str, str, str]:

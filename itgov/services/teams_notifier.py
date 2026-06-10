@@ -1,118 +1,201 @@
-"""Formatador de MessageCard para Microsoft Teams e dispatcher via webhook.
+"""Notificador Teams via Adaptive Card (Workflows trigger).
 
-Formatos de card:
-  🔴 DVR DOWN      → themeColor vermelho, seção com câmeras afetadas
-  ⚠️  Individual    → themeColor laranja, alerta de câmera/ativo
-  ✅  Recuperação   → themeColor verde
+Formato aceito pelo trigger "When a Teams webhook request is received":
+  { "type": "message",
+    "attachments": [{ "contentType": "application/vnd.microsoft.card.adaptive",
+                      "content": { <AdaptiveCard v1.4> } }] }
 
-Referência:
-  https://learn.microsoft.com/en-us/outlook/actionable-messages/message-card-reference
+Severidades:
+  "critico"  → color Attention (vermelho)
+  "warning"  → color Warning   (laranja)
+  "recovery" → color Good      (verde)
 """
 
 from __future__ import annotations
 
-import structlog
+import os
+from typing import Any
 
-from itgov.utils.http_client import SyncAPIClient
+import httpx
+import structlog
 
 log = structlog.get_logger(__name__)
 
-_COR_CRITICO = "FF0000"  # vermelho
-_COR_WARNING = "FF8C00"  # laranja
-_COR_OK = "36A64F"  # verde
+_COR_SEVERIDADE: dict[str, str] = {
+    "critico": "Attention",
+    "warning": "Warning",
+    "recovery": "Good",
+}
+
+_ICONE_SEVERIDADE: dict[str, str] = {
+    "critico": "🔴",
+    "warning": "⚠️",
+    "recovery": "✅",
+}
 
 
-def _card_dvr_down(ramo: str, dvr_name: str, n_cameras: int, msg: str) -> dict:
-    return {
-        "@type": "MessageCard",
-        "@context": "https://schema.org/extensions",
-        "themeColor": _COR_CRITICO,
-        "summary": f"CAUSA-RAIZ: {dvr_name} DOWN",
-        "sections": [
+def _montar_adaptive_card(
+    tipo: str,
+    severidade: str,
+    titulo: str,
+    unidade: str,
+    ramo: str,
+    host: str,
+    qtd_afetados: int,
+    mensagem: str,
+    timestamp: str,
+) -> dict[str, Any]:
+    cor = _COR_SEVERIDADE.get(severidade, "Default")
+    icone = _ICONE_SEVERIDADE.get(severidade, "")
+
+    card: dict[str, Any] = {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
             {
-                "activityTitle": f"🔴 [{ramo}] {dvr_name} DOWN — CAUSA-RAIZ",
-                "activitySubtitle": f"{n_cameras} câmera(s) afetada(s)",
-                "activityText": msg,
+                "type": "TextBlock",
+                "text": f"{icone} {titulo}",
+                "weight": "Bolder",
+                "size": "Large",
+                "color": cor,
+                "wrap": True,
+            },
+            {
+                "type": "FactSet",
                 "facts": [
-                    {"name": "Ramo", "value": ramo},
-                    {"name": "DVR", "value": dvr_name},
-                    {"name": "Câmeras afetadas", "value": str(n_cameras)},
-                    {"name": "Tipo", "value": "DVR_DOWN"},
+                    {"title": "Unidade", "value": unidade},
+                    {"title": "Ramo", "value": ramo},
+                    {"title": "Host", "value": host},
+                    {"title": "Afetados", "value": f"{qtd_afetados} câmera(s)"},
+                    {"title": "Tipo", "value": tipo},
                 ],
+            },
+            {
+                "type": "TextBlock",
+                "text": mensagem,
+                "wrap": True,
+            },
+            {
+                "type": "TextBlock",
+                "text": f"🕒 {timestamp}",
+                "isSubtle": True,
+                "size": "Small",
+            },
+        ],
+    }
+
+    return {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": card,
             }
         ],
     }
 
 
-def _card_individual(ramo: str, host_name: str, tipo: str, msg: str) -> dict:
-    icone = "⚠️"
-    return {
-        "@type": "MessageCard",
-        "@context": "https://schema.org/extensions",
-        "themeColor": _COR_WARNING,
-        "summary": f"{host_name} DOWN",
-        "sections": [
-            {
-                "activityTitle": f"{icone} [{ramo}] {host_name} DOWN",
-                "activityText": msg,
-                "facts": [
-                    {"name": "Ramo", "value": ramo},
-                    {"name": "Host", "value": host_name},
-                    {"name": "Tipo", "value": tipo},
-                ],
-            }
-        ],
-    }
-
-
-def _card_recovery(ramo: str, host_name: str, msg: str) -> dict:
-    return {
-        "@type": "MessageCard",
-        "@context": "https://schema.org/extensions",
-        "themeColor": _COR_OK,
-        "summary": f"{host_name} RECUPERADO",
-        "sections": [
-            {
-                "activityTitle": f"✅ [{ramo}] {host_name} RECUPERADO",
-                "activityText": msg,
-                "facts": [
-                    {"name": "Ramo", "value": ramo},
-                    {"name": "Host", "value": host_name},
-                ],
-            }
-        ],
-    }
-
-
-class TeamsNotifier:
-    """Envia MessageCards para um webhook do Microsoft Teams.
+def notify(payload: dict[str, Any]) -> bool:
+    """Envia Adaptive Card ao webhook do Teams Workflows.
 
     Args:
-        webhook_url: URL do incoming webhook configurado no canal Teams.
-        timeout: Timeout HTTP em segundos (padrão: 10).
+        payload: Dicionário com chaves tipo, severidade, titulo, unidade,
+                 ramo, host, qtd_afetados, mensagem, timestamp.
+
+    Returns:
+        True em sucesso (HTTP 200/202), False em qualquer falha.
     """
+    webhook_url = os.getenv("TEAMS_WEBHOOK_URL", "")
+    if not webhook_url:
+        log.warning("teams_webhook_url_ausente", motivo="TEAMS_WEBHOOK_URL não definida")
+        return False
+
+    envelope = _montar_adaptive_card(
+        tipo=payload.get("tipo", ""),
+        severidade=payload.get("severidade", "warning"),
+        titulo=payload.get("titulo", ""),
+        unidade=payload.get("unidade", ""),
+        ramo=payload.get("ramo", ""),
+        host=payload.get("host", ""),
+        qtd_afetados=payload.get("qtd_afetados", 0),
+        mensagem=payload.get("mensagem", ""),
+        timestamp=payload.get("timestamp", ""),
+    )
+
+    try:
+        resp = httpx.post(webhook_url, json=envelope, timeout=10.0)
+        if resp.status_code not in (200, 202):
+            log.error(
+                "teams_webhook_falhou",
+                status=resp.status_code,
+                body=resp.text[:200],
+            )
+            return False
+        log.info("teams_notif_ok", tipo=payload.get("tipo"), host=payload.get("host"))
+        return True
+    except httpx.TimeoutException as exc:
+        log.error("teams_webhook_erro", erro=str(exc))
+        return False
+    except Exception as exc:
+        log.error("teams_webhook_erro", erro=str(exc))
+        return False
+
+
+# Mantido para compatibilidade de import nos testes legados — use notify() em código novo
+class TeamsNotifier:
+    """Wrapper legado sobre notify(). Prefer usar notify() diretamente."""
 
     def __init__(self, webhook_url: str, timeout: float = 10.0) -> None:
-        self._webhook_url = webhook_url
-        self._client = SyncAPIClient(base_url="", timeout=timeout)
-
-    def _post(self, card: dict) -> None:
-        """Envia o card ao webhook. Falhas são logadas sem propagar."""
-        try:
-            resp = self._client._client.post(self._webhook_url, json=card, timeout=10)
-            resp.raise_for_status()
-            log.info("teams_notif_ok", summary=card.get("summary"))
-        except Exception as exc:
-            log.error("teams_notif_failed", error=str(exc), summary=card.get("summary"))
+        os.environ.setdefault("TEAMS_WEBHOOK_URL", webhook_url)
 
     def notify_dvr_down(self, ramo: str, dvr_name: str, n_cameras: int, msg: str) -> None:
-        """Notifica DVR DOWN com contagem de câmeras afetadas."""
-        self._post(_card_dvr_down(ramo, dvr_name, n_cameras, msg))
+        from datetime import UTC, datetime
+
+        notify(
+            {
+                "tipo": "DVR_DOWN",
+                "severidade": "critico",
+                "titulo": f"{dvr_name} DOWN — CAUSA-RAIZ",
+                "unidade": ramo,
+                "ramo": ramo,
+                "host": dvr_name,
+                "qtd_afetados": n_cameras,
+                "mensagem": msg,
+                "timestamp": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
+            }
+        )
 
     def notify_individual_down(self, ramo: str, host_name: str, tipo: str, msg: str) -> None:
-        """Notifica alerta individual (câmera, facial, antena)."""
-        self._post(_card_individual(ramo, host_name, tipo, msg))
+        from datetime import UTC, datetime
+
+        notify(
+            {
+                "tipo": tipo,
+                "severidade": "warning",
+                "titulo": f"{host_name} DOWN",
+                "unidade": ramo,
+                "ramo": ramo,
+                "host": host_name,
+                "qtd_afetados": 0,
+                "mensagem": msg,
+                "timestamp": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
+            }
+        )
 
     def notify_recovery(self, ramo: str, host_name: str, msg: str) -> None:
-        """Notifica recuperação (transição DOWN→UP)."""
-        self._post(_card_recovery(ramo, host_name, msg))
+        from datetime import UTC, datetime
+
+        notify(
+            {
+                "tipo": "RECOVERY",
+                "severidade": "recovery",
+                "titulo": f"{host_name} RECUPERADO",
+                "unidade": ramo,
+                "ramo": ramo,
+                "host": host_name,
+                "qtd_afetados": 0,
+                "mensagem": msg,
+                "timestamp": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
+            }
+        )

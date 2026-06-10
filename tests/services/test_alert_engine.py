@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from itgov.models.db.alert import ActiveAlert, AlertLog
 from itgov.services.alert_engine import AlertEngine, _formatar_alerta
@@ -276,8 +276,12 @@ class TestTeamsNotifier:
             notifier=notifier,
             flap_threshold=1,
         )
-        engine.run_cycle({dvr.hostid: "0"})
-        notifier.notify_dvr_down.assert_called_once()
+        with patch("itgov.services.alert_engine.teams_notify") as mock_notify:
+            engine.run_cycle({dvr.hostid: "0"})
+        mock_notify.assert_called_once()
+        payload = mock_notify.call_args[0][0]
+        assert payload["tipo"] == "DVR_DOWN"
+        assert payload["severidade"] == "critico"
 
     def test_recovery_chama_notify_recovery(self) -> None:
         dvr = _dvr()
@@ -291,6 +295,11 @@ class TestTeamsNotifier:
             notifier=notifier,
             flap_threshold=1,
         )
-        engine.run_cycle({dvr.hostid: "0"})  # dispara
-        engine.run_cycle({dvr.hostid: "1"})  # recovery
-        notifier.notify_recovery.assert_called_once()
+        with patch("itgov.services.alert_engine.teams_notify"):
+            engine.run_cycle({dvr.hostid: "0"})  # dispara
+        with patch("itgov.services.alert_engine.teams_notify") as mock_notify:
+            engine.run_cycle({dvr.hostid: "1"})  # recovery
+        mock_notify.assert_called_once()
+        payload = mock_notify.call_args[0][0]
+        assert payload["tipo"] == "RECOVERY"
+        assert payload["severidade"] == "recovery"
