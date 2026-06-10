@@ -414,14 +414,79 @@ class InfluxDBMetricsProvider:
         return mock
 
     def get_resource_metrics(self) -> dict[str, Any]:
-        """Resource Management: COMING_SOON — requires Intune/M365 integration."""
-        mock = self._mock.get_resource_metrics()
-        mock["_meta"] = {
-            "data_source": "coming_soon",
-            "last_collected": None,
-            "collector_eta": _COMING_SOON_ETA_RESOURCE,
+        """Gestão de Recursos: utilização de servidores via Zabbix; demais componentes COMING_SOON."""
+        resource = self._zabbix_resource_stats()
+
+        if not resource:
+            log.warning("zabbix_resource_sem_dados", fallback="coming_soon")
+            mock = self._mock.get_resource_metrics()
+            mock["_meta"] = {
+                "data_source": "coming_soon",
+                "last_collected": None,
+                "collector_eta": _COMING_SOON_ETA_RESOURCE,
+            }
+            return mock
+
+        log.info(
+            "resource_metrics_from_zabbix",
+            cpu_avg_pct=resource["cpu_avg_pct"],
+            mem_avg_pct=resource["mem_avg_pct"],
+            hosts_with_data=resource["hosts_with_data"],
+        )
+
+        return {
+            "_meta": {
+                "data_source": "partial",
+                "last_collected": resource["_time"],
+                "collector_eta": None,
+            },
+            "previous_score": None,
+            "components": [
+                {
+                    "id": "server_utilization",
+                    "label": "Utilização de servidores",
+                    "value": round(resource["cpu_avg_pct"], 1),
+                    "raw_value": resource["cpu_avg_pct"],
+                    "unit": "%",
+                    "source": "zabbix",
+                    "weight": 2.0,
+                    "trend": "stable",
+                },
+                {
+                    "id": "license_waste",
+                    "label": "Licenças não utilizadas",
+                    "value": 74.0,
+                    "raw_value": None,
+                    "unit": "score",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                    "is_estimated": True,
+                },
+                {
+                    "id": "it_budget_used",
+                    "label": "Orçamento TI consumido",
+                    "value": 82.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 1.5,
+                    "trend": "stable",
+                    "is_estimated": True,
+                },
+                {
+                    "id": "team_capacity",
+                    "label": "Capacidade da equipe utilizada",
+                    "value": 78.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 1.0,
+                    "trend": "stable",
+                    "is_estimated": True,
+                },
+            ],
         }
-        return mock
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -444,6 +509,26 @@ from(bucket: "{self._bucket_raw}")
             "high": int(row.get("problems_high", 0)),
             "average": int(row.get("problems_average", 0)),
             "warning": int(row.get("problems_warning", 0)),
+            "_time": row.get("_time"),
+        }
+
+    def _zabbix_resource_stats(self) -> dict[str, Any]:
+        """Retorna o último registro de utilização de recursos Zabbix do InfluxDB."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_resource")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "cpu_avg_pct": float(row.get("cpu_avg_pct", 0.0)),
+            "mem_avg_pct": float(row.get("mem_avg_pct", 0.0)),
+            "hosts_with_data": int(row.get("hosts_with_data", 0)),
             "_time": row.get("_time"),
         }
 
