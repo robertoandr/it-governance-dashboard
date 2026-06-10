@@ -79,6 +79,81 @@ class TestCalculatePillar:
         pillar = calc.calculate_pillar(PillarID.VALUE_DELIVERY, comps)
         assert pillar.score <= 100.0
 
+    def test_estimated_excluido_da_media(self, calc: ScoreCalculator) -> None:
+        # Componente real vale 40; estimado vale 100 — não deve puxar a média para cima
+        comps = [
+            {
+                "id": "real",
+                "label": "Real",
+                "value": 40.0,
+                "weight": 1.0,
+                "trend": "stable",
+                "source": "zabbix",
+                "is_estimated": False,
+            },
+            {
+                "id": "est",
+                "label": "Est",
+                "value": 100.0,
+                "weight": 1.0,
+                "trend": "stable",
+                "source": "coming_soon",
+                "is_estimated": True,
+            },
+        ]
+        pillar = calc.calculate_pillar(PillarID.RESOURCE_MANAGEMENT, comps)
+        assert pillar.score == pytest.approx(40.0)
+
+    def test_estimated_ainda_aparece_nos_components(self, calc: ScoreCalculator) -> None:
+        # is_estimated=True não remove o componente da lista — só da média
+        comps = [
+            {
+                "id": "real",
+                "label": "Real",
+                "value": 40.0,
+                "weight": 1.0,
+                "trend": "stable",
+                "source": "zabbix",
+                "is_estimated": False,
+            },
+            {
+                "id": "est",
+                "label": "Est",
+                "value": 100.0,
+                "weight": 1.0,
+                "trend": "stable",
+                "source": "coming_soon",
+                "is_estimated": True,
+            },
+        ]
+        pillar = calc.calculate_pillar(PillarID.RESOURCE_MANAGEMENT, comps)
+        assert len(pillar.components) == 2
+
+    def test_todos_estimados_usa_fallback(self, calc: ScoreCalculator) -> None:
+        # Se 100% dos componentes forem estimados, usa todos (evita score=0 enganoso)
+        comps = [
+            {
+                "id": "a",
+                "label": "A",
+                "value": 60.0,
+                "weight": 1.0,
+                "trend": "stable",
+                "source": "coming_soon",
+                "is_estimated": True,
+            },
+            {
+                "id": "b",
+                "label": "B",
+                "value": 80.0,
+                "weight": 1.0,
+                "trend": "stable",
+                "source": "coming_soon",
+                "is_estimated": True,
+            },
+        ]
+        pillar = calc.calculate_pillar(PillarID.RESOURCE_MANAGEMENT, comps)
+        assert pillar.score == pytest.approx(70.0)
+
 
 class TestCalculateGlobal:
     def test_five_pillars(self, calc: ScoreCalculator) -> None:

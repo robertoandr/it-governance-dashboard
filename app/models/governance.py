@@ -73,6 +73,8 @@ class ComponentMetric(BaseModel):
     source: str = "coming_soon"
     weight: float = Field(default=1.0, gt=0.0)
     trend: str = "stable"
+    # True = valor estimado/mock; excluído da média do pilar até coletor real chegar
+    is_estimated: bool = False
 
 
 class PillarScore(BaseModel):

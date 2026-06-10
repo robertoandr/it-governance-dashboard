@@ -62,8 +62,12 @@ class ScoreCalculator:
         meta = PILLAR_META[pillar_id]
         parsed: list[ComponentMetric] = [ComponentMetric(**c) for c in components]
 
-        total_weight = sum(c.weight for c in parsed)
-        score = 0.0 if total_weight == 0 else sum(c.value * c.weight for c in parsed) / total_weight
+        # Componentes estimados aparecem na UI mas não entram na média do pilar
+        real = [c for c in parsed if not c.is_estimated]
+        scored = real if real else parsed  # fallback: usa todos se 100% estimado
+
+        total_weight = sum(c.weight for c in scored)
+        score = 0.0 if total_weight == 0 else sum(c.value * c.weight for c in scored) / total_weight
 
         pillar_trend = _trend(score, previous_score)
 
@@ -71,7 +75,8 @@ class ScoreCalculator:
             "pillar_calculated",
             pillar=pillar_id.value,
             score=round(score, 2),
-            components=len(parsed),
+            components_total=len(parsed),
+            components_scored=len(scored),
             trend=pillar_trend,
         )
 
