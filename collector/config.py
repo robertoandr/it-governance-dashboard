@@ -12,10 +12,21 @@ class Settings(BaseSettings):
     INFLUX_BUCKET_RAW: str = "governance_raw"
     LOG_LEVEL: str = "INFO"
     TZ: str = "America/Sao_Paulo"
-    # Microsoft Entra ID (Azure AD) — required for Entra ID collector
+    # Microsoft Entra ID (Azure AD) — necessário para o coletor Entra ID
     AZURE_TENANT_ID: str = ""
     AZURE_CLIENT_ID: str = ""
     AZURE_CLIENT_SECRET: str = ""
+    # Zabbix — necessário para o coletor de utilização de recursos
+    ZABBIX_URL: str = ""
+    ZABBIX_USER: str = ""
+    ZABBIX_PASSWORD: str = ""
+    # Zabbix Asset Status — job de polling a cada 60s (Pacote III)
+    ZBX_URL: str = ""
+    ZBX_TOKEN: str = ""
+    ZBX_USER: str = ""
+    ZBX_PASSWORD: str = ""
+    # JSON: {"camera": ["Cameras"], "server": ["Linux servers"]}
+    ZBX_GROUP_MAP: str = ""
 
     class Config:
         env_file = ".env"

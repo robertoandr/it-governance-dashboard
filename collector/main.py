@@ -7,10 +7,13 @@ import structlog
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from jobs.asset_status_job import run as sync_asset_status
 from jobs.entra_id_collector import run as collect_entra_id
 from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
+from jobs.snapshot_job import run as snapshot_score
+from jobs.zabbix_resource_collector import run as collect_zabbix_resource
 
 from config import settings
 
@@ -58,6 +61,44 @@ if __name__ == "__main__":
         max_instances=1,
         coalesce=True,
     )
+
+    scheduler.add_job(
+        snapshot_score,
+        CronTrigger(hour=2, minute=0),
+        id="snapshot_score",
+        name="Governance Score Snapshot",
+        max_instances=1,
+        coalesce=True,
+    )
+    log.info("snapshot_job_registrado")
+
+    if settings.ZBX_URL:
+        scheduler.add_job(
+            sync_asset_status,
+            IntervalTrigger(seconds=60),
+            id="asset_status_job",
+            name="Asset Status Sync (Zabbix)",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("asset_status_job_registrado")
+    else:
+        log.warning("asset_status_job_ignorado", motivo="ZBX_URL não configurada")
+
+    if settings.ZABBIX_URL and settings.ZABBIX_USER and settings.ZABBIX_PASSWORD:
+        scheduler.add_job(
+            collect_zabbix_resource,
+            CronTrigger(minute="*/30"),
+            id="zabbix_resource_collector",
+            name="Zabbix Resource Utilization Collector",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("zabbix_resource_job_registrado")
+    else:
+        log.warning("zabbix_resource_job_ignorado", motivo="ZABBIX_* env vars não configuradas")
 
     if settings.AZURE_TENANT_ID and settings.AZURE_CLIENT_ID and settings.AZURE_CLIENT_SECRET:
         scheduler.add_job(
