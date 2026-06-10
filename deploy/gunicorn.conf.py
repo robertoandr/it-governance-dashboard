@@ -67,6 +67,22 @@ def on_starting(server: object) -> None:
     )
 
 
+def post_fork(server: object, worker: object) -> None:
+    """Arranca o AlertPoller em cada worker — somente um ganha o advisory lock PG."""
+    import logging
+
+    logging.getLogger("gunicorn.error").info(
+        "post_fork: worker pid=%s tentando advisory lock do poller",
+        worker.pid,  # type: ignore[union-attr]
+    )
+    try:
+        from itgov.services.alert_poller import start_poller
+
+        start_poller()
+    except Exception as exc:
+        logging.getLogger("gunicorn.error").warning("post_fork: start_poller falhou: %s", exc)
+
+
 def on_exit(server: object) -> None:
     """Log clean shutdown."""
     import logging

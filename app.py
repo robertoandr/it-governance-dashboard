@@ -60,14 +60,10 @@ itgov_api.add_namespace(zendesk_ns)
 itgov_api.add_namespace(ativos_ns)
 itgov_api.add_namespace(alerts_ns)
 
-# Módulo de alertas CFTV — inicia poller em background
-try:
-    from itgov.services.alert_poller import AlertPoller
-
-    _alert_poller = AlertPoller.from_config()
-    _alert_poller.start()
-except Exception as _poller_err:
-    log.warning("alert_poller_nao_iniciado: %s", _poller_err)
+# Módulo de alertas CFTV — o start efetivo ocorre em post_fork (gunicorn.conf.py).
+# Em execução direta (python app.py) o start_poller() abaixo é chamado no __main__.
+# NÃO iniciar aqui: com preload_app=True este bloco roda no master do Gunicorn e
+# qualquer thread iniciada morre após o fork dos workers.
 
 _cache: dict = {
     "hosts": {},
@@ -424,5 +420,13 @@ def legacy_dashboard_redirect():
 
 
 if __name__ == "__main__":
+    # Execução direta: não há post_fork — inicia poller manualmente.
+    try:
+        from itgov.services.alert_poller import start_poller
+
+        start_poller()
+    except Exception as _poller_err:
+        log.warning("alert_poller_nao_iniciado: %s", _poller_err)
+
     log.info("Subindo Flask em 0.0.0.0:%s", config.FLASK_PORT)
     app.run(host="0.0.0.0", port=config.FLASK_PORT, debug=config.FLASK_DEBUG, use_reloader=False)

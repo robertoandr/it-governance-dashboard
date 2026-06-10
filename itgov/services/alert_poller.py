@@ -147,3 +147,22 @@ class AlertPoller:
         log.debug("alert_poller_ciclo", hosts=len(hostids), com_icmp=len(icmp_status))
 
         self._engine.run_cycle(icmp_status)
+
+
+def start_poller() -> None:
+    """Tenta adquirir o advisory lock e inicia o AlertPoller se este worker ganhar.
+
+    Deve ser chamado no hook post_fork do Gunicorn (ou equivalente). Workers que
+    perderem o lock continuam servindo HTTP normalmente, sem rodar o poller.
+    """
+    from itgov.services.singleton import try_acquire_poller_lock
+
+    if not try_acquire_poller_lock():
+        log.info("poller_nao_iniciado", razao="advisory lock ocupado por outro worker")
+        return
+
+    try:
+        poller = AlertPoller.from_config()
+        poller.start()
+    except Exception as exc:
+        log.error("poller_start_falhou", error=str(exc))
