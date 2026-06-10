@@ -47,6 +47,13 @@ ZABBIX_URL = _env("ZABBIX_URL")
 ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
 ZABBIX_USER = _env("ZABBIX_USER")
 ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
+# Token de API nativo Zabbix 7.x (Bearer); se definido, user/password são ignorados
+ZABBIX_TOKEN = _env("ZABBIX_TOKEN", "", required=False) or None
+
+# ── Módulo de Alertas CFTV
+WEBHOOK_URL = _env("WEBHOOK_URL", "", required=False)
+POLL_INTERVAL = _env_int("POLL_INTERVAL", 60)
+FLAP_THRESHOLD = _env_int("FLAP_THRESHOLD", 2)
 
 # ── Zendesk (optional integration — disabled when vars are absent)
 ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN", required=False)

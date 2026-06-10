@@ -18,6 +18,7 @@ from collectors.graph import GraphCollector
 from collectors.influx import InfluxCollector
 from collectors.ldap_collector import LDAPCollector
 from collectors.zabbix import ZabbixCollector
+from itgov.api.v1.alerts import ns as alerts_ns
 from itgov.api.v1.ativos import ns as ativos_ns
 from itgov.api.v1.zabbix import ns as zabbix_ns
 from itgov.api.v1.zendesk import ns as zendesk_ns
@@ -57,6 +58,16 @@ itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=Fa
 itgov_api.add_namespace(zabbix_ns)
 itgov_api.add_namespace(zendesk_ns)
 itgov_api.add_namespace(ativos_ns)
+itgov_api.add_namespace(alerts_ns)
+
+# Módulo de alertas CFTV — inicia poller em background
+try:
+    from itgov.services.alert_poller import AlertPoller
+
+    _alert_poller = AlertPoller.from_config()
+    _alert_poller.start()
+except Exception as _poller_err:
+    log.warning("alert_poller_nao_iniciado: %s", _poller_err)
 
 _cache: dict = {
     "hosts": {},
