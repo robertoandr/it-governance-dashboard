@@ -76,13 +76,17 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     # Legacy itgov namespaces (Sprint 10E) — preserved under /api/v1/ path
     try:
+        from itgov.api.v1.assets import ns as assets_ns
         from itgov.api.v1.ativos import ns as ativos_ns
+        from itgov.api.v1.score_history import ns as score_history_ns
         from itgov.api.v1.zabbix import ns as zabbix_ns
         from itgov.api.v1.zendesk import ns as zendesk_ns
 
         api.add_namespace(zabbix_ns, path="/v1/zabbix")
         api.add_namespace(zendesk_ns, path="/v1/zendesk")
         api.add_namespace(ativos_ns, path="/v1/ativos")
+        api.add_namespace(score_history_ns, path="/v1/score")
+        api.add_namespace(assets_ns, path="/v1/assets")
         app.extensions["itgov_api"] = api
         log.info("itgov_legacy_namespaces_registered")
     except Exception as _e:

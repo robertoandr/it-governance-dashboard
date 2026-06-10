@@ -17,6 +17,8 @@ if config.config_file_name is not None:
 # Import all models so Alembic autogenerate can detect them
 from itgov.models.db.base import Base
 from itgov.models.db.ativo import AtivoDB  # noqa: F401
+from itgov.models.db.score_snapshot import PillarSnapshotDB, ScoreSnapshotDB  # noqa: F401
+from itgov.models.db.asset_status import AssetStatusDB, AssetStatusHistoryDB  # noqa: F401
 
 target_metadata = Base.metadata
 
