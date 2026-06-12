@@ -159,6 +159,9 @@ services:
       AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
       AZURE_CLIENT_ID: "${AZURE_CLIENT_ID:-}"
       AZURE_CLIENT_SECRET: "${AZURE_CLIENT_SECRET:-}"
+      ACRONIS_BASE_URL: "${ACRONIS_BASE_URL:-}"
+      ACRONIS_CLIENT_ID: "${ACRONIS_CLIENT_ID:-}"
+      ACRONIS_CLIENT_SECRET: "${ACRONIS_CLIENT_SECRET:-}"
     volumes:
       - collector_data:/data
     depends_on:
