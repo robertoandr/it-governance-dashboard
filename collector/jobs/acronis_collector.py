@@ -108,43 +108,55 @@ class AcronisCollector:
         raise RuntimeError(f"Acronis: tentativas esgotadas para {url}")
 
     def _paginar(self, path: str, params: dict[str, Any] | None = None) -> Generator[dict[str, Any], None, None]:
-        """Itera sobre todas as páginas usando cursor pagination do Acronis."""
+        """Itera sobre todas as páginas usando cursor pagination do Acronis.
+
+        A API retorna o cursor em paging.cursors.after; a próxima página
+        é requisitada com o parâmetro after=<cursor>.
+        """
         params = dict(params or {})
         params.setdefault("limit", _DEFAULT_PAGE_SIZE)
         while True:
             pagina = self._get(path, params=params)
             itens = pagina.get("items", [])
             yield from itens
-            cursor = pagina.get("cursor")
+            cursor = pagina.get("paging", {}).get("cursors", {}).get("after")
             if not cursor or not itens:
                 break
-            params = {"cursor": cursor, "limit": params.get("limit", _DEFAULT_PAGE_SIZE)}
+            params = {"after": cursor, "limit": params.get("limit", _DEFAULT_PAGE_SIZE)}
 
     # ── Coleta de métricas ──────────────────────────────────────────────────
 
     def _coletar_agentes(self) -> dict[str, int]:
-        """Retorna contagens de agentes por status."""
+        """Retorna contagens de agentes por status.
+
+        A API usa campo booleano 'online' (não string 'status').
+        Outdated: installer_version.current.release_id != latest.release_id.
+        """
         contagens: dict[str, int] = {"online": 0, "offline": 0, "outdated": 0, "total": 0}
         for agente in self._paginar("/api/agent_manager/v2/agents"):
             contagens["total"] += 1
-            status = (agente.get("status") or "").lower()
-            if status == "online":
+            if agente.get("online"):
                 contagens["online"] += 1
-            elif status == "offline":
+            else:
                 contagens["offline"] += 1
-            # 'outdated' pode vir como flag separada ou status
-            if agente.get("outdated") or status == "outdated":
+            inst = agente.get("installer_version", {})
+            current_id = inst.get("current", {}).get("release_id", "")
+            latest_id = inst.get("latest", {}).get("release_id", "")
+            if current_id and latest_id and current_id != latest_id:
                 contagens["outdated"] += 1
         return contagens
 
     def _coletar_protecao(self) -> dict[str, int]:
-        """Retorna máquinas protegidas vs total."""
+        """Retorna máquinas com agente instalado vs total.
+
+        O endpoint resources não expõe protection.status diretamente.
+        Proxy: máquina com agent_id preenchido = agente instalado = protegida.
+        """
         total = 0
         protegidas = 0
         for recurso in self._paginar("/api/resource_management/v4/resources", params={"type": "machine"}):
             total += 1
-            protecao = recurso.get("protection", {})
-            if isinstance(protecao, dict) and protecao.get("status") == "protected":
+            if recurso.get("agent_id"):
                 protegidas += 1
         return {"protected_machines": protegidas, "total_machines": total}
 

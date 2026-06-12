@@ -168,7 +168,7 @@ class TestPaginar:
         coletor._cached_token = "tok"
         coletor._token_expires_at = time.monotonic() + 3600
 
-        pagina1 = {"items": [{"id": "1"}], "cursor": "cursor-xyz"}
+        pagina1 = {"items": [{"id": "1"}], "paging": {"cursors": {"after": "cursor-xyz"}}}
         pagina2 = {"items": [{"id": "2"}]}
 
         respostas = [_resposta_json(pagina1), _resposta_json(pagina2)]
@@ -184,7 +184,7 @@ class TestPaginar:
         coletor._cached_token = "tok"
         coletor._token_expires_at = time.monotonic() + 3600
 
-        pagina = {"items": [], "cursor": "cursor-xyz"}
+        pagina = {"items": [], "paging": {"cursors": {"after": "cursor-xyz"}}}
         with patch("collector.jobs.acronis_collector.requests.get", return_value=_resposta_json(pagina)):
             resultado = list(coletor._paginar("/api/recursos"))
 
@@ -197,13 +197,24 @@ class TestPaginar:
 class TestColetarAgentes:
     def test_conta_agentes_por_status(self):
         coletor = _coletor()
+        # API usa campo booleano 'online'; outdated = current != latest
         agentes = [
-            {"status": "online"},
-            {"status": "online"},
-            {"status": "offline"},
-            {"status": "offline"},
-            {"status": "offline"},
-            {"outdated": True, "status": "online"},
+            {
+                "online": True,
+                "installer_version": {"current": {"release_id": "26.5.1"}, "latest": {"release_id": "26.5.1"}},
+            },
+            {
+                "online": True,
+                "installer_version": {"current": {"release_id": "26.5.1"}, "latest": {"release_id": "26.5.1"}},
+            },
+            {"online": False, "installer_version": {}},
+            {"online": False, "installer_version": {}},
+            {"online": False, "installer_version": {}},
+            # online mas desatualizado
+            {
+                "online": True,
+                "installer_version": {"current": {"release_id": "25.7.1"}, "latest": {"release_id": "26.5.1"}},
+            },
         ]
         with patch.object(coletor, "_paginar", return_value=iter(agentes)):
             resultado = coletor._coletar_agentes()
@@ -225,12 +236,12 @@ class TestColetarAgentes:
 
 
 class TestColetarProtecao:
-    def test_conta_maquinas_protegidas(self):
+    def test_conta_maquinas_com_agente(self):
         coletor = _coletor()
         maquinas = [
-            {"protection": {"status": "protected"}},
-            {"protection": {"status": "protected"}},
-            {"protection": {"status": "unprotected"}},
+            {"agent_id": "uuid-1"},  # protegida (tem agente)
+            {"agent_id": "uuid-2"},  # protegida
+            {"agent_id": ""},  # sem agente = não protegida
         ]
         with patch.object(coletor, "_paginar", return_value=iter(maquinas)):
             resultado = coletor._coletar_protecao()
