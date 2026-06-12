@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     ZABBIX_URL: str = ""
     ZABBIX_USER: str = ""
     ZABBIX_PASSWORD: str = ""
+    # Acronis Cyber Cloud — coletor de agentes e proteção
+    ACRONIS_BASE_URL: str = ""
+    ACRONIS_CLIENT_ID: str = ""
+    ACRONIS_CLIENT_SECRET: str = ""
     # Zabbix Asset Status — job de polling a cada 60s (Pacote III)
     ZBX_URL: str = ""
     ZBX_TOKEN: str = ""
