@@ -2,6 +2,9 @@
 Description=IT Governance Dashboard (Gunicorn)
 Documentation=https://github.com/robertoandr/it-governance-dashboard
 After=network.target
+# FIX(#156): StartLimit* belongs in [Unit], not [Service]
+StartLimitBurst=3
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
@@ -12,6 +15,12 @@ Group=zabbix
 # ── Working directory & environment ───────────────────────────────────────────
 WorkingDirectory=/opt/it-gov-dashboard
 EnvironmentFile=/opt/it-gov-dashboard/.env
+# FIX(#156): explicit HOME prevents gunicorn control socket from trying
+# /home/zabbix/.gunicorn/ which is blocked by ProtectHome=true.
+# RuntimeDirectory creates /run/it-gov-dashboard at startup (mode 0750, zabbix:zabbix).
+RuntimeDirectory=it-gov-dashboard
+RuntimeDirectoryMode=0750
+Environment=HOME=/run/it-gov-dashboard
 
 # ── Process ───────────────────────────────────────────────────────────────────
 ExecStart=/opt/it-gov-dashboard/.venv/bin/gunicorn \
@@ -31,8 +40,6 @@ SendSIGKILL=yes
 # ── Restart policy ────────────────────────────────────────────────────────────
 Restart=on-failure
 RestartSec=5
-StartLimitBurst=3
-StartLimitIntervalSec=60
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 # stdout/stderr captured by journald. Access via:

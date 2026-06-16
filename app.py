@@ -216,13 +216,32 @@ def _refresh_once():
 
 
 def _refresh_loop():
+    consecutive_failures = 0
     while True:
+        t0 = time.monotonic()
         try:
             _refresh_once()
-        except Exception as e:
-            log.exception("loop: %s", safe(e))
+            consecutive_failures = 0
+            log.info(
+                "refresh_success duration_s=%.3f last_refresh=%s",
+                time.monotonic() - t0,
+                _cache.get("last_refresh"),
+            )
+        except Exception as exc:
+            consecutive_failures += 1
+            backoff = min(30 * (2 ** min(consecutive_failures - 1, 4)), 300)
+            log.error(
+                "refresh_failed error=%s type=%s consecutive=%d backoff_s=%d",
+                safe(exc),
+                type(exc).__name__,
+                consecutive_failures,
+                backoff,
+                exc_info=True,
+            )
             with _cache_lock:
-                _cache["last_error"] = str(e)
+                _cache["last_error"] = f"[{consecutive_failures}x] {exc}"
+            time.sleep(backoff)
+            continue
         time.sleep(config.CACHE_TTL)
 
 
@@ -245,22 +264,39 @@ def api_data():
         return jsonify(_cache)
 
 
+@app.route("/health")
+def health_liveness():
+    """Liveness probe: returns 200 as long as gunicorn is up (process alive)."""
+    return {"status": "ok", "service": "it-gov-dashboard", "port": 8091}, 200
+
+
 @app.route("/api/health")
 def api_health():
     with _cache_lock:
         hs = _cache.get("health_score") or {}
-        return jsonify(
-            {
-                "ok": _cache.get("last_refresh") is not None,
-                "last_refresh": _cache.get("last_refresh"),
-                "last_error": _cache.get("last_error"),
-                "graph_enabled": config.GRAPH_ENABLED,
-                "grafana_enabled": config.GRAFANA_ENABLED,
-                "ldap_enabled": config.LDAP_ENABLED,
-                "health_score": hs.get("score"),
-                "health_label": hs.get("label"),
-            }
-        )
+        last_refresh = _cache.get("last_refresh")
+        # FIX(#156): return 503 when data is absent or stale (>5 min).
+        # Prevents monitors/Zabbix from treating "data=empty, HTTP=200" as healthy.
+        stale_threshold = 300  # 5 × CACHE_TTL is a generous staleness limit
+        if last_refresh is None:
+            is_healthy = False
+        else:
+            try:
+                age = (datetime.now(UTC) - datetime.fromisoformat(last_refresh)).total_seconds()
+                is_healthy = age < stale_threshold
+            except Exception:
+                is_healthy = False
+        payload = {
+            "ok": is_healthy,
+            "last_refresh": last_refresh,
+            "last_error": _cache.get("last_error"),
+            "graph_enabled": config.GRAPH_ENABLED,
+            "grafana_enabled": config.GRAFANA_ENABLED,
+            "ldap_enabled": config.LDAP_ENABLED,
+            "health_score": hs.get("score"),
+            "health_label": hs.get("label"),
+        }
+        return jsonify(payload), 200 if is_healthy else 503
 
 
 @app.route("/api/ack", methods=["POST"])
