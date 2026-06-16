@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from typing import Any
+
 import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
@@ -10,6 +13,47 @@ import config
 from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
+
+# Cache em memória (mesmo padrão de app/api/dashboards.py): get_mttr_summary() e
+# get_ticket_volume_by_status() paginam o histórico completo de tickets — sem
+# cache, cada carregamento da página/endpoint leva ~20s (centenas de páginas
+# na API Zendesk). TTL curto evita refetch a cada request sem deixar os
+# números muito desatualizados.
+_TTL_SECONDS = 120
+_mttr_cache: dict[str, Any] = {}
+_volume_cache: dict[str, Any] = {}
+
+
+def get_cached_mttr_summary() -> dict[str, Any]:
+    """Retorna o resumo de MTTR, recalculando no máximo a cada _TTL_SECONDS."""
+    now = time.monotonic()
+    if _mttr_cache.get("expires_at", 0) > now and _mttr_cache.get("data") is not None:
+        log.debug("zendesk_mttr_cache_hit")
+        return _mttr_cache["data"]  # type: ignore[return-value]
+
+    with _svc() as svc:
+        summary = svc.get_mttr_summary()
+    data = summary.model_dump()
+    _mttr_cache["data"] = data
+    _mttr_cache["expires_at"] = now + _TTL_SECONDS
+    log.info("zendesk_mttr_cache_refreshed", ttl=_TTL_SECONDS)
+    return data
+
+
+def get_cached_volume_by_status() -> dict[str, int]:
+    """Retorna o volume de tickets por status, recalculando no máximo a cada _TTL_SECONDS."""
+    now = time.monotonic()
+    if _volume_cache.get("expires_at", 0) > now and _volume_cache.get("data") is not None:
+        log.debug("zendesk_volume_cache_hit")
+        return _volume_cache["data"]  # type: ignore[return-value]
+
+    with _svc() as svc:
+        data = svc.get_ticket_volume_by_status()
+    _volume_cache["data"] = data
+    _volume_cache["expires_at"] = now + _TTL_SECONDS
+    log.info("zendesk_volume_cache_refreshed", ttl=_TTL_SECONDS)
+    return data
+
 
 ns = Namespace("zendesk", description="Zendesk support integration")
 
@@ -50,6 +94,16 @@ csat_model = ns.model(
             allow_null=True, description="Percentual de avaliações positivas, ou null se sem dados"
         ),
         "sample_size": fields.Integer(description="Surveys respondidas (good + bad) na janela"),
+    },
+)
+
+mttr_model = ns.model(
+    "ZendeskMTTRSummary",
+    {
+        "sample_size": fields.Integer(description="Tickets resolvidos considerados no cálculo"),
+        "avg_business_minutes": fields.Float(allow_null=True, description="MTTR médio em horário comercial"),
+        "avg_calendar_minutes": fields.Float(allow_null=True, description="MTTR médio em tempo corrido"),
+        "avg_first_reply_business_minutes": fields.Float(allow_null=True, description="1ª resposta média (business)"),
     },
 )
 
@@ -119,9 +173,8 @@ class VolumeResource(Resource):
     @ns.marshal_with(volume_model)
     @ns.doc(description="Contagem de tickets por status")
     def get(self) -> dict:
-        """Volume de tickets agrupado por status."""
-        with _svc() as svc:
-            return svc.get_ticket_volume_by_status()
+        """Volume de tickets agrupado por status (cacheado, ver _TTL_SECONDS)."""
+        return get_cached_volume_by_status()
 
 
 @ns.route("/sla")
@@ -133,6 +186,15 @@ class SLAResource(Resource):
         with _svc() as svc:
             metric = svc.get_sla_metrics()
         return metric.model_dump()
+
+
+@ns.route("/mttr")
+class MTTRResource(Resource):
+    @ns.marshal_with(mttr_model)
+    @ns.doc(description="MTTR — tempo médio de resolução (business e calendar)")
+    def get(self) -> dict:
+        """Resumo de MTTR a partir de ticket_metrics (cacheado, ver _TTL_SECONDS)."""
+        return get_cached_mttr_summary()
 
 
 @ns.route("/csat")

@@ -45,10 +45,11 @@ INFLUX_BUCKET = _env("INFLUX_BUCKET")
 # ── Zabbix
 ZABBIX_URL = _env("ZABBIX_URL")
 ZABBIX_FRONT_URL = _env("ZABBIX_FRONT_URL", "")
-ZABBIX_USER = _env("ZABBIX_USER")
-ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD")
 # Token de API nativo Zabbix 7.x (Bearer); se definido, user/password são ignorados
 ZABBIX_TOKEN = _env("ZABBIX_TOKEN", "", required=False) or None
+# user/password só são obrigatórios quando não há token (auth básica legada)
+ZABBIX_USER = _env("ZABBIX_USER", required=not ZABBIX_TOKEN)
+ZABBIX_PASSWORD = _env("ZABBIX_PASSWORD", required=not ZABBIX_TOKEN)
 
 # ── Módulo de Alertas CFTV
 WEBHOOK_URL = _env("WEBHOOK_URL", "", required=False)
@@ -64,6 +65,9 @@ ZENDESK_ENABLED = bool(ZENDESK_SUBDOMAIN and ZENDESK_EMAIL and ZENDESK_API_TOKEN
 
 # ── Maintenance PIN (vazio = endpoints de escrita bloqueados por design)
 OPS_PIN = _env("OPS_PIN", "", required=False)
+
+# ── Governance MFA PIN (vazio = POST /reclassify bloqueado por design)
+GOV_MFA_PIN = _env("GOV_MFA_PIN", "", required=False)
 
 # ── Microsoft Graph
 GRAPH_TENANT_ID = _env("AZURE_TENANT_ID", required=False)

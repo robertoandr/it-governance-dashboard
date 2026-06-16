@@ -75,6 +75,7 @@ import structlog
 import config
 from itgov.models.zendesk import (
     CSATSummary,
+    MTTRSummary,
     SatisfactionRating,
     SLAMetric,
     Ticket,
@@ -263,6 +264,50 @@ class ZendeskService(SyncAPIClient):
         bad = total - good
         csat_pct = round((good / total) * 100, 1) if total else None
         return CSATSummary(total_ratings=total, good=good, bad=bad, csat_pct=csat_pct, sample_size=total)
+
+    def get_mttr_summary(self) -> MTTRSummary:
+        """Calcula MTTR (tempo médio de resolução) a partir de /ticket_metrics.json.
+
+        Usa ``full_resolution_time_in_minutes`` (business e calendar) e
+        ``reply_time_in_minutes.business`` para 1ª resposta. Tickets ainda não
+        resolvidos têm esses campos ``null`` na API e são excluídos do cálculo
+        (não contam como 0 minutos).
+
+        Returns:
+            MTTRSummary com médias em minutos e o tamanho da amostra resolvida.
+        """
+        raw = self._paginate("/api/v2/ticket_metrics.json", "ticket_metrics")
+
+        def _mean(values: list[float]) -> float | None:
+            return round(sum(values) / len(values), 1) if values else None
+
+        business = [
+            m["business"]
+            for t in raw
+            if (m := t.get("full_resolution_time_in_minutes")) and m.get("business") is not None
+        ]
+        calendar = [
+            m["calendar"]
+            for t in raw
+            if (m := t.get("full_resolution_time_in_minutes")) and m.get("calendar") is not None
+        ]
+        first_reply = [
+            m["business"] for t in raw if (m := t.get("reply_time_in_minutes")) and m.get("business") is not None
+        ]
+
+        summary = MTTRSummary(
+            sample_size=len(business),
+            avg_business_minutes=_mean(business),
+            avg_calendar_minutes=_mean(calendar),
+            avg_first_reply_business_minutes=_mean(first_reply),
+        )
+        log.info(
+            "zendesk_mttr_calculated",
+            sample_size=summary.sample_size,
+            avg_business_minutes=summary.avg_business_minutes,
+            avg_calendar_minutes=summary.avg_calendar_minutes,
+        )
+        return summary
 
     def get_ticket_volume_by_status(self) -> dict[str, int]:
         """Retorna contagem de tickets por status.

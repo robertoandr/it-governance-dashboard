@@ -78,6 +78,20 @@ class SatisfactionRating(BaseModel):
     created_at: datetime
 
 
+class MTTRSummary(BaseModel):
+    """Resumo de MTTR (tempo médio de resolução) calculado a partir de ticket_metrics.
+
+    ``avg_business_minutes``/``avg_calendar_minutes`` são ``None`` quando
+    ``sample_size == 0`` (nenhum ticket resolvido na amostra) — consumidores
+    devem tratar ``None`` como "sem dados", não como 0 minutos.
+    """
+
+    sample_size: int = Field(ge=0, description="Tickets resolvidos considerados no cálculo")
+    avg_business_minutes: float | None = Field(default=None, ge=0.0)
+    avg_calendar_minutes: float | None = Field(default=None, ge=0.0)
+    avg_first_reply_business_minutes: float | None = Field(default=None, ge=0.0)
+
+
 class CSATSummary(BaseModel):
     """Resumo de satisfação do cliente.
 

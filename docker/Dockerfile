@@ -64,13 +64,15 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fs http://localhost:5000/health || exit 1
 
-# gunicorn: 4 workers × gthread, timeout 30s
+# gunicorn: 4 workers × gthread, timeout 60s
+# (60s, não 30s: rotas com fetch externo paginado a frio — ex: /zendesk —
+# podem levar ~25s; nginx upstream também usa proxy_read_timeout 60s)
 ENTRYPOINT ["python", "-m", "gunicorn"]
 CMD ["--bind", "0.0.0.0:5000", \
      "--workers", "4", \
      "--worker-class", "gthread", \
      "--threads", "2", \
-     "--timeout", "30", \
+     "--timeout", "60", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--log-level", "info", \

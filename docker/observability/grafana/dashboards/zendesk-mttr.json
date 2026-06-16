@@ -1,0 +1,238 @@
+{
+  "id": null,
+  "uid": "itgov-zendesk-mttr",
+  "title": "Zendesk — Suporte (MTTR)",
+  "description": "MTTR e indicadores de suporte via Zendesk ticket_metrics API. Baseado nos 100 tickets mais recentes (sem paginacao completa ainda).",
+  "tags": ["itgov", "zendesk", "support"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 2,
+  "refresh": "5m",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "MTTR (ultimos 100 tickets)",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "MTTR medio (business hours)",
+      "description": "Media de full_resolution_time_in_minutes.business entre tickets resolvidos. Numero que reflete SLA/horario comercial.",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 6 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "zendesk" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "https://grupogadens.zendesk.com/api/v2/ticket_metrics.json?page[size]=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "ticket_metrics",
+          "columns": [
+            { "selector": "full_resolution_time_in_minutes.business", "text": "mttr_business", "type": "number" }
+          ]
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["mean"], "fields": "/.*/" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 240 },
+              { "color": "red",    "value": 1440 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "MTTR medio (calendar)",
+      "description": "Media de full_resolution_time_in_minutes.calendar (tempo corrido, sentido pelo usuario).",
+      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 6 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "zendesk" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "https://grupogadens.zendesk.com/api/v2/ticket_metrics.json?page[size]=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "ticket_metrics",
+          "columns": [
+            { "selector": "full_resolution_time_in_minutes.calendar", "text": "mttr_calendar", "type": "number" }
+          ]
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["mean"], "fields": "/.*/" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Tickets resolvidos (amostra)",
+      "description": "Quantidade de tickets com full_resolution_time preenchido, dentro dos 100 mais recentes.",
+      "gridPos": { "x": 12, "y": 1, "w": 6, "h": 6 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "zendesk" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "https://grupogadens.zendesk.com/api/v2/ticket_metrics.json?page[size]=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "ticket_metrics",
+          "columns": [
+            { "selector": "full_resolution_time_in_minutes.business", "text": "mttr_business", "type": "number" }
+          ]
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["count"], "fields": "/.*/" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "green", "mode": "fixed" }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tempo medio de 1a resposta (business)",
+      "description": "Media de reply_time_in_minutes.business.",
+      "gridPos": { "x": 18, "y": 1, "w": 6, "h": 6 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "zendesk" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "https://grupogadens.zendesk.com/api/v2/ticket_metrics.json?page[size]=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "ticket_metrics",
+          "columns": [
+            { "selector": "reply_time_in_minutes.business", "text": "reply_business", "type": "number" }
+          ]
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["mean"], "fields": "/.*/" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red",    "value": 120 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Ultimos tickets resolvidos",
+      "gridPos": { "x": 0, "y": 7, "w": 24, "h": 10 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "zendesk" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "https://grupogadens.zendesk.com/api/v2/ticket_metrics.json?page[size]=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "ticket_metrics",
+          "columns": [
+            { "selector": "ticket_id", "text": "ticket_id", "type": "number" },
+            { "selector": "solved_at", "text": "solved_at", "type": "timestamp" },
+            { "selector": "full_resolution_time_in_minutes.business", "text": "mttr_business_min", "type": "number" },
+            { "selector": "full_resolution_time_in_minutes.calendar", "text": "mttr_calendar_min", "type": "number" },
+            { "selector": "reopens", "text": "reopens", "type": "number" },
+            { "selector": "replies", "text": "replies", "type": "number" }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "mttr_business_min",
+                "config": { "id": "isNotNull" }
+              }
+            ],
+            "type": "include",
+            "match": "all"
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [{ "field": "solved_at", "desc": true }]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "mttr_business_min" }, "properties": [{ "id": "unit", "value": "m" }] },
+          { "matcher": { "id": "byName", "options": "mttr_calendar_min" }, "properties": [{ "id": "unit", "value": "m" }] }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    }
+  ]
+}

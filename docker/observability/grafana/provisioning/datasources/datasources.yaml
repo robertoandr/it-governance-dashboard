@@ -33,3 +33,15 @@ datasources:
           matcherRegex: '"traceId":"(\w+)"'
           name: TraceID
           url: "$${__value.raw}"
+
+  - name: Zendesk
+    type: yesoreyeram-infinity-datasource
+    uid: zendesk
+    jsonData:
+      auth_method: basicAuth
+      allowedHosts:
+        - https://grupogadens.zendesk.com
+    basicAuth: true
+    basicAuthUser: roberto@grupogadens.com.br/token
+    secureJsonData:
+      basicAuthPassword: $__env{ZD_TOKEN}

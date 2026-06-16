@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Suporte (Zendesk) — IT Governance{% endblock %}
+
+{% block page_title %}Suporte — MTTR (Zendesk){% endblock %}
+
+
+{% block content %}
+{% macro stat_card(label, value, unit, color) %}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+  {% if value is none %}
+    <p class="text-3xl font-bold text-gray-300">—</p>
+    <p class="text-xs text-gray-400 mt-1">sem dados</p>
+  {% else %}
+    <p class="text-3xl font-bold {{ color }}">{{ value }}<span class="text-base text-gray-400 ml-1">{{ unit }}</span></p>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div class="mb-4 flex items-center justify-between">
+  <div>
+    <h1 class="text-xl font-bold text-gray-800">Suporte — Zendesk</h1>
+    <p class="text-sm text-gray-500">MTTR calculado sobre todos os tickets resolvidos (paginação completa via ticket_metrics).</p>
+  </div>
+  <span class="text-xs text-gray-400">Amostra: {{ mttr.sample_size }} ticket{{ 's' if mttr.sample_size != 1 else '' }} resolvido{{ 's' if mttr.sample_size != 1 else '' }}</span>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+  {{ stat_card('MTTR médio (business hours)', mttr.avg_business_minutes, 'min', 'text-blue-600') }}
+  {{ stat_card('MTTR médio (calendar)', mttr.avg_calendar_minutes, 'min', 'text-gray-700') }}
+  {{ stat_card('1ª resposta média (business)', mttr.avg_first_reply_business_minutes, 'min', 'text-emerald-600') }}
+</div>
+
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Volume de tickets por status</p>
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    {% for status, count in volume.items() %}
+    <div class="text-center p-3 rounded-lg bg-gray-50 border border-gray-100">
+      <p class="text-2xl font-bold text-gray-800">{{ count }}</p>
+      <p class="text-xs text-gray-500 capitalize">{{ status }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -55,6 +55,30 @@ def pillars() -> str:
     return render_template("dashboards/pillars.html", governance=data)
 
 
+@bp.route("/zendesk")
+def zendesk_mttr() -> str:
+    """Render Zendesk MTTR / suporte dashboard.
+
+    Reusa o cache em memória de itgov.api.v1.zendesk (TTL 120s) em vez de
+    paginar o histórico completo do Zendesk a cada carregamento — sem isso,
+    a página leva ~20s (centenas de páginas na API) a cada request.
+    """
+    import config
+    from itgov.api.v1.zendesk import get_cached_mttr_summary, get_cached_volume_by_status
+
+    if not config.ZENDESK_ENABLED:
+        abort(404)
+
+    mttr = get_cached_mttr_summary()
+    volume = get_cached_volume_by_status()
+
+    return render_template(
+        "dashboards/zendesk_mttr.html",
+        mttr=mttr,
+        volume=volume,
+    )
+
+
 @bp.route("/pillars/<string:pillar_id>")
 def pillar_detail(pillar_id: str) -> str:
     """Render drill-down page for a single pillar.
