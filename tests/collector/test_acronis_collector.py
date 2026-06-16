@@ -6,7 +6,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-import requests
 
 import config as _cfg
 
@@ -202,97 +201,58 @@ class TestColetarAgentes:
             {
                 "online": True,
                 "installer_version": {"current": {"release_id": "26.5.1"}, "latest": {"release_id": "26.5.1"}},
+                "tenant": {"name": "tenant-a"},
             },
             {
                 "online": True,
                 "installer_version": {"current": {"release_id": "26.5.1"}, "latest": {"release_id": "26.5.1"}},
+                "tenant": {"name": "tenant-a"},
             },
-            {"online": False, "installer_version": {}},
-            {"online": False, "installer_version": {}},
-            {"online": False, "installer_version": {}},
+            {"online": False, "installer_version": {}, "tenant": {"name": "tenant-b"}},
+            {"online": False, "installer_version": {}, "tenant": {"name": "tenant-b"}},
+            {"online": False, "installer_version": {}, "tenant": {"name": "tenant-b"}},
             # online mas desatualizado
             {
                 "online": True,
                 "installer_version": {"current": {"release_id": "25.7.1"}, "latest": {"release_id": "26.5.1"}},
+                "tenant": {"name": "tenant-a"},
             },
         ]
         with patch.object(coletor, "_paginar", return_value=iter(agentes)):
-            resultado = coletor._coletar_agentes()
+            agentes_count, compliance, inventario = coletor._coletar_agentes()
 
-        assert resultado["total"] == 6
-        assert resultado["online"] == 3
-        assert resultado["offline"] == 3
-        assert resultado["outdated"] == 1
+        assert agentes_count == {"total": 6, "online": 3, "offline": 3, "outdated": 1}
+        assert compliance["total"] == 6.0
+        assert compliance["outdated"] == 1.0
+        assert inventario == {"tenant-a": 3, "tenant-b": 3}
 
     def test_sem_agentes_retorna_zeros(self):
         coletor = _coletor()
         with patch.object(coletor, "_paginar", return_value=iter([])):
-            resultado = coletor._coletar_agentes()
+            agentes_count, compliance, inventario = coletor._coletar_agentes()
 
-        assert resultado == {"online": 0, "offline": 0, "outdated": 0, "total": 0}
-
-
-# ── Coleta de proteção ───────────────────────────────────────────────────────
-
-
-class TestColetarProtecao:
-    def test_conta_maquinas_com_agente(self):
-        coletor = _coletor()
-        maquinas = [
-            {"agent_id": "uuid-1"},  # protegida (tem agente)
-            {"agent_id": "uuid-2"},  # protegida
-            {"agent_id": ""},  # sem agente = não protegida
-        ]
-        with patch.object(coletor, "_paginar", return_value=iter(maquinas)):
-            resultado = coletor._coletar_protecao()
-
-        assert resultado["protected_machines"] == 2
-        assert resultado["total_machines"] == 3
-
-    def test_sem_maquinas_retorna_zeros(self):
-        coletor = _coletor()
-        with patch.object(coletor, "_paginar", return_value=iter([])):
-            resultado = coletor._coletar_protecao()
-
-        assert resultado == {"protected_machines": 0, "total_machines": 0}
-
-
-# ── Coleta de storage ────────────────────────────────────────────────────────
-
-
-class TestColetarStorage:
-    def test_soma_bytes_usados(self):
-        coletor = _coletor()
-        coletor._cached_token = "tok"
-        coletor._token_expires_at = time.monotonic() + 3600
-
-        payload = {"items": [{"bytesUsed": 1024}, {"bytesUsed": 2048}]}
-        with patch.object(coletor, "_get", return_value=payload):
-            resultado = coletor._coletar_storage()
-
-        assert resultado["used_bytes"] == 3072
-
-    def test_http_error_retorna_zero(self):
-        coletor = _coletor()
-        with patch.object(coletor, "_get", side_effect=requests.HTTPError("403")):
-            resultado = coletor._coletar_storage()
-
-        assert resultado == {"used_bytes": 0}
+        assert agentes_count == {"online": 0, "offline": 0, "outdated": 0, "total": 0}
+        assert compliance == {"total": 0.0, "outdated": 0.0, "compliant_pct": 0.0}
+        assert inventario == {}
 
 
 # ── Ciclo completo (collect) ─────────────────────────────────────────────────
 
 
 class TestCollect:
-    def test_escreve_tres_measurements_no_influxdb(self):
+    def test_escreve_measurements_no_influxdb(self):
         coletor = _coletor()
 
         with (
             patch.object(
-                coletor, "_coletar_agentes", return_value={"online": 5, "offline": 1, "outdated": 0, "total": 6}
+                coletor,
+                "_coletar_agentes",
+                return_value=(
+                    {"online": 5, "offline": 1, "outdated": 0, "total": 6},
+                    {"total": 6.0, "outdated": 0.0, "compliant_pct": 100.0},
+                    {"tenant-a": 6},
+                ),
             ),
-            patch.object(coletor, "_coletar_protecao", return_value={"protected_machines": 4, "total_machines": 6}),
-            patch.object(coletor, "_coletar_storage", return_value={"used_bytes": 10_000_000}),
             patch("collector.jobs.acronis_collector.InfluxDBClient") as mock_influx,
         ):
             mock_write_api = MagicMock()
@@ -305,8 +265,8 @@ class TestCollect:
         pontos = kwargs.get("record", [])
         nomes = [p._name for p in pontos]
         assert "gov_acronis_agents" in nomes
-        assert "gov_acronis_protection" in nomes
-        assert "gov_acronis_storage" in nomes
+        assert "gov_acronis_version_compliance" in nomes
+        assert "gov_acronis_tenant_inventory" in nomes
 
 
 # ── Entry point run() ────────────────────────────────────────────────────────
