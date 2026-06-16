@@ -1,0 +1,415 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Acronis Cyber Protection — Inventário e Compliance\nDados coletados a cada 6h via API `agent_manager/v2`. Fonte: `governance_raw`."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total de Agentes",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Online",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"online\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Offline",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"offline\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Desatualizados",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"outdated\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 30 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Compliance de Versão",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_version_compliance\")\n  |> filter(fn: (r) => r._field == \"compliant_pct\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "gauge",
+      "title": "% Agentes Atualizados",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_version_compliance\")\n  |> filter(fn: (r) => r._field == \"compliant_pct\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "options": {
+        "mode": "markdown",
+        "content": "### Inventário por Tenant"
+      }
+    },
+    {
+      "id": 11,
+      "type": "barchart",
+      "title": "Agentes por Tenant",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 7 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_tenant_inventory\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "hidden" },
+        "xField": "tenant"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 80
+          }
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": { "_value": "Agentes", "tenant": "Tenant" }
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Detalhamento por Tenant",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 7 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_tenant_inventory\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> keep(columns: [\"tenant\", \"_value\", \"_time\"])"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "tenant" },
+            "properties": [
+              { "id": "displayName", "value": "Tenant" },
+              { "id": "custom.width", "value": 280 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "_value" },
+            "properties": [
+              { "id": "displayName", "value": "Agentes" },
+              { "id": "custom.width", "value": 80 },
+              { "id": "custom.displayMode", "value": "color-background" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "blue", "value": null },
+                    { "color": "orange", "value": 50 },
+                    { "color": "red", "value": 100 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "_time" },
+            "properties": [
+              { "id": "displayName", "value": "Última Coleta" },
+              { "id": "unit", "value": "dateTimeAsLocal" }
+            ]
+          }
+        ]
+      },
+      "transformations": []
+    },
+    {
+      "id": 20,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "options": {
+        "mode": "markdown",
+        "content": "### Tendência Histórica (últimas coletas)"
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Agentes Online × Offline × Desatualizados",
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 16 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"online\" or r._field == \"offline\" or r._field == \"outdated\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "online" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "offline" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "outdated" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
+          }
+        ]
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Compliance de Versão (%)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_version_compliance\")\n  |> filter(fn: (r) => r._field == \"compliant_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "hidden" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "tags": ["acronis", "segurança", "inventário", "compliance"],
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Acronis — Cyber Protection",
+  "uid": "acronis-cyber-protection",
+  "version": 1
+}

@@ -1,12 +1,12 @@
 """Acronis Cyber Cloud collector — escreve KPIs no bucket governance_raw.
 
 Métricas coletadas:
-  gov_acronis_agents      — online, offline, outdated, total
-  gov_acronis_protection  — protected_machines, total_machines
-  gov_acronis_storage     — used_bytes
+  gov_acronis_agents             — total, online, offline, outdated
+  gov_acronis_version_compliance — total, outdated, compliant_pct
+  gov_acronis_tenant_inventory   — total por tenant (tag: tenant)
 
 Autenticação: OAuth2 client_credentials nativo (HTTP Basic Auth).
-Paginação:    cursor-based via campo 'cursor' na resposta.
+Paginação:    cursor-based via paging.cursors.after (itera até esgotar).
 Retry:        Retry-After em respostas 429.
 Schedule:     a cada 6h via APScheduler.
 """
@@ -41,7 +41,7 @@ class AcronisCollector:
     """Coleta métricas do Acronis Cyber Cloud e persiste no InfluxDB.
 
     Args:
-        base_url: URL base da API Acronis (ex.: https://eu2-cloud.acronis.com).
+        base_url: URL base da API Acronis (ex.: https://cyber.opustech.com.br).
         client_id: Client ID da integração OAuth2.
         client_secret: Client secret — nunca logado.
     """
@@ -100,7 +100,6 @@ class AcronisCollector:
                 retry_after = int(resp.headers.get("Retry-After", 30))
                 log.warning("rate_limited_acronis", url=url, retry_after=retry_after, tentativa=tentativa)
                 time.sleep(retry_after)
-                # força renovação do token após espera
                 self._cached_token = None
                 continue
             resp.raise_for_status()
@@ -126,49 +125,50 @@ class AcronisCollector:
 
     # ── Coleta de métricas ──────────────────────────────────────────────────
 
-    def _coletar_agentes(self) -> dict[str, int]:
-        """Retorna contagens de agentes por status.
+    def _coletar_agentes(self) -> tuple[dict[str, int], dict[str, float], dict[str, int]]:
+        """Itera uma única vez sobre todos os agentes e retorna os 3 datasets.
 
-        A API usa campo booleano 'online' (não string 'status').
-        Outdated: installer_version.current.release_id != latest.release_id.
+        Returns:
+            Tupla com (contagens_agentes, compliance_versao, inventario_tenant).
+
+        Campos confirmados na API (campo booleano, não string):
+          - online: bool — true/false
+          - installer_version.current.release_id — versão instalada
+          - installer_version.latest.release_id  — versão disponível
+          - tenant.name — identificador do tenant
         """
-        contagens: dict[str, int] = {"online": 0, "offline": 0, "outdated": 0, "total": 0}
+        agentes: dict[str, int] = {"total": 0, "online": 0, "offline": 0, "outdated": 0}
+        inventario: dict[str, int] = {}
+
         for agente in self._paginar("/api/agent_manager/v2/agents"):
-            contagens["total"] += 1
+            agentes["total"] += 1
+
+            # online é bool — não comparar com string
             if agente.get("online"):
-                contagens["online"] += 1
+                agentes["online"] += 1
             else:
-                contagens["offline"] += 1
+                agentes["offline"] += 1
+
             inst = agente.get("installer_version", {})
             current_id = inst.get("current", {}).get("release_id", "")
             latest_id = inst.get("latest", {}).get("release_id", "")
             if current_id and latest_id and current_id != latest_id:
-                contagens["outdated"] += 1
-        return contagens
+                agentes["outdated"] += 1
 
-    def _coletar_protecao(self) -> dict[str, int]:
-        """Retorna máquinas com agente instalado vs total.
+            tenant_nome = agente.get("tenant", {}).get("name", "desconhecido")
+            inventario[tenant_nome] = inventario.get(tenant_nome, 0) + 1
 
-        O endpoint resources não expõe protection.status diretamente.
-        Proxy: máquina com agent_id preenchido = agente instalado = protegida.
-        """
-        total = 0
-        protegidas = 0
-        for recurso in self._paginar("/api/resource_management/v4/resources", params={"type": "machine"}):
-            total += 1
-            if recurso.get("agent_id"):
-                protegidas += 1
-        return {"protected_machines": protegidas, "total_machines": total}
+        total = agentes["total"]
+        outdated = agentes["outdated"]
+        compliant_pct = round((total - outdated) / total * 100, 1) if total > 0 else 0.0
 
-    def _coletar_storage(self) -> dict[str, int]:
-        """Retorna bytes usados no storage Acronis."""
-        try:
-            dados = self._get("/api/vault_manager/v1/vaults", params={"limit": 1000})
-            total_bytes = sum(v.get("bytesUsed", 0) for v in dados.get("items", []))
-            return {"used_bytes": total_bytes}
-        except requests.HTTPError as exc:
-            log.warning("acronis_storage_falhou", erro=str(exc))
-            return {"used_bytes": 0}
+        compliance: dict[str, float] = {
+            "total": float(total),
+            "outdated": float(outdated),
+            "compliant_pct": compliant_pct,
+        }
+
+        return agentes, compliance, inventario
 
     # ── Ciclo principal ─────────────────────────────────────────────────────
 
@@ -177,30 +177,36 @@ class AcronisCollector:
         log.info("acronis_coleta_iniciada")
         coletado_em = datetime.now(UTC)
 
-        agentes = self._coletar_agentes()
-        protecao = self._coletar_protecao()
-        storage = self._coletar_storage()
+        agentes, compliance, inventario = self._coletar_agentes()
 
         log.info(
             "acronis_metricas_coletadas",
             agentes=agentes,
-            protecao=protecao,
-            storage=storage,
+            compliance=compliance,
+            tenants=len(inventario),
         )
 
-        pontos = [
+        pontos: list[Point] = [
             Point("gov_acronis_agents")
+            .field("total", agentes["total"])
             .field("online", agentes["online"])
             .field("offline", agentes["offline"])
             .field("outdated", agentes["outdated"])
-            .field("total", agentes["total"])
             .time(coletado_em, WritePrecision.S),
-            Point("gov_acronis_protection")
-            .field("protected_machines", protecao["protected_machines"])
-            .field("total_machines", protecao["total_machines"])
+            Point("gov_acronis_version_compliance")
+            .field("total", int(compliance["total"]))
+            .field("outdated", int(compliance["outdated"]))
+            .field("compliant_pct", compliance["compliant_pct"])
             .time(coletado_em, WritePrecision.S),
-            Point("gov_acronis_storage").field("used_bytes", storage["used_bytes"]).time(coletado_em, WritePrecision.S),
         ]
+
+        for tenant, contagem in inventario.items():
+            pontos.append(
+                Point("gov_acronis_tenant_inventory")
+                .tag("tenant", tenant)
+                .field("total", contagem)
+                .time(coletado_em, WritePrecision.S)
+            )
 
         with InfluxDBClient(
             url=settings.INFLUX_URL,
@@ -214,7 +220,9 @@ class AcronisCollector:
 
         log.info(
             "acronis_metricas_escritas",
-            measurements=["gov_acronis_agents", "gov_acronis_protection", "gov_acronis_storage"],
+            measurements=["gov_acronis_agents", "gov_acronis_version_compliance", "gov_acronis_tenant_inventory"],
+            total_agentes=agentes["total"],
+            total_tenants=len(inventario),
         )
 
 
