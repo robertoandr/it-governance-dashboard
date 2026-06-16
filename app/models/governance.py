@@ -128,6 +128,9 @@ class GovernanceScore(BaseModel):
     trend: str
     pillars: list[PillarScore] = Field(default_factory=list)
     computed_at: str = ""
+    coverage: float = Field(default=1.0, ge=0.0, le=1.0)
+    active_pillars: int = Field(default=0)
+    total_pillars: int = Field(default=0)
 
     @field_validator("global_score", mode="before")
     @classmethod

@@ -11,6 +11,7 @@ Run with:
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -173,18 +174,96 @@ class TestCheckDiskSpace:
         assert result.ok is True
 
 
+class TestCheckSqlite:
+    async def test_ok_with_valid_db(self, tmp_path) -> None:
+        """Retorna ok=True quando o banco SQLite existe e aceita SELECT 1."""
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE t (id INTEGER)")
+        conn.close()
+
+        mock_settings = MagicMock()
+        mock_settings.db.url = f"sqlite:///{db_file}"
+
+        with patch("app.services.health_checker.get_settings", return_value=mock_settings):
+            result = await HealthChecker().check_sqlite()
+
+        assert result.ok is True
+        assert result.error is None
+        assert result.latency_ms >= 0
+
+    async def test_ok_latency_is_numeric(self, tmp_path) -> None:
+        """latency_ms deve ser float >= 0 em caso de sucesso."""
+        db_file = tmp_path / "latency.db"
+        sqlite3.connect(str(db_file)).close()
+
+        mock_settings = MagicMock()
+        mock_settings.db.url = f"sqlite:///{db_file}"
+
+        with patch("app.services.health_checker.get_settings", return_value=mock_settings):
+            result = await HealthChecker().check_sqlite()
+
+        assert isinstance(result.latency_ms, float)
+        assert result.latency_ms >= 0
+
+    async def test_fail_with_missing_db(self, tmp_path) -> None:
+        """Retorna ok=False quando o arquivo de banco não existe e sqlite3 lança erro."""
+        db_path = tmp_path / "nonexistent" / "missing.db"  # diretório pai não existe
+
+        mock_settings = MagicMock()
+        mock_settings.db.url = f"sqlite:///{db_path}"
+
+        with patch("app.services.health_checker.get_settings", return_value=mock_settings):
+            result = await HealthChecker().check_sqlite()
+
+        # sqlite3 cria o arquivo se o pai existir; falha se o diretório não existe
+        assert result.ok is False
+        assert result.error is not None
+
+    async def test_fail_propagates_exception_message(self, tmp_path) -> None:
+        """A mensagem da exceção deve aparecer em result.error."""
+        mock_settings = MagicMock()
+        mock_settings.db.url = "sqlite:///irrelevant.db"
+
+        with (
+            patch("app.services.health_checker.get_settings", return_value=mock_settings),
+            patch("sqlite3.connect", side_effect=sqlite3.OperationalError("unable to open")),
+        ):
+            result = await HealthChecker().check_sqlite()
+
+        assert result.ok is False
+        assert "unable to open" in (result.error or "")
+
+    async def test_fail_latency_still_reported(self, tmp_path) -> None:
+        """Mesmo em caso de falha, latency_ms deve ser float >= 0."""
+        mock_settings = MagicMock()
+        mock_settings.db.url = "sqlite:///irrelevant.db"
+
+        with (
+            patch("app.services.health_checker.get_settings", return_value=mock_settings),
+            patch("sqlite3.connect", side_effect=sqlite3.OperationalError("disk error")),
+        ):
+            result = await HealthChecker().check_sqlite()
+
+        assert isinstance(result.latency_ms, float)
+        assert result.latency_ms >= 0
+
+
 class TestCheckAll:
     async def test_all_ok_aggregates_correctly(self) -> None:
         """check_all returns a mapping with all check names present."""
         checker = HealthChecker()
+        ok = CheckResult(ok=True, latency_ms=1.0)
         with (
-            patch.object(checker, "check_influxdb", new=AsyncMock(return_value=CheckResult(ok=True, latency_ms=1.0))),
-            patch.object(checker, "check_disk_space", new=AsyncMock(return_value=CheckResult(ok=True, latency_ms=0.5))),
+            patch.object(checker, "check_influxdb", new=AsyncMock(return_value=ok)),
+            patch.object(checker, "check_disk_space", new=AsyncMock(return_value=ok)),
+            patch.object(checker, "check_sqlite", new=AsyncMock(return_value=ok)),
         ):
             results = await checker.check_all(timeout=2.0)
 
         assert "influxdb" in results
         assert "disk_space" in results
+        assert "sqlite" in results
         assert all(r.ok for r in results.values())
 
     async def test_timeout_marks_check_failed(self) -> None:
@@ -195,9 +274,11 @@ class TestCheckAll:
             await asyncio.sleep(10)
             return CheckResult(ok=True, latency_ms=0)
 
+        ok = AsyncMock(return_value=CheckResult(ok=True, latency_ms=0.1))
         with (
             patch.object(checker, "check_influxdb", new=_slow),
-            patch.object(checker, "check_disk_space", new=AsyncMock(return_value=CheckResult(ok=True, latency_ms=0.1))),
+            patch.object(checker, "check_disk_space", new=ok),
+            patch.object(checker, "check_sqlite", new=ok),
         ):
             results = await checker.check_all(timeout=0.05)
 
@@ -208,6 +289,7 @@ class TestCheckAll:
     async def test_one_failure_does_not_abort_others(self) -> None:
         """A failing check must not prevent other checks from running."""
         checker = HealthChecker()
+        ok = AsyncMock(return_value=CheckResult(ok=True, latency_ms=0.2))
 
         with (
             patch.object(
@@ -215,16 +297,30 @@ class TestCheckAll:
                 "check_influxdb",
                 new=AsyncMock(return_value=CheckResult(ok=False, latency_ms=50.0, error="refused")),
             ),
-            patch.object(
-                checker,
-                "check_disk_space",
-                new=AsyncMock(return_value=CheckResult(ok=True, latency_ms=0.2)),
-            ),
+            patch.object(checker, "check_disk_space", new=ok),
+            patch.object(checker, "check_sqlite", new=ok),
         ):
             results = await checker.check_all(timeout=2.0)
 
         assert results["influxdb"].ok is False
         assert results["disk_space"].ok is True
+        assert results["sqlite"].ok is True
+
+    async def test_sqlite_failure_included_in_check_all(self) -> None:
+        """Falha no SQLite deve aparecer no resultado e tornar o status not_ready."""
+        checker = HealthChecker()
+        ok = AsyncMock(return_value=CheckResult(ok=True, latency_ms=1.0))
+        fail = AsyncMock(return_value=CheckResult(ok=False, latency_ms=5.0, error="db locked"))
+
+        with (
+            patch.object(checker, "check_influxdb", new=ok),
+            patch.object(checker, "check_disk_space", new=ok),
+            patch.object(checker, "check_sqlite", new=fail),
+        ):
+            results = await checker.check_all(timeout=2.0)
+
+        assert results["sqlite"].ok is False
+        assert results["sqlite"].error == "db locked"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -273,20 +369,32 @@ class TestReadinessProbe:
         ok_result = CheckResult(ok=True, latency_ms=5.0)
         with patch(
             "app.api.health.HealthChecker.check_all",
-            new=AsyncMock(return_value={"influxdb": ok_result, "disk_space": ok_result}),
+            new=AsyncMock(
+                return_value={
+                    "influxdb": ok_result,
+                    "disk_space": ok_result,
+                    "sqlite": ok_result,
+                }
+            ),
         ):
             resp = health_client.get("/api/health/ready")
         assert resp.status_code == 200
 
     def test_503_when_influxdb_down(self, health_client) -> None:
-        """Returns 503 when InfluxDB is unreachable."""
+        """Returns 503 quando InfluxDB está inacessível."""
         import json
 
         fail_result = CheckResult(ok=False, latency_ms=2000.0, error="Connection refused")
         ok_result = CheckResult(ok=True, latency_ms=1.0)
         with patch(
             "app.api.health.HealthChecker.check_all",
-            new=AsyncMock(return_value={"influxdb": fail_result, "disk_space": ok_result}),
+            new=AsyncMock(
+                return_value={
+                    "influxdb": fail_result,
+                    "disk_space": ok_result,
+                    "sqlite": ok_result,
+                }
+            ),
         ):
             resp = health_client.get("/api/health/ready")
 
@@ -296,13 +404,43 @@ class TestReadinessProbe:
         assert data["checks"]["influxdb"]["ok"] is False
         assert data["checks"]["disk_space"]["ok"] is True
 
+    def test_503_when_sqlite_down(self, health_client) -> None:
+        """Returns 503 quando SQLite está inacessível."""
+        import json
+
+        ok_result = CheckResult(ok=True, latency_ms=1.0)
+        fail_result = CheckResult(ok=False, latency_ms=5.0, error="unable to open database")
+        with patch(
+            "app.api.health.HealthChecker.check_all",
+            new=AsyncMock(
+                return_value={
+                    "influxdb": ok_result,
+                    "disk_space": ok_result,
+                    "sqlite": fail_result,
+                }
+            ),
+        ):
+            resp = health_client.get("/api/health/ready")
+
+        assert resp.status_code == 503
+        data = json.loads(resp.data)
+        assert data["status"] == "not_ready"
+        assert data["checks"]["sqlite"]["ok"] is False
+        assert "unable to open" in data["checks"]["sqlite"]["error"]
+
     def test_503_when_disk_critical(self, health_client) -> None:
-        """Returns 503 when disk space is below threshold."""
+        """Returns 503 quando espaço em disco está abaixo do limiar."""
         ok_result = CheckResult(ok=True, latency_ms=1.0)
         fail_result = CheckResult(ok=False, latency_ms=0.1, error="Only 4.0% free (0.4 GB)")
         with patch(
             "app.api.health.HealthChecker.check_all",
-            new=AsyncMock(return_value={"influxdb": ok_result, "disk_space": fail_result}),
+            new=AsyncMock(
+                return_value={
+                    "influxdb": ok_result,
+                    "disk_space": fail_result,
+                    "sqlite": ok_result,
+                }
+            ),
         ):
             resp = health_client.get("/api/health/ready")
         assert resp.status_code == 503
@@ -314,7 +452,13 @@ class TestReadinessProbe:
         fail = CheckResult(ok=False, latency_ms=99.0, error="timeout")
         with patch(
             "app.api.health.HealthChecker.check_all",
-            new=AsyncMock(return_value={"influxdb": fail, "disk_space": fail}),
+            new=AsyncMock(
+                return_value={
+                    "influxdb": fail,
+                    "disk_space": fail,
+                    "sqlite": fail,
+                }
+            ),
         ):
             resp = health_client.get("/api/health/ready")
 
@@ -322,6 +466,7 @@ class TestReadinessProbe:
         assert data["status"] == "not_ready"
         assert "checks" in data
         assert "timestamp" in data
+        assert "sqlite" in data["checks"]
         for check in data["checks"].values():
             assert "ok" in check
             assert "latency_ms" in check
@@ -331,7 +476,13 @@ class TestReadinessProbe:
         fail = CheckResult(ok=False, latency_ms=2000.0, error="unavailable")
         with patch(
             "app.api.health.HealthChecker.check_all",
-            new=AsyncMock(return_value={"influxdb": fail, "disk_space": fail}),
+            new=AsyncMock(
+                return_value={
+                    "influxdb": fail,
+                    "disk_space": fail,
+                    "sqlite": fail,
+                }
+            ),
         ):
             resp = health_client.get("/api/health/ready")
         assert resp.status_code == 503

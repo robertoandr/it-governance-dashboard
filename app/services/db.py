@@ -68,6 +68,12 @@ def init_db(app: Flask, cfg: AppSettings) -> None:
 
     @app.before_request
     def open_db() -> None:
+        # Rotas de health fazem seu próprio probe isolado — não precisam de g.db
+        # e não devem falhar se o banco estiver inacessível.
+        from flask import request
+
+        if request.path.startswith("/api/health"):
+            return
         g.db = _open_connection(db_path)
 
     @app.teardown_request

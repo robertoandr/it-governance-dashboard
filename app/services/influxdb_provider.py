@@ -179,9 +179,10 @@ class InfluxDBMetricsProvider:
         }
 
     def get_risk_metrics(self) -> dict[str, Any]:
-        """Risk Management: Zabbix incidents + Entra ID MFA when available."""
+        """Risk Management: Zabbix incidents + Entra ID MFA + Secure Score when available."""
         zabbix = self._zabbix_stats()
         entra = self._entra_stats()
+        secure = self._secure_score_stats()
 
         if not zabbix:
             log.warning("zabbix_no_data_risk", fallback="coming_soon")
@@ -216,7 +217,15 @@ class InfluxDBMetricsProvider:
         data_source = "partial"
 
         if entra:
-            mfa_pct = entra.get("mfa_enabled_pct", 0.0)
+            mfa_pct = entra.get("mfa_enabled_pct")  # None = Reports.Read.All ausente
+            entra_time = entra.get("_time")
+            if entra_time and last_collected:
+                last_collected = max(last_collected, entra_time)
+            elif entra_time:
+                last_collected = entra_time
+
+        if entra and mfa_pct is not None:
+            # Dado real: adoção medida com sucesso
             components.append(
                 {
                     "id": "mfa_adoption",
@@ -229,12 +238,8 @@ class InfluxDBMetricsProvider:
                     "trend": "stable",
                 }
             )
-            entra_time = entra.get("_time")
-            if entra_time and last_collected:
-                last_collected = max(last_collected, entra_time)
-            elif entra_time:
-                last_collected = entra_time
         else:
+            # Sem dado (entra ausente ou Reports.Read.All não concedido) — não confundir com 0%
             components.append(
                 {
                     "id": "mfa_adoption",
@@ -245,6 +250,43 @@ class InfluxDBMetricsProvider:
                     "source": "coming_soon",
                     "weight": 2.0,
                     "trend": "stable",
+                    "is_estimated": True,
+                }
+            )
+
+        # Secure Score — real se disponível, coming_soon caso contrário
+        if secure:
+            ss_pct = secure.get("pct", 0.0)
+            components.append(
+                {
+                    "id": "secure_score",
+                    "label": "Microsoft Secure Score",
+                    "value": round(float(ss_pct), 1),
+                    "raw_value": round(secure.get("current_score", 0.0), 1),
+                    "unit": "%",
+                    "source": "m365",
+                    "weight": 3.0,
+                    "trend": "stable",
+                }
+            )
+            ss_time = secure.get("_time")
+            if ss_time and last_collected:
+                last_collected = max(last_collected, ss_time)
+            elif ss_time:
+                last_collected = ss_time
+            log.info("secure_score_adicionado_ao_risco", pct=ss_pct)
+        else:
+            components.append(
+                {
+                    "id": "secure_score",
+                    "label": "Microsoft Secure Score",
+                    "value": 58.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 3.0,
+                    "trend": "stable",
+                    "is_estimated": True,
                 }
             )
 
@@ -260,6 +302,7 @@ class InfluxDBMetricsProvider:
                     "source": "coming_soon",
                     "weight": 3.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "patch_compliance",
@@ -270,6 +313,7 @@ class InfluxDBMetricsProvider:
                     "source": "coming_soon",
                     "weight": 2.5,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "backup_success_rate",
@@ -280,6 +324,7 @@ class InfluxDBMetricsProvider:
                     "source": "coming_soon",
                     "weight": 2.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
             ]
         )
@@ -533,25 +578,60 @@ from(bucket: "{self._bucket_raw}")
         }
 
     def _entra_stats(self) -> dict[str, Any]:
-        """Return the latest Entra ID summary record from InfluxDB."""
+        """Return the latest Entra ID summary record from InfluxDB.
+
+        Pivota antes de last() para garantir uma única linha por timestamp.
+        Campos gravados em timestamps diferentes (ex.: mfa_enabled_pct ausente)
+        não criam linhas extras que causariam int(None) após o pivot.
+        """
         flux = f"""
 from(bucket: "{self._bucket_raw}")
   |> range(start: -25h)
   |> filter(fn: (r) => r._measurement == "gov_entra_summary")
-  |> last()
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"], desc: true)
+  |> limit(n: 1)
 """
         rows = self._query(flux)
         if not rows:
             return {}
-        row = rows[-1]
+        row = rows[0]
+        # mfa_enabled_pct pode estar ausente se Reports.Read.All falhou — None ≠ 0
+        mfa_raw = row.get("mfa_enabled_pct")
+        total = row.get("total_users")
         return {
-            "total_users": int(row.get("total_users", 0)),
-            "guest_users": int(row.get("guest_users", 0)),
-            "mfa_enabled_pct": float(row.get("mfa_enabled_pct", 0.0)),
-            "stale_accounts_90d": int(row.get("stale_accounts_90d", 0)),
-            "privileged_roles_count": int(row.get("privileged_roles_count", 0)),
-            "ca_policies_count": int(row.get("ca_policies_count", 0)),
+            "total_users": int(total) if total is not None else 0,
+            "guest_users": int(row.get("guest_users") or 0),
+            "mfa_enabled_pct": float(mfa_raw) if mfa_raw is not None else None,
+            "stale_accounts_90d": int(row.get("stale_accounts_90d") or 0),
+            "privileged_roles_count": int(row.get("privileged_roles_count") or 0),
+            "ca_policies_count": int(row.get("ca_policies_count") or 0),
+            "_time": row.get("_time"),
+        }
+
+    def _secure_score_stats(self) -> dict[str, Any]:
+        """Retorna o último registro de Secure Score do InfluxDB.
+
+        Pivota antes de last() (mesmo motivo que _entra_stats).
+        Janela de 25h tolera até 4 ciclos falhados (coleta a cada 6h).
+        """
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -25h)
+  |> filter(fn: (r) => r._measurement == "gov_m365_secure_score")
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"], desc: true)
+  |> limit(n: 1)
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[0]
+        return {
+            "current_score": float(row.get("current_score") or 0.0),
+            "max_score": float(row.get("max_score") or 100.0),
+            "pct": float(row.get("pct") or 0.0),
+            "control_scores_count": int(row.get("control_scores_count") or 0),
             "_time": row.get("_time"),
         }
 

@@ -1138,6 +1138,27 @@ td.editing input:focus, td.editing select:focus { outline: none; }
   color: var(--text);
 }
 
+/* Badge de cobertura de dados — âmbar quando parcial, verde quando completo */
+.coverage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(234, 179, 8, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  cursor: help;
+  margin-top: 6px;
+}
+.coverage-badge.complete {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
 /* KPI counter animation — número não quebra durante animação */
 .kpi-value span[id],
 .score-ring-value {

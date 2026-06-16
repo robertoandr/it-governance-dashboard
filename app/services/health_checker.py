@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import sqlite3
 import time
 from collections.abc import Coroutine
 from dataclasses import dataclass
@@ -103,6 +104,45 @@ class HealthChecker:
         log.debug("disk_space_ok", pct_free=round(pct_free, 4))
         return CheckResult(ok=True, latency_ms=latency_ms)
 
+    async def check_sqlite(self) -> CheckResult:
+        """Verifica conectividade e integridade básica do banco SQLite.
+
+        Abre uma conexão isolada (NÃO usa g.db) e executa SELECT 1.
+        Usar uma conexão própria garante que o check funciona fora do
+        ciclo de vida de request do Flask (e.g. startup probes, cron).
+
+        Returns:
+            CheckResult com status e latência em ms.
+        """
+        settings = get_settings()
+        db_url = settings.db.url
+        db_path = db_url[len("sqlite:///") :] if db_url.startswith("sqlite:///") else db_url
+
+        loop = asyncio.get_running_loop()
+        t0 = time.monotonic()
+
+        def _probe() -> None:
+            conn = sqlite3.connect(db_path, timeout=2.0)
+            try:
+                conn.execute("SELECT 1")
+            finally:
+                conn.close()
+
+        try:
+            await loop.run_in_executor(None, _probe)
+            latency_ms = (time.monotonic() - t0) * 1000
+            log.debug("sqlite_check_ok", latency_ms=round(latency_ms, 2), path=db_path)
+            return CheckResult(ok=True, latency_ms=latency_ms)
+        except Exception as exc:
+            latency_ms = (time.monotonic() - t0) * 1000
+            log.error(
+                "sqlite_check_failed",
+                error=str(exc),
+                latency_ms=round(latency_ms, 2),
+                path=db_path,
+            )
+            return CheckResult(ok=False, latency_ms=latency_ms, error=str(exc))
+
     # TODO: add check_zabbix() once ZabbixConfig.enabled is wired to AppSettings
     # TODO: add check_zendesk() for Zendesk API connectivity
     # TODO: add check_github() for GitHub API connectivity
@@ -123,6 +163,7 @@ class HealthChecker:
         checks: dict[str, Coroutine[Any, Any, CheckResult]] = {
             "influxdb": self.check_influxdb(),
             "disk_space": self.check_disk_space(),
+            "sqlite": self.check_sqlite(),
         }
 
         tasks = [asyncio.wait_for(coro, timeout=timeout) for coro in checks.values()]

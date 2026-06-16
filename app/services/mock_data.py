@@ -1,4 +1,9 @@
-"""Mock metrics provider for development and testing."""
+"""Mock metrics provider para desenvolvimento e testes.
+
+Todos os componentes são marcados com is_estimated=True para que o score global
+não trate dados inventados como reais. O calculate_pillar já filtra estimados;
+o calculate_global pode (futuramente) excluir pilares 100% estimados da média.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +18,10 @@ _COMING_SOON_META: dict[str, Any] = {
 
 
 class MockMetricsProvider:
-    """Provides realistic mock metrics for all five governance pillars.
+    """Fornece métricas mock realistas para os cinco pilares de governança.
 
     Args:
-        seed: Random seed for reproducible values.
+        seed: Semente aleatória para valores reproduzíveis.
     """
 
     def __init__(self, seed: int = 42) -> None:
@@ -26,7 +31,7 @@ class MockMetricsProvider:
         return round(min(100.0, max(0.0, base + self._rng.uniform(-spread, spread))), 1)
 
     def get_strategic_metrics(self) -> dict[str, Any]:
-        """Return mock metrics for the Strategic Alignment pillar."""
+        """Retorna métricas mock para o pilar Alinhamento Estratégico."""
         previous = self._jitter(74.0)
         return {
             "_meta": _COMING_SOON_META,
@@ -41,6 +46,7 @@ class MockMetricsProvider:
                     "source": "pmo",
                     "weight": 2.0,
                     "trend": "up",
+                    "is_estimated": True,
                 },
                 {
                     "id": "kpi_coverage",
@@ -51,6 +57,7 @@ class MockMetricsProvider:
                     "source": "scorecard",
                     "weight": 1.5,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "it_budget_alignment",
@@ -61,12 +68,13 @@ class MockMetricsProvider:
                     "source": "finance",
                     "weight": 1.0,
                     "trend": "up",
+                    "is_estimated": True,
                 },
             ],
         }
 
     def get_value_metrics(self) -> dict[str, Any]:
-        """Return mock metrics for the Value Delivery pillar."""
+        """Retorna métricas mock para o pilar Entrega de Valor."""
         previous = self._jitter(78.0)
         return {
             "_meta": _COMING_SOON_META,
@@ -81,6 +89,7 @@ class MockMetricsProvider:
                     "source": "zabbix",
                     "weight": 3.0,
                     "trend": "up",
+                    "is_estimated": True,
                 },
                 {
                     "id": "ticket_resolution_rate",
@@ -91,6 +100,7 @@ class MockMetricsProvider:
                     "source": "zendesk",
                     "weight": 2.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "project_delivery",
@@ -101,6 +111,7 @@ class MockMetricsProvider:
                     "source": "pmo",
                     "weight": 1.5,
                     "trend": "down",
+                    "is_estimated": True,
                 },
                 {
                     "id": "user_satisfaction",
@@ -111,12 +122,13 @@ class MockMetricsProvider:
                     "source": "survey",
                     "weight": 1.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
             ],
         }
 
     def get_risk_metrics(self) -> dict[str, Any]:
-        """Return mock metrics for the Risk Management pillar."""
+        """Retorna métricas mock para o pilar Gestão de Riscos."""
         previous = self._jitter(65.0)
         return {
             "_meta": _COMING_SOON_META,
@@ -131,6 +143,7 @@ class MockMetricsProvider:
                     "source": "vulnerability_scanner",
                     "weight": 3.0,
                     "trend": "down",
+                    "is_estimated": True,
                 },
                 {
                     "id": "patch_compliance",
@@ -141,6 +154,7 @@ class MockMetricsProvider:
                     "source": "intune",
                     "weight": 2.5,
                     "trend": "up",
+                    "is_estimated": True,
                 },
                 {
                     "id": "mfa_adoption",
@@ -151,6 +165,7 @@ class MockMetricsProvider:
                     "source": "entra_id",
                     "weight": 2.0,
                     "trend": "up",
+                    "is_estimated": True,
                 },
                 {
                     "id": "backup_success_rate",
@@ -161,6 +176,7 @@ class MockMetricsProvider:
                     "source": "veeam",
                     "weight": 2.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "incidents_critical",
@@ -171,12 +187,13 @@ class MockMetricsProvider:
                     "source": "zabbix",
                     "weight": 1.5,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
             ],
         }
 
     def get_resource_metrics(self) -> dict[str, Any]:
-        """Return mock metrics for the Resource Management pillar."""
+        """Retorna métricas mock para o pilar Gestão de Recursos."""
         previous = self._jitter(71.0)
         return {
             "_meta": _COMING_SOON_META,
@@ -191,6 +208,7 @@ class MockMetricsProvider:
                     "source": "influxdb",
                     "weight": 2.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "license_waste",
@@ -201,6 +219,7 @@ class MockMetricsProvider:
                     "source": "m365",
                     "weight": 2.0,
                     "trend": "up",
+                    "is_estimated": True,
                 },
                 {
                     "id": "it_budget_used",
@@ -211,6 +230,7 @@ class MockMetricsProvider:
                     "source": "finance",
                     "weight": 1.5,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "team_capacity",
@@ -221,12 +241,13 @@ class MockMetricsProvider:
                     "source": "pmo",
                     "weight": 1.0,
                     "trend": "down",
+                    "is_estimated": True,
                 },
             ],
         }
 
     def get_performance_metrics(self) -> dict[str, Any]:
-        """Return mock metrics for the Performance Measurement pillar."""
+        """Retorna métricas mock para o pilar Medição de Performance."""
         previous = self._jitter(80.0)
         return {
             "_meta": _COMING_SOON_META,
@@ -241,6 +262,7 @@ class MockMetricsProvider:
                     "source": "zabbix",
                     "weight": 3.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "mttr",
@@ -251,6 +273,7 @@ class MockMetricsProvider:
                     "source": "incidents",
                     "weight": 2.5,
                     "trend": "up",
+                    "is_estimated": True,
                 },
                 {
                     "id": "change_success_rate",
@@ -261,6 +284,7 @@ class MockMetricsProvider:
                     "source": "itsm",
                     "weight": 2.0,
                     "trend": "stable",
+                    "is_estimated": True,
                 },
                 {
                     "id": "monitoring_coverage",
@@ -271,6 +295,7 @@ class MockMetricsProvider:
                     "source": "zabbix",
                     "weight": 1.5,
                     "trend": "up",
+                    "is_estimated": True,
                 },
             ],
         }

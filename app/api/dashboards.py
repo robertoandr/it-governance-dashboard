@@ -26,6 +26,7 @@ _component_model = ns.model(
         "source": fields.String,
         "weight": fields.Float,
         "trend": fields.String,
+        "is_estimated": fields.Boolean(default=False, description="True = dado fictício/estimado, não coletado"),
     },
 )
 
@@ -55,6 +56,9 @@ _overview_model = ns.model(
         "trend": fields.String,
         "computed_at": fields.String,
         "pillars": fields.List(fields.Nested(_pillar_model)),
+        "coverage": fields.Float(description="Fração do peso total com dados reais (0.0–1.0)"),
+        "active_pillars": fields.Integer(description="Pilares com dados reais"),
+        "total_pillars": fields.Integer(description="Total de pilares"),
     },
 )
 

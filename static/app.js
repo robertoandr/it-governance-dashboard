@@ -926,4 +926,43 @@ function updateScoreRing(score) {
 document.addEventListener("DOMContentLoaded", function () {
   const fill = document.getElementById("score-ring-fill");
   if (fill) fill.style.strokeDashoffset = "314.16";
+  fetchCoverageBadge();
 });
+
+// Badge de cobertura: lê /api/overview e exibe "N de M pilares ativos".
+// Transição automática para verde quando coverage >= 1.0 — sem manutenção manual.
+async function fetchCoverageBadge() {
+  const badge = document.getElementById("coverage-badge");
+  if (!badge) return;
+  try {
+    const res = await fetch("/api/overview", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderCoverageBadge(badge, data);
+  } catch (_) {
+    // silencioso — badge permanece oculto se a API falhar
+  }
+}
+
+function renderCoverageBadge(badge, data) {
+  const active = data.active_pillars ?? 0;
+  const total  = data.total_pillars  ?? 0;
+  const cov    = data.coverage       ?? 1;
+  if (total === 0) return;
+
+  const pct = Math.round(cov * 100);
+  const faltam = total - active;
+
+  if (cov >= 1) {
+    badge.textContent = "Todos os pilares ativos";
+    badge.title = "Score calculado sobre 100% do peso — todos os pilares com dados reais.";
+    badge.classList.add("complete");
+  } else {
+    badge.textContent = `${active} de ${total} pilares ativos`;
+    badge.title =
+      `Score calculado sobre ${pct}% do peso total. ` +
+      `${faltam} pilar${faltam > 1 ? "es" : ""} ainda em ativação (coming soon).`;
+    badge.classList.remove("complete");
+  }
+  badge.style.display = "";
+}

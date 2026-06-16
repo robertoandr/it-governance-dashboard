@@ -10,6 +10,7 @@ import structlog
 from app.models.governance import (
     PILLAR_META,
     ComponentMetric,
+    DataSource,
     GovernanceScore,
     PillarID,
     PillarScore,
@@ -95,19 +96,33 @@ class ScoreCalculator:
     def calculate_global(self, pillar_scores: list[PillarScore]) -> GovernanceScore:
         """Compute weighted global governance score from pillar scores.
 
+        Pilares com data_source=coming_soon são excluídos e os pesos dos pilares
+        reais são renormalizados para somar 1.0 — o score não é distorcido por
+        dados inventados. Se TODOS forem coming_soon, usa todos como fallback.
+
         Args:
             pillar_scores: List of computed pillar scores.
 
         Returns:
             GovernanceScore aggregating all pillars.
         """
-        global_score = sum(p.score * p.weight for p in pillar_scores)
-        previous_global: float | None = None
+        all_weight = sum(p.weight for p in pillar_scores)
+        real = [p for p in pillar_scores if p.data_source != DataSource.COMING_SOON]
+        scored = real if real else pillar_scores  # fallback: todos coming_soon
 
-        prevs = [p.previous_score for p in pillar_scores if p.previous_score is not None]
-        if len(prevs) == len(pillar_scores):
-            previous_global = sum(
-                prev * PILLAR_META[p.id]["weight"] for p, prev in zip(pillar_scores, prevs, strict=False)
+        real_weight = sum(p.weight for p in scored)
+        global_score = sum(p.score * p.weight for p in scored) / real_weight if real_weight > 0 else 0.0
+        coverage = round(real_weight / all_weight, 4) if all_weight > 0 else 1.0
+
+        previous_global: float | None = None
+        prevs = [p.previous_score for p in scored if p.previous_score is not None]
+        if len(prevs) == len(scored):
+            prev_real_weight = sum(PILLAR_META[p.id]["weight"] for p in scored)
+            previous_global = (
+                sum(prev * PILLAR_META[p.id]["weight"] for p, prev in zip(scored, prevs, strict=False))
+                / prev_real_weight
+                if prev_real_weight > 0
+                else None
             )
 
         global_trend = _trend(global_score, previous_global)
@@ -115,9 +130,11 @@ class ScoreCalculator:
         log.info(
             "global_score_calculated",
             global_score=round(global_score, 2),
+            coverage=coverage,
+            active_pillars=len(scored),
+            total_pillars=len(pillar_scores),
             status=_status(global_score),
             trend=global_trend,
-            pillars=len(pillar_scores),
         )
 
         return GovernanceScore(
@@ -126,4 +143,7 @@ class ScoreCalculator:
             trend=global_trend,
             pillars=sorted(pillar_scores, key=lambda p: PILLAR_META[p.id]["order"]),
             computed_at=datetime.now(UTC).isoformat(),
+            coverage=coverage,
+            active_pillars=len(scored),
+            total_pillars=len(pillar_scores),
         )

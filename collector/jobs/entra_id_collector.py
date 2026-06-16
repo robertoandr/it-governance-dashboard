@@ -54,23 +54,31 @@ class EntraIdCollector(BaseOAuthCollector):
         guests = sum(1 for u in all_users if u.get("userType") == "Guest")
         return total, guests
 
-    def _mfa_enabled_pct(self, total_users: int) -> float:
-        """Return percentage of users with at least one MFA method registered."""
+    def _mfa_enabled_pct(self, total_users: int) -> float | None:
+        """Return percentage of users with at least one MFA method registered.
+
+        Retorna None em caso de falha de API — não confundir com 0% real.
+        O coletor não grava mfa_enabled_pct se o valor for None.
+        """
         if total_users == 0:
             return 0.0
-        # credentialUserRegistrationDetails requires Reports.Read.All
+        # credentialUserRegistrationDetails foi removido da v1.0 — usar authenticationMethods
         try:
             items = list(
                 self._paginate(
-                    f"{_GRAPH_BASE}/reports/credentialUserRegistrationDetails",
+                    f"{_GRAPH_BASE}/reports/authenticationMethods/userRegistrationDetails",
                     params={"$select": "isMfaRegistered", "$top": "999"},
                 )
             )
             mfa_count = sum(1 for i in items if i.get("isMfaRegistered"))
             return round(mfa_count / total_users * 100, 2) if total_users else 0.0
         except Exception as exc:
-            log.warning("mfa_count_failed", error=str(exc))
-            return 0.0
+            log.warning(
+                "mfa_count_failed_stale",
+                error=str(exc),
+                nota="mfa_enabled_pct não será gravado — Reports.Read.All ausente?",
+            )
+            return None
 
     def _stale_accounts(self) -> int:
         """Count accounts with no interactive sign-in in the past 90 days."""
@@ -154,12 +162,15 @@ class EntraIdCollector(BaseOAuthCollector):
             Point("gov_entra_summary")
             .field("total_users", total_users)
             .field("guest_users", guest_users)
-            .field("mfa_enabled_pct", mfa_pct)
             .field("stale_accounts_90d", stale)
             .field("privileged_roles_count", priv_roles)
             .field("ca_policies_count", ca_count)
             .time(collected_at, WritePrecision.S)
         )
+        # Só grava mfa_enabled_pct se a API respondeu — None significa falha de
+        # permissão (Reports.Read.All ausente), não adoção zero real.
+        if mfa_pct is not None:
+            point = point.field("mfa_enabled_pct", float(mfa_pct))
 
         with InfluxDBClient(
             url=settings.INFLUX_URL,
