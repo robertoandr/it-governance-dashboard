@@ -1,0 +1,301 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Gestão de Riscos — Infraestrutura Zabbix\nScore calculado por decaimento multiplicativo sobre alertas ativos. Atualizado a cada hora. Fonte: `gov_zabbix_riscos`."
+      }
+    },
+    {
+      "id": 2,
+      "type": "gauge",
+      "title": "Score de Riscos",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"score\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "none",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 40 },
+              { "color": "green",  "value": 70 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Incidentes Críticos (Disaster + High)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"incidentes_criticos\")\n  |> last()"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Incidente Crítico Atual",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"top_incidente\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 },
+      "options": {
+        "mode": "markdown",
+        "content": "### Breakdown por Severidade"
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Críticos",
+      "gridPos": { "h": 3, "w": 4, "x": 0, "y": 11 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"criticos\")\n  |> last()"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Altos",
+      "gridPos": { "h": 3, "w": 4, "x": 4, "y": 11 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"altos\")\n  |> last()"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 8 }] }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Médios",
+      "gridPos": { "h": 3, "w": 4, "x": 8, "y": 11 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"medios\")\n  |> last()"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 15 }] }
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Avisos",
+      "gridPos": { "h": 3, "w": 4, "x": 12, "y": 11 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"avisos\")\n  |> last()"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }] }
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Total de Problemas",
+      "gridPos": { "h": 3, "w": 4, "x": 16, "y": 11 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"total_problemas\")\n  |> last()"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "options": {
+        "mode": "markdown",
+        "content": "### Tendência Histórica"
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Tendência de Riscos",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 15 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"score\" or r._field == \"criticos\" or r._field == \"altos\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "score" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "left" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 40 }, { "color": "green", "value": 70 }]
+                }
+              },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "criticos" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "dark-red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "altos" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
+          }
+        ]
+      }
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "tags": ["zabbix", "riscos", "infraestrutura", "governança"],
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Zabbix — Gestão de Riscos",
+  "uid": "zabbix-riscos",
+  "version": 1
+}

@@ -145,6 +145,8 @@ services:
     image: it-gov-dashboard-collector:latest
     container_name: itgov-collector
     restart: unless-stopped
+    env_file:
+      - smtp.env   # SMTP_* — chmod 600, nunca commitar
     environment:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
       GITHUB_ORG: "${GITHUB_ORG:-robertoandr}"
@@ -162,6 +164,12 @@ services:
       ACRONIS_BASE_URL: "${ACRONIS_BASE_URL:-}"
       ACRONIS_CLIENT_ID: "${ACRONIS_CLIENT_ID:-}"
       ACRONIS_CLIENT_SECRET: "${ACRONIS_CLIENT_SECRET:-}"
+      ZABBIX_URL: "${ZABBIX_URL:-}"
+      ZABBIX_TOKEN: "${ZABBIX_TOKEN:-}"
+      ZBX_VERIFY_TLS: "${ZBX_VERIFY_TLS:-true}"
+      ZBX_TIMEOUT: "${ZBX_TIMEOUT:-10}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - collector_data:/data
     depends_on:

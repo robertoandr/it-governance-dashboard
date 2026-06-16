@@ -35,3 +35,6 @@ opentelemetry-instrumentation-flask>=0.63b0
 opentelemetry-instrumentation-httpx>=0.63b0
 opentelemetry-instrumentation-sqlalchemy>=0.63b0
 gunicorn[gthread]>=21
+
+# Zabbix API — provisionamento via script (scripts/zabbix_provision.py)
+zabbix-utils>=2.0
