@@ -107,6 +107,17 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_governance_mfa_unavailable", error=str(_e))
 
+    # Governança Dispositivos + Aplicativos (pilares M365) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_apps import ns as governance_apps_ns
+        from itgov.api.v1.governance_devices import ns as governance_devices_ns
+
+        api.add_namespace(governance_devices_ns, path="/v1/governance")
+        api.add_namespace(governance_apps_ns, path="/v1/governance")
+        log.info("itgov_governance_devices_apps_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_devices_apps_unavailable", error=str(_e))
+
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 

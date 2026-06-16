@@ -79,6 +79,40 @@ def zendesk_mttr() -> str:
     )
 
 
+@bp.route("/governance/devices")
+def governance_devices() -> str:
+    """Render pilar Dispositivos (Governança M365)."""
+    import config
+    from itgov.api.v1.governance_devices import get_cached_device_summary
+
+    if not config.GRAPH_ENABLED:
+        abort(404)
+
+    try:
+        summary = get_cached_device_summary()
+    except RuntimeError:
+        abort(503)
+
+    return render_template("dashboards/governance_devices.html", summary=summary)
+
+
+@bp.route("/governance/apps")
+def governance_apps() -> str:
+    """Render pilar Aplicativos (Governança M365)."""
+    import config
+    from itgov.api.v1.governance_apps import get_cached_app_summary
+
+    if not config.GRAPH_ENABLED:
+        abort(404)
+
+    try:
+        summary = get_cached_app_summary()
+    except RuntimeError:
+        abort(503)
+
+    return render_template("dashboards/governance_apps.html", summary=summary)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 def pillar_detail(pillar_id: str) -> str:
     """Render drill-down page for a single pillar.

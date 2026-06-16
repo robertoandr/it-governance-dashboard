@@ -20,6 +20,8 @@ from collectors.ldap_collector import LDAPCollector
 from collectors.zabbix import ZabbixCollector
 from itgov.api.v1.alerts import ns as alerts_ns
 from itgov.api.v1.ativos import ns as ativos_ns
+from itgov.api.v1.governance_apps import ns as governance_apps_ns
+from itgov.api.v1.governance_devices import ns as governance_devices_ns
 from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
 from itgov.api.v1.zabbix import ns as zabbix_ns
 from itgov.api.v1.zendesk import ns as zendesk_ns
@@ -61,6 +63,8 @@ itgov_api.add_namespace(zendesk_ns)
 itgov_api.add_namespace(ativos_ns)
 itgov_api.add_namespace(alerts_ns)
 itgov_api.add_namespace(governance_mfa_ns)
+itgov_api.add_namespace(governance_devices_ns)
+itgov_api.add_namespace(governance_apps_ns)
 
 # Módulo de alertas CFTV — o start efetivo ocorre em post_fork (gunicorn.conf.py).
 # Em execução direta (python app.py) o start_poller() abaixo é chamado no __main__.

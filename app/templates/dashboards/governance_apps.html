@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Aplicativos — IT Governance{% endblock %}
+
+{% block page_title %}Governança M365 — Aplicativos{% endblock %}
+
+{% block content %}
+{% macro stat_card(label, value, unit, color) %}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+  <p class="text-3xl font-bold {{ color }}">{{ value }}<span class="text-base text-gray-400 ml-1">{{ unit }}</span></p>
+</div>
+{% endmacro %}
+
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Aplicativos — Microsoft 365</h1>
+  <p class="text-sm text-gray-500">App Registrations e governança de credenciais (secrets/certificados).</p>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+  {{ stat_card('Total de App Registrations', summary.total_apps, '', 'text-gray-800') }}
+  {{ stat_card('Secrets expirando (30d)', summary.secrets_expirando_30d, '', 'text-yellow-600' if summary.secrets_expirando_30d > 0 else 'text-green-600') }}
+  {{ stat_card('Secrets já expirados', summary.secrets_expirados, '', 'text-red-600' if summary.secrets_expirados > 0 else 'text-green-600') }}
+</div>
+
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Credenciais expirando ou expiradas</p>
+  {% if summary.expirando %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-left text-gray-500 border-b">
+        <th class="py-2">App</th>
+        <th class="py-2">Tipo</th>
+        <th class="py-2">Vencimento</th>
+        <th class="py-2">Dias restantes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cred in summary.expirando %}
+      <tr class="border-b border-gray-100">
+        <td class="py-2 text-gray-800">{{ cred.app_display_name }}</td>
+        <td class="py-2 text-gray-500">{{ cred.tipo }}</td>
+        <td class="py-2 text-gray-500">{{ cred.end_date_time[:10] }}</td>
+        <td class="py-2 font-semibold {{ 'text-red-600' if cred.dias_restantes < 0 else 'text-yellow-600' }}">
+          {{ cred.dias_restantes }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-sm text-green-600">Nenhuma credencial expirando nos próximos 30 dias.</p>
+  {% endif %}
+</div>
+{% endblock %}
