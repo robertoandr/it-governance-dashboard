@@ -22,6 +22,7 @@ from itgov.api.v1.alerts import ns as alerts_ns
 from itgov.api.v1.ativos import ns as ativos_ns
 from itgov.api.v1.governance_apps import ns as governance_apps_ns
 from itgov.api.v1.governance_compliance import ns as governance_compliance_ns
+from itgov.api.v1.governance_data import ns as governance_data_ns
 from itgov.api.v1.governance_devices import ns as governance_devices_ns
 from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
 from itgov.api.v1.zabbix import ns as zabbix_ns
@@ -67,6 +68,7 @@ itgov_api.add_namespace(governance_mfa_ns)
 itgov_api.add_namespace(governance_devices_ns)
 itgov_api.add_namespace(governance_apps_ns)
 itgov_api.add_namespace(governance_compliance_ns)
+itgov_api.add_namespace(governance_data_ns)
 
 # Módulo de alertas CFTV — o start efetivo ocorre em post_fork (gunicorn.conf.py).
 # Em execução direta (python app.py) o start_poller() abaixo é chamado no __main__.

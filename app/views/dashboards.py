@@ -126,6 +126,19 @@ def governance_compliance() -> str:
     return render_template("dashboards/governance_compliance.html", summary=summary)
 
 
+@bp.route("/governance/data")
+def governance_data() -> str:
+    """Render pilar Dados (Sensitivity Labels) — Governança M365."""
+    import config
+    from itgov.api.v1.governance_data import get_cached_data_summary
+
+    if not config.GRAPH_ENABLED:
+        abort(404)
+
+    summary = get_cached_data_summary()
+    return render_template("dashboards/governance_data.html", summary=summary)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 def pillar_detail(pillar_id: str) -> str:
     """Render drill-down page for a single pillar.

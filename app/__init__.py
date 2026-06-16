@@ -127,6 +127,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_governance_compliance_unavailable", error=str(_e))
 
+    # Governança Dados (Sensitivity Labels) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_data import ns as governance_data_ns
+
+        api.add_namespace(governance_data_ns, path="/v1/governance")
+        log.info("itgov_governance_data_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_data_unavailable", error=str(_e))
+
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 
