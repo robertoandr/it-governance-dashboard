@@ -33,9 +33,12 @@ virtualenv/
 .env.local
 .env.*.local
 .env.bak*
+.env.backup*
 .env.production
 .env.staging
+smtp.env
 *.bak
+*.bak-*
 *.bak.*
 *.pre-*
 !.pre-commit-config.yaml
@@ -153,3 +156,8 @@ grafana/provisioning/**/*.tmp
 grafana/provisioning/**/*.orig
 grafana/provisioning/**/*.disabled
 CLAUDE.md.bkp-*
+
+# ===== Claude Code (estado local da ferramenta, não é código do projeto) =====
+.claude/
+.agents/
+skills-lock.json
