@@ -118,6 +118,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_governance_devices_apps_unavailable", error=str(_e))
 
+    # Governança Compliance (Secure Score) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_compliance import ns as governance_compliance_ns
+
+        api.add_namespace(governance_compliance_ns, path="/v1/governance")
+        log.info("itgov_governance_compliance_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_compliance_unavailable", error=str(_e))
+
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 

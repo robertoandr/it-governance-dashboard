@@ -113,6 +113,19 @@ def governance_apps() -> str:
     return render_template("dashboards/governance_apps.html", summary=summary)
 
 
+@bp.route("/governance/compliance")
+def governance_compliance() -> str:
+    """Render pilar Compliance (Secure Score) — Governança M365."""
+    import config
+    from itgov.api.v1.governance_compliance import get_cached_compliance_summary
+
+    if not config.GRAPH_ENABLED:
+        abort(404)
+
+    summary = get_cached_compliance_summary()
+    return render_template("dashboards/governance_compliance.html", summary=summary)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 def pillar_detail(pillar_id: str) -> str:
     """Render drill-down page for a single pillar.
