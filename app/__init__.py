@@ -45,7 +45,13 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         DEBUG=settings.app.debug,
         APP_VERSION=settings.app.version,
         APP_ENVIRONMENT=settings.app.environment,
+        # UTF-8: Flask-RESTX lê RESTX_JSON para dumps(); Flask nativo lê JSON_AS_ASCII
+        RESTX_JSON={"ensure_ascii": False},
+        JSON_AS_ASCII=False,
     )
+
+    # UTF-8: serializar JSON com caracteres Unicode diretos (não \uXXXX)
+    app.json.ensure_ascii = False
 
     # Database
     from app.services.db import init_db
@@ -92,6 +98,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_legacy_api_unavailable", error=str(_e))
 
+    # Governança MFA — bloco separado: não depende de ZABBIX/Zendesk
+    try:
+        from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
+
+        api.add_namespace(governance_mfa_ns, path="/v1/governance")
+        log.info("itgov_governance_mfa_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_mfa_unavailable", error=str(_e))
+
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 
@@ -126,6 +141,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     @app.after_request
     def add_security_headers(response: Any) -> Any:
         nonce = getattr(g, "csp_nonce", "")
+        # Garantir charset=utf-8 em todas as respostas textuais
+        ct = response.content_type or ""
+        if ct.startswith("application/json") and "charset" not in ct:
+            response.content_type = "application/json; charset=utf-8"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"

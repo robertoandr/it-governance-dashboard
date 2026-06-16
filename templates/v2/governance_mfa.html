@@ -1,0 +1,248 @@
+{% extends "v2/base.html" %}
+
+{% block title %}Adoção MFA · Governança de TI{% endblock %}
+{% block page_title %}🔐 Adoção de MFA{% endblock %}
+
+{% block content %}
+<div
+  x-data="mfaDashboard()"
+  x-init="carregar()"
+  class="mfa-root"
+>
+  <!-- Card de Adoção -->
+  <div class="mfa-hero-card" :class="statusClass">
+    <template x-if="carregando">
+      <div class="mfa-loading">
+        <div class="spinner"></div>
+        <p>Carregando dados de MFA…</p>
+      </div>
+    </template>
+
+    <template x-if="!carregando && !erro">
+      <div>
+        <div class="mfa-hero-top">
+          <div>
+            <div class="mfa-pct" x-text="dados.adocao_pct.toFixed(1) + '%'"></div>
+            <div class="mfa-label">Adoção de MFA · Meta: 87%</div>
+          </div>
+          <div class="mfa-gauge-wrap">
+            <svg viewBox="0 0 120 60" class="mfa-gauge">
+              <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+              <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="currentColor" stroke-width="12"
+                :stroke-dasharray="gaugeArc" stroke-dashoffset="0" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="mfa-stats-grid">
+          <div class="mfa-stat">
+            <span class="mfa-stat-val" x-text="dados.com_mfa"></span>
+            <span class="mfa-stat-lbl">Com MFA</span>
+          </div>
+          <div class="mfa-stat">
+            <span class="mfa-stat-val mfa-stat-red" x-text="dados.sem_mfa"></span>
+            <span class="mfa-stat-lbl">Sem MFA</span>
+          </div>
+          <div class="mfa-stat">
+            <span class="mfa-stat-val" x-text="dados.denominador"></span>
+            <span class="mfa-stat-lbl">Total Humanos</span>
+          </div>
+        </div>
+
+        <div class="mfa-buckets">
+          <span class="mfa-bucket">👤 <b x-text="dados.total_humanos"></b> humanos</span>
+          <span class="mfa-bucket">🤖 <b x-text="dados.total_nao_humanos"></b> serviço</span>
+          <span class="mfa-bucket">🚪 <b x-text="dados.total_salas"></b> salas</span>
+          <span class="mfa-bucket mfa-bucket-warn" x-show="dados.total_pendente_revisao > 0">
+            ⚠️ <b x-text="dados.total_pendente_revisao"></b> pendentes
+          </span>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="erro">
+      <div class="mfa-erro">❌ <span x-text="erro"></span></div>
+    </template>
+  </div>
+
+  <!-- Lista de Pendentes -->
+  <template x-if="!carregando && !erro && dados.pendentes_revisao && dados.pendentes_revisao.length > 0">
+    <div class="mfa-pendentes">
+      <h3 class="mfa-pendentes-titulo">
+        Contas Pendentes de Revisão
+        <span class="mfa-counter" x-text="dados.pendentes_revisao.length"></span>
+      </h3>
+
+      <div class="mfa-pendentes-lista">
+        <template x-for="conta in dados.pendentes_revisao" :key="conta.upn">
+          <div class="mfa-pendente-item" :class="{ 'mfa-pendente-saindo': conta._saindo }">
+            <div class="mfa-pendente-info">
+              <div class="mfa-pendente-nome" x-text="conta.nome_exibicao"></div>
+              <div class="mfa-pendente-upn" x-text="conta.upn"></div>
+              <span class="mfa-badge" :class="conta.mfa_habilitado ? 'mfa-badge-ok' : 'mfa-badge-no'">
+                <span x-text="conta.mfa_habilitado ? '✓ MFA' : '✗ Sem MFA'"></span>
+              </span>
+            </div>
+            <div class="mfa-pendente-acoes">
+              <button
+                class="btn-classificar btn-humano"
+                :disabled="conta._processando"
+                @click="reclassificar(conta, 'human')"
+              >
+                <span x-show="!conta._processando">👤 Humano</span>
+                <span x-show="conta._processando">…</span>
+              </button>
+              <button
+                class="btn-classificar btn-naohumano"
+                :disabled="conta._processando"
+                @click="reclassificar(conta, 'non_human')"
+              >
+                <span x-show="!conta._processando">🤖 Não-humano</span>
+                <span x-show="conta._processando">…</span>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="!carregando && !erro && (!dados.pendentes_revisao || dados.pendentes_revisao.length === 0)">
+    <div class="mfa-sem-pendentes">✅ Nenhuma conta pendente de revisão</div>
+  </template>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<!-- Alpine.js -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js"></script>
+
+<style>
+.mfa-root { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+
+.mfa-hero-card {
+  background: var(--card-bg, #1e2433);
+  border: 1px solid var(--border, #2d3748);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 24px;
+  color: var(--text, #e2e8f0);
+  transition: border-color .3s;
+}
+.mfa-hero-card.status-ok  { border-color: #22c55e; }
+.mfa-hero-card.status-warn { border-color: #f59e0b; }
+.mfa-hero-card.status-crit { border-color: #ef4444; }
+
+.mfa-hero-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.mfa-pct { font-size: 3rem; font-weight: 700; line-height: 1; }
+.mfa-label { font-size: .85rem; color: var(--text-muted, #94a3b8); margin-top: 4px; }
+
+.mfa-gauge-wrap { width: 110px; }
+.mfa-gauge { width: 100%; color: #22c55e; }
+.mfa-hero-card.status-warn .mfa-gauge { color: #f59e0b; }
+.mfa-hero-card.status-crit .mfa-gauge { color: #ef4444; }
+
+.mfa-stats-grid { display: flex; gap: 32px; margin-bottom: 16px; }
+.mfa-stat { display: flex; flex-direction: column; }
+.mfa-stat-val { font-size: 1.5rem; font-weight: 600; }
+.mfa-stat-red { color: #ef4444; }
+.mfa-stat-lbl { font-size: .75rem; color: var(--text-muted, #94a3b8); }
+
+.mfa-buckets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.mfa-bucket { background: var(--badge-bg, #2d3748); padding: 4px 10px; border-radius: 20px; font-size: .78rem; }
+.mfa-bucket-warn { background: #78350f33; color: #fbbf24; }
+
+.mfa-loading { text-align: center; padding: 32px; }
+.mfa-erro { color: #ef4444; padding: 16px; }
+
+.mfa-pendentes { background: var(--card-bg, #1e2433); border: 1px solid var(--border, #2d3748); border-radius: 12px; padding: 20px; }
+.mfa-pendentes-titulo { font-size: 1rem; font-weight: 600; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
+.mfa-counter { background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
+
+.mfa-pendentes-lista { display: flex; flex-direction: column; gap: 8px; }
+.mfa-pendente-item {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--item-bg, #252d3d); border-radius: 8px; padding: 12px 16px;
+  transition: opacity .4s, transform .4s;
+}
+.mfa-pendente-saindo { opacity: 0; transform: translateX(32px); }
+
+.mfa-pendente-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mfa-pendente-nome { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mfa-pendente-upn { font-size: .75rem; color: var(--text-muted, #94a3b8); }
+
+.mfa-badge { padding: 2px 8px; border-radius: 12px; font-size: .72rem; font-weight: 600; }
+.mfa-badge-ok { background: #14532d; color: #4ade80; }
+.mfa-badge-no { background: #450a0a; color: #f87171; }
+
+.mfa-pendente-acoes { display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px; }
+.btn-classificar {
+  padding: 6px 14px; border-radius: 6px; font-size: .8rem; font-weight: 500;
+  border: none; cursor: pointer; transition: opacity .2s;
+}
+.btn-classificar:disabled { opacity: .5; cursor: not-allowed; }
+.btn-humano    { background: #166534; color: #4ade80; }
+.btn-naohumano { background: #1e3a5f; color: #60a5fa; }
+
+.mfa-sem-pendentes { text-align: center; padding: 24px; color: #4ade80; font-size: .9rem; }
+</style>
+
+<script>
+function mfaDashboard() {
+  return {
+    carregando: true,
+    erro: null,
+    dados: {},
+
+    get statusClass() {
+      const pct = this.dados.adocao_pct ?? 0;
+      if (pct >= 87) return 'status-ok';
+      if (pct >= 70) return 'status-warn';
+      return 'status-crit';
+    },
+
+    // Arco SVG proporcional à % (semicírculo = 157px de comprimento total)
+    get gaugeArc() {
+      const pct = Math.min(this.dados.adocao_pct ?? 0, 100) / 100;
+      const total = 157;
+      return `${(pct * total).toFixed(1)} ${total}`;
+    },
+
+    async carregar() {
+      this.carregando = true;
+      this.erro = null;
+      try {
+        const resp = await fetch('/api/v1/governance/mfa');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        this.dados = await resp.json();
+      } catch (e) {
+        this.erro = e.message;
+      } finally {
+        this.carregando = false;
+      }
+    },
+
+    async reclassificar(conta, classificacao) {
+      conta._processando = true;
+      try {
+        const resp = await fetch('/api/v1/governance/reclassify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ upn: conta.upn, classificacao }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        // Anima saída antes de recarregar
+        conta._saindo = true;
+        await new Promise(r => setTimeout(r, 400));
+
+        this.dados = await resp.json();
+      } catch (e) {
+        this.erro = `Erro ao reclassificar: ${e.message}`;
+        conta._processando = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}
