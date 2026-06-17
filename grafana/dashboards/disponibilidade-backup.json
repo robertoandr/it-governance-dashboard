@@ -1,0 +1,1215 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 10,
+      "type": "row",
+      "title": "🟢  Disponibilidade de Infraestrutura (Zabbix)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Score de Disponibilidade",
+      "description": "% de hosts UP sobre o total monitorado",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_disponibilidade\")\n  |> filter(fn: (r) => r._field == \"score\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Hosts UP",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 3,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_disponibilidade\")\n  |> filter(fn: (r) => r._field == \"hosts_up\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Hosts DOWN",
+      "description": "Hosts sem resposta agora",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 7,
+        "y": 1,
+        "w": 3,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_disponibilidade\")\n  |> filter(fn: (r) => r._field == \"hosts_down\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Score de Risco",
+      "description": "Índice de risco calculado pelo collector (menor = melhor)",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 1,
+        "w": 4,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"score\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "⚠️  Incidentes em Destaque",
+      "description": "Pior incidente ativo e host mais crítico offline",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 1,
+        "w": 10,
+        "h": 5
+      },
+      "options": {
+        "sortBy": [],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "enablePagination": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"top_incidente\")\n  |> last()\n  |> keep(columns: [\"_field\",\"_value\"])"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "B",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_disponibilidade\")\n  |> filter(fn: (r) => r._field == \"top_host_down\")\n  |> last()\n  |> keep(columns: [\"_field\",\"_value\"])"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "🔴  Problemas por Severidade (agora)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Disaster",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 4,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_summary\")\n  |> filter(fn: (r) => r._field == \"problems_disaster\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "High",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 7,
+        "w": 4,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 15
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_summary\")\n  |> filter(fn: (r) => r._field == \"problems_high\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "Average",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 7,
+        "w": 4,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 20
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_summary\")\n  |> filter(fn: (r) => r._field == \"problems_average\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Warning",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 4,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 5
+              },
+              {
+                "color": "yellow",
+                "value": 15
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_summary\")\n  |> filter(fn: (r) => r._field == \"problems_warning\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Tendência de Riscos",
+      "description": "Evolução do número de problemas abertos por severidade",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 7,
+        "w": 8,
+        "h": 4
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"criticos\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Críticos\"}))"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "B",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"altos\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Altos\"}))"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "C",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"medios\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Médios\"}))"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "D",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_zabbix_riscos\")\n  |> filter(fn: (r) => r._field == \"avisos\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Avisos\"}))"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "💾  Backup — Acronis Cyber Protection",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Agentes Online",
+      "description": "Agentes Acronis com comunicação ativa",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 5,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 40
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"online\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Agentes Offline",
+      "description": "Esperado: máquinas de usuários desligadas fora do horário",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 12,
+        "w": 5,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"offline\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "Compliance de Versão",
+      "description": "% de agentes na versão mais recente",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 12,
+        "w": 5,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 85
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_version_compliance\")\n  |> filter(fn: (r) => r._field == \"compliant_pct\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "Agentes Desatualizados",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 12,
+        "w": 4,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_version_compliance\")\n  |> filter(fn: (r) => r._field == \"outdated\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "type": "stat",
+      "title": "Total de Agentes",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 12,
+        "w": 5,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "type": "row",
+      "title": "Protecao de Maquinas (Acronis)",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 1 },
+      "panels": []
+    },
+    {
+      "id": 38,
+      "type": "stat",
+      "title": "Maquinas Desprotegidas",
+      "description": "Agentes Acronis offline (sem comunicacao ativa). Threshold: 0 = verde, qualquer valor = vermelho.",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 0, "y": 17, "w": 6, "h": 5 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_agents\")\n  |> filter(fn: (r) => r._field == \"offline\")\n  |> last()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "type": "table",
+      "title": "Status de Backup por Tenant (Acronis)",
+      "description": "Dispositivos por tenant/responsavel. Granularidade por maquina individual nao disponivel no InfluxDB — coleta agrega por tenant.",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 6, "y": 17, "w": 18, "h": 8 },
+      "options": {
+        "sortBy": [{ "displayName": "Dispositivos", "desc": true }],
+        "footer": { "show": false, "reducer": ["sum"], "enablePagination": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Dispositivos" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "color-background" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 50 },
+                    { "color": "orange", "value": 100 }
+                  ]
+                }
+              },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_tenant_inventory\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()\n  |> keep(columns: [\"tenant\",\"_value\"])\n  |> rename(columns: {_value: \"Dispositivos\", tenant: \"Tenant / Responsavel\"})\n  |> sort(columns: [\"Dispositivos\"], desc: true)"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "type": "table",
+      "title": "Inventario por Responsavel (Acronis)",
+      "description": "Total de dispositivos Acronis por responsável de tenant",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-Governanca"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 8
+      },
+      "options": {
+        "sortBy": [],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "enablePagination": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB-Governanca"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_tenant_inventory\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()\n  |> keep(columns: [\"tenant\",\"_value\"])\n  |> rename(columns: {_value: \"Dispositivos\", tenant: \"Responsável\"})\n  |> sort(columns: [\"Dispositivos\"], desc: true)"
+        }
+      ]
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "governança",
+    "infraestrutura",
+    "backup",
+    "zabbix",
+    "acronis"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "America/Sao_Paulo",
+  "title": "Governança — Disponibilidade & Backup",
+  "uid": "itgov-infra-backup-v1",
+  "version": 1,
+  "weekStart": ""
+}
