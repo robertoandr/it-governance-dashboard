@@ -15,6 +15,7 @@ from jobs.entra_id_collector import run as collect_entra_id
 from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
+from jobs.link_monitor import run as run_link_monitor
 from jobs.secure_score_collector import run as collect_secure_score
 from jobs.snapshot_job import run as snapshot_score
 from jobs.spamhaus_collector import run as collect_spamhaus
@@ -194,6 +195,18 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("spamhaus_job_registrado", ips=settings.SPAMHAUS_IPS)
+
+    if settings.LINK_MONITOR_TARGETS:
+        scheduler.add_job(
+            run_link_monitor,
+            IntervalTrigger(seconds=60),
+            id="link_monitor",
+            name="Link Monitor (ICMP)",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("link_monitor_job_registrado", targets=settings.LINK_MONITOR_TARGETS)
 
     if settings.SMTP_HOST and settings.SMTP_FROM and settings.SMTP_TO:
         scheduler.add_job(

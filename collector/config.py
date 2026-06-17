@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = True
     # Spamhaus DNSBL — IPs de saida corporativos separados por virgula
     SPAMHAUS_IPS: str = "189.112.100.49,45.166.249.159"
+    # Link monitor — "ip,link_name,site;ip,link_name,site"
+    LINK_MONITOR_TARGETS: str = "189.112.100.49,algar,sede_centro;45.166.249.159,uno,sede_centro"
     # Limites do alert_job
     ALERT_COOLDOWN_S: int = 3600
     ALERT_SCORE_THRESHOLD: float = 60.0
