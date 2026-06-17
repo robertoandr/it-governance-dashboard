@@ -74,6 +74,8 @@ secretGroup = 1
 description = "Arquivos, padrões e commits ignorados (falsos positivos documentados)"
 
 paths = [
+    # Baseline do detect-secrets: contém hashes SHA256 (não secrets reais)
+    '''\.secrets\.baseline''',
     # Arquivos de exemplo/template — valores intencionalmente vazios
     '''\.env\.example''',
     '''\.env\.local\.example''',

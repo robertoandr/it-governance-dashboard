@@ -1,0 +1,8 @@
+{
+  "api_url": "https://<HOST>/zabbix/api_jsonrpc.php",
+  "user": "svc_dashboard",
+  "password": "<rotacionada-via-secrets>",
+  "zabbix_version": "7.0.x",
+  "verify_ssl": true,
+  "use_https": true
+}
