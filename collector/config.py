@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_AUTH: bool = True
     SMTP_TLS: bool = True
+    # Spamhaus DNSBL — IPs de saida corporativos separados por virgula
+    SPAMHAUS_IPS: str = "189.112.100.49,45.166.249.159"
     # Limites do alert_job
     ALERT_COOLDOWN_S: int = 3600
     ALERT_SCORE_THRESHOLD: float = 60.0

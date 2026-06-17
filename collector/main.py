@@ -17,6 +17,7 @@ from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
 from jobs.secure_score_collector import run as collect_secure_score
 from jobs.snapshot_job import run as snapshot_score
+from jobs.spamhaus_collector import run as collect_spamhaus
 from jobs.zabbix_availability_collector import run as collect_zabbix_availability
 from jobs.zabbix_resource_collector import run as collect_zabbix_resource
 from jobs.zabbix_risk_collector import run as collect_zabbix_risks
@@ -181,6 +182,18 @@ if __name__ == "__main__":
     else:
         log.warning("entra_id_job_skipped", reason="AZURE_* env vars not set")
         log.warning("secure_score_job_ignorado", motivo="AZURE_* env vars não configuradas")
+
+    if settings.SPAMHAUS_IPS:
+        scheduler.add_job(
+            collect_spamhaus,
+            CronTrigger(hour="*/6"),
+            id="spamhaus_collector",
+            name="Spamhaus IP Reputation Collector",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("spamhaus_job_registrado", ips=settings.SPAMHAUS_IPS)
 
     if settings.SMTP_HOST and settings.SMTP_FROM and settings.SMTP_TO:
         scheduler.add_job(
