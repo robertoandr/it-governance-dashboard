@@ -1188,6 +1188,213 @@
           "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_tenant_inventory\")\n  |> filter(fn: (r) => r._field == \"total\")\n  |> last()\n  |> keep(columns: [\"tenant\",\"_value\"])\n  |> rename(columns: {_value: \"Dispositivos\", tenant: \"Responsável\"})\n  |> sort(columns: [\"Dispositivos\"], desc: true)"
         }
       ]
+    },
+    {
+      "id": 50,
+      "type": "row",
+      "title": "Postura de Risco Acronis",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 33, "w": 24, "h": 1 },
+      "panels": []
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "Offline > 20 dias",
+      "description": "Maquinas sem comunicacao ha mais de 20 dias (proxy: ultimo update de componente Acronis).",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 0, "y": 34, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto", "colorMode": "background", "graphMode": "none",
+        "justifyMode": "center", "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none", "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }, "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [{
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+        "refId": "A",
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_risk_summary\")\n  |> filter(fn: (r) => r._field == \"offline_gt_20d\")\n  |> last()"
+      }]
+    },
+    {
+      "id": 42,
+      "type": "stat",
+      "title": "Licenca Insuficiente",
+      "description": "Alertas OfferingItemIsNotSufficient — maquinas sem licenca adequada no Acronis.",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 4, "y": 34, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto", "colorMode": "background", "graphMode": "none",
+        "justifyMode": "center", "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none", "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }, "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [{
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+        "refId": "A",
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_risk_summary\")\n  |> filter(fn: (r) => r._field == \"license_issues\")\n  |> last()"
+      }]
+    },
+    {
+      "id": 43,
+      "type": "stat",
+      "title": "Reboot/Update Pendente",
+      "description": "Maquinas com update instalado aguardando reboot (AcroinstReboot* alerts).",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 8, "y": 34, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto", "colorMode": "background", "graphMode": "none",
+        "justifyMode": "center", "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none", "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 30 }
+            ]
+          },
+          "color": { "mode": "thresholds" }, "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [{
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+        "refId": "A",
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_machines\")\n  |> filter(fn: (r) => r._field == \"pending_updates\")\n  |> last()\n  |> sum()"
+      }]
+    },
+    {
+      "id": 45,
+      "type": "stat",
+      "title": "EDR Incidents",
+      "description": "Incidentes de seguranca detectados pelo modulo EDR do Acronis. Cada ocorrencia requer investigacao.",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 12, "y": 34, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto", "colorMode": "background", "graphMode": "none",
+        "justifyMode": "center", "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none", "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }, "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [{
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+        "refId": "A",
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_risk_summary\")\n  |> filter(fn: (r) => r._field == \"edr_total\")\n  |> last()"
+      }]
+    },
+    {
+      "id": 46,
+      "type": "stat",
+      "title": "Backup Noise (faxina)",
+      "description": "BackupFailed de planos orfaos. Nao e incidente real — ruido conhecido. Limpar planos inativos para reduzir a zero.",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 16, "y": 34, "w": 4, "h": 4 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto", "colorMode": "background", "graphMode": "none",
+        "justifyMode": "center", "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none", "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          },
+          "color": { "mode": "thresholds" }, "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [{
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+        "refId": "A",
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_risk_summary\")\n  |> filter(fn: (r) => r._field == \"backup_noise_total\")\n  |> last()"
+      }]
+    },
+    {
+      "id": 44,
+      "type": "table",
+      "title": "Incidentes Abertos (sem BackupFailed)",
+      "description": "Incidentes criticos por maquina — EDR e outros. BackupFailed excluido (ruido isolado no painel Backup Noise).",
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "gridPos": { "x": 0, "y": 38, "w": 24, "h": 10 },
+      "options": {
+        "sortBy": [{ "displayName": "Time", "desc": true }],
+        "footer": { "show": false, "reducer": ["sum"], "enablePagination": true }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "severity" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "color-background" },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "critical": { "color": "red", "index": 0 } } },
+                  { "type": "value", "options": { "warning": { "color": "yellow", "index": 1 } } }
+                ]
+              },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          }
+        ]
+      },
+      "targets": [{
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+        "refId": "A",
+        "query": "from(bucket: \"governance_raw\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"gov_acronis_incidents\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> keep(columns: [\"_time\", \"resource_name\", \"alert_type\", \"severity\", \"tenant\"])\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 200)"
+      }]
     }
   ],
   "refresh": "5m",
@@ -1203,7 +1410,7 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {},

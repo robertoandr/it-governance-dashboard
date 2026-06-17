@@ -8,6 +8,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from jobs.acronis_collector import run as collect_acronis
+from jobs.acronis_risk_collector import run as collect_acronis_risk
 from jobs.alert_job import run as run_alerts
 from jobs.asset_status_job import run as sync_asset_status
 from jobs.entra_id_collector import run as collect_entra_id
@@ -116,6 +117,17 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("acronis_job_registrado")
+
+        scheduler.add_job(
+            collect_acronis_risk,
+            CronTrigger(hour="*"),
+            id="acronis_risk_collector",
+            name="Acronis Risk Posture Collector",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("acronis_risk_job_registrado")
     else:
         log.warning("acronis_job_ignorado", motivo="ACRONIS_* env vars não configuradas")
 
