@@ -50,6 +50,7 @@ services:
       - app_logs:/app/logs
       - app_tmp:/app/tmp
       - app_data:/app/data
+      # Bind mounts de hot-patch removidos em 2026-06-18: código incorporado na imagem via rebuild.
     tmpfs:
       - /tmp:size=64m,mode=1777
     read_only: true

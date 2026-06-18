@@ -228,6 +228,9 @@ class AcronisCollector:
 
 def run() -> None:
     """Entry point para o APScheduler."""
+    if not all([settings.ACRONIS_BASE_URL, settings.ACRONIS_CLIENT_ID, settings.ACRONIS_CLIENT_SECRET]):
+        log.warning("acronis_job_ignorado", motivo="ACRONIS_BASE_URL/CLIENT_ID/CLIENT_SECRET não configurados")
+        return
     try:
         AcronisCollector(
             base_url=settings.ACRONIS_BASE_URL,

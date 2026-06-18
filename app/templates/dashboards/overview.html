@@ -3,153 +3,317 @@
 {% block title %}Visão Geral — IT Governance{% endblock %}
 {% block page_title %}Visão Geral da Governança{% endblock %}
 
+{% block head %}
+<!-- Dados iniciais + helpers em variáveis globais — sem eval() no template -->
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var _raw = {{ governance | tojson }};
+
+  function enrichPillar(p) {
+    var isCS = p.data_source === 'coming_soon';
+    return {
+      id: p.id,
+      color: p.color || '#6B7280',
+      label: p.label,
+      weight: p.weight,
+      score: p.score,
+      status: p.status,
+      data_source: p.data_source,
+      previous_score: p.previous_score,
+      trend: p.trend,
+      collector_eta: p.collector_eta,
+      last_collected: p.last_collected,
+      components: p.components || [],
+      href: '/pillars/' + p.id,
+      weightDisplay: (p.weight * 100).toFixed(0) + '%',
+      isActive: !isCS,
+      isLive: p.data_source === 'live',
+      isManual: p.data_source === 'manual',
+      isPartial: p.data_source === 'partial',
+      isComingSoon: isCS,
+      scoreDisplay: isCS ? '–' : p.score.toFixed(1),
+      scoreClass: isCS
+        ? 'text-gray-300'
+        : 'text-gray-800 group-hover:text-blue-600',
+      progressStyle: !isCS
+        ? 'width:' + p.score + '%; background:' + (p.color || '#6B7280')
+        : 'width:0',
+      statusClass: p.status === 'OPERACIONAL'
+        ? 'text-green-600'
+        : p.status === 'DEGRADADO' ? 'text-yellow-600' : 'text-red-600',
+      etaDisplay: '⏳ em breve' + (p.collector_eta ? ' · ' + p.collector_eta : ''),
+    };
+  }
+
+  function buildKpis(pillars) {
+    var availability = '–', sla = '–', incidents = '–', coverage = '–';
+    for (var i = 0; i < pillars.length; i++) {
+      var comps = pillars[i].components || [];
+      for (var j = 0; j < comps.length; j++) {
+        var c = comps[j];
+        if (c.id === 'availability' && c.source !== 'coming_soon' && c.raw_value != null)
+          availability = c.raw_value.toFixed(1) + '%';
+        if (c.id === 'sla_compliance' && c.source !== 'coming_soon' && c.raw_value != null)
+          sla = c.raw_value.toFixed(1) + '%';
+        if (c.id === 'incidents_critical' && c.source !== 'coming_soon' && c.raw_value != null)
+          incidents = Math.round(c.raw_value).toString();
+        if (c.id === 'monitoring_coverage' && c.source !== 'coming_soon' && c.value != null)
+          coverage = c.value.toFixed(1) + '%';
+      }
+    }
+    return { availability: availability, sla: sla, incidents: incidents, coverage: coverage };
+  }
+
+  window.__GOV_INIT__   = _raw;
+  window.__GOV_ENRICH__ = enrichPillar;
+  window.__GOV_KPIS__   = buildKpis;
+})();
+</script>
+{% endblock %}
+
 {% block content %}
-{% set status_colors = {
-  'OPERACIONAL': 'text-green-600 bg-green-50 border-green-200',
-  'DEGRADADO':   'text-yellow-600 bg-yellow-50 border-yellow-200',
-  'CRÍTICO':     'text-red-600 bg-red-50 border-red-200'
-} %}
+<div id="kiosk-root" x-data="kioskDashboard">
 
-<!-- Hero: Global Score -->
-<div class="bg-white rounded-2xl shadow p-8 mb-6 flex flex-col md:flex-row items-center justify-between gap-6">
-  <div>
-    <p class="text-sm text-gray-500 mb-1">Score Global de Governança</p>
-    <div class="flex items-baseline gap-3">
-      <span class="text-6xl font-bold text-gray-800">{{ governance.global_score | round(1) }}</span>
-      <span class="text-gray-400 text-2xl">/100</span>
-    </div>
-    <span class="inline-block mt-2 px-3 py-1 rounded-full border text-sm font-semibold
-                 {{ status_colors.get(governance.status, 'text-gray-600 bg-gray-50 border-gray-200') }}">
-      {{ governance.status }}
-    </span>
-    {% if governance.trend == 'up' %}
-      <span class="ml-2 text-green-500 text-sm">▲ melhorando</span>
-    {% elif governance.trend == 'down' %}
-      <span class="ml-2 text-red-500 text-sm">▼ piorando</span>
-    {% else %}
-      <span class="ml-2 text-gray-400 text-sm">→ estável</span>
-    {% endif %}
+  <!-- Banner de erro (visível só quando fetch falha) -->
+  <div x-show="error" x-cloak
+       class="mb-4 p-3 rounded-lg bg-red-50 border border-red-300 text-red-800 text-sm flex items-center gap-2">
+    <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-4.75a.75.75 0 001.5 0v-4.5a.75.75 0 00-1.5 0v4.5zm.75-7.25a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"/>
+    </svg>
+    <span><strong>Falha ao atualizar:</strong> <span x-text="error"></span></span>
+  </div>
 
-    {# Badge de cobertura — âmbar quando parcial, verde quando 100% real #}
-    {% set cov_pct = (governance.coverage * 100) | round | int %}
-    {% set faltam = governance.total_pillars - governance.active_pillars %}
-    {% if governance.coverage >= 1 %}
-      <span class="ml-2 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full
-                   bg-green-50 text-green-700 border border-green-200"
-            title="Score calculado sobre 100% do peso — todos os pilares com dados reais.">
-        Todos os pilares ativos
+  <!-- Hero: Score Global -->
+  <div class="bg-white rounded-2xl shadow p-8 mb-6 flex flex-col md:flex-row items-center justify-between gap-6">
+    <div>
+      <p class="text-sm text-gray-500 mb-1">Score Global de Governança</p>
+      <div class="flex items-baseline gap-3">
+        <span class="text-6xl font-bold text-gray-800" x-text="scoreDisplay"></span>
+        <span class="text-gray-400 text-2xl">/100</span>
+      </div>
+
+      <!-- Status badge -->
+      <span class="inline-block mt-2 px-3 py-1 rounded-full border text-sm font-semibold"
+            :class="statusClass" x-text="status"></span>
+
+      <!-- Trend -->
+      <span class="ml-2 text-sm" :class="trendClass" x-text="trendDisplay"></span>
+
+      <!-- Coverage badge -->
+      <span class="ml-2 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full cursor-help"
+            :class="coverageBadgeClass"
+            :title="coverageTitle"
+            x-text="coverageLabel">
       </span>
-    {% else %}
-      <span class="ml-2 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full
-                   bg-yellow-50 text-yellow-700 border border-yellow-200 cursor-help"
-            title="Score calculado sobre {{ cov_pct }}% do peso total. {{ faltam }} pilar{{ 'es' if faltam > 1 else '' }} ainda em ativação (coming soon).">
-        {{ governance.active_pillars }} de {{ governance.total_pillars }} pilares ativos
-      </span>
-    {% endif %}
-  </div>
-  <div class="text-right text-sm text-gray-400">
-    <p>Calculado em</p>
-    <p class="font-mono">{{ governance.computed_at[:19] | replace('T',' ') }}</p>
-  </div>
-</div>
-
-<!-- Pillar Cards Grid -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
-  {% for p in governance.pillars %}
-  <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
-     class="bg-white rounded-xl shadow p-5 hover:shadow-md transition-shadow block group{% if p.data_source == 'coming_soon' %} opacity-80{% endif %}">
-    <div class="flex items-center justify-between mb-3">
-      <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ p.color }}"></span>
-      <span class="text-xs text-gray-400">{{ (p.weight * 100) | int }}%</span>
-    </div>
-    <p class="text-xs text-gray-500 mb-1 leading-tight">{{ p.label }}</p>
-
-    <!-- Score: hide number for coming_soon -->
-    {% if p.data_source == 'coming_soon' %}
-    <p class="text-3xl font-bold text-gray-300">–</p>
-    {% else %}
-    <p class="text-3xl font-bold text-gray-800 group-hover:text-blue-600 transition-colors">
-      {{ p.score | round(1) }}
-    </p>
-    {% endif %}
-
-    <!-- Mini progress bar -->
-    <div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-      {% if p.data_source != 'coming_soon' %}
-      <div class="h-full rounded-full transition-all duration-500"
-           style="width:{{ p.score }}%; background:{{ p.color }}"></div>
-      {% endif %}
     </div>
 
-    <!-- Status badge -->
-    {% if p.data_source != 'coming_soon' %}
-    <span class="mt-2 inline-block text-xs font-medium
-      {% if p.status == 'OPERACIONAL' %}text-green-600
-      {% elif p.status == 'DEGRADADO' %}text-yellow-600
-      {% else %}text-red-600{% endif %}">
-      {{ p.status }}
-    </span>
-    {% endif %}
-
-    <!-- DataSource badge -->
-    <div class="mt-2">
-      {% if p.data_source == 'live' %}
-        <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>ao vivo
-        </span>
-      {% elif p.data_source == 'manual' %}
-        <span class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-          ✍ manual
-        </span>
-      {% elif p.data_source == 'partial' %}
-        <span class="inline-flex items-center gap-1 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-full px-2 py-0.5">
-          🟡 parcial
-        </span>
-      {% else %}
-        <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">
-          ⏳ em breve{% if p.collector_eta %} · {{ p.collector_eta }}{% endif %}
-        </span>
-      {% endif %}
+    <!-- Timestamp + kiosk indicator -->
+    <div class="text-right text-sm text-gray-400">
+      <p>Calculado em</p>
+      <p class="font-mono" x-text="computedAt"></p>
+      <p class="text-xs mt-2 flex items-center justify-end gap-1">
+        <span class="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+        auto-refresh em <span class="font-mono ml-1" x-text="countdownDisplay"></span>
+      </p>
     </div>
-  </a>
-  {% endfor %}
-</div>
+  </div>
 
-<!-- KPI Footer — values extracted from pillar components -->
-{% set ns = namespace(availability='–', sla='–', incidents='–', coverage='–') %}
-{% for p in governance.pillars %}
-  {% for c in p.components %}
-    {% if c.id == 'availability' and c.source != 'coming_soon' %}
-      {% set ns.availability = (c.raw_value | round(1) | string) + '%' %}
-    {% endif %}
-    {% if c.id == 'sla_compliance' and c.source != 'coming_soon' %}
-      {% set ns.sla = (c.raw_value | round(1) | string) + '%' %}
-    {% endif %}
-    {% if c.id == 'incidents_critical' and c.source != 'coming_soon' %}
-      {% set ns.incidents = c.raw_value | int | string %}
-    {% endif %}
-    {% if c.id == 'monitoring_coverage' and c.source != 'coming_soon' %}
-      {% set ns.coverage = (c.value | round(1) | string) + '%' %}
-    {% endif %}
-  {% endfor %}
-{% endfor %}
+  <!-- Cards dos Pilares -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+    <template x-for="p in pillars" :key="p.id">
+      <a :href="p.href"
+         class="bg-white rounded-xl shadow p-5 hover:shadow-md transition-shadow block group"
+         :class="p.isComingSoon ? 'opacity-75' : ''">
 
-<div class="bg-white rounded-xl shadow p-5 grid grid-cols-2 md:grid-cols-4 gap-6">
-  <div class="text-center">
-    <p class="text-xs text-gray-500">Disponibilidade</p>
-    <p class="text-2xl font-bold {% if ns.availability != '–' %}text-green-600{% else %}text-gray-300{% endif %}">{{ ns.availability }}</p>
+        <!-- Cor do pilar + peso -->
+        <div class="flex items-center justify-between mb-3">
+          <span class="w-3 h-3 rounded-full flex-shrink-0" :style="'background:' + p.color"></span>
+          <span class="text-xs text-gray-400" x-text="p.weightDisplay"></span>
+        </div>
+
+        <!-- Nome -->
+        <p class="text-xs text-gray-500 mb-1 leading-tight" x-text="p.label"></p>
+
+        <!-- Score -->
+        <p class="text-3xl font-bold transition-colors"
+           :class="p.scoreClass"
+           x-text="p.scoreDisplay"></p>
+
+        <!-- Barra de progresso -->
+        <div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-500"
+               :style="p.progressStyle"></div>
+        </div>
+
+        <!-- Status texto -->
+        <span class="mt-2 inline-block text-xs font-medium"
+              x-show="p.isActive"
+              :class="p.statusClass"
+              x-text="p.status"></span>
+
+        <!-- Badge de fonte de dados -->
+        <div class="mt-2">
+          <template x-if="p.isLive">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>ao vivo
+            </span>
+          </template>
+          <template x-if="p.isManual">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+              &#9997; manual
+            </span>
+          </template>
+          <template x-if="p.isPartial">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-full px-2 py-0.5">
+              &#9680; parcial
+            </span>
+          </template>
+          <template x-if="p.isComingSoon">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5"
+                  x-text="p.etaDisplay"></span>
+          </template>
+        </div>
+      </a>
+    </template>
   </div>
-  <div class="text-center">
-    <p class="text-xs text-gray-500">SLA Geral</p>
-    <p class="text-2xl font-bold {% if ns.sla != '–' %}text-green-600{% else %}text-gray-300{% endif %}">{{ ns.sla }}</p>
+
+  <!-- KPI Footer -->
+  <div class="bg-white rounded-xl shadow p-5 grid grid-cols-2 md:grid-cols-4 gap-6">
+    <div class="text-center">
+      <p class="text-xs text-gray-500">Disponibilidade</p>
+      <p class="text-2xl font-bold text-green-600" x-text="kpiAvailability"></p>
+    </div>
+    <div class="text-center">
+      <p class="text-xs text-gray-500">SLA Geral</p>
+      <p class="text-2xl font-bold text-green-600" x-text="kpiSla"></p>
+    </div>
+    <div class="text-center">
+      <p class="text-xs text-gray-500">Incidentes Críticos</p>
+      <p class="text-2xl font-bold text-red-600" x-text="kpiIncidents"></p>
+    </div>
+    <div class="text-center">
+      <p class="text-xs text-gray-500">Cobertura Zabbix</p>
+      <p class="text-2xl font-bold text-blue-600" x-text="kpiCoverage"></p>
+    </div>
   </div>
-  <div class="text-center">
-    <p class="text-xs text-gray-500">Incidentes Críticos</p>
-    <p class="text-2xl font-bold {% if ns.incidents != '–' %}text-red-600{% else %}text-gray-300{% endif %}">{{ ns.incidents }}</p>
-  </div>
-  <div class="text-center">
-    <p class="text-xs text-gray-500">Cobertura Zabbix</p>
-    <p class="text-2xl font-bold {% if ns.coverage != '–' %}text-blue-600{% else %}text-gray-300{% endif %}">{{ ns.coverage }}</p>
-  </div>
+
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('alpine:init', function () {
+  var initial   = window.__GOV_INIT__   || {};
+  var enrich    = window.__GOV_ENRICH__ || function (p) { return p; };
+  var buildKpis = window.__GOV_KPIS__   || function () { return {}; };
+
+  var enrichedPillars = (initial.pillars || []).map(enrich);
+  var kpisInit        = buildKpis(enrichedPillars);
+
+  Alpine.data('kioskDashboard', function () {
+    return {
+      score:         initial.global_score    || 0,
+      status:        initial.status          || '—',
+      trend:         initial.trend           || 'stable',
+      computedAt:    initial.computed_at
+                       ? initial.computed_at.substring(0, 19).replace('T', ' ')
+                       : '—',
+      pillars:       enrichedPillars,
+      coverage:      initial.coverage        || 1,
+      activePillars: initial.active_pillars  || 0,
+      totalPillars:  initial.total_pillars   || 0,
+      error:         null,
+      countdown:     30,
+      _timer:        null,
+      _tick:         null,
+      kpiAvailability: kpisInit.availability || '–',
+      kpiSla:          kpisInit.sla          || '–',
+      kpiIncidents:    kpisInit.incidents    || '–',
+      kpiCoverage:     kpisInit.coverage     || '–',
+
+      get scoreDisplay()     { return this.score.toFixed(1); },
+      get countdownDisplay() { return this.countdown + 's'; },
+      get coveragePct()      { return Math.round(this.coverage * 100); },
+
+      get trendDisplay() {
+        return this.trend === 'up'   ? '▲ melhorando'
+             : this.trend === 'down' ? '▼ piorando'
+             : '→ estável';
+      },
+      get trendClass() {
+        return this.trend === 'up'   ? 'text-green-500'
+             : this.trend === 'down' ? 'text-red-500'
+             : 'text-gray-400';
+      },
+      get statusClass() {
+        var m = {
+          'OPERACIONAL': 'text-green-600 bg-green-50 border-green-200',
+          'DEGRADADO':   'text-yellow-600 bg-yellow-50 border-yellow-200',
+          'CRÍTICO': 'text-red-600 bg-red-50 border-red-200',
+        };
+        return m[this.status] || 'text-gray-600 bg-gray-50 border-gray-200';
+      },
+      get coverageBadgeClass() {
+        return this.coveragePct >= 100
+          ? 'bg-green-50 text-green-700 border border-green-200'
+          : 'bg-yellow-50 text-yellow-700 border border-yellow-200';
+      },
+      get coverageTitle() {
+        return this.coveragePct >= 100
+          ? 'Score calculado sobre 100% do peso — todos os pilares com dados reais.'
+          : 'Score calculado sobre ' + this.coveragePct + '% do peso total. Pilares coming_soon excluídos da média.';
+      },
+      get coverageLabel() {
+        return this.coveragePct >= 100
+          ? 'Todos os pilares ativos'
+          : this.activePillars + ' de ' + this.totalPillars + ' pilares ativos';
+      },
+
+      _apply: function (data) {
+        this.score         = data.global_score    || this.score;
+        this.status        = data.status          || this.status;
+        this.trend         = data.trend           || this.trend;
+        this.computedAt    = data.computed_at
+                               ? data.computed_at.substring(0, 19).replace('T', ' ')
+                               : this.computedAt;
+        this.pillars       = (data.pillars || this.pillars).map(enrich);
+        this.coverage      = data.coverage        || this.coverage;
+        this.activePillars = data.active_pillars  || this.activePillars;
+        this.totalPillars  = data.total_pillars   || this.totalPillars;
+        var kpis = buildKpis(this.pillars);
+        this.kpiAvailability = kpis.availability || this.kpiAvailability;
+        this.kpiSla          = kpis.sla          || this.kpiSla;
+        this.kpiIncidents    = kpis.incidents    || this.kpiIncidents;
+        this.kpiCoverage     = kpis.coverage     || this.kpiCoverage;
+      },
+
+      refresh: async function () {
+        try {
+          var res = await fetch('/api/overview', { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status + ' — ' + res.statusText);
+          this._apply(await res.json());
+          this.error = null;
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+
+      startKiosk: function () {
+        var INTERVAL = 30;
+        var self = this;
+        this.countdown = INTERVAL;
+        this._tick = setInterval(function () {
+          self.countdown = self.countdown > 1 ? self.countdown - 1 : INTERVAL;
+        }, 1000);
+        this._timer = setInterval(function () {
+          self.countdown = INTERVAL;
+          self.refresh();
+        }, INTERVAL * 1000);
+      },
+
+      init: function () { this.startKiosk(); },
+    };
+  });
+});
+</script>
 {% endblock %}

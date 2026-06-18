@@ -16,6 +16,7 @@ from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
 from jobs.link_monitor import run as run_link_monitor
+from jobs.m365_gov_collector import run as collect_m365_gov
 from jobs.secure_score_collector import run as collect_secure_score
 from jobs.snapshot_job import run as snapshot_score
 from jobs.spamhaus_collector import run as collect_spamhaus
@@ -180,6 +181,17 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("secure_score_job_registrado")
+
+        scheduler.add_job(
+            collect_m365_gov,
+            IntervalTrigger(minutes=30),
+            id="m365_gov_collector",
+            name="M365 Gov KPIs (Score / MFA / Alertas / Licencas)",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("m365_gov_job_registrado")
     else:
         log.warning("entra_id_job_skipped", reason="AZURE_* env vars not set")
         log.warning("secure_score_job_ignorado", motivo="AZURE_* env vars não configuradas")

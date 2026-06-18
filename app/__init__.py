@@ -139,7 +139,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # HTML blueprints
     from app.views.dashboards import bp as dashboards_bp
 
-    app.register_blueprint(dashboards_bp)
+    app.register_blueprint(dashboards_bp, url_prefix="/gov")
 
     # Error handlers
     @app.errorhandler(404)

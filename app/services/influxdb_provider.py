@@ -45,6 +45,125 @@ def _last_collected_from(rows: list[dict[str, Any]]) -> datetime | None:
     return max(times) if times else None
 
 
+def _backup_score_from_acronis(sem_plano: int, backup_noise: int) -> float:
+    """Converte dados Acronis em score 0-100.
+
+    Penalidade sem_plano: -15 pts por máquina sem plano de proteção.
+    Penalidade backup_noise: escalonada por faixa (reflete tendência, não satura):
+      0 alertas → 0 pts  |  1-5 → 10  |  6-20 → 30  |  21-50 → 50  |  >50 → 70
+    """
+    if backup_noise == 0:
+        noise_penalty = 0
+    elif backup_noise <= 5:
+        noise_penalty = 10
+    elif backup_noise <= 20:
+        noise_penalty = 30
+    elif backup_noise <= 50:
+        noise_penalty = 50
+    else:
+        noise_penalty = 70
+    penalty = sem_plano * 15 + noise_penalty
+    return round(max(0.0, 100.0 - penalty), 1)
+
+
+def _build_backup_components(acronis: dict[str, Any]) -> list[dict[str, Any]]:
+    """Retorna lista de componentes de backup: score, backlog e saúde 24h.
+
+    Três componentes separados para clareza:
+    - backup_success_rate : score penalizado (afeta média do pilar, is_estimated=False)
+    - backup_noise_total  : backlog acumulado de alertas BackupFailed (informativo)
+    - backup_health_24h   : jobs das últimas 24h — sem coletor dedicado ainda (coming_soon)
+    """
+    if not acronis:
+        return [
+            {
+                "id": "backup_success_rate",
+                "label": "Taxa de sucesso de backups (Acronis)",
+                "value": 95.0,
+                "raw_value": None,
+                "unit": "%",
+                "source": "coming_soon",
+                "weight": 2.0,
+                "trend": "stable",
+                "is_estimated": True,
+            },
+            {
+                "id": "backup_noise_total",
+                "label": "Backlog de alertas BackupFailed (acumulado)",
+                "value": 75.0,
+                "raw_value": None,
+                "unit": "alertas",
+                "source": "coming_soon",
+                "weight": 0.1,
+                "trend": "stable",
+                "is_estimated": True,
+            },
+            {
+                "id": "backup_health_24h",
+                "label": "Saúde dos backups nas últimas 24h",
+                "value": 75.0,
+                "raw_value": None,
+                "unit": "%",
+                "source": "coming_soon",
+                "weight": 0.1,
+                "trend": "stable",
+                "is_estimated": True,
+            },
+        ]
+
+    sem_plano = acronis["sem_plano"]
+    backup_noise = acronis["backup_noise_total"]
+    score = _backup_score_from_acronis(sem_plano, backup_noise)
+
+    # Faixa de severidade do backlog (para o campo trend do componente noise)
+    if backup_noise == 0:
+        noise_trend = "up"
+    elif backup_noise <= 20:
+        noise_trend = "stable"
+    else:
+        noise_trend = "down"
+
+    return [
+        {
+            "id": "backup_success_rate",
+            "label": "Taxa de sucesso de backups (Acronis)",
+            "value": score,
+            "raw_value": float(sem_plano),
+            "unit": "%",
+            "source": "acronis",
+            "weight": 2.0,
+            "trend": "stable",
+        },
+        {
+            # NOTA: backup_noise_total são alertas BackupFailed ACUMULADOS no Acronis,
+            # não jobs das últimas 24h. Para 24h específico use backup_health_24h
+            # (requer coletor dedicado — ver Sprint 13).
+            "id": "backup_noise_total",
+            "label": "Backlog de alertas BackupFailed (acumulado)",
+            "value": score,
+            "raw_value": float(backup_noise),
+            "unit": "alertas",
+            "source": "acronis",
+            "weight": 0.1,
+            "trend": noise_trend,
+            "is_estimated": True,
+        },
+        {
+            # Saúde dos backups das últimas 24h: requer coletor que consulte
+            # /api/alert_manager/v1/alerts?since=<24h> no Acronis — não implementado.
+            "id": "backup_health_24h",
+            "label": "Saúde dos backups nas últimas 24h",
+            "value": 75.0,
+            "raw_value": None,
+            "unit": "%",
+            "source": "coming_soon",
+            "weight": 0.1,
+            "trend": "stable",
+            "is_estimated": True,
+        },
+    ]
+
+
 class InfluxDBMetricsProvider:
     """Governance metrics sourced from InfluxDB with COMING_SOON for unmeasured pillars.
 
@@ -179,10 +298,11 @@ class InfluxDBMetricsProvider:
         }
 
     def get_risk_metrics(self) -> dict[str, Any]:
-        """Risk Management: Zabbix incidents + Entra ID MFA + Secure Score when available."""
+        """Risk Management: Zabbix incidents + Entra ID MFA + Secure Score + Acronis backup."""
         zabbix = self._zabbix_stats()
         entra = self._entra_stats()
         secure = self._secure_score_stats()
+        acronis = self._acronis_stats()
 
         if not zabbix:
             log.warning("zabbix_no_data_risk", fallback="coming_soon")
@@ -290,6 +410,14 @@ class InfluxDBMetricsProvider:
                 }
             )
 
+        # Merge Acronis timestamp into last_collected
+        if acronis:
+            ac_time = acronis.get("_time")
+            if ac_time and last_collected:
+                last_collected = max(last_collected, ac_time)
+            elif ac_time:
+                last_collected = ac_time
+
         # Remaining components without real sources
         components.extend(
             [
@@ -315,17 +443,7 @@ class InfluxDBMetricsProvider:
                     "trend": "stable",
                     "is_estimated": True,
                 },
-                {
-                    "id": "backup_success_rate",
-                    "label": "Taxa de sucesso de backups",
-                    "value": 95.0,
-                    "raw_value": None,
-                    "unit": "%",
-                    "source": "coming_soon",
-                    "weight": 2.0,
-                    "trend": "stable",
-                    "is_estimated": True,
-                },
+                *_build_backup_components(acronis),
             ]
         )
 
@@ -336,6 +454,9 @@ class InfluxDBMetricsProvider:
             high=high,
             incidents_score=incidents_score,
             entra_available=bool(entra),
+            acronis_available=bool(acronis),
+            acronis_sem_plano=acronis.get("sem_plano") if acronis else None,
+            acronis_backup_noise=acronis.get("backup_noise_total") if acronis else None,
         )
 
         return {
@@ -632,6 +753,33 @@ from(bucket: "{self._bucket_raw}")
             "max_score": float(row.get("max_score") or 100.0),
             "pct": float(row.get("pct") or 0.0),
             "control_scores_count": int(row.get("control_scores_count") or 0),
+            "_time": row.get("_time"),
+        }
+
+    def _acronis_stats(self) -> dict[str, Any]:
+        """Retorna o último resumo de risco Acronis do InfluxDB.
+
+        Janela de 3h: coleta horária — mais de 1 ciclo de tolerância.
+        """
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -3h)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_risk_summary")
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"], desc: true)
+  |> limit(n: 1)
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[0]
+        return {
+            "sem_plano": int(row.get("sem_plano") or 0),
+            "offline_gt_20d": int(row.get("offline_gt_20d") or 0),
+            "backup_noise_total": int(row.get("backup_noise_total") or 0),
+            "incidents_total": int(row.get("incidents_total") or 0),
+            "edr_total": int(row.get("edr_total") or 0),
+            "license_issues": int(row.get("license_issues") or 0),
             "_time": row.get("_time"),
         }
 
