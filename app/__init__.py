@@ -109,13 +109,16 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         log.warning("itgov_legacy_api_unavailable", error=str(_e))
 
     # HTML blueprints
+    import os
+
     from app.auth import bp as auth_bp
     from app.views.dashboards import bp as dashboards_bp
     from app.views.users import bp as users_bp
 
-    app.register_blueprint(auth_bp, url_prefix="/gov")
-    app.register_blueprint(dashboards_bp, url_prefix="/gov")
-    app.register_blueprint(users_bp, url_prefix="/gov")
+    _gov_prefix = os.getenv("APP_ROOT_PATH", "/gov")
+    app.register_blueprint(auth_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(dashboards_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(users_bp, url_prefix=_gov_prefix)
 
     # CLI commands
     from app.commands import register_commands
