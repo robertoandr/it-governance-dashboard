@@ -141,6 +141,27 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     app.register_blueprint(dashboards_bp, url_prefix="/gov")
 
+    # /gov/api/* alias — resposta nativa (sem redirect) para endpoints do dashboard.
+    # /gov/api/overview chama _get_cached_or_compute() diretamente (cache compartilhado).
+    # Rota catch-all usa 307 para qualquer sub-caminho ainda não explicitado.
+    from flask import Blueprint, redirect
+    from flask import request as _req
+
+    _gov_api_bp = Blueprint("gov_api_alias", __name__)
+
+    @_gov_api_bp.route("/overview", methods=["GET"])
+    def _gov_api_overview():
+        from app.api.dashboards import _get_cached_or_compute
+
+        return jsonify(_get_cached_or_compute())
+
+    @_gov_api_bp.route("/<path:subpath>", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    def _gov_api_fwd(subpath: str):
+        qs = f"?{_req.query_string.decode()}" if _req.query_string else ""
+        return redirect(f"/api/{subpath}{qs}", code=307)
+
+    app.register_blueprint(_gov_api_bp, url_prefix="/gov/api")
+
     # Error handlers
     @app.errorhandler(404)
     def not_found(e: Exception) -> Any:

@@ -289,7 +289,7 @@ document.addEventListener('alpine:init', function () {
 
       refresh: async function () {
         try {
-          var res = await fetch('/api/overview', { cache: 'no-store' });
+          var res = await fetch('/gov/api/overview', { cache: 'no-store' });
           if (!res.ok) throw new Error('HTTP ' + res.status + ' — ' + res.statusText);
           this._apply(await res.json());
           this.error = null;
