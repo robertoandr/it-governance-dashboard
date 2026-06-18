@@ -24,6 +24,8 @@ _IDEAL_MERGE_HOURS = 8.0  # avg merge time (h) considered excellent
 _EXPECTED_HOSTS = 150  # baseline for 100% monitoring coverage
 _PENALTY_DISASTER = 20.0  # score penalty per disaster-severity incident
 _PENALTY_HIGH = 5.0  # score penalty per high-severity incident
+_MIN_UPTIME_PCT = 99.5  # below = availability degraded
+_MIN_BACKUP_COVERAGE_PCT = 95.0  # below = backup coverage concern
 
 _COMING_SOON_ETA_STRATEGIC = "Sprint 13 - PMO"
 _COMING_SOON_ETA_RESOURCE = "Sprint 13 - Intune/M365"
@@ -100,11 +102,11 @@ class InfluxDBMetricsProvider:
     # ── Public pillar methods ────────────────────────────────────────────────
 
     def get_performance_metrics(self) -> dict[str, Any]:
-        """Performance Measure: real availability + coverage from Zabbix."""
-        zabbix = self._zabbix_stats()
+        """Performance Measure: real availability + coverage from gov_zabbix_disponibilidade."""
+        disp = self._zabbix_disp_stats()
 
-        if not zabbix:
-            log.warning("zabbix_no_data_performance", fallback="coming_soon")
+        if not disp:
+            log.warning("zabbix_disp_no_data_performance", fallback="coming_soon")
             mock = self._mock.get_performance_metrics()
             mock["_meta"] = {
                 "data_source": "coming_soon",
@@ -113,24 +115,23 @@ class InfluxDBMetricsProvider:
             }
             return mock
 
-        hosts = zabbix.get("hosts", 0)
-        disaster = zabbix.get("disaster", 0)
-
-        avail_raw = round((hosts - disaster) / hosts * 100, 2) if hosts else 0.0
-        coverage_raw = round(min(100.0, hosts / _EXPECTED_HOSTS * 100), 1)
+        uptime_pct = disp.get("uptime_pct", 0.0)
+        hosts_down = disp.get("hosts_down", 0)
+        total = disp.get("total_monitorado", 0)
+        coverage_raw = round(min(100.0, total / _EXPECTED_HOSTS * 100), 1)
 
         log.info(
-            "performance_metrics_from_zabbix",
-            hosts=hosts,
-            disaster=disaster,
-            availability=avail_raw,
+            "performance_metrics_from_zabbix_disp",
+            uptime_pct=uptime_pct,
+            hosts_down=hosts_down,
+            total_monitorado=total,
             coverage=coverage_raw,
         )
 
         return {
             "_meta": {
                 "data_source": "partial",
-                "last_collected": zabbix.get("_time"),
+                "last_collected": disp.get("_time"),
                 "collector_eta": None,
             },
             "previous_score": None,
@@ -138,9 +139,9 @@ class InfluxDBMetricsProvider:
                 {
                     "id": "availability",
                     "label": "Disponibilidade de sistemas críticos",
-                    "value": round(min(100.0, avail_raw), 1),
-                    "raw_value": avail_raw,
-                    "unit": "%",
+                    "value": round(min(100.0, uptime_pct), 1),
+                    "raw_value": hosts_down,
+                    "unit": "hosts down",
                     "source": "zabbix",
                     "weight": 3.0,
                     "trend": "stable",
@@ -149,8 +150,8 @@ class InfluxDBMetricsProvider:
                     "id": "monitoring_coverage",
                     "label": "Cobertura de monitoramento",
                     "value": coverage_raw,
-                    "raw_value": hosts,
-                    "unit": "%",
+                    "raw_value": total,
+                    "unit": "hosts",
                     "source": "zabbix",
                     "weight": 1.5,
                     "trend": "stable",
@@ -179,9 +180,11 @@ class InfluxDBMetricsProvider:
         }
 
     def get_risk_metrics(self) -> dict[str, Any]:
-        """Risk Management: Zabbix incidents + Entra ID MFA when available."""
+        """Risk Management: Zabbix incidents + risk score + Acronis backup + Entra MFA."""
         zabbix = self._zabbix_stats()
         entra = self._entra_stats()
+        zabbix_risk = self._zabbix_risk_stats()
+        acronis = self._acronis_stats()
 
         if not zabbix:
             log.warning("zabbix_no_data_risk", fallback="coming_soon")
@@ -248,6 +251,77 @@ class InfluxDBMetricsProvider:
                 }
             )
 
+        # Zabbix risk score (pre-calculated by collector across all severity levels)
+        if zabbix_risk:
+            zr_score = round(zabbix_risk.get("score", 0.0), 1)
+            components.append(
+                {
+                    "id": "risk_score_zabbix",
+                    "label": "Score de risco Zabbix",
+                    "value": zr_score,
+                    "raw_value": float(zabbix_risk.get("total_problemas", 0)),
+                    "unit": "score",
+                    "source": "zabbix",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            zr_time = zabbix_risk.get("_time")
+            if zr_time and last_collected:
+                last_collected = max(last_collected, zr_time)
+            elif zr_time:
+                last_collected = zr_time
+        else:
+            components.append(
+                {
+                    "id": "risk_score_zabbix",
+                    "label": "Score de risco Zabbix",
+                    "value": 60.0,
+                    "raw_value": None,
+                    "unit": "score",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
+        # Acronis backup coverage (real data from gov_acronis_protection)
+        if acronis:
+            protected = acronis.get("protected_machines", 0)
+            total_m = acronis.get("total_machines", 0)
+            backup_pct = round(protected / total_m * 100, 1) if total_m else 0.0
+            components.append(
+                {
+                    "id": "backup_coverage",
+                    "label": "Cobertura de Backup (Acronis)",
+                    "value": backup_pct,
+                    "raw_value": float(protected),
+                    "unit": "máquinas protegidas",
+                    "source": "acronis",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            acr_time = acronis.get("_time")
+            if acr_time and last_collected:
+                last_collected = max(last_collected, acr_time)
+            elif acr_time:
+                last_collected = acr_time
+        else:
+            backup_pct = None
+            components.append(
+                {
+                    "id": "backup_coverage",
+                    "label": "Cobertura de Backup (Acronis)",
+                    "value": 95.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
         # Remaining components without real sources
         components.extend(
             [
@@ -271,26 +345,19 @@ class InfluxDBMetricsProvider:
                     "weight": 2.5,
                     "trend": "stable",
                 },
-                {
-                    "id": "backup_success_rate",
-                    "label": "Taxa de sucesso de backups",
-                    "value": 95.0,
-                    "raw_value": None,
-                    "unit": "%",
-                    "source": "coming_soon",
-                    "weight": 2.0,
-                    "trend": "stable",
-                },
             ]
         )
 
         log.info(
-            "risk_metrics_from_zabbix",
+            "risk_metrics_assembled",
             hosts=hosts,
             disaster=disaster,
             high=high,
             incidents_score=incidents_score,
+            zabbix_risk_score=zabbix_risk.get("score") if zabbix_risk else None,
+            backup_pct=backup_pct,
             entra_available=bool(entra),
+            acronis_available=bool(acronis),
         )
 
         return {
@@ -700,6 +767,98 @@ from(bucket: "{self._bucket_raw}")
             "control_scores_count": int(row.get("control_scores_count", 0)),
             "_time": row.get("_time"),
         }
+
+    def _zabbix_disp_stats(self) -> dict[str, Any]:
+        """Return the latest Zabbix availability record from gov_zabbix_disponibilidade."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_disponibilidade")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "uptime_pct": float(row.get("uptime_pct", 0.0)),
+            "score": float(row.get("score", 0.0)),
+            "hosts_up": int(row.get("hosts_up", 0)),
+            "hosts_down": int(row.get("hosts_down", 0)),
+            "hosts_unknown": int(row.get("hosts_unknown", 0)),
+            "total_monitorado": int(row.get("total_monitorado", 0)),
+            "top_host_down": str(row.get("top_host_down", "")),
+            "_time": row.get("_time"),
+        }
+
+    def _zabbix_risk_stats(self) -> dict[str, Any]:
+        """Return the latest Zabbix risk score from gov_zabbix_riscos."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_riscos")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "score": float(row.get("score", 0.0)),
+            "criticos": int(row.get("criticos", 0)),
+            "altos": int(row.get("altos", 0)),
+            "medios": int(row.get("medios", 0)),
+            "avisos": int(row.get("avisos", 0)),
+            "total_problemas": int(row.get("total_problemas", 0)),
+            "incidentes_criticos": int(row.get("incidentes_criticos", 0)),
+            "top_incidente": str(row.get("top_incidente", "")),
+            "_time": row.get("_time"),
+        }
+
+    def _acronis_stats(self) -> dict[str, Any]:
+        """Return Acronis protection coverage + risk summary from InfluxDB."""
+        flux_prot = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -7d)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_protection")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        flux_risk = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_risk_summary")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        prot_rows = self._query(flux_prot)
+        risk_rows = self._query(flux_risk)
+        if not prot_rows and not risk_rows:
+            return {}
+        result: dict[str, Any] = {}
+        if prot_rows:
+            row = prot_rows[-1]
+            result.update(
+                {
+                    "protected_machines": int(row.get("protected_machines", 0)),
+                    "total_machines": int(row.get("total_machines", 0)),
+                    "_time": row.get("_time"),
+                }
+            )
+        if risk_rows:
+            row = risk_rows[-1]
+            result.update(
+                {
+                    "offline_gt_20d": int(row.get("offline_gt_20d", 0)),
+                    "incidents_total": int(row.get("incidents_total", 0)),
+                    "license_issues": int(row.get("license_issues", 0)),
+                }
+            )
+            if "_time" not in result:
+                result["_time"] = row.get("_time")
+        return result
 
     def _github_pr_stats(self) -> tuple[int, float | None]:
         """Return (pr_count, avg_merge_hours) for the past 30 days."""
