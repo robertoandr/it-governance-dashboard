@@ -113,9 +113,9 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.views.dashboards import bp as dashboards_bp
     from app.views.users import bp as users_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(dashboards_bp)
-    app.register_blueprint(users_bp)
+    app.register_blueprint(auth_bp, url_prefix="/gov")
+    app.register_blueprint(dashboards_bp, url_prefix="/gov")
+    app.register_blueprint(users_bp, url_prefix="/gov")
 
     # CLI commands
     from app.commands import register_commands
