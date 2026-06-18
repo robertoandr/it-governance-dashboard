@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{% block title %}IT Governance Dashboard{% endblock %}</title>
+  <title>{% block title %}Governança de TI Dashboard{% endblock %}</title>
   <!-- Tailwind dark mode via class strategy -->
   <script nonce="{{ csp_nonce() }}">tailwind = { config: { darkMode: 'class' } }</script>
   <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce() }}"></script>
@@ -78,7 +78,7 @@
     <!-- Footer -->
     <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700
                    px-6 py-2 text-xs text-slate-400 flex justify-between">
-      <span>IT Governance Dashboard &mdash; v{{ app_version }}</span>
+      <span>Governança de TI Dashboard &mdash; v{{ app_version }}</span>
       <span>{{ environment | upper }}</span>
     </footer>
   </div>

@@ -1,4 +1,4 @@
-"""Flask application factory for the IT Governance Dashboard."""
+"""Flask application factory for the Governança de TI Dashboard."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     api = Api(
         app,
         version=settings.app.version,
-        title="IT Governance Dashboard API",
+        title="Governança de TI Dashboard API",
         description="5-pillar COBIT-aligned governance score API",
         prefix="/api",
         doc="/api/docs",

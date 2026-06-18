@@ -23,7 +23,7 @@ def _inject_globals() -> dict:
 
     return {
         "app_version": current_app.config.get("APP_VERSION", "1.1.0"),
-        "app_name": current_app.config.get("APP_NAME", "IT Governance Dashboard"),
+        "app_name": current_app.config.get("APP_NAME", "Governança de TI Dashboard"),
         "environment": current_app.config.get("APP_ENVIRONMENT", "production"),
     }
 

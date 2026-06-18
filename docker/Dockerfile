@@ -23,8 +23,8 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt && \
 # ─── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="IT Governance Dashboard" \
-      org.opencontainers.image.description="5-pillar COBIT governance dashboard" \
+LABEL org.opencontainers.image.title="Governança de TI Dashboard" \
+      org.opencontainers.image.description="Dashboard COBIT 5 pilares — Governança de TI" \
       org.opencontainers.image.url="https://github.com/robertoandr/it-governance-dashboard" \
       org.opencontainers.image.source="https://github.com/robertoandr/it-governance-dashboard"
 
