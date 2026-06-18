@@ -36,18 +36,38 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     log = structlog.get_logger(__name__)
 
+    from pathlib import Path
+
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
     # Core Flask config
+    _users_db = Path(__file__).resolve().parent.parent / "data" / "app.db"
     app.config.update(
         SECRET_KEY=settings.app.secret_key.get_secret_value(),
         TESTING=settings.app.testing,
         DEBUG=settings.app.debug,
         APP_VERSION=settings.app.version,
         APP_ENVIRONMENT=settings.app.environment,
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{_users_db}",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
 
-    # Database
+    # Flask-SQLAlchemy + Flask-Login + Flask-Bcrypt
+    from app.extensions import bcrypt, db, login_manager
+
+    db.init_app(app)
+    login_manager.init_app(app)
+    bcrypt.init_app(app)
+
+    # Ensure tables exist (idempotent).
+    # Use "from ... import" — plain "import app.models.user" would rebind the
+    # local variable "app" to the Python package, shadowing the Flask instance.
+    with app.app_context():
+        from app.models import user as _user_model  # noqa: F401
+
+        db.create_all()
+
+    # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
 
     init_db(app, settings)
@@ -89,9 +109,18 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         log.warning("itgov_legacy_api_unavailable", error=str(_e))
 
     # HTML blueprints
+    from app.auth import bp as auth_bp
     from app.views.dashboards import bp as dashboards_bp
+    from app.views.users import bp as users_bp
 
+    app.register_blueprint(auth_bp)
     app.register_blueprint(dashboards_bp)
+    app.register_blueprint(users_bp)
+
+    # CLI commands
+    from app.commands import register_commands
+
+    register_commands(app)
 
     # Error handlers
     @app.errorhandler(404)
@@ -136,14 +165,28 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         )
         return response
 
+    # Error handlers for auth
+    @app.errorhandler(401)
+    def unauthorized(e: Exception) -> Any:
+        from flask import redirect, url_for
+
+        return redirect(url_for("auth.login")), 302
+
+    @app.errorhandler(403)
+    def forbidden(e: Exception) -> Any:
+        return _render_error("errors/403.html", 403)
+
     # Context processors
     @app.context_processor
     def inject_globals() -> dict[str, Any]:
+        from flask_login import current_user as cu
+
         return {
             "app_version": settings.app.version,
             "app_name": settings.app.name,
             "environment": settings.app.environment,
             "csp_nonce": lambda: getattr(g, "csp_nonce", ""),
+            "current_user": cu,
         }
 
     log.info(

@@ -6,7 +6,9 @@ import asyncio
 
 import structlog
 from flask import Blueprint, abort, render_template
+from flask_login import login_required
 
+from app.auth.rbac import require_role
 from app.services.metrics_aggregator import MetricsAggregator
 
 log = structlog.get_logger(__name__)
@@ -41,7 +43,18 @@ def _get_governance() -> dict:
     return governance.model_dump(mode="json")
 
 
+@bp.route("/dashboard")
+@login_required
+@require_role("admin", "gestor", "visualizador")
+def dashboard_redirect():
+    from flask import redirect, url_for
+
+    return redirect(url_for("dashboards.overview"))
+
+
 @bp.route("/")
+@login_required
+@require_role("admin", "gestor", "visualizador")
 def overview() -> str:
     """Render governance overview dashboard."""
     data = _get_governance()
@@ -49,6 +62,8 @@ def overview() -> str:
 
 
 @bp.route("/pillars")
+@login_required
+@require_role("admin", "gestor", "visualizador")
 def pillars() -> str:
     """Render all pillars detail page."""
     data = _get_governance()
@@ -56,6 +71,8 @@ def pillars() -> str:
 
 
 @bp.route("/pillars/<string:pillar_id>")
+@login_required
+@require_role("admin", "gestor", "visualizador")
 def pillar_detail(pillar_id: str) -> str:
     """Render drill-down page for a single pillar.
 

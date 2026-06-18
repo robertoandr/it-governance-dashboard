@@ -1,24 +1,90 @@
-<div class="p-4 border-b border-gray-700 flex items-center gap-2">
-  <svg class="w-6 h-6 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-  </svg>
-  <span class="font-bold text-sm truncate" x-show="sidebarOpen">Governança de TI</span>
+<!-- Brand -->
+<div class="px-4 py-4 border-b border-slate-700 dark:border-slate-800 flex items-center gap-2 flex-shrink-0">
+  <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+    </svg>
+  </div>
+  <span class="font-bold text-sm text-white truncate" x-show="sidebarOpen">Governanca TI</span>
 </div>
 
-<nav class="flex-1 py-4 space-y-1 px-2">
-  {% set nav_items = [
-    (url_for('dashboards.overview'), 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', 'Visão Geral'),
-    (url_for('dashboards.pillars'), 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', 'Pilares'),
-  ] %}
-  {% for href, icon_path, label in nav_items %}
-    <a href="{{ href }}"
-       class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition-colors
-              {% if request.path == href or request.path.startswith(href ~ '/') %}bg-gray-700 text-white{% endif %}">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon_path }}"/>
-      </svg>
-      <span class="text-sm truncate" x-show="sidebarOpen">{{ label }}</span>
-    </a>
-  {% endfor %}
+<nav class="flex-1 py-3 overflow-y-auto">
+
+  {% macro nav_item(href, icon_path, label, soon=false) %}
+  <a href="{{ href if not soon else '#' }}"
+     class="flex items-center gap-3 mx-2 px-3 py-2 rounded-lg transition-colors
+            {% if not soon and (request.path == href or request.path.startswith(href ~ '/')) %}
+              bg-blue-600 text-white
+            {% elif soon %}
+              text-slate-500 cursor-default
+            {% else %}
+              text-slate-300 hover:bg-slate-700 hover:text-white
+            {% endif %}">
+    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon_path }}"/>
+    </svg>
+    <span class="text-sm truncate flex-1" x-show="sidebarOpen">{{ label }}</span>
+    {% if soon %}
+    <span class="text-[9px] bg-slate-700 text-slate-400 rounded px-1 flex-shrink-0" x-show="sidebarOpen">em breve</span>
+    {% endif %}
+  </a>
+  {% endmacro %}
+
+  {% macro group_label(label) %}
+  <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500 px-5 pt-4 pb-1"
+     x-show="sidebarOpen">{{ label }}</p>
+  {% endmacro %}
+
+  {# Grupo 1: Governanca (admin, gestor, visualizador) #}
+  {% if current_user.is_authenticated and current_user.role in ('admin','gestor','visualizador') %}
+  {{ group_label('Governanca') }}
+  {{ nav_item(url_for('dashboards.overview'), 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', 'Visao Geral') }}
+  {{ nav_item(url_for('dashboards.pillars'), 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', 'Pilares COBIT') }}
+  {% endif %}
+
+  {# Grupo 2: Microsoft 365 (admin, gestor) #}
+  {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
+  {{ group_label('Microsoft 365') }}
+  {{ nav_item('#', 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', 'Dispositivos', soon=true) }}
+  {{ nav_item('#', 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', 'Aplicativos', soon=true) }}
+  {{ nav_item('#', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'Compliance', soon=true) }}
+  {{ nav_item('#', 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4', 'Dados / Labels', soon=true) }}
+  {% endif %}
+
+  {# Grupo 3: Suporte (admin, gestor) #}
+  {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
+  {{ group_label('Suporte') }}
+  {{ nav_item('#', 'M13 10V3L4 14h7v7l9-11h-7z', 'Zendesk MTTR', soon=true) }}
+  {{ nav_item('#', 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z', 'SLA / Chamados', soon=true) }}
+  {% endif %}
+
+  {# Grupo 4: Monitoramento (admin, gestor, operador) #}
+  {% if current_user.is_authenticated and current_user.role in ('admin','gestor','operador') %}
+  {{ group_label('Monitoramento') }}
+  {{ nav_item('#', 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', 'Zabbix', soon=true) }}
+  {{ nav_item('#', 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01', 'Infraestrutura', soon=true) }}
+  {{ nav_item('#', 'M15 10l4.553-2.069A1 1 0 0121 8.82V15.18a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', 'CFTV', soon=true) }}
+  {% endif %}
+
+  {# Grupo 5: Seguranca (admin, gestor) #}
+  {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
+  {{ group_label('Seguranca') }}
+  {{ nav_item('#', 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', 'Vulnerabilidades', soon=true) }}
+  {{ nav_item('#', 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', 'Backup / Acronis', soon=true) }}
+  {% endif %}
+
+  {# Grupo 6: Gestao (admin, gestor) #}
+  {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
+  {{ group_label('Gestao') }}
+  {{ nav_item('#', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', 'PMO', soon=true) }}
+  {{ nav_item('#', 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'Relatorios', soon=true) }}
+  {% endif %}
+
+  {# Usuarios: admin only #}
+  {% if current_user.is_authenticated and current_user.role == 'admin' %}
+  <div class="mx-2 mt-4 mb-1 border-t border-slate-700"></div>
+  {{ nav_item(url_for('users.list_users'), 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', 'Usuarios') }}
+  {% endif %}
+
 </nav>
