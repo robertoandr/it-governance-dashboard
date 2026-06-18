@@ -404,24 +404,233 @@ class InfluxDBMetricsProvider:
         }
 
     def get_strategic_metrics(self) -> dict[str, Any]:
-        """Strategic Alignment: COMING_SOON — requires PMO manual input."""
-        mock = self._mock.get_strategic_metrics()
-        mock["_meta"] = {
-            "data_source": "coming_soon",
-            "last_collected": None,
-            "collector_eta": _COMING_SOON_ETA_STRATEGIC,
+        """Strategic Alignment: Secure Score M365 + Entra privileged access (partial).
+
+        Real sources:
+          gov_m365_secure_score.pct          → maturidade de segurança estratégica
+          gov_entra_summary.privileged_roles_count → governança de acessos privilegiados
+        Coming soon: PMO (projetos alinhados, KPIs, orçamento).
+        """
+        secure = self._secure_score_stats()
+        entra = self._entra_stats()
+
+        if not secure and not entra:
+            log.warning("strategic_no_data", fallback="coming_soon")
+            mock = self._mock.get_strategic_metrics()
+            mock["_meta"] = {
+                "data_source": "coming_soon",
+                "last_collected": None,
+                "collector_eta": _COMING_SOON_ETA_STRATEGIC,
+            }
+            return mock
+
+        components: list[dict[str, Any]] = []
+        last_collected: datetime | None = None
+
+        if secure:
+            pct = float(secure.get("pct", 0.0))
+            components.append(
+                {
+                    "id": "security_posture",
+                    "label": "Maturidade de segurança (Secure Score M365)",
+                    "value": round(pct, 1),
+                    "raw_value": pct,
+                    "unit": "%",
+                    "source": "m365_secure_score",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            last_collected = secure.get("_time")
+
+        if entra:
+            roles = int(entra.get("privileged_roles_count", 0))
+            # Baseline 4 roles expected; each extra = -10 pts.
+            priv_score = round(max(0.0, 100.0 - max(0, roles - 4) * 10.0), 1)
+            components.append(
+                {
+                    "id": "privileged_access",
+                    "label": "Governança de acessos privilegiados",
+                    "value": priv_score,
+                    "raw_value": float(roles),
+                    "unit": "roles",
+                    "source": "entra_id",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+            entra_time = entra.get("_time")
+            if entra_time and last_collected:
+                last_collected = max(last_collected, entra_time)
+            elif entra_time:
+                last_collected = entra_time
+
+        # PMO components — coming_soon; placeholder values to avoid dragging score to 0
+        components.extend(
+            [
+                {
+                    "id": "pmo_alignment",
+                    "label": "Projetos alinhados ao planejamento estratégico",
+                    "value": 75.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                },
+                {
+                    "id": "kpi_coverage",
+                    "label": "Cobertura de KPIs estratégicos",
+                    "value": 68.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 1.5,
+                    "trend": "stable",
+                },
+                {
+                    "id": "budget_alignment",
+                    "label": "Aderência orçamentária TI vs negócio",
+                    "value": 79.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 1.0,
+                    "trend": "stable",
+                },
+            ]
+        )
+
+        log.info(
+            "strategic_metrics_assembled",
+            secure_score_available=bool(secure),
+            entra_available=bool(entra),
+            secure_pct=secure.get("pct") if secure else None,
+            privileged_roles=entra.get("privileged_roles_count") if entra else None,
+        )
+
+        return {
+            "_meta": {
+                "data_source": "partial",
+                "last_collected": last_collected,
+                "collector_eta": None,
+            },
+            "previous_score": None,
+            "components": components,
         }
-        return mock
 
     def get_resource_metrics(self) -> dict[str, Any]:
-        """Resource Management: COMING_SOON — requires Intune/M365 integration."""
-        mock = self._mock.get_resource_metrics()
-        mock["_meta"] = {
-            "data_source": "coming_soon",
-            "last_collected": None,
-            "collector_eta": _COMING_SOON_ETA_RESOURCE,
+        """Resource Management: Entra identity hygiene + Secure Score M365 (partial).
+
+        Real sources:
+          gov_entra_summary.stale_accounts_90d / total_users → higiene de identidades
+          gov_entra_summary.ca_policies_count               → políticas de Acesso Condicional
+          gov_m365_secure_score.pct / current_score         → controles M365 implementados
+        Coming soon: utilização de licenças M365 (requer m365_licenses no InfluxDB).
+        """
+        entra = self._entra_stats()
+        secure = self._secure_score_stats()
+
+        if not entra and not secure:
+            log.warning("resource_no_data", fallback="coming_soon")
+            mock = self._mock.get_resource_metrics()
+            mock["_meta"] = {
+                "data_source": "coming_soon",
+                "last_collected": None,
+                "collector_eta": _COMING_SOON_ETA_RESOURCE,
+            }
+            return mock
+
+        components: list[dict[str, Any]] = []
+        last_collected: datetime | None = None
+
+        if entra:
+            total = int(entra.get("total_users", 0))
+            stale = int(entra.get("stale_accounts_90d", 0))
+            hygiene_score = round(max(0.0, (1.0 - stale / total) * 100.0), 1) if total else 0.0
+            components.append(
+                {
+                    "id": "identity_hygiene",
+                    "label": "Higiene de identidades (contas ativas)",
+                    "value": hygiene_score,
+                    "raw_value": float(stale),
+                    "unit": "%",
+                    "source": "entra_id",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
+            ca = int(entra.get("ca_policies_count", 0))
+            # 10 pts per CA policy, capped at 100.
+            ca_score = round(min(100.0, ca * 10.0), 1)
+            components.append(
+                {
+                    "id": "conditional_access",
+                    "label": "Políticas de Acesso Condicional (CA)",
+                    "value": ca_score,
+                    "raw_value": float(ca),
+                    "unit": "políticas",
+                    "source": "entra_id",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+            last_collected = entra.get("_time")
+
+        if secure:
+            pct = float(secure.get("pct", 0.0))
+            current = float(secure.get("current_score", 0.0))
+            components.append(
+                {
+                    "id": "m365_controls",
+                    "label": "Controles M365 implementados (Secure Score)",
+                    "value": round(pct, 1),
+                    "raw_value": current,
+                    "unit": "%",
+                    "source": "m365_secure_score",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            secure_time = secure.get("_time")
+            if secure_time and last_collected:
+                last_collected = max(last_collected, secure_time)
+            elif secure_time:
+                last_collected = secure_time
+
+        # Licenses: no collector writing m365_licenses yet — coming_soon
+        components.append(
+            {
+                "id": "license_utilization",
+                "label": "Utilização de licenças M365",
+                "value": 74.0,
+                "raw_value": None,
+                "unit": "%",
+                "source": "coming_soon",
+                "weight": 2.0,
+                "trend": "stable",
+            }
+        )
+
+        log.info(
+            "resource_metrics_assembled",
+            entra_available=bool(entra),
+            secure_score_available=bool(secure),
+            stale_accounts=entra.get("stale_accounts_90d") if entra else None,
+            ca_policies=entra.get("ca_policies_count") if entra else None,
+            secure_pct=secure.get("pct") if secure else None,
+        )
+
+        return {
+            "_meta": {
+                "data_source": "partial",
+                "last_collected": last_collected,
+                "collector_eta": None,
+            },
+            "previous_score": None,
+            "components": components,
         }
-        return mock
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -467,6 +676,28 @@ from(bucket: "{self._bucket_raw}")
             "stale_accounts_90d": int(row.get("stale_accounts_90d", 0)),
             "privileged_roles_count": int(row.get("privileged_roles_count", 0)),
             "ca_policies_count": int(row.get("ca_policies_count", 0)),
+            "_time": row.get("_time"),
+        }
+
+    def _secure_score_stats(self) -> dict[str, Any]:
+        """Return the latest Microsoft Secure Score record from InfluxDB."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -25h)
+  |> filter(fn: (r) => r._measurement == "gov_m365_secure_score")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "current_score": float(row.get("current_score", 0.0)),
+            "max_score": float(row.get("max_score", 0.0)),
+            "pct": float(row.get("pct", 0.0)),
+            "active_user_count": int(row.get("active_user_count", 0)),
+            "control_scores_count": int(row.get("control_scores_count", 0)),
             "_time": row.get("_time"),
         }
 
