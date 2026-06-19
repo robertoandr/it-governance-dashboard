@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Zendesk MTTR — IT Governance{% endblock %}
+
+{% block page_title %}Suporte — Zendesk{% endblock %}
+
+{% block content %}
+{% macro stat_card(label, value, unit, color, sub) %}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+  {% if value is none %}
+    <p class="text-3xl font-bold text-gray-300">—</p>
+    <p class="text-xs text-gray-400 mt-1">sem dados</p>
+  {% else %}
+    <p class="text-3xl font-bold {{ color }}">{{ value }}<span class="text-base text-gray-400 ml-1">{{ unit }}</span></p>
+    {% if sub %}<p class="text-xs text-gray-400 mt-1">{{ sub }}</p>{% endif %}
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Suporte — Zendesk</h1>
+  <p class="text-sm text-gray-500">MTTR, SLA e volume de tickets abertos no Zendesk Support.</p>
+</div>
+
+{# --- KPIs principais --- #}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  {{ stat_card('Tickets abertos', mttr.total_open, '', 'text-gray-800', 'new + open + pending') }}
+  {{ stat_card('Em breach de SLA', mttr.breached,  '',
+      'text-red-600' if mttr.breached > 0 else 'text-green-600',
+      'abertos há mais de 8h') }}
+  {{ stat_card('Compliance SLA',  mttr.compliance_pct | round(1), '%',
+      'text-green-600' if mttr.compliance_pct >= 80 else 'text-yellow-600' if mttr.compliance_pct >= 60 else 'text-red-600',
+      none) }}
+  {{ stat_card('Tempo médio aberto', mttr.avg_age_hours, 'h',
+      'text-red-600' if mttr.avg_age_hours > 24 else 'text-yellow-600' if mttr.avg_age_hours > 8 else 'text-green-600',
+      'média dos tickets abertos') }}
+</div>
+
+{# --- CSAT + Volume --- #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+  {# CSAT #}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-4">CSAT — Satisfação do Cliente</p>
+    {% if mttr.csat_sample == 0 %}
+      <p class="text-sm text-gray-400 italic">Nenhuma avaliação respondida no período.</p>
+    {% else %}
+      <div class="flex items-end gap-2 mb-3">
+        <p class="text-4xl font-bold
+            {% if mttr.csat_pct >= 80 %}text-green-600
+            {% elif mttr.csat_pct >= 60 %}text-yellow-600
+            {% else %}text-red-600{% endif %}">
+          {{ mttr.csat_pct | round(1) }}%
+        </p>
+        <p class="text-sm text-gray-400 mb-1">satisfação</p>
+      </div>
+      <div class="space-y-1 text-sm text-gray-600">
+        <div class="flex justify-between">
+          <span>Avaliações positivas</span>
+          <span class="font-semibold text-green-600">{{ mttr.csat_good }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Avaliações negativas</span>
+          <span class="font-semibold text-red-600">{{ mttr.csat_bad }}</span>
+        </div>
+        <div class="flex justify-between border-t pt-1 mt-1">
+          <span class="text-gray-400">Total de respostas</span>
+          <span class="font-semibold text-gray-700">{{ mttr.csat_sample }}</span>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  {# Volume por status #}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-4">Volume por Status</p>
+    <div class="space-y-2">
+      {% set status_labels = {
+          'new':     ('Novo',       'bg-blue-100 text-blue-700'),
+          'open':    ('Aberto',     'bg-yellow-100 text-yellow-700'),
+          'pending': ('Pendente',   'bg-orange-100 text-orange-700'),
+          'hold':    ('Em espera',  'bg-gray-100 text-gray-600'),
+          'solved':  ('Resolvido',  'bg-green-100 text-green-700'),
+          'closed':  ('Fechado',    'bg-slate-100 text-slate-600')
+      } %}
+      {% for key, (label, badge_cls) in status_labels.items() %}
+      {% set count = volume.get(key, 0) %}
+      <div class="flex items-center justify-between">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ badge_cls }}">
+          {{ label }}
+        </span>
+        <span class="font-semibold text-gray-800 text-sm">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

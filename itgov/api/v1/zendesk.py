@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import threading
+import time
 
 import structlog
 from flask import request
@@ -11,6 +13,73 @@ from flask_restx import Namespace, Resource, fields
 from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
+
+# ── Cache em memória (TTL 5min) ───────────────────────────────────────────────
+
+_CACHE_TTL = 300
+
+_lock_mttr = threading.Lock()
+_cache_mttr: dict | None = None
+_cache_mttr_ts: float = 0.0
+
+_lock_vol = threading.Lock()
+_cache_vol: dict | None = None
+_cache_vol_ts: float = 0.0
+
+
+def _cache_valido(ts: float) -> bool:
+    return (time.monotonic() - ts) < _CACHE_TTL
+
+
+def get_cached_mttr_summary() -> dict:
+    """Retorna resumo MTTR/SLA + CSAT do Zendesk com cache de 5min."""
+    global _cache_mttr, _cache_mttr_ts
+    with _lock_mttr:
+        if _cache_mttr is not None and _cache_valido(_cache_mttr_ts):
+            log.debug("zendesk.mttr.cache.hit")
+            return _cache_mttr
+
+    log.info("zendesk.mttr.cache.miss")
+    with _svc() as svc:
+        sla = svc.get_sla_metrics()
+        csat = svc.get_csat_summary()
+        open_tickets = svc.get_open_tickets()
+
+    total_open = len(open_tickets)
+    avg_age = round(sum(t.age_hours for t in open_tickets) / total_open, 1) if total_open else 0.0
+
+    dados = {
+        "total_open": total_open,
+        "breached": sla.breached,
+        "compliance_pct": sla.compliance_pct,
+        "avg_age_hours": avg_age,
+        "csat_pct": csat.csat_pct,
+        "csat_sample": csat.sample_size,
+        "csat_good": csat.good,
+        "csat_bad": csat.bad,
+    }
+    with _lock_mttr:
+        _cache_mttr = dados
+        _cache_mttr_ts = time.monotonic()
+    return dados
+
+
+def get_cached_volume_by_status() -> dict:
+    """Retorna volume de tickets por status com cache de 5min."""
+    global _cache_vol, _cache_vol_ts
+    with _lock_vol:
+        if _cache_vol is not None and _cache_valido(_cache_vol_ts):
+            log.debug("zendesk.volume.cache.hit")
+            return _cache_vol
+
+    log.info("zendesk.volume.cache.miss")
+    with _svc() as svc:
+        dados = svc.get_ticket_volume_by_status()
+    with _lock_vol:
+        _cache_vol = dados
+        _cache_vol_ts = time.monotonic()
+    return dados
+
 
 ns = Namespace("zendesk", description="Zendesk support integration")
 
