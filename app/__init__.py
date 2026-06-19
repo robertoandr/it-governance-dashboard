@@ -110,6 +110,44 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_legacy_api_unavailable", error=str(_e))
 
+    # Governança MFA — bloco separado: não depende de ZABBIX/Zendesk
+    try:
+        from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
+
+        api.add_namespace(governance_mfa_ns, path="/v1/governance")
+        log.info("itgov_governance_mfa_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_mfa_unavailable", error=str(_e))
+
+    # Governança Dispositivos + Aplicativos (pilares M365) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_apps import ns as governance_apps_ns
+        from itgov.api.v1.governance_devices import ns as governance_devices_ns
+
+        api.add_namespace(governance_devices_ns, path="/v1/governance")
+        api.add_namespace(governance_apps_ns, path="/v1/governance")
+        log.info("itgov_governance_devices_apps_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_devices_apps_unavailable", error=str(_e))
+
+    # Governança Compliance (Secure Score) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_compliance import ns as governance_compliance_ns
+
+        api.add_namespace(governance_compliance_ns, path="/v1/governance")
+        log.info("itgov_governance_compliance_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_compliance_unavailable", error=str(_e))
+
+    # Governança Dados (Sensitivity Labels) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_data import ns as governance_data_ns
+
+        api.add_namespace(governance_data_ns, path="/v1/governance")
+        log.info("itgov_governance_data_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_data_unavailable", error=str(_e))
+
     # HTML blueprints
     import os
 

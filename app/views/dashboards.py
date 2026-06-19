@@ -70,6 +70,93 @@ def pillars() -> str:
     return render_template("dashboards/pillars.html", governance=data)
 
 
+@bp.route("/zendesk")
+def zendesk_mttr() -> str:
+    """Render Zendesk MTTR / suporte dashboard."""
+    import config
+    from itgov.api.v1.zendesk import get_cached_mttr_summary, get_cached_volume_by_status
+
+    if not getattr(config, "ZENDESK_ENABLED", False):
+        abort(404)
+
+    mttr = get_cached_mttr_summary()
+    volume = get_cached_volume_by_status()
+
+    return render_template(
+        "dashboards/zendesk_mttr.html",
+        mttr=mttr,
+        volume=volume,
+    )
+
+
+@bp.route("/governance/devices")
+@login_required
+@require_role("admin", "gestor")
+def governance_devices() -> str:
+    """Render pilar Dispositivos (Governança M365)."""
+    import config
+    from itgov.api.v1.governance_devices import get_cached_device_summary
+
+    if not getattr(config, "GRAPH_ENABLED", False):
+        abort(404)
+
+    try:
+        summary = get_cached_device_summary()
+    except RuntimeError:
+        abort(503)
+
+    return render_template("dashboards/governance_devices.html", summary=summary)
+
+
+@bp.route("/governance/apps")
+@login_required
+@require_role("admin", "gestor")
+def governance_apps() -> str:
+    """Render pilar Aplicativos (Governança M365)."""
+    import config
+    from itgov.api.v1.governance_apps import get_cached_app_summary
+
+    if not getattr(config, "GRAPH_ENABLED", False):
+        abort(404)
+
+    try:
+        summary = get_cached_app_summary()
+    except RuntimeError:
+        abort(503)
+
+    return render_template("dashboards/governance_apps.html", summary=summary)
+
+
+@bp.route("/governance/compliance")
+@login_required
+@require_role("admin", "gestor")
+def governance_compliance() -> str:
+    """Render pilar Compliance (Secure Score) — Governança M365."""
+    import config
+    from itgov.api.v1.governance_compliance import get_cached_compliance_summary
+
+    if not getattr(config, "GRAPH_ENABLED", False):
+        abort(404)
+
+    summary = get_cached_compliance_summary()
+    return render_template("dashboards/governance_compliance.html", summary=summary)
+
+
+@bp.route("/governance/data")
+@login_required
+@require_role("admin", "gestor")
+def governance_data() -> str:
+    """Render pilar Dados (Sensitivity Labels) — Governança M365."""
+    import config
+    from itgov.api.v1.governance_data import get_cached_data_summary
+
+    if not getattr(config, "GRAPH_ENABLED", False):
+        abort(404)
+
+    summary = get_cached_data_summary()
+    return render_template("dashboards/governance_data.html", summary=summary)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 @login_required
 @require_role("admin", "gestor", "visualizador")

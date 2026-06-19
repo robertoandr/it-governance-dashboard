@@ -41,9 +41,9 @@ class IntunePatchComplianceResource(Resource):
     def get(self):
         """Compliance de patches Intune: global + por OS."""
         try:
-            data = _provider()._intune_stats()
+            data = _provider()._patch_stats()
         except Exception:
-            log.exception("intune_patch_compliance_failed")
+            log.exception("patch_compliance_failed")
             return {"error": "influxdb_unavailable"}, 503
 
         status = 206 if data.get("stale") else 200

@@ -926,6 +926,56 @@ from(bucket: "{self._bucket_raw}")
             "stale": False,
         }
 
+    def _patch_stats(self) -> dict[str, Any]:
+        """Return AD+WinRM patch compliance summary from InfluxDB.
+
+        Fonte: gov_patch_compliance (collector: patch_collector.py via WinRM/NTLM).
+        Staleness: 15h — coleta a cada 6h, stale após 2 ciclos perdidos.
+        Diferente de _intune_stats(): aqui é summary agregado (sem breakdown por OS).
+        """
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -15h)
+  |> filter(fn: (r) => r._measurement == "gov_patch_compliance")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+
+        if not rows:
+            log.info("patch_stats_stale", reason="no data in last 15h")
+            return {
+                "compliance_pct": None,
+                "compliant": 0,
+                "non_compliant": 0,
+                "total_machines": 0,
+                "reachable": 0,
+                "unreachable": 0,
+                "low_confidence": 0,
+                "stale": True,
+            }
+
+        row = rows[-1]
+        pct_raw = row.get("compliance_pct")
+
+        log.info(
+            "patch_stats",
+            compliance_pct=pct_raw,
+            total_machines=row.get("total_machines"),
+            reachable=row.get("reachable"),
+        )
+
+        return {
+            "compliance_pct": float(pct_raw) if pct_raw is not None else None,
+            "compliant": int(row.get("compliant") or 0),
+            "non_compliant": int(row.get("non_compliant") or 0),
+            "total_machines": int(row.get("total_machines") or 0),
+            "reachable": int(row.get("reachable") or 0),
+            "unreachable": int(row.get("unreachable") or 0),
+            "low_confidence": int(row.get("low_confidence") or 0),
+            "stale": False,
+        }
+
     def _github_pr_stats(self) -> tuple[int, float | None]:
         """Return (pr_count, avg_merge_hours) for the past 30 days."""
         flux = f"""
