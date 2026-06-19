@@ -35,9 +35,9 @@ def _cache_valido(ts: float) -> bool:
 
 
 def _query_influx(flux: str) -> list[dict[str, Any]]:
-    from app.services.influxdb_provider import InfluxDBProvider
+    from app.services.influxdb_provider import InfluxDBMetricsProvider
 
-    provider = InfluxDBProvider()
+    provider = InfluxDBMetricsProvider()
     return provider._query(flux)
 
 
