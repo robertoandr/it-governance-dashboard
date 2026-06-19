@@ -211,6 +211,22 @@ def zabbix_monitoring() -> str:
     return render_template("dashboards/zabbix_monitoring.html", summary=summary, problems=problems)
 
 
+@bp.route("/cftv")
+@login_required
+@require_role("admin", "gestor", "operador")
+def cftv_monitoring() -> str:
+    """Render painel de monitoramento CFTV (câmeras e NVRs)."""
+    import os
+
+    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+
+    data = get_cached_cftv_summary()
+    return render_template("dashboards/cftv_monitoring.html", data=data)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 @login_required
 @require_role("admin", "gestor", "visualizador")
