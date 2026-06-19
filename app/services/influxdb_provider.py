@@ -860,6 +860,72 @@ from(bucket: "{self._bucket_raw}")
                 result["_time"] = row.get("_time")
         return result
 
+    def _intune_stats(self) -> dict[str, Any]:
+        """Return Intune patch compliance aggregated from InfluxDB.
+
+        Aggregation rule: sum raw fields across OS types, then divide.
+        Arithmetic mean of per-OS compliance_pct is wrong (ignores fleet size).
+        Staleness window: 15 h — collector runs every 6 h, so >2 missed runs = stale.
+        """
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -15h)
+  |> filter(fn: (r) => r._measurement == "gov_intune_patch_compliance")
+  |> filter(fn: (r) => r._field == "compliant" or r._field == "total_evaluated")
+  |> last()
+  |> pivot(rowKey: ["os_type"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+
+        if not rows:
+            log.info("intune_stats_stale", reason="no data in last 15h")
+            return {
+                "global": {"compliant": 0, "total_evaluated": 0, "compliance_pct": None},
+                "by_os": [],
+                "stale": True,
+            }
+
+        by_os: list[dict[str, Any]] = []
+        total_compliant = 0
+        total_evaluated = 0
+
+        for row in rows:
+            os_type = row.get("os_type") or "Other"
+            compliant = int(row.get("compliant") or 0)
+            evaluated = int(row.get("total_evaluated") or 0)
+            pct = round(compliant / evaluated * 100, 1) if evaluated else None
+
+            by_os.append(
+                {
+                    "os_type": os_type,
+                    "compliant": compliant,
+                    "total_evaluated": evaluated,
+                    "compliance_pct": pct,
+                }
+            )
+            total_compliant += compliant
+            total_evaluated += evaluated
+
+        global_pct: float | None = round(total_compliant / total_evaluated * 100, 1) if total_evaluated else None
+
+        log.info(
+            "intune_stats",
+            os_count=len(by_os),
+            total_compliant=total_compliant,
+            total_evaluated=total_evaluated,
+            pct_global=global_pct,
+        )
+
+        return {
+            "global": {
+                "compliant": total_compliant,
+                "total_evaluated": total_evaluated,
+                "compliance_pct": global_pct,
+            },
+            "by_os": sorted(by_os, key=lambda r: r["os_type"]),
+            "stale": False,
+        }
+
     def _github_pr_stats(self) -> tuple[int, float | None]:
         """Return (pr_count, avg_merge_hours) for the past 30 days."""
         flux = f"""

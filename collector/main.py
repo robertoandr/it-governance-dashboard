@@ -11,6 +11,7 @@ from jobs.entra_id_collector import run as collect_entra_id
 from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
+from jobs.intune_patch_collector import run as collect_intune_patch
 
 from config import settings
 
@@ -70,8 +71,19 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("entra_id_job_registered")
+
+        scheduler.add_job(
+            collect_intune_patch,
+            CronTrigger(hour="*/6"),
+            id="intune_patch_collector",
+            name="Intune Patch Compliance Collector",
+            max_instances=1,
+            coalesce=True,
+        )
+        log.info("intune_patch_job_registered")
     else:
         log.warning("entra_id_job_skipped", reason="AZURE_* env vars not set")
+        log.warning("intune_patch_job_skipped", reason="AZURE_* env vars not set")
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
