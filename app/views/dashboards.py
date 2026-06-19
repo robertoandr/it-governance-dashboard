@@ -70,6 +70,22 @@ def pillars() -> str:
     return render_template("dashboards/pillars.html", governance=data)
 
 
+@bp.route("/sla")
+@login_required
+@require_role("admin", "gestor")
+def sla_chamados() -> str:
+    """Render painel SLA / Chamados (Zendesk)."""
+    import os
+
+    from itgov.api.v1.zendesk import get_cached_sla_detail
+
+    if not os.getenv("ZENDESK_SUBDOMAIN"):
+        abort(404)
+
+    data = get_cached_sla_detail()
+    return render_template("dashboards/sla_chamados.html", data=data)
+
+
 @bp.route("/zendesk")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""

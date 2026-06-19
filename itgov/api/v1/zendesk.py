@@ -14,9 +14,10 @@ from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
 
-# ── Cache em memória (TTL 5min) ───────────────────────────────────────────────
+# ── Cache em memória ─────────────────────────────────────────────────────────
 
-_CACHE_TTL = 300
+_CACHE_TTL = 300  # 5min — para MTTR e volume (fetches leves)
+_CACHE_TTL_SLA = 600  # 10min — para SLA detail (fetch completo de todos os tickets)
 
 _lock_mttr = threading.Lock()
 _cache_mttr: dict | None = None
@@ -26,9 +27,124 @@ _lock_vol = threading.Lock()
 _cache_vol: dict | None = None
 _cache_vol_ts: float = 0.0
 
+_lock_sla = threading.Lock()
+_cache_sla: dict | None = None
+_cache_sla_ts: float = 0.0
 
-def _cache_valido(ts: float) -> bool:
-    return (time.monotonic() - ts) < _CACHE_TTL
+# SLA thresholds por prioridade (horas). Sobrescrevíveis via env.
+_SLA_H: dict[str, float] = {
+    "urgent": float(os.getenv("ZENDESK_SLA_URGENT_H", "2")),
+    "high": float(os.getenv("ZENDESK_SLA_HIGH_H", "8")),
+    "normal": float(os.getenv("ZENDESK_SLA_NORMAL_H", "48")),
+    "low": float(os.getenv("ZENDESK_SLA_LOW_H", "120")),
+}
+
+
+def _cache_valido(ts: float, ttl: float = _CACHE_TTL) -> bool:
+    return (time.monotonic() - ts) < ttl
+
+
+def get_cached_sla_detail() -> dict:
+    """Retorna análise SLA detalhada por prioridade + fila de tickets mais antigos.
+
+    TTL 10min — faz fetch completo de todos os tickets (1800+), pesado.
+    """
+    global _cache_sla, _cache_sla_ts
+    with _lock_sla:
+        if _cache_sla is not None and _cache_valido(_cache_sla_ts, _CACHE_TTL_SLA):
+            log.debug("zendesk.sla_detail.cache.hit")
+            return _cache_sla
+
+    log.info("zendesk.sla_detail.cache.miss")
+
+    from datetime import UTC, datetime, timedelta
+
+    with _svc() as svc:
+        all_tickets = svc.get_tickets()
+
+    now = datetime.now(UTC)
+    cutoff_7d = now - timedelta(days=7)
+    cutoff_30d = now - timedelta(days=30)
+
+    open_tickets = [t for t in all_tickets if t.is_open]
+
+    # ── SLA por prioridade ────────────────────────────────────────────────
+    by_priority: dict[str, dict] = {}
+    for prio, threshold_h in _SLA_H.items():
+        bucket = [t for t in open_tickets if str(t.priority or "normal") == prio]
+        breached = [t for t in bucket if t.age_hours > threshold_h]
+        total = len(bucket)
+        by_priority[prio] = {
+            "count": total,
+            "breached": len(breached),
+            "ok": total - len(breached),
+            "compliance_pct": round((1 - len(breached) / total) * 100, 1) if total else 100.0,
+            "threshold_h": threshold_h,
+        }
+
+    # ── Fila: tickets mais antigos (abertos) ─────────────────────────────
+    oldest = sorted(open_tickets, key=lambda t: t.age_hours, reverse=True)
+    oldest_list = []
+    for t in oldest[:25]:
+        age_h = t.age_hours
+        age_str = f"{int(age_h // 24)}d {int(age_h % 24)}h" if age_h >= 24 else f"{int(age_h)}h"
+        prio = str(t.priority or "normal")
+        threshold_h = _SLA_H.get(prio, 48.0)
+        oldest_list.append(
+            {
+                "id": t.id,
+                "subject": t.subject,
+                "status": str(t.status),
+                "priority": prio,
+                "age_hours": round(age_h, 1),
+                "age_str": age_str,
+                "breached": age_h > threshold_h,
+                "created_fmt": t.created_at.strftime("%d/%m/%Y"),
+            }
+        )
+
+    # ── Baldes de idade (tickets abertos) ─────────────────────────────────
+    age_buckets = {"<8h": 0, "8-48h": 0, "48-168h": 0, ">168h": 0}
+    for t in open_tickets:
+        h = t.age_hours
+        if h < 8:
+            age_buckets["<8h"] += 1
+        elif h < 48:
+            age_buckets["8-48h"] += 1
+        elif h < 168:
+            age_buckets["48-168h"] += 1
+        else:
+            age_buckets[">168h"] += 1
+
+    # ── Resolvidos recentes ────────────────────────────────────────────────
+    def _aware(dt: datetime) -> datetime:
+        return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+    solved = [t for t in all_tickets if str(t.status) in ("solved", "closed")]
+    resolved_7d = sum(1 for t in solved if _aware(t.updated_at) >= cutoff_7d)
+    resolved_30d = sum(1 for t in solved if _aware(t.updated_at) >= cutoff_30d)
+
+    # ── Volume por status ──────────────────────────────────────────────────
+    from collections import Counter
+
+    vol_counter = Counter(str(t.status) for t in all_tickets)
+
+    dados = {
+        "total_open": len(open_tickets),
+        "total_all": len(all_tickets),
+        "by_priority": by_priority,
+        "oldest": oldest_list,
+        "age_buckets": age_buckets,
+        "resolved_7d": resolved_7d,
+        "resolved_30d": resolved_30d,
+        "volume": dict(vol_counter),
+        "sla_thresholds": _SLA_H,
+    }
+
+    with _lock_sla:
+        _cache_sla = dados
+        _cache_sla_ts = time.monotonic()
+    return dados
 
 
 def get_cached_mttr_summary() -> dict:
