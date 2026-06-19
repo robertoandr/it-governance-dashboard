@@ -162,6 +162,22 @@ def governance_data() -> str:
     return render_template("dashboards/governance_data.html", summary=summary)
 
 
+@bp.route("/backup")
+@login_required
+@require_role("admin", "gestor")
+def acronis_backup() -> str:
+    """Render painel de Backup/Proteção Acronis."""
+    import os
+
+    from itgov.api.v1.acronis_backup import get_cached_acronis_summary
+
+    if not os.getenv("ACRONIS_BASE_URL"):
+        abort(404)
+
+    data = get_cached_acronis_summary()
+    return render_template("dashboards/acronis_backup.html", data=data)
+
+
 @bp.route("/zabbix")
 @login_required
 @require_role("admin", "gestor", "operador")
