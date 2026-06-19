@@ -121,7 +121,7 @@ class IntunePatchCollector(BaseOAuthCollector):
                 .field("not_applicable", not_applicable)
                 .field("total_evaluated", total_evaluated)
                 .field("compliance_pct", compliance_pct)
-                .time(collected_at, WritePrecision.SECONDS)
+                .time(collected_at, WritePrecision.S)
             )
 
         try:

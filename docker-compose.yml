@@ -159,6 +159,33 @@ services:
       AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
       AZURE_CLIENT_ID: "${AZURE_CLIENT_ID:-}"
       AZURE_CLIENT_SECRET: "${AZURE_CLIENT_SECRET:-}"
+      # AD + WinRM patch collector (NTLM — servidor Linux fora do domínio)
+      LDAP_SERVER: "${LDAP_SERVER:-}"
+      LDAP_BASE_DN: "${LDAP_BASE_DN:-}"
+      LDAP_BIND_DN: "${LDAP_BIND_DN:-}"
+      LDAP_BIND_PASSWORD: "${LDAP_BIND_PASSWORD:-}"
+      WINRM_USER: "${WINRM_USER:-}"
+      WINRM_PASSWORD: "${WINRM_PASSWORD:-}"
+      PATCH_THRESHOLD_DAYS: "${PATCH_THRESHOLD_DAYS:-35}"
+      PATCH_MAX_WORKERS: "${PATCH_MAX_WORKERS:-20}"
+      WINRM_TIMEOUT_S: "${WINRM_TIMEOUT_S:-30}"
+      PATCH_STALE_MACHINE_DAYS: "${PATCH_STALE_MACHINE_DAYS:-60}"
+      # Zabbix — coletor de riscos e disponibilidade
+      ZABBIX_URL: "${ZABBIX_URL:-}"
+      ZABBIX_TOKEN: "${ZABBIX_TOKEN:-}"
+      ZABBIX_USER: "${ZABBIX_USER:-}"
+      ZABBIX_PASSWORD: "${ZABBIX_PASSWORD:-}"
+      # Acronis Cyber Cloud
+      ACRONIS_BASE_URL: "${ACRONIS_BASE_URL:-}"
+      ACRONIS_CLIENT_ID: "${ACRONIS_CLIENT_ID:-}"
+      ACRONIS_CLIENT_SECRET: "${ACRONIS_CLIENT_SECRET:-}"
+      # Alert job SMTP (complementado por smtp.env se presente)
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      SMTP_TO: "${SMTP_TO:-}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
     volumes:
       - collector_data:/data
     depends_on:

@@ -158,7 +158,7 @@ class EntraIdCollector(BaseOAuthCollector):
             .field("stale_accounts_90d", stale)
             .field("privileged_roles_count", priv_roles)
             .field("ca_policies_count", ca_count)
-            .time(collected_at, WritePrecision.SECONDS)
+            .time(collected_at, WritePrecision.S)
         )
 
         with InfluxDBClient(
