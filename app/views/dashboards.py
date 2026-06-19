@@ -162,6 +162,23 @@ def governance_data() -> str:
     return render_template("dashboards/governance_data.html", summary=summary)
 
 
+@bp.route("/zabbix")
+@login_required
+@require_role("admin", "gestor", "operador")
+def zabbix_monitoring() -> str:
+    """Render painel de monitoramento Zabbix."""
+    import os
+
+    from itgov.api.v1.zabbix_monitoring import get_cached_problems, get_cached_zabbix_summary
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+
+    summary = get_cached_zabbix_summary()
+    problems = get_cached_problems()
+    return render_template("dashboards/zabbix_monitoring.html", summary=summary, problems=problems)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 @login_required
 @require_role("admin", "gestor", "visualizador")
