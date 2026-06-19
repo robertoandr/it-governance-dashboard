@@ -73,10 +73,11 @@ def pillars() -> str:
 @bp.route("/zendesk")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""
-    import config
+    import os
+
     from itgov.api.v1.zendesk import get_cached_mttr_summary, get_cached_volume_by_status
 
-    if not getattr(config, "ZENDESK_ENABLED", False):
+    if not os.getenv("ZENDESK_SUBDOMAIN"):
         abort(404)
 
     mttr = get_cached_mttr_summary()
@@ -94,10 +95,11 @@ def zendesk_mttr() -> str:
 @require_role("admin", "gestor")
 def governance_devices() -> str:
     """Render pilar Dispositivos (Governança M365)."""
-    import config
+    import os
+
     from itgov.api.v1.governance_devices import get_cached_device_summary
 
-    if not getattr(config, "GRAPH_ENABLED", False):
+    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
         abort(404)
 
     try:
@@ -113,10 +115,11 @@ def governance_devices() -> str:
 @require_role("admin", "gestor")
 def governance_apps() -> str:
     """Render pilar Aplicativos (Governança M365)."""
-    import config
+    import os
+
     from itgov.api.v1.governance_apps import get_cached_app_summary
 
-    if not getattr(config, "GRAPH_ENABLED", False):
+    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
         abort(404)
 
     try:
@@ -132,10 +135,11 @@ def governance_apps() -> str:
 @require_role("admin", "gestor")
 def governance_compliance() -> str:
     """Render pilar Compliance (Secure Score) — Governança M365."""
-    import config
+    import os
+
     from itgov.api.v1.governance_compliance import get_cached_compliance_summary
 
-    if not getattr(config, "GRAPH_ENABLED", False):
+    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
         abort(404)
 
     summary = get_cached_compliance_summary()
@@ -147,10 +151,11 @@ def governance_compliance() -> str:
 @require_role("admin", "gestor")
 def governance_data() -> str:
     """Render pilar Dados (Sensitivity Labels) — Governança M365."""
-    import config
+    import os
+
     from itgov.api.v1.governance_data import get_cached_data_summary
 
-    if not getattr(config, "GRAPH_ENABLED", False):
+    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
         abort(404)
 
     summary = get_cached_data_summary()
