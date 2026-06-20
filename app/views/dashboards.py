@@ -243,6 +243,22 @@ def cftv_monitoring() -> str:
     return render_template("dashboards/cftv_monitoring.html", data=data)
 
 
+@bp.route("/rede")
+@login_required
+@require_role("admin", "gestor", "operador")
+def rede_monitoring() -> str:
+    """Render painel de rede — discovery nmap + Zabbix drules."""
+    import os
+
+    from itgov.api.v1.rede_monitoring import get_cached_rede_summary
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+
+    data = get_cached_rede_summary()
+    return render_template("dashboards/rede_monitoring.html", data=data)
+
+
 @bp.route("/pillars/<string:pillar_id>")
 @login_required
 @require_role("admin", "gestor", "visualizador")

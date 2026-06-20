@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Rede — IT Governance{% endblock %}
+
+{% block content %}
+{% set inf = data.influx %}
+
+<div class="space-y-6">
+
+  {# ── Header ──────────────────────────────────────────────────────────────── #}
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Varredura de Rede</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        Ativos descobertos por nmap &bull; Zabbix Network Discovery
+        {% if inf.last_scan %}
+          &bull; Ultimo scan: <span class="font-medium">{{ inf.last_scan }}</span>
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+      {% if data.active_drules %}
+        <span class="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded px-2 py-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+          {{ data.active_drules|length }} drule(s) ativa(s)
+        </span>
+      {% else %}
+        <span class="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+          Nenhuma drule ativa
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Estado vazio: nunca rodou o collector ────────────────────────────────── #}
+  {% if not inf.has_data %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+    <svg class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+    </svg>
+    <p class="text-slate-600 dark:text-slate-300 font-medium mb-1">Nenhum scan executado ainda</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Execute o collector para descobrir ativos na rede.</p>
+    <code class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded px-3 py-1.5 block w-fit mx-auto">
+      python3 collectors/network_discovery.py --scan-now --report
+    </code>
+    <p class="text-xs text-slate-400 mt-3">Ou inicie o servico Docker: <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">docker compose --profile discovery up -d</code></p>
+  </div>
+  {% endif %}
+
+  {# ── KPI Cards ────────────────────────────────────────────────────────────── #}
+  {% if inf.has_data %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+    {% set kpis = [
+      ('Total', inf.total, 'text-slate-700 dark:text-slate-200', 'bg-slate-50 dark:bg-slate-800'),
+      ('Linux', inf.linux, 'text-blue-700 dark:text-blue-400', 'bg-blue-50 dark:bg-blue-900/20'),
+      ('Windows', inf.windows, 'text-sky-700 dark:text-sky-400', 'bg-sky-50 dark:bg-sky-900/20'),
+      ('Rede/FW', inf.rede, 'text-purple-700 dark:text-purple-400', 'bg-purple-50 dark:bg-purple-900/20'),
+      ('Databases', inf.databases, 'text-orange-700 dark:text-orange-400', 'bg-orange-50 dark:bg-orange-900/20'),
+      ('Com Agente', inf.com_agente, 'text-green-700 dark:text-green-400', 'bg-green-50 dark:bg-green-900/20'),
+      ('Genericos', inf.genericos, 'text-slate-500 dark:text-slate-400', 'bg-slate-100 dark:bg-slate-700/50'),
+    ] %}
+    {% for label, val, color, bg in kpis %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-700 {{ bg }} p-4 flex flex-col items-center justify-center text-center">
+      <p class="text-2xl font-bold {{ color }}">{{ val }}</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ label }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── Linha 2: Distribuicao por categoria + Discovery Rules ────────────────── #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+    {# Distribuicao por categoria #}
+    {% if inf.has_data %}
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-4">Distribuicao por Categoria</h2>
+      {% set cats = {} %}
+      {% for h in inf.hosts %}
+        {% if h.category not in cats %}
+          {% set _ = cats.update({h.category: 0}) %}
+        {% endif %}
+        {% set _ = cats.update({h.category: cats[h.category] + 1}) %}
+      {% endfor %}
+      {% if cats %}
+        {% for cat, count in cats.items()|sort(attribute='1', reverse=True) %}
+        {% set pct = (count / inf.total * 100)|round|int if inf.total else 0 %}
+        {% if cat == 'Servidor Linux' or cat == 'Servidor Linux (sem agente)' %}{% set bar_color = 'bg-blue-500' %}
+        {% elif cat == 'Servidor Windows' %}{% set bar_color = 'bg-sky-500' %}
+        {% elif 'Rede' in cat or 'Cisco' in cat or 'MikroTik' in cat or 'Firewall' in cat %}{% set bar_color = 'bg-purple-500' %}
+        {% elif cat == 'Banco de Dados' %}{% set bar_color = 'bg-orange-500' %}
+        {% elif cat == 'Aplicacao Web' %}{% set bar_color = 'bg-teal-500' %}
+        {% else %}{% set bar_color = 'bg-slate-400' %}
+        {% endif %}
+        <div class="mb-2.5">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-600 dark:text-slate-300">{{ cat }}</span>
+            <span class="font-semibold text-slate-700 dark:text-slate-200">{{ count }} <span class="font-normal text-slate-400">({{ pct }}%)</span></span>
+          </div>
+          <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div class="{{ bar_color }} h-full rounded-full" style="width:{{ pct }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-sm text-slate-400">Sem hosts descobertos</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Discovery Rules #}
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-4">Zabbix Discovery Rules</h2>
+      {% if data.drules %}
+        <div class="space-y-4">
+          {% for dr in data.drules %}
+          <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ dr.name }}</span>
+              {% if dr.enabled %}
+                <span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded px-2 py-0.5">ativa</span>
+              {% else %}
+                <span class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 rounded px-2 py-0.5">desabilitada</span>
+              {% endif %}
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+              <p>Intervalo: <span class="font-medium text-slate-600 dark:text-slate-300">{{ dr.delay }}</span></p>
+              <p>Checks: <span class="font-medium text-slate-600 dark:text-slate-300">{{ dr.checks|join(', ') }}</span></p>
+              <div class="mt-1.5">
+                <p class="mb-1">Ranges varridos:</p>
+                <div class="flex flex-wrap gap-1">
+                  {% for r in dr.ranges %}
+                  <code class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded px-1.5 py-0.5 text-[10px]">{{ r }}</code>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-sm text-slate-400">Nenhuma discovery rule configurada</p>
+        <p class="text-xs text-slate-400 mt-1">Execute: <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">python3 infra-setup/01_configure_discovery.py</code></p>
+      {% endif %}
+    </div>
+
+  </div>{# /grid #}
+
+  {# ── Tabela de Hosts Descobertos ──────────────────────────────────────────── #}
+  {% if inf.has_data and inf.hosts %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        Hosts Descobertos
+        <span class="text-slate-400 font-normal ml-1">({{ inf.hosts|length }})</span>
+      </h2>
+      <div class="flex gap-2 text-[10px]">
+        <span class="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded px-1.5 py-0.5">agente</span>
+        <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-1.5 py-0.5">SSH</span>
+        <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded px-1.5 py-0.5">SNMP</span>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-left text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
+            <th class="pb-2 pr-3 font-medium">IP</th>
+            <th class="pb-2 pr-3 font-medium">Hostname</th>
+            <th class="pb-2 pr-3 font-medium">Categoria</th>
+            <th class="pb-2 pr-3 font-medium">OS / Vendor</th>
+            <th class="pb-2 pr-3 font-medium text-center">Portas</th>
+            <th class="pb-2 font-medium text-center">Servicos</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {% for h in inf.hosts %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+            <td class="py-2 pr-3">
+              <code class="font-mono text-slate-700 dark:text-slate-200">{{ h.ip }}</code>
+            </td>
+            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate">
+              {{ h.hostname or '—' }}
+            </td>
+            <td class="py-2 pr-3">
+              {% set cat = h.category %}
+              {% if 'Linux' in cat %}
+                <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              {% elif 'Windows' in cat %}
+                <span class="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              {% elif 'Rede' in cat or 'Cisco' in cat or 'MikroTik' in cat %}
+                <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              {% elif 'Banco' in cat %}
+                <span class="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              {% elif 'Web' in cat %}
+                <span class="bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              {% else %}
+                <span class="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              {% endif %}
+            </td>
+            <td class="py-2 pr-3 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">
+              {% if h.vendor %}{{ h.vendor }}{% elif h.os_guess %}{{ h.os_guess[:40] }}{% else %}—{% endif %}
+            </td>
+            <td class="py-2 pr-3 text-center text-slate-600 dark:text-slate-300 font-mono">
+              {{ h.open_ports if h.open_ports else '—' }}
+            </td>
+            <td class="py-2 text-center">
+              <span class="inline-flex gap-1 justify-center">
+                {% if h.has_agent %}
+                  <span title="Zabbix agent" class="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded px-1 py-0.5 text-[9px]">agente</span>
+                {% endif %}
+                {% if h.has_ssh %}
+                  <span title="SSH:22" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-1 py-0.5 text-[9px]">SSH</span>
+                {% endif %}
+                {% if h.has_snmp %}
+                  <span title="SNMP:161" class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded px-1 py-0.5 text-[9px]">SNMP</span>
+                {% endif %}
+                {% if not h.has_agent and not h.has_ssh and not h.has_snmp %}
+                  <span class="text-slate-300 dark:text-slate-600">ICMP</span>
+                {% endif %}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Como executar o collector ─────────────────────────────────────────────── #}
+  <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Como executar o collector</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+      <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+        <p class="font-medium text-slate-600 dark:text-slate-300 mb-1.5">Scan imediato (terminal)</p>
+        <code class="text-slate-500 dark:text-slate-400 block leading-5">python3 collectors/network_discovery.py --scan-now</code>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+        <p class="font-medium text-slate-600 dark:text-slate-300 mb-1.5">Dry-run (sem gravar)</p>
+        <code class="text-slate-500 dark:text-slate-400 block leading-5">python3 collectors/network_discovery.py --dry-run --report</code>
+      </div>
+      <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+        <p class="font-medium text-slate-600 dark:text-slate-300 mb-1.5">Daemon Docker (1h/ciclo)</p>
+        <code class="text-slate-500 dark:text-slate-400 block leading-5">docker compose --profile discovery up -d</code>
+      </div>
+    </div>
+    <p class="text-[10px] text-slate-400 mt-3">
+      Range padrao: <code class="bg-white dark:bg-slate-700 rounded px-1">172.29.0.0/22</code> &bull;
+      Configuravel via <code class="bg-white dark:bg-slate-700 rounded px-1">INFRA_SCAN_RANGES</code> no .env &bull;
+      Resultado gravado em InfluxDB bucket <code class="bg-white dark:bg-slate-700 rounded px-1">governance_raw</code>
+    </p>
+  </div>
+
+</div>{# /space-y-6 #}
+{% endblock %}
