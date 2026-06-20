@@ -54,18 +54,21 @@ log = structlog.get_logger(__name__)
 # ── Carregar .env sem source ───────────────────────────────────────────────────
 _env_file = Path(__file__).resolve().parent.parent / ".env"
 if _env_file.exists():
+    _env_vals: dict[str, str] = {}
     for _line in _env_file.read_text().splitlines():
         _line = _line.strip()
         if _line and not _line.startswith("#") and "=" in _line:
             _k, _, _v = _line.partition("=")
-            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
-            if _k not in os.environ:
-                os.environ[_k] = _v
+            _env_vals[_k.strip()] = _v.strip().strip('"').strip("'")
+    for _k, _v in _env_vals.items():
+        if _k not in os.environ:
+            os.environ[_k] = _v
 
 # ── Configuração ──────────────────────────────────────────────────────────────
-ZABBIX_URL = os.getenv("ZABBIX_URL", "http://172.29.2.11:8080/api_jsonrpc.php")
+_zbx_url_raw = os.getenv("ZABBIX_URL", "http://172.29.2.11:8080/api_jsonrpc.php")
+ZABBIX_URL = "http://172.29.2.11:8080/api_jsonrpc.php" if "host.docker.internal" in _zbx_url_raw else _zbx_url_raw
 ZABBIX_TOKEN = os.getenv("ZABBIX_TOKEN", "")
-INFLUX_URL = os.getenv("INFLUX_URL", "")
+INFLUX_URL = os.getenv("INFLUX_URL", "").replace("localhost:8086", "localhost:18086")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "")
 INFLUX_ORG = os.getenv("INFLUX_ORG", "")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET_RAW", "governance_raw")
@@ -318,12 +321,14 @@ def _registrar_no_zabbix(host: DiscoveredHost, api: Any, existing: dict[str, str
 
     groups = [{"groupid": g} for g in host.groups]
     templates = [{"templateid": t} for t in host.templates]
+    # Zabbix rejeita DNS com chars inválidos (ex: "_gateway"); useip=1 então DNS fica vazio
+    safe_dns = host.hostname if host.hostname and host.hostname[0].isalnum() else ""
     iface = {
         "type": str(iface_type),
         "main": "1",
         "useip": "1",
         "ip": host.ip,
-        "dns": host.hostname,
+        "dns": safe_dns,
         "port": port,
     }
 
@@ -396,7 +401,7 @@ def _write_influx(hosts: list[DiscoveredHost], scan_ts: datetime) -> None:
         .field("bancos_de_dados", cat_counts.get("Banco de Dados", 0))
         .field("aplicacoes_web", cat_counts.get("Aplicacao Web", 0))
         .field("hosts_genericos", cat_counts.get("Host Generico", 0))
-        .time(scan_ts, WritePrecision.SECONDS)
+        .time(scan_ts, WritePrecision.S)
     )
     points = [summary]
 
@@ -413,7 +418,7 @@ def _write_influx(hosts: list[DiscoveredHost], scan_ts: datetime) -> None:
             .field("has_agent", int(10050 in h.open_tcp))
             .field("has_snmp", int(bool(h.open_udp & PORTS_SNMP)))
             .field("has_ssh", int(22 in h.open_tcp))
-            .time(scan_ts, WritePrecision.SECONDS)
+            .time(scan_ts, WritePrecision.S)
         )
         points.append(p)
 
@@ -502,7 +507,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.scan_now or args.dry_run:
-        # Modo único
+        # Modo único: scan uma vez, relatório + gravação usam os mesmos hosts
+        scan_start = datetime.now(UTC)
+        log.info("network_discovery.inicio", ranges=SCAN_RANGES, dry_run=args.dry_run)
         all_hosts: list[DiscoveredHost] = []
         for ip_range in SCAN_RANGES:
             all_hosts.extend(_scan_range(ip_range))
@@ -510,8 +517,23 @@ def main() -> None:
         if args.report or args.dry_run:
             _print_report(all_hosts)
 
-        if not args.dry_run:
-            stats = run_scan()
+        if not args.dry_run and all_hosts:
+            stats: dict[str, int] = {"total": len(all_hosts), "created": 0, "updated": 0, "skipped": 0}
+            if ZABBIX_TOKEN:
+                try:
+                    api = _zbx_api()
+                    existing = _existing_hosts(api)
+                    skip_ips = _skip_ips(api)
+                    for host in all_hosts:
+                        if host.ip in skip_ips:
+                            stats["skipped"] += 1
+                            continue
+                        result = _registrar_no_zabbix(host, api, existing)
+                        stats[result] = stats.get(result, 0) + 1
+                        log.info("network_discovery.zabbix_sync", ip=host.ip, resultado=result, categoria=host.category)
+                except Exception as exc:
+                    log.error("network_discovery.zabbix_falhou", erro=str(exc))
+            _write_influx(all_hosts, scan_start)
             print(f"\n  Resultado: {stats}")
         sys.exit(0)
 
