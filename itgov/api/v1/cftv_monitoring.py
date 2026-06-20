@@ -74,20 +74,31 @@ def _buscar_cftv() -> dict:
             "maint_list": [],
         }
 
-    # ── 2. Hosts com ping e tags ──────────────────────────────────────────────
+    # ── 2. Hosts com tags e interfaces (sem itens inline — evita truncamento) ──
     hosts = _zbx(
         "host.get",
         {
             "output": ["hostid", "host", "name", "maintenance_status"],
             "groupids": gids,
             "selectInterfaces": ["ip"],
-            "selectItems": ["key_", "lastvalue", "lastclock"],
             "selectTags": ["tag", "value"],
         },
     )
 
-    # ── 3. Problemas ativos por host ──────────────────────────────────────────
     host_ids = [h["hostid"] for h in hosts]
+
+    # ── 2b. Busca separada do ICMP ping (filter exato, sem truncamento) ───────
+    ping_items = _zbx(
+        "item.get",
+        {
+            "output": ["hostid", "key_", "lastvalue", "lastclock"],
+            "hostids": host_ids,
+            "filter": {"key_": "icmpping"},
+        },
+    )
+    ping_map: dict[str, dict] = {i["hostid"]: i for i in ping_items}
+
+    # ── 3. Problemas ativos por host ──────────────────────────────────────────
     problems_raw = (
         _zbx(
             "problem.get",
@@ -122,22 +133,21 @@ def _buscar_cftv() -> dict:
 
     # ── 4. Processar hosts ────────────────────────────────────────────────────
     by_subcat: dict[str, dict] = {}
+    by_andar: dict[str, dict] = {}
     down_list: list[dict] = []
     maint_list: list[dict] = []
     maint_count = 0
 
-    for h in hosts:
-        subcat = "outros"
-        andar = "?"
-        for tg in h.get("tags", []):
-            if tg["tag"] == "subcategory":
-                subcat = tg["value"]
-            elif tg["tag"] == "andar":
-                andar = tg["value"]
+    _empty: dict = {"total": 0, "up": 0, "down": 0, "nodata": 0, "maint": 0}
 
-        if subcat not in by_subcat:
-            by_subcat[subcat] = {"total": 0, "up": 0, "down": 0, "nodata": 0, "maint": 0}
-        by_subcat[subcat]["total"] += 1
+    for h in hosts:
+        tags = {tg["tag"]: tg["value"] for tg in h.get("tags", [])}
+        subcat = tags.get("subcategory", "outros")
+        andar = tags.get("andar", "?")
+        dvr = tags.get("dvr", "")
+
+        by_subcat.setdefault(subcat, dict(_empty))["total"] += 1
+        by_andar.setdefault(andar, dict(_empty))["total"] += 1
 
         ip = (h.get("interfaces") or [{}])[0].get("ip", "?")
         in_maint = h.get("maintenance_status") == "1"
@@ -146,32 +156,50 @@ def _buscar_cftv() -> dict:
 
         if in_maint:
             by_subcat[subcat]["maint"] += 1
+            by_andar[andar]["maint"] += 1
             maint_count += 1
-            maint_list.append({"host": h["host"], "name": h["name"], "ip": ip, "andar": andar, "subcat": subcat})
+            maint_list.append(
+                {"host": h["host"], "name": h["name"], "ip": ip, "andar": andar, "subcat": subcat, "dvr": dvr}
+            )
+            continue
 
-        ping = next((i for i in h.get("items", []) if i["key_"] == "icmpping"), None)
+        ping = ping_map.get(hid)
         if not ping or not ping.get("lastclock") or ping["lastclock"] == "0":
-            by_subcat[subcat]["nodata"] += 1
+            st = "nodata"
         elif ping["lastvalue"] == "1":
-            by_subcat[subcat]["up"] += 1
+            st = "up"
         else:
-            by_subcat[subcat]["down"] += 1
-            if not in_maint:
-                down_list.append(
-                    {
-                        "host": h["host"],
-                        "name": h["name"],
-                        "ip": ip,
-                        "subcat": subcat,
-                        "andar": andar,
-                        "problems": n_problems,
-                    }
-                )
+            st = "down"
+
+        by_subcat[subcat][st] += 1
+        by_andar[andar][st] += 1
+
+        if st == "down":
+            down_list.append(
+                {
+                    "host": h["host"],
+                    "name": h["name"],
+                    "ip": ip,
+                    "subcat": subcat,
+                    "andar": andar,
+                    "dvr": dvr,
+                    "problems": n_problems,
+                }
+            )
 
     total = sum(s["total"] for s in by_subcat.values())
     up = sum(s["up"] for s in by_subcat.values())
     down = sum(s["down"] for s in by_subcat.values())
     nodata = sum(s["nodata"] for s in by_subcat.values())
+
+    # Ordenar by_andar: andares numéricos primeiro, depois especiais, depois "?"
+    def _andar_key(k: str) -> tuple:
+        import re
+
+        m = re.match(r"(\d+)", k)
+        return (0, int(m.group(1)), k) if m else (1, 0, k)
+
+    by_andar_sorted = dict(sorted(by_andar.items(), key=lambda kv: _andar_key(kv[0])))
 
     return {
         "enabled": True,
@@ -182,7 +210,8 @@ def _buscar_cftv() -> dict:
         "maint": maint_count,
         "up_pct": round(up / total * 100, 1) if total else 0.0,
         "by_subcat": by_subcat,
-        "down_list": sorted(down_list, key=lambda x: (x["subcat"], x["host"])),
+        "by_andar": by_andar_sorted,
+        "down_list": sorted(down_list, key=lambda x: (x["andar"], x["subcat"], x["host"])),
         "maint_list": sorted(maint_list, key=lambda x: (x["subcat"], x["host"])),
     }
 

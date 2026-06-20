@@ -450,6 +450,53 @@ def zabbix_triggers() -> str:
     return render_template("dashboards/zabbix_triggers.html", data=data)
 
 
+@bp.route("/m365")
+@login_required
+@require_role("admin", "gestor")
+def m365_overview() -> str:
+    """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
+    from app.services.influxdb_provider import InfluxDBMetricsProvider
+    from itgov.api.v1.m365_licenses import get_licenses_summary
+    from itgov.api.v1.zabbix_triggers import get_cached_triggers
+
+    provider = InfluxDBMetricsProvider()
+
+    # Secure Score
+    ss_rows = provider._query(f"""
+from(bucket: "{provider._bucket_raw}")
+  |> range(start: -7d)
+  |> filter(fn: (r) => r._measurement == "gov_m365_secure_score")
+  |> last()
+  |> keep(columns: ["_field", "_value"])
+""")
+    secure_score: dict = {r["_field"]: r["_value"] for r in ss_rows}
+
+    # Entra / MFA
+    entra_rows = provider._query(f"""
+from(bucket: "{provider._bucket_raw}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._measurement == "gov_entra_summary")
+  |> last()
+  |> keep(columns: ["_field", "_value"])
+""")
+    entra: dict = {r["_field"]: r["_value"] for r in entra_rows}
+
+    # Licenses
+    lic = get_licenses_summary()
+
+    # Triggers
+    triggers = get_cached_triggers()
+
+    return render_template(
+        "dashboards/m365_overview.html",
+        secure_score=secure_score,
+        entra=entra,
+        licenses=lic,
+        triggers=triggers,
+        reajuste_date="01/07/2026",
+    )
+
+
 @bp.route("/triggers/<string:eventid>/ack", methods=["POST"])
 @login_required
 @require_role("admin", "gestor", "operador")
