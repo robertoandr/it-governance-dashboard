@@ -1,8 +1,11 @@
-"""Dados de Infraestrutura via Zabbix API para o dashboard.
+"""Dados de Infraestrutura para o dashboard.
 
-Consulta hosts dos grupos de infra (Servidores, Hypervisors, Databases,
-Firewall, VM, Cloud, Rede) usando Bearer token. Exclui CFTV e M365,
-que têm páginas próprias. Cache TTL 3min.
+Combina:
+- InfluxDB: gov_zabbix_summary (totais por categoria, problems by severity)
+- Zabbix API Bearer token: hosts nao-CFTV em tempo real + problemas ativos
+
+Exclui apenas os grupos CFTV/* (têm página própria).
+Cache TTL 3min.
 """
 
 from __future__ import annotations
@@ -23,11 +26,9 @@ _lock = threading.Lock()
 _cache_data: dict | None = None
 _cache_ts: float = 0.0
 
-# Grupos a excluir da página de Infraestrutura (têm páginas próprias ou são internos)
-_EXCLUDE_PREFIXES = ("CFTV", "Discovered", "Zabbix", "Microsoft 365", "Lojas")
-
-# Mapeamento grupo → categoria de exibição
 _CATEGORY_MAP: dict[str, str] = {
+    "Microsoft 365": "Microsoft 365",
+    "Zabbix servers": "Monitoramento",
     "Servidores": "Servidores",
     "Linux servers": "Servidores",
     "Virtual machines": "Servidores",
@@ -68,96 +69,108 @@ def _zbx(method: str, params: dict[str, Any]) -> Any:
     return data["result"]
 
 
+def _query_influx(flux: str) -> list[dict[str, Any]]:
+    from app.services.influxdb_provider import InfluxDBMetricsProvider
+
+    return InfluxDBMetricsProvider()._query(flux)
+
+
+def _ler_summary_influx() -> dict:
+    """Lê gov_zabbix_summary e gov_zabbix_disponibilidade do InfluxDB."""
+    from app.config import get_settings
+
+    bucket = get_settings().influx.bucket_raw
+
+    rows_sum = _query_influx(f"""
+from(bucket: "{bucket}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_summary")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+""")
+    rows_disp = _query_influx(f"""
+from(bucket: "{bucket}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_disponibilidade")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+""")
+    s = rows_sum[-1] if rows_sum else {}
+    d = rows_disp[-1] if rows_disp else {}
+    return {
+        "hosts_total": int(s.get("hosts_total", 0) or 0),
+        "hosts_cftv": int(s.get("hosts_cftv", 0) or 0),
+        "hosts_m365": int(s.get("hosts_m365", 0) or 0),
+        "problems_disaster": int(s.get("problems_disaster", 0) or 0),
+        "problems_high": int(s.get("problems_high", 0) or 0),
+        "problems_average": int(s.get("problems_average", 0) or 0),
+        "problems_warning": int(s.get("problems_warning", 0) or 0),
+        "problems_total": int(s.get("problems_total", 0) or 0),
+        "uptime_pct": float(d.get("uptime_pct", 0.0) or 0.0),
+        "hosts_up": int(d.get("hosts_up", 0) or 0),
+        "hosts_down": int(d.get("hosts_down", 0) or 0),
+    }
+
+
 def _categoria(group_name: str) -> str:
-    """Retorna a categoria de exibição para um nome de grupo."""
     if group_name in _CATEGORY_MAP:
         return _CATEGORY_MAP[group_name]
     if "Servidores" in group_name or "servidor" in group_name.lower():
         return "Servidores"
-    if "Rede" in group_name or "rede" in group_name.lower() or "Switch" in group_name:
+    if "Rede" in group_name or "Switch" in group_name:
         return "Firewall / Rede"
     if "Lojas" in group_name:
         return "Lojas"
     return "Outros"
 
 
-def _buscar_infra() -> dict:
-    # ── 1. Grupos (filtrar infra) ─────────────────────────────────────────────
+def _buscar_hosts_infra() -> dict:
+    """Busca hosts nao-CFTV no Zabbix com problemas ativos."""
+    # Todos os grupos exceto CFTV/*
     all_groups = _zbx("hostgroup.get", {"output": ["groupid", "name"]})
-    infra_groups = [g for g in all_groups if not any(g["name"].startswith(p) for p in _EXCLUDE_PREFIXES)]
+    infra_groups = [g for g in all_groups if not g["name"].startswith("CFTV")]
     gids = [g["groupid"] for g in infra_groups]
 
     if not gids:
-        return {
-            "enabled": False,
-            "total": 0,
-            "up": 0,
-            "down": 0,
-            "nodata": 0,
-            "maint": 0,
-            "up_pct": 0.0,
-            "by_category": {},
-            "down_list": [],
-            "problems": [],
-        }
+        return {"hosts": [], "by_category": {}, "down_list": [], "problems": [], "total_problems": 0}
 
-    # ── 2. Hosts com ping, grupos e tags ─────────────────────────────────────
     hosts = _zbx(
         "host.get",
         {
             "output": ["hostid", "host", "name", "maintenance_status"],
             "groupids": gids,
-            "selectGroups": ["groupid", "name"],
+            "selectGroups": ["name"],
             "selectInterfaces": ["ip"],
             "selectItems": ["key_", "lastvalue", "lastclock"],
-            "selectTags": ["tag", "value"],
+        },
+    )
+    if not hosts:
+        return {"hosts": [], "by_category": {}, "down_list": [], "problems": [], "total_problems": 0}
+
+    # Problemas ativos para esses hosts
+    host_ids = [h["hostid"] for h in hosts]
+    problems_raw = _zbx(
+        "problem.get",
+        {
+            "output": ["eventid", "name", "severity", "clock", "objectid", "acknowledged"],
+            "hostids": host_ids,
+            "recent": False,
+            "suppressed": False,
         },
     )
 
-    # ── 3. Problemas ativos para esses hosts ──────────────────────────────────
-    host_ids = [h["hostid"] for h in hosts]
-    problems_raw = (
-        _zbx(
-            "problem.get",
-            {
-                "output": ["eventid", "name", "severity", "clock", "objectid", "acknowledged"],
-                "hostids": host_ids,
-                "recent": False,
-                "suppressed": False,
-            },
-        )
-        if host_ids
-        else []
-    )
-
-    # Contar problemas por host e enriquecer com nome de host
     problems_by_host: dict[str, int] = {}
     problem_list: list[dict] = []
-    sev_label = {
-        0: "not classified",
-        1: "information",
-        2: "warning",
-        3: "average",
-        4: "high",
-        5: "disaster",
-    }
+    sev_label = {0: "not classified", 1: "information", 2: "warning", 3: "average", 4: "high", 5: "disaster"}
 
     if problems_raw:
         trigger_ids = list({p["objectid"] for p in problems_raw})
         triggers = _zbx(
             "trigger.get",
-            {
-                "output": ["triggerid"],
-                "selectHosts": ["hostid", "name"],
-                "triggerids": trigger_ids,
-            },
+            {"output": ["triggerid"], "selectHosts": ["hostid", "name"], "triggerids": trigger_ids},
         )
-        trigger_hosts: dict[str, list[str]] = {
-            t["triggerid"]: [h["name"] for h in t.get("hosts", [])] for t in triggers or []
-        }
-        trigger_hostids: dict[str, list[str]] = {
-            t["triggerid"]: [h["hostid"] for h in t.get("hosts", [])] for t in triggers or []
-        }
+        trigger_hosts = {t["triggerid"]: [h["name"] for h in t.get("hosts", [])] for t in triggers or []}
+        trigger_hostids = {t["triggerid"]: [h["hostid"] for h in t.get("hosts", [])] for t in triggers or []}
 
         from datetime import UTC, datetime
 
@@ -165,7 +178,6 @@ def _buscar_infra() -> dict:
             sev = int(p.get("severity", 0))
             ts = int(p["clock"])
             clock_fmt = datetime.fromtimestamp(ts, tz=UTC).strftime("%d/%m %H:%M") if ts else "—"
-            host_names = trigger_hosts.get(p["objectid"], [])
             for hid in trigger_hostids.get(p["objectid"], []):
                 problems_by_host[hid] = problems_by_host.get(hid, 0) + 1
             problem_list.append(
@@ -175,28 +187,20 @@ def _buscar_infra() -> dict:
                     "severity_label": sev_label.get(sev, "unknown"),
                     "acknowledged": str(p.get("acknowledged", "0")) == "1",
                     "clock_fmt": clock_fmt,
-                    "hosts": host_names,
+                    "hosts": trigger_hosts.get(p["objectid"], []),
                 }
             )
 
-    # ── 4. Processar hosts ────────────────────────────────────────────────────
     by_category: dict[str, dict] = {}
     down_list: list[dict] = []
-    maint_count = 0
 
     for h in hosts:
-        # Categoria = primeiro grupo que não seja o mais genérico
-        host_groups = h.get("groups", [])
         cat = "Outros"
-        for g in host_groups:
-            gn = g.get("name", "")
-            if gn and not any(gn.startswith(p) for p in _EXCLUDE_PREFIXES):
-                c = _categoria(gn)
-                if c != "Outros":
-                    cat = c
-                    break
-        if cat == "Outros" and host_groups:
-            cat = _categoria(host_groups[0].get("name", "Outros"))
+        for g in h.get("groups", []):
+            c = _categoria(g.get("name", ""))
+            if c != "Outros":
+                cat = c
+                break
 
         if cat not in by_category:
             by_category[cat] = {"total": 0, "up": 0, "down": 0, "nodata": 0, "maint": 0}
@@ -208,7 +212,6 @@ def _buscar_infra() -> dict:
 
         if in_maint:
             by_category[cat]["maint"] += 1
-            maint_count += 1
 
         ping = next((i for i in h.get("items", []) if i["key_"] == "icmpping"), None)
         if not ping or not ping.get("lastclock") or ping["lastclock"] == "0":
@@ -228,28 +231,46 @@ def _buscar_infra() -> dict:
                     }
                 )
 
-    total = sum(s["total"] for s in by_category.values())
-    up = sum(s["up"] for s in by_category.values())
-    down = sum(s["down"] for s in by_category.values())
-    nodata = sum(s["nodata"] for s in by_category.values())
-
     return {
-        "enabled": True,
-        "total": total,
-        "up": up,
-        "down": down,
-        "nodata": nodata,
-        "maint": maint_count,
-        "up_pct": round(up / total * 100, 1) if total else 0.0,
+        "hosts": hosts,
         "by_category": by_category,
-        "down_list": sorted(down_list, key=lambda x: (x["category"], x["host"])),
+        "down_list": sorted(down_list, key=lambda x: x["host"]),
         "problems": problem_list[:40],
         "total_problems": len(problem_list),
     }
 
 
+def _buscar_infra() -> dict:
+    influx = _ler_summary_influx()
+    zabbix = _buscar_hosts_infra()
+
+    n_hosts = len(zabbix["hosts"])
+    by_cat = zabbix["by_category"]
+    total_up = sum(s["up"] for s in by_cat.values())
+    total_down = sum(s["down"] for s in by_cat.values())
+    total_nodata = sum(s["nodata"] for s in by_cat.values())
+    total_maint = sum(s["maint"] for s in by_cat.values())
+
+    return {
+        "enabled": True,
+        # Dados InfluxDB — visão global do Zabbix
+        "influx": influx,
+        # Dados Zabbix API — hosts nao-CFTV
+        "total": n_hosts,
+        "up": total_up,
+        "down": total_down,
+        "nodata": total_nodata,
+        "maint": total_maint,
+        "up_pct": round(total_up / n_hosts * 100, 1) if n_hosts else 0.0,
+        "by_category": by_cat,
+        "down_list": zabbix["down_list"],
+        "problems": zabbix["problems"],
+        "total_problems": zabbix["total_problems"],
+    }
+
+
 def get_cached_infra_summary() -> dict:
-    """Retorna dados de infra do Zabbix com cache TTL 3min."""
+    """Retorna dados de infraestrutura com cache TTL 3min."""
     global _cache_data, _cache_ts
     with _lock:
         if _cache_valido():
@@ -263,6 +284,7 @@ def get_cached_infra_summary() -> dict:
         log.warning("infra_monitoring.busca_falhou", erro=str(exc))
         dados = {
             "enabled": False,
+            "influx": {},
             "total": 0,
             "up": 0,
             "down": 0,
