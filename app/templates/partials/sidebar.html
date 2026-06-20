@@ -50,6 +50,7 @@
   {{ nav_item(url_for('dashboards.governance_apps'), 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', 'Aplicativos') }}
   {{ nav_item(url_for('dashboards.governance_compliance'), 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'Compliance') }}
   {{ nav_item(url_for('dashboards.governance_data'), 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4', 'Dados / Labels') }}
+  {{ nav_item(url_for('dashboards.m365_licenses'), 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z', 'Licencas') }}
   {% endif %}
 
   {# Grupo 3: Suporte (admin, gestor) #}
@@ -66,6 +67,7 @@
   {{ nav_item(url_for('dashboards.infra_monitoring'), 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01', 'Infraestrutura') }}
   {{ nav_item(url_for('dashboards.cftv_monitoring'), 'M15 10l4.553-2.069A1 1 0 0121 8.82V15.18a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', 'CFTV') }}
   {{ nav_item(url_for('dashboards.rede_monitoring'), 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9', 'Rede') }}
+  {{ nav_item(url_for('dashboards.zabbix_triggers'), 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', 'Triggers / Alertas') }}
   {{ nav_item(url_for('dashboards.links_manager'), 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1', 'Links WAN') }}
   {% endif %}
 
@@ -79,8 +81,8 @@
   {# Grupo 6: Gestao (admin, gestor) #}
   {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
   {{ group_label('Gestao') }}
-  {{ nav_item('#', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', 'PMO', soon=true) }}
-  {{ nav_item('#', 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'Relatorios', soon=true) }}
+  {{ nav_item(url_for('dashboards.pmo_dashboard'), 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', 'PMO') }}
+  {{ nav_item(url_for('dashboards.relatorios'), 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'Relatorios') }}
   {% endif %}
 
   {# Usuarios: admin only #}

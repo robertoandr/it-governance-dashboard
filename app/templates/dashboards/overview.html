@@ -103,7 +103,7 @@
 {% for p in governance.pillars %}
   {% for c in p.components %}
     {% if c.id == 'availability' and c.source != 'coming_soon' %}
-      {% set ns.availability = (c.raw_value | round(1) | string) + '%' %}
+      {% set ns.availability = (c.value | round(1) | string) + '%' %}
     {% endif %}
     {% if c.id == 'sla_compliance' and c.source != 'coming_soon' %}
       {% set ns.sla = (c.raw_value | round(1) | string) + '%' %}

@@ -532,9 +532,32 @@ class InfluxDBMetricsProvider:
             elif entra_time:
                 last_collected = entra_time
 
-        # PMO components — coming_soon; placeholder values to avoid dragging score to 0
-        components.extend(
-            [
+        # PMO components — ClickUp taxa_conclusao como proxy de alinhamento estratégico
+        try:
+            from itgov.api.v1.pmo_clickup import get_cached_pmo
+
+            pmo = get_cached_pmo()
+            pmo_taxa = float(pmo.get("taxa_conclusao", 0.0)) if pmo.get("has_data") else None
+            pmo_total = int(pmo.get("total", 0))
+        except Exception:
+            pmo_taxa = None
+            pmo_total = 0
+
+        if pmo_taxa is not None:
+            components.append(
+                {
+                    "id": "pmo_alignment",
+                    "label": "Projetos alinhados ao planejamento estratégico",
+                    "value": round(pmo_taxa, 1),
+                    "raw_value": float(pmo_total),
+                    "unit": "% concluídos",
+                    "source": "clickup",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+        else:
+            components.append(
                 {
                     "id": "pmo_alignment",
                     "label": "Projetos alinhados ao planejamento estratégico",
@@ -544,7 +567,11 @@ class InfluxDBMetricsProvider:
                     "source": "coming_soon",
                     "weight": 2.0,
                     "trend": "stable",
-                },
+                }
+            )
+
+        components.extend(
+            [
                 {
                     "id": "kpi_coverage",
                     "label": "Cobertura de KPIs estratégicos",
@@ -666,19 +693,34 @@ class InfluxDBMetricsProvider:
             elif secure_time:
                 last_collected = secure_time
 
-        # Licenses: no collector writing m365_licenses yet — coming_soon
-        components.append(
-            {
-                "id": "license_utilization",
-                "label": "Utilização de licenças M365",
-                "value": 74.0,
-                "raw_value": None,
-                "unit": "%",
-                "source": "coming_soon",
-                "weight": 2.0,
-                "trend": "stable",
-            }
-        )
+        # Utilização de licenças M365 — via m365_licenses measurement
+        lic_usage_pct = self._license_utilization_pct()
+        if lic_usage_pct is not None:
+            components.append(
+                {
+                    "id": "license_utilization",
+                    "label": "Utilização de licenças M365",
+                    "value": round(lic_usage_pct, 1),
+                    "raw_value": round(lic_usage_pct, 1),
+                    "unit": "%",
+                    "source": "m365_licenses",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+        else:
+            components.append(
+                {
+                    "id": "license_utilization",
+                    "label": "Utilização de licenças M365",
+                    "value": 74.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
 
         log.info(
             "resource_metrics_assembled",
@@ -833,6 +875,13 @@ from(bucket: "{self._bucket_raw}")
   |> last()
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 """
+        flux_agents = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_agents")
+  |> filter(fn: (r) => r._field == "total")
+  |> last()
+"""
         prot_rows = self._query(flux_prot)
         risk_rows = self._query(flux_risk)
         if not prot_rows and not risk_rows:
@@ -858,7 +907,54 @@ from(bucket: "{self._bucket_raw}")
             )
             if "_time" not in result:
                 result["_time"] = row.get("_time")
+            # Fallback: derive protection from gov_acronis_agents + sem_plano when
+            # gov_acronis_protection measurement is absent (collector < v2 schema).
+            if "protected_machines" not in result:
+                sem_plano = int(row.get("sem_plano", 0))
+                agents_rows = self._query(flux_agents)
+                total_m = int(agents_rows[0]["_value"]) if agents_rows else 0
+                if total_m:
+                    result["total_machines"] = total_m
+                    result["protected_machines"] = max(0, total_m - sem_plano)
         return result
+
+    def _license_utilization_pct(self) -> float | None:
+        """Return overall M365 license utilization % from m365_licenses measurement.
+
+        Excludes free/unlimited SKUs (total >= 10000). Returns None if no data.
+        """
+        flux_consumed = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._measurement == "m365_licenses")
+  |> filter(fn: (r) => r._field == "consumed" or r._field == "total")
+  |> group(columns: ["sku_name", "_field"])
+  |> last()
+  |> keep(columns: ["sku_name", "_field", "_value"])
+"""
+        rows = self._query(flux_consumed)
+        if not rows:
+            return None
+        by_sku: dict[str, dict] = {}
+        for row in rows:
+            key = str(row.get("sku_name", ""))
+            if key not in by_sku:
+                by_sku[key] = {}
+            field = str(row.get("_field", ""))
+            if field:
+                by_sku[key][field] = int(row.get("_value", 0) or 0)
+        total_consumed = 0
+        total_seats = 0
+        for sku_data in by_sku.values():
+            total = sku_data.get("total", 0)
+            consumed = sku_data.get("consumed", 0)
+            if total >= 10000 or total == 0:
+                continue
+            total_consumed += consumed
+            total_seats += total
+        if total_seats == 0:
+            return None
+        return round(min(100.0, total_consumed / total_seats * 100), 1)
 
     def _intune_stats(self) -> dict[str, Any]:
         """Return Intune patch compliance aggregated from InfluxDB.

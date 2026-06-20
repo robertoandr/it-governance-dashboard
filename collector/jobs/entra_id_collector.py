@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import structlog
 from influxdb_client import InfluxDBClient, Point, WritePrecision
@@ -58,11 +59,11 @@ class EntraIdCollector(BaseOAuthCollector):
         """Return percentage of users with at least one MFA method registered."""
         if total_users == 0:
             return 0.0
-        # credentialUserRegistrationDetails requires Reports.Read.All
+        # userRegistrationDetails requires UserAuthenticationMethod.Read.All
         try:
             items = list(
                 self._paginate(
-                    f"{_GRAPH_BASE}/reports/credentialUserRegistrationDetails",
+                    f"{_GRAPH_BASE}/reports/authenticationMethods/userRegistrationDetails",
                     params={"$select": "isMfaRegistered", "$top": "999"},
                 )
             )
@@ -123,6 +124,41 @@ class EntraIdCollector(BaseOAuthCollector):
             log.warning("ca_policies_failed", error=str(exc))
             return 0
 
+    def _collect_licenses(self, write_api: Any, bucket: str, collected_at: datetime) -> None:
+        """Collect M365 subscribed SKUs and write to m365_licenses measurement."""
+        try:
+            data = self._get(
+                f"{_GRAPH_BASE}/subscribedSkus",
+                params={"$select": "skuId,skuPartNumber,consumedUnits,prepaidUnits"},
+            )
+            skus = data.get("value", [])
+            points = []
+            for sku in skus:
+                consumed = int(sku.get("consumedUnits", 0))
+                prepaid = sku.get("prepaidUnits") or {}
+                total = int(prepaid.get("enabled", 0))
+                warning_units = int(prepaid.get("warning", 0))
+                available = max(0, total - consumed)
+                sku_id = sku.get("skuId", "")
+                sku_name = sku.get("skuPartNumber", "")
+                if not sku_id or total == 0:
+                    continue
+                points.append(
+                    Point("m365_licenses")
+                    .tag("sku_id", sku_id)
+                    .tag("sku_name", sku_name)
+                    .field("consumed", consumed)
+                    .field("total", total)
+                    .field("available", available)
+                    .field("warning_units", warning_units)
+                    .time(collected_at, WritePrecision.S)
+                )
+            if points:
+                write_api.write(bucket=bucket, record=points)
+                log.info("m365_licenses_written", count=len(points))
+        except Exception as exc:
+            log.warning("licenses_collect_failed", error=str(exc))
+
     # ── Main collection cycle ────────────────────────────────────────────────
 
     def collect(self) -> None:
@@ -166,10 +202,9 @@ class EntraIdCollector(BaseOAuthCollector):
             token=settings.INFLUX_TOKEN,
             org=settings.INFLUX_ORG,
         ) as client:
-            client.write_api(write_options=SYNCHRONOUS).write(
-                bucket=settings.INFLUX_BUCKET_RAW,
-                record=point,
-            )
+            api = client.write_api(write_options=SYNCHRONOUS)
+            api.write(bucket=settings.INFLUX_BUCKET_RAW, record=point)
+            self._collect_licenses(api, settings.INFLUX_BUCKET_RAW, collected_at)
 
         log.info("entra_metrics_written", measurement="gov_entra_summary")
 

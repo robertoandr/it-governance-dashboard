@@ -243,6 +243,12 @@ def cftv_monitoring() -> str:
     return render_template("dashboards/cftv_monitoring.html", data=data)
 
 
+@bp.route("/network")
+@login_required
+def network_redirect():
+    return redirect(url_for("dashboards.rede_monitoring"))
+
+
 @bp.route("/rede")
 @login_required
 @require_role("admin", "gestor", "operador")
@@ -362,3 +368,97 @@ def pillar_detail(pillar_id: str) -> str:
         abort(404)
 
     return render_template("dashboards/pillar_detail.html", pillar=pillar, governance=data)
+
+
+@bp.route("/pmo")
+@login_required
+@require_role("admin", "gestor", "visualizador")
+def pmo_dashboard() -> str:
+    """Render PMO — Projetos de TI (ClickUp + score manual)."""
+    from itgov.api.v1.pmo_clickup import get_cached_pmo
+
+    data = get_cached_pmo()
+    return render_template("dashboards/pmo_dashboard.html", data=data)
+
+
+@bp.route("/relatorios")
+@login_required
+@require_role("admin", "gestor")
+def relatorios() -> str:
+    """Render Relatórios — resumo consolidado de governança."""
+    from itgov.api.v1.pmo_clickup import get_cached_pmo
+
+    pmo = get_cached_pmo()
+    gov = _get_governance()
+    return render_template("dashboards/relatorios.html", pmo=pmo, governance=gov)
+
+
+@bp.route("/licenses")
+@login_required
+@require_role("admin", "gestor")
+def m365_licenses() -> str:
+    """Render painel de Licenças M365 — uso vs disponível + custos manuais."""
+    from itgov.api.v1.m365_licenses import get_licenses_summary
+
+    data = get_licenses_summary()
+    return render_template("dashboards/m365_licenses.html", data=data)
+
+
+@bp.route("/licenses/update", methods=["POST"])
+@login_required
+@require_role("admin", "gestor")
+def m365_licenses_update():
+    """Salvar custo/renovação de uma SKU (JSON POST)."""
+
+    from flask import jsonify, request
+
+    from itgov.api.v1.m365_licenses import _load_costs, save_costs
+
+    try:
+        payload = request.get_json(force=True)
+        sku = payload.get("sku_name", "")
+        if not sku:
+            return jsonify({"ok": False, "error": "sku_name obrigatório"}), 400
+        costs = _load_costs()
+        if sku not in costs:
+            costs[sku] = {}
+        costs[sku]["cost_per_unit_brl"] = float(payload.get("cost_per_unit_brl", 0))
+        costs[sku]["renewal_date"] = str(payload.get("renewal_date", ""))
+        costs[sku]["billing_cycle"] = str(payload.get("billing_cycle", "monthly"))
+        costs[sku]["notes"] = str(payload.get("notes", ""))
+        if "friendly_name" in payload:
+            costs[sku]["friendly_name"] = str(payload["friendly_name"])
+        save_costs(costs)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@bp.route("/triggers")
+@login_required
+@require_role("admin", "gestor", "operador")
+def zabbix_triggers() -> str:
+    """Render painel de Triggers Zabbix — problemas ativos."""
+    import os
+
+    from itgov.api.v1.zabbix_triggers import get_cached_triggers
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+
+    data = get_cached_triggers()
+    return render_template("dashboards/zabbix_triggers.html", data=data)
+
+
+@bp.route("/triggers/<string:eventid>/ack", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", "operador")
+def zabbix_trigger_ack(eventid: str):
+    """Acknowledge um problema no Zabbix."""
+    from flask import jsonify, request
+
+    from itgov.api.v1.zabbix_triggers import ack_problem
+
+    payload = request.get_json(force=True) or {}
+    ok = ack_problem(eventid, message=payload.get("message", ""))
+    return (jsonify({"ok": True}) if ok else jsonify({"ok": False, "error": "Zabbix ack falhou"}), 200 if ok else 500)
