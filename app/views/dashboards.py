@@ -455,6 +455,8 @@ def zabbix_triggers() -> str:
 @require_role("admin", "gestor")
 def m365_overview() -> str:
     """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
+    from datetime import date
+
     from app.services.influxdb_provider import InfluxDBMetricsProvider
     from itgov.api.v1.m365_licenses import get_licenses_summary
     from itgov.api.v1.zabbix_triggers import get_cached_triggers
@@ -487,6 +489,10 @@ from(bucket: "{provider._bucket_raw}")
     # Triggers
     triggers = get_cached_triggers()
 
+    # Reajuste countdown
+    reajuste_iso = "2026-07-01"
+    dias_reajuste = (date.fromisoformat(reajuste_iso) - date.today()).days
+
     return render_template(
         "dashboards/m365_overview.html",
         secure_score=secure_score,
@@ -494,6 +500,7 @@ from(bucket: "{provider._bucket_raw}")
         licenses=lic,
         triggers=triggers,
         reajuste_date="01/07/2026",
+        dias_reajuste=dias_reajuste,
     )
 
 

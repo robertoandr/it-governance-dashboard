@@ -37,87 +37,143 @@
   </div>
 </div>
 
-<!-- BLOCO 2 — KPIs -->
+<!-- BLOCO 2 — KPIs linkáveis -->
+{% set mfa_habilitados = ((mfa_pct / 100) * total_users) | round(0) | int %}
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 
+  <!-- MFA Habilitado -->
+  {% if mfa_pct >= 90 %}{% set mfa_c = "green" %}
+  {% elif mfa_pct >= 70 %}{% set mfa_c = "yellow" %}
+  {% else %}{% set mfa_c = "red" %}{% endif %}
+  <a href="{{ url_for('dashboards.governance_compliance') }}"
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">MFA Habilitado</p>
+      <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ mfa_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+    {% if mfa_pct > 0 %}
+      <p class="text-3xl font-bold text-{{ mfa_c }}-600">{{ mfa_pct | round(1) }}%</p>
+      <p class="text-xs text-gray-400 mt-1">{{ mfa_habilitados }}/{{ total_users }} usuarios</p>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Sem dados</p>
+    {% endif %}
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div class="h-full rounded-full bg-{{ mfa_c }}-500 transition-all"
+           style="width: {{ [mfa_pct, 100] | min }}%"></div>
+    </div>
+  </a>
+
   <!-- Secure Score -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Secure Score</p>
+  {% if ss_pct >= 70 %}{% set ss_c = "green" %}
+  {% elif ss_pct >= 50 %}{% set ss_c = "yellow" %}
+  {% else %}{% set ss_c = "red" %}{% endif %}
+  <a href="{{ url_for('dashboards.governance_compliance') }}"
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Secure Score</p>
+      <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ ss_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
     {% if ss_pct > 0 %}
-      {% if ss_pct >= 70 %}{% set ss_color = "text-green-600" %}
-      {% elif ss_pct >= 45 %}{% set ss_color = "text-yellow-500" %}
-      {% else %}{% set ss_color = "text-red-600" %}{% endif %}
-      <p class="text-3xl font-bold {{ ss_color }}">{{ ss_pct | round(1) }}%</p>
+      <p class="text-3xl font-bold text-{{ ss_c }}-600">{{ ss_pct | round(1) }}%</p>
       <p class="text-xs text-gray-400 mt-1">{{ ss_cur | int }} / {{ ss_max | int }} pts</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Sem dados</p>
     {% endif %}
     <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-      <div class="h-full rounded-full {% if ss_pct >= 70 %}bg-green-500{% elif ss_pct >= 45 %}bg-yellow-400{% else %}bg-red-500{% endif %}"
+      <div class="h-full rounded-full bg-{{ ss_c }}-500 transition-all"
            style="width: {{ [ss_pct, 100] | min }}%"></div>
     </div>
-  </div>
+  </a>
 
-  <!-- MFA -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">MFA habilitado</p>
-    {% if mfa_pct > 0 %}
-      {% if mfa_pct >= 90 %}{% set mfa_color = "text-green-600" %}
-      {% elif mfa_pct >= 70 %}{% set mfa_color = "text-yellow-500" %}
-      {% else %}{% set mfa_color = "text-red-600" %}{% endif %}
-      <p class="text-3xl font-bold {{ mfa_color }}">{{ mfa_pct | round(1) }}%</p>
-      <p class="text-xs text-gray-400 mt-1">{{ total_users }} usuarios · {{ ca_policies }} CA policies</p>
-    {% else %}
-      <p class="text-2xl font-bold text-gray-300">—</p>
-    {% endif %}
-    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-      <div class="h-full rounded-full {% if mfa_pct >= 90 %}bg-green-500{% elif mfa_pct >= 70 %}bg-yellow-400{% else %}bg-red-500{% endif %}"
-           style="width: {{ [mfa_pct, 100] | min }}%"></div>
+  <!-- Licenças -->
+  {% set uso = lic_sum.uso_pct | float %}
+  {% if uso > 100 %}{% set lic_c = "red" %}
+  {% elif uso > 95 %}{% set lic_c = "yellow" %}
+  {% else %}{% set lic_c = "green" %}{% endif %}
+  <a href="{{ url_for('dashboards.m365_licenses') }}"
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Licencas</p>
+      <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ lic_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
     </div>
-  </div>
-
-  <!-- Licencas -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Licencas pagas</p>
     {% if licenses.has_data %}
-      {% set uso = lic_sum.uso_pct | float %}
-      {% if uso > 100 %}{% set lic_color = "text-red-600" %}
-      {% elif uso >= 85 %}{% set lic_color = "text-yellow-500" %}
-      {% else %}{% set lic_color = "text-green-600" %}{% endif %}
-      <p class="text-3xl font-bold {{ lic_color }}">{{ uso | round(1) }}%</p>
-      <p class="text-xs text-gray-400 mt-1">{{ lic_sum.total_consumed }} / {{ lic_sum.total_seats }} licencas</p>
+      <p class="text-3xl font-bold text-{{ lic_c }}-600">{{ uso | round(1) }}%</p>
+      <p class="text-xs text-gray-400 mt-1">{{ lic_sum.total_consumed }}/{{ lic_sum.total_seats }} licencas</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
     {% endif %}
     <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-      {% set uso_bar = [lic_sum.uso_pct | float, 100] | min %}
-      <div class="h-full rounded-full {% if lic_sum.uso_pct > 100 %}bg-red-500{% elif lic_sum.uso_pct >= 85 %}bg-yellow-400{% else %}bg-green-500{% endif %}"
-           style="width: {{ uso_bar }}%"></div>
+      <div class="h-full rounded-full bg-{{ lic_c }}-500 transition-all"
+           style="width: {{ [uso, 100] | min }}%"></div>
     </div>
-  </div>
+  </a>
 
-  <!-- Alertas -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Alertas ativos</p>
-    {% if trig_total > 0 %}
-      {% if trig_disaster > 0 %}{% set trig_color = "text-purple-700" %}
-      {% elif trig_high > 0 %}{% set trig_color = "text-red-600" %}
-      {% else %}{% set trig_color = "text-yellow-500" %}{% endif %}
-      <p class="text-3xl font-bold {{ trig_color }}">{{ trig_total }}</p>
-      <p class="text-xs text-gray-400 mt-1">
-        {% if trig_disaster > 0 %}<span class="text-purple-600 font-semibold">{{ trig_disaster }} desastre</span> ·{% endif %}
-        {{ trig_high }} alto · {{ triggers.get('counts', {}).get('Médio', 0) }} medio
-      </p>
-    {% else %}
-      <p class="text-3xl font-bold text-green-600">0</p>
-      <p class="text-xs text-gray-400 mt-1">Sem alertas ativos</p>
-    {% endif %}
-    <a href="{{ url_for('dashboards.zabbix_triggers') }}"
-       class="mt-2 block text-xs text-blue-600 hover:text-blue-800">Ver triggers &rarr;</a>
-  </div>
+  <!-- Alertas Ativos -->
+  {% if trig_disaster > 0 %}{% set trig_c = "red" %}
+  {% elif trig_total > 0 %}{% set trig_c = "yellow" %}
+  {% else %}{% set trig_c = "green" %}{% endif %}
+  <a href="{{ url_for('dashboards.zabbix_triggers') }}"
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Alertas Ativos</p>
+      <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ trig_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+    <p class="text-3xl font-bold text-{{ trig_c }}-600">{{ trig_total }}</p>
+    <p class="text-xs text-gray-400 mt-1">
+      {% if trig_disaster > 0 %}
+        <span class="text-red-600 font-semibold">{{ trig_disaster }} desastre</span> ·
+      {% endif %}
+      {{ trig_high }} alto · {{ triggers.get('counts', {}).get('Médio', 0) }} medio
+    </p>
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      {% if trig_total == 0 %}
+        <div class="h-full rounded-full bg-green-500" style="width: 100%"></div>
+      {% elif trig_disaster > 0 %}
+        <div class="h-full rounded-full bg-red-500" style="width: 100%"></div>
+      {% else %}
+        <div class="h-full rounded-full bg-yellow-400" style="width: 100%"></div>
+      {% endif %}
+    </div>
+  </a>
+
 </div>
+
+<!-- BLOCO 3 — Alerta de Reajuste (banner amarelo se < 30 dias) -->
+{% if dias_reajuste is defined and dias_reajuste <= 30 %}
+<div class="rounded-xl border {% if dias_reajuste <= 7 %}bg-red-50 border-red-200{% else %}bg-yellow-50 border-yellow-200{% endif %} px-5 py-4 mb-6 flex items-start gap-3">
+  <svg class="w-5 h-5 flex-shrink-0 mt-0.5 {% if dias_reajuste <= 7 %}text-red-500{% else %}text-yellow-500{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+  </svg>
+  <div class="flex-1">
+    <p class="text-sm font-semibold {% if dias_reajuste <= 7 %}text-red-800{% else %}text-yellow-800{% endif %}">
+      Reajuste de licencas em {{ dias_reajuste }} dia{% if dias_reajuste != 1 %}s{% endif %} ({{ reajuste_date }})
+    </p>
+    <p class="text-xs {% if dias_reajuste <= 7 %}text-red-600{% else %}text-yellow-700{% endif %} mt-1">
+      Business Basic +16,7% (US$6 &rarr; US$7) &nbsp;·&nbsp;
+      Business Standard +12% (US$12,50 &rarr; US$14) &nbsp;·&nbsp;
+      Business Premium mantido (US$22)
+    </p>
+  </div>
+  {% if dias_reajuste >= 0 %}
+  <span class="flex-shrink-0 text-xs font-bold px-2 py-1 rounded
+    {% if dias_reajuste <= 7 %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+    {{ dias_reajuste }}d
+  </span>
+  {% endif %}
+</div>
+{% endif %}
 
 <!-- BLOCO 3 — Comparativo de planos -->
 <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
