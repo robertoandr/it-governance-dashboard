@@ -76,9 +76,7 @@ def _metricas_zabbix(hostids: list[str]) -> dict[str, dict]:
         {
             "output": ["itemid", "hostid", "key_", "lastvalue", "lastclock", "units", "value_type"],
             "hostids": hostids,
-            "search": {"key_": "icmpping"},
-            "searchWildcardsEnabled": True,
-            "filter": {},
+            "filter": {"key_": ["icmpping", "icmppingloss", "icmppingsec"]},
         },
     )
     if not items:
