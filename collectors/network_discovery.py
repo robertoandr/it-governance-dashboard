@@ -75,7 +75,7 @@ INFLUX_BUCKET = os.getenv("INFLUX_BUCKET_RAW", "governance_raw")
 
 SCAN_RANGES = os.getenv("INFRA_SCAN_RANGES", "172.29.0.0/22").split(",")
 SCAN_INTERVAL = int(os.getenv("INFRA_SCAN_INTERVAL", "3600"))
-NMAP_ARGS = os.getenv("INFRA_NMAP_ARGS", "-T4 --host-timeout 10s")
+NMAP_ARGS = os.getenv("INFRA_NMAP_ARGS", "-T4 --host-timeout 15s")
 
 # ── Zabbix group IDs ──────────────────────────────────────────────────────────
 GRP_LINUX = "2"
@@ -197,7 +197,7 @@ def _scan_range(ip_range: str) -> list[DiscoveredHost]:
 
     nm = nmap.PortScanner()
     # Scan: portas TCP chave + UDP 161 (SNMP) + OS detection
-    args = f"{NMAP_ARGS} -sV -p 22,80,161,443,623,3306,3389,5432,1433,8080,8443,10050 --open"
+    args = f"{NMAP_ARGS} -p 22,80,161,443,623,3306,3389,5432,1433,8080,8443,10050 --open"
 
     log.info("network_discovery.scan_inicio", range=ip_range, args=args)
     try:
