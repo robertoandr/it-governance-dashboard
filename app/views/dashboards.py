@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import structlog
-from flask import Blueprint, abort, render_template
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app.auth.rbac import require_role
@@ -257,6 +257,88 @@ def rede_monitoring() -> str:
 
     data = get_cached_rede_summary()
     return render_template("dashboards/rede_monitoring.html", data=data)
+
+
+@bp.route("/links")
+@login_required
+@require_role("admin", "gestor", "operador")
+def links_manager() -> str:
+    """Render gerenciador de links WAN/Internet."""
+    from itgov.api.v1.links_manager import get_cached_links
+
+    data = get_cached_links()
+    return render_template("dashboards/links_manager.html", data=data)
+
+
+@bp.route("/links/novo", methods=["GET", "POST"])
+@bp.route("/links/<int:link_id>/editar", methods=["GET", "POST"])
+@login_required
+@require_role("admin", "gestor")
+def link_form(link_id: int | None = None) -> str:
+    """Formulario de criacao e edicao de links WAN."""
+    from app.extensions import db
+    from app.models.link import LINK_TYPES, Link
+    from itgov.api.v1.links_manager import invalidar_cache
+
+    link = Link.query.get(link_id) if link_id else None
+    if link_id and not link:
+        abort(404)
+
+    if request.method == "POST":
+        action = request.form.get("action", "save")
+
+        if action == "delete" and link:
+            db.session.delete(link)
+            db.session.commit()
+            invalidar_cache()
+            flash("Link removido.", "success")
+            return redirect(url_for("dashboards.links_manager"))
+
+        ip = request.form.get("ip", "").strip()
+        name = request.form.get("name", "").strip()
+        if not ip or not name:
+            flash("IP e nome sao obrigatorios.", "error")
+            return render_template("dashboards/link_form.html", link=link, link_types=LINK_TYPES)
+
+        # Verificar IP duplicado (exceto o proprio)
+        existing = Link.query.filter_by(ip=ip).first()
+        if existing and (not link or existing.id != link.id):
+            flash(f"IP {ip} ja esta cadastrado.", "error")
+            return render_template("dashboards/link_form.html", link=link, link_types=LINK_TYPES)
+
+        bw_raw = request.form.get("bandwidth_mbps", "").strip()
+        bw = float(bw_raw) if bw_raw else None
+
+        if link:
+            link.name = name
+            link.ip = ip
+            link.cidr = request.form.get("cidr", ip).strip() or ip
+            link.provider = request.form.get("provider", "").strip()
+            link.circuit_id = request.form.get("circuit_id", "").strip()
+            link.link_type = request.form.get("link_type", "dedicado")
+            link.bandwidth_mbps = bw
+            link.notes = request.form.get("notes", "").strip()
+            link.active = "active" in request.form
+        else:
+            link = Link(
+                name=name,
+                ip=ip,
+                cidr=request.form.get("cidr", ip).strip() or ip,
+                provider=request.form.get("provider", "").strip(),
+                circuit_id=request.form.get("circuit_id", "").strip(),
+                link_type=request.form.get("link_type", "dedicado"),
+                bandwidth_mbps=bw,
+                notes=request.form.get("notes", "").strip(),
+                active=True,
+            )
+            db.session.add(link)
+
+        db.session.commit()
+        invalidar_cache()
+        flash("Link salvo com sucesso.", "success")
+        return redirect(url_for("dashboards.links_manager"))
+
+    return render_template("dashboards/link_form.html", link=link, link_types=LINK_TYPES)
 
 
 @bp.route("/pillars/<string:pillar_id>")

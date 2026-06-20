@@ -63,6 +63,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # Use "from ... import" — plain "import app.models.user" would rebind the
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
+        from app.models import link as _link_model  # noqa: F401
         from app.models import user as _user_model  # noqa: F401
 
         db.create_all()
