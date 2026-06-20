@@ -194,6 +194,31 @@ services:
     networks:
       - itgov-net
 
+  # ─── Network Discovery (varredura de ativos de infra — perfil discovery) ─────
+  network-discovery:
+    build:
+      context: .
+      dockerfile: infra-setup/Dockerfile.discovery
+    image: itgov-network-discovery:latest
+    container_name: itgov-network-discovery
+    restart: unless-stopped
+    profiles: ["discovery"]
+    cap_add:
+      - NET_RAW       # nmap raw sockets
+      - NET_ADMIN     # nmap OS detection
+    network_mode: host  # acesso direto à rede corporativa para scan
+    environment:
+      ZABBIX_URL: "${ZABBIX_URL:-}"
+      ZABBIX_TOKEN: "${ZABBIX_TOKEN:-}"
+      INFLUX_URL: "http://127.0.0.1:8086"
+      INFLUX_TOKEN: "${INFLUX_TOKEN:-}"
+      INFLUX_ORG: "${INFLUX_ORG:-gadens}"
+      INFLUX_BUCKET_RAW: "${INFLUX_BUCKET_RAW:-governance_raw}"
+      INFRA_SCAN_RANGES: "${INFRA_SCAN_RANGES:-172.29.0.0/22}"
+      INFRA_SCAN_INTERVAL: "${INFRA_SCAN_INTERVAL:-3600}"
+      INFRA_NMAP_ARGS: "${INFRA_NMAP_ARGS:--T4 --host-timeout 10s}"
+      TZ: "${TZ:-America/Sao_Paulo}"
+
   # ─── Grafana (dashboards) ──────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.2.0
