@@ -137,14 +137,17 @@ from(bucket: "{bucket}")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 """)
 
-    # Último estado de cada host (último ponto por IP)
+    # toString() antes do pivot evita schema collision entre campos string e int
     rows_hosts = _query_influx(f"""
 from(bucket: "{bucket}")
   |> range(start: -7d)
   |> filter(fn: (r) => r._measurement == "gov_infra_asset_detail")
-  |> group(columns: ["ip"])
+  |> group(columns: ["ip", "_field"])
   |> last()
+  |> map(fn: (r) => ({{r with _value: string(v: r._value)}}))
+  |> group(columns: ["ip", "category", "os_guess"])
   |> pivot(rowKey: ["_time", "ip", "category", "os_guess"], columnKey: ["_field"], valueColumn: "_value")
+  |> group()
 """)
 
     # Histórico de totais (para sparkline)
@@ -157,6 +160,12 @@ from(bucket: "{bucket}")
 
     s = rows_sum[-1] if rows_sum else {}
 
+    def _int(v: object) -> int:
+        try:
+            return int(str(v)) if v is not None else 0
+        except (ValueError, TypeError):
+            return 0
+
     hosts: list[dict] = []
     for row in rows_hosts:
         hosts.append(
@@ -166,10 +175,10 @@ from(bucket: "{bucket}")
                 "hostname": str(row.get("hostname", "")),
                 "vendor": str(row.get("vendor", "")),
                 "os_guess": row.get("os_guess", ""),
-                "open_ports": int(row.get("open_ports_count", 0) or 0),
-                "has_agent": int(row.get("has_agent", 0) or 0) == 1,
-                "has_snmp": int(row.get("has_snmp", 0) or 0) == 1,
-                "has_ssh": int(row.get("has_ssh", 0) or 0) == 1,
+                "open_ports": _int(row.get("open_ports_count")),
+                "has_agent": _int(row.get("has_agent")) == 1,
+                "has_snmp": _int(row.get("has_snmp")) == 1,
+                "has_ssh": _int(row.get("has_ssh")) == 1,
                 "scan_time": str(row.get("_time", "")),
             }
         )
