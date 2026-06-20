@@ -211,6 +211,22 @@ def zabbix_monitoring() -> str:
     return render_template("dashboards/zabbix_monitoring.html", summary=summary, problems=problems)
 
 
+@bp.route("/infra")
+@login_required
+@require_role("admin", "gestor", "operador")
+def infra_monitoring() -> str:
+    """Render painel de Infraestrutura (servidores, VMs, firewall, etc.)."""
+    import os
+
+    from itgov.api.v1.infra_monitoring import get_cached_infra_summary
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+
+    data = get_cached_infra_summary()
+    return render_template("dashboards/infra_monitoring.html", data=data)
+
+
 @bp.route("/cftv")
 @login_required
 @require_role("admin", "gestor", "operador")
