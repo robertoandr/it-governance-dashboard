@@ -3,95 +3,219 @@
 {% block title %}Pilares — Governança de TI{% endblock %}
 {% block page_title %}5 Pilares de Governança{% endblock %}
 
+{# Mapa source -> (label, rota) para drill-down #}
+{% set SOURCE_MAP = {
+  'zabbix':           ('Zabbix',        'dashboards.zabbix_monitoring'),
+  'acronis':          ('Acronis',       'dashboards.acronis_backup'),
+  'm365_licenses':    ('M365 Licenças', 'dashboards.m365_licenses'),
+  'm365_secure_score':('Secure Score',  'dashboards.m365_overview'),
+  'clickup':          ('ClickUp PMO',   'dashboards.pmo_dashboard'),
+  'zendesk':          ('Zendesk SLA',   'dashboards.sla_chamados'),
+  'github':           ('GitHub',        None),
+  'entra_id':         ('Entra ID',      'dashboards.governance_compliance'),
+} %}
+
 {% block content %}
+
+{# ── Score global resumido ──────────────────────────────────────────────────── #}
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+  {% for p in governance.pillars %}
+  <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
+     class="bg-white dark:bg-slate-800 rounded-xl border
+            {% if p.status == 'OPERACIONAL' %}border-green-200 dark:border-green-800
+            {% elif p.status == 'DEGRADADO' %}border-yellow-200 dark:border-yellow-800
+            {% else %}border-red-200 dark:border-red-800{% endif %}
+            p-3 text-center hover:shadow-md transition group">
+    <p class="text-2xl font-bold
+              {% if p.status == 'OPERACIONAL' %}text-green-600 dark:text-green-400
+              {% elif p.status == 'DEGRADADO' %}text-yellow-600 dark:text-yellow-400
+              {% else %}text-red-600 dark:text-red-400{% endif %}">
+      {{ p.score | round(1) }}
+    </p>
+    <p class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+      {{ p.label }}
+    </p>
+    <p class="text-[9px] text-slate-400 mt-0.5">peso {{ (p.weight * 100)|int }}%</p>
+  </a>
+  {% endfor %}
+</div>
+
+{# ── Cartões de pilares com drill-down ─────────────────────────────────────── #}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
   {% for p in governance.pillars %}
-  <div x-data="{ open: false }" class="bg-white rounded-xl shadow overflow-hidden">
-    <!-- Header -->
-    <button @click="open = !open"
-            class="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors">
-      <div class="flex items-center gap-3">
-        <span class="w-4 h-4 rounded-full flex-shrink-0" style="background:{{ p.color }}"></span>
-        <div class="text-left">
-          <p class="font-semibold text-gray-800">{{ p.label }}</p>
-          <p class="text-xs text-gray-400">peso {{ (p.weight * 100) | int }}%</p>
+  <div class="bg-white dark:bg-slate-800 rounded-2xl shadow border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col">
+
+    {# Cabeçalho do pilar #}
+    <div class="px-5 pt-5 pb-3 flex items-center justify-between">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ p.color }}"></span>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-800 dark:text-slate-100 truncate">{{ p.label }}</p>
+          <p class="text-[10px] text-slate-400">peso {{ (p.weight * 100)|int }}%</p>
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        <span class="text-2xl font-bold text-gray-700">{{ p.score | round(1) }}</span>
-        <span class="text-xs font-medium px-2 py-1 rounded-full
-          {% if p.status == 'OPERACIONAL' %}bg-green-100 text-green-700
-          {% elif p.status == 'DEGRADADO' %}bg-yellow-100 text-yellow-700
-          {% else %}bg-red-100 text-red-700{% endif %}">
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">{{ p.score | round(1) }}</span>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+          {% if p.status == 'OPERACIONAL' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
+          {% elif p.status == 'DEGRADADO' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400
+          {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% endif %}">
           {{ p.status }}
         </span>
-        <svg class="w-4 h-4 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''"
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-        </svg>
       </div>
-    </button>
+    </div>
 
-    <!-- Expandable detail -->
-    <div x-show="open" x-transition class="border-t px-5 pb-5">
-      <div class="mt-4 space-y-3">
-        {% for c in p.components %}
-        <div>
-          <div class="flex justify-between text-xs text-gray-500 mb-1">
-            <span>{{ c.label }}</span>
-            <span class="font-medium text-gray-700">{{ c.value | round(1) }}</span>
+    {# Barra de progresso global do pilar #}
+    <div class="px-5 pb-3">
+      <div class="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-700"
+             style="width:{{ p.score }}%; background:{{ p.color }}"></div>
+      </div>
+    </div>
+
+    {# KPIs / Componentes com drill-down #}
+    <div class="px-5 pb-4 flex-1 space-y-3">
+      {% for c in p.components %}
+      {% set src_info = SOURCE_MAP.get(c.source) %}
+      {% set is_live = c.source not in ('coming_soon',) %}
+
+      <div class="rounded-lg border
+                  {% if not is_live %}border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/20
+                  {% elif c.value < 60 %}border-red-100 dark:border-red-900/30 bg-red-50/40 dark:bg-red-900/10
+                  {% elif c.value < 85 %}border-yellow-100 dark:border-yellow-900/30 bg-yellow-50/40 dark:bg-yellow-900/10
+                  {% else %}border-green-100 dark:border-green-900/30 bg-green-50/40 dark:bg-green-900/10{% endif %}
+                  px-3 py-2">
+
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 min-w-0">
+            {# Ícone de status #}
+            {% if not is_live %}
+              <svg class="w-3 h-3 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            {% elif c.value >= 85 %}
+              <span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
+            {% elif c.value >= 60 %}
+              <span class="w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0"></span>
+            {% else %}
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0"></span>
+            {% endif %}
+            <span class="text-xs font-medium text-slate-700 dark:text-slate-200 truncate
+                         {% if not is_live %}text-slate-400 dark:text-slate-500{% endif %}">
+              {{ c.label }}
+            </span>
           </div>
-          <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div class="h-full rounded-full transition-all"
-                 style="width:{{ c.value }}%; background:{{ p.color }}"></div>
-          </div>
-          <div class="flex justify-between text-xs text-gray-400 mt-0.5">
-            <span>{{ c.source }}</span>
-            <span>w={{ c.weight }}</span>
+
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            {# Valor do KPI #}
+            <span class="text-sm font-bold
+              {% if not is_live %}text-slate-300 dark:text-slate-600
+              {% elif c.value < 60 %}text-red-600 dark:text-red-400
+              {% elif c.value < 85 %}text-yellow-600 dark:text-yellow-400
+              {% else %}text-green-600 dark:text-green-400{% endif %}">
+              {% if not is_live %}—{% else %}{{ c.value | round(1) }}{% endif %}
+            </span>
+
+            {# Badge de fonte com drill-down #}
+            {% if src_info and src_info[1] %}
+              <a href="{{ url_for(src_info[1]) }}"
+                 class="text-[9px] font-medium px-1.5 py-0.5 rounded
+                        bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300
+                        hover:bg-blue-200 dark:hover:bg-blue-800/40 transition whitespace-nowrap"
+                 title="Abrir {{ src_info[0] }}">
+                {{ src_info[0] }} ↗
+              </a>
+            {% elif src_info %}
+              <span class="text-[9px] font-medium px-1.5 py-0.5 rounded
+                           bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                {{ src_info[0] }}
+              </span>
+            {% else %}
+              <span class="text-[9px] font-medium px-1.5 py-0.5 rounded
+                           bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500
+                           border border-dashed border-slate-300 dark:border-slate-600">
+                em breve
+              </span>
+            {% endif %}
           </div>
         </div>
-        {% endfor %}
+
+        {# Mini barra de progresso por KPI #}
+        {% if is_live %}
+        <div class="mt-1.5 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-500"
+               style="width:{{ c.value }}%;
+                      background:{% if c.value < 60 %}#EF4444{% elif c.value < 85 %}#F59E0B{% else %}#10B981{% endif %}">
+          </div>
+        </div>
+        {% endif %}
+
       </div>
+      {% endfor %}
+    </div>
+
+    {# Footer com link detalhes #}
+    <div class="px-5 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+      <span class="text-[10px] text-slate-400">
+        {% set live_count = p.components | selectattr('source', 'ne', 'coming_soon') | list | length %}
+        {{ live_count }}/{{ p.components | length }} KPIs ativos
+      </span>
       <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
-         class="mt-4 inline-block text-xs text-blue-600 hover:underline">
-        Ver detalhes →
+         class="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline flex items-center gap-1">
+        Ver detalhes
+        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
       </a>
     </div>
   </div>
   {% endfor %}
 </div>
 
-<!-- Radar Chart -->
-<div class="bg-white rounded-xl shadow p-6">
-  <h2 class="text-sm font-semibold text-gray-600 mb-4">Radar — Pilares</h2>
-  <div class="max-w-sm mx-auto">
+{# ── Radar Chart ────────────────────────────────────────────────────────────── #}
+<div class="bg-white dark:bg-slate-800 rounded-2xl shadow border border-slate-100 dark:border-slate-700 p-6">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-sm font-semibold text-slate-600 dark:text-slate-300">Radar — Pilares de Governança</h2>
+    <span class="text-xs text-slate-400">Score global: <strong class="text-slate-600 dark:text-slate-200">{{ governance.global_score | round(1) }}</strong></span>
+  </div>
+  <div class="max-w-xs mx-auto">
     <canvas id="radarChart"></canvas>
   </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function() {
-  const labels = {{ governance.pillars | map(attribute='label') | list | tojson }};
-  const scores = {{ governance.pillars | map(attribute='score') | list | tojson }};
-  const colors = {{ governance.pillars | map(attribute='color') | list | tojson }};
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var labels = {{ governance.pillars | map(attribute='label') | list | tojson }};
+  var scores = {{ governance.pillars | map(attribute='score') | list | tojson }};
+  var colors = {{ governance.pillars | map(attribute='color') | list | tojson }};
 
   new Chart(document.getElementById('radarChart'), {
     type: 'radar',
     data: {
-      labels,
+      labels: labels,
       datasets: [{
         label: 'Score',
         data: scores,
-        backgroundColor: 'rgba(59,130,246,0.15)',
+        backgroundColor: 'rgba(59,130,246,0.1)',
         borderColor: '#3B82F6',
+        borderWidth: 2,
         pointBackgroundColor: colors,
         pointRadius: 5,
+        pointHoverRadius: 7,
       }]
     },
     options: {
-      scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { stepSize: 25, font: { size: 10 } },
+          pointLabels: { font: { size: 11 } }
+        }
+      },
       plugins: { legend: { display: false } }
     }
   });

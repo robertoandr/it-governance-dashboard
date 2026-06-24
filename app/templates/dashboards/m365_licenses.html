@@ -2,41 +2,67 @@
 {% block title %}Licencas M365 — Governanca de TI{% endblock %}
 {% block page_title %}Licencas Microsoft 365{% endblock %}
 
-{% block content %}
-<div x-data="{
-  editing: null,
-  form: {},
-  saving: false,
-  msg: '',
-  openEdit(sku) {
-    this.editing = sku.sku_name;
-    this.form = {
-      sku_name: sku.sku_name,
-      friendly_name: sku.friendly_name,
-      cost_per_unit_brl: sku.cost_per_unit_brl,
-      renewal_date: sku.renewal_date || '',
-      billing_cycle: sku.billing_cycle || 'monthly',
-      notes: sku.notes || ''
+{% block head %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('alpine:init', function () {
+  Alpine.data('licensesPage', function () {
+    return {
+      showModal: false,
+      editing:   null,
+      form:      {},
+      saving:    false,
+      msg:       '',
+      filterFree: false,
+      _updateUrl: '{{ url_for("dashboards.m365_licenses_update") }}',
+
+      get saveLabel()  { return this.saving ? 'Salvando...' : 'Salvar'; },
+      get msgIsError() { return this.msg !== '' && this.msg.indexOf('Erro') === 0; },
+
+      openEdit: function (skuJson) {
+        var sku = JSON.parse(skuJson);
+        this.editing = sku.sku_name;
+        this.form = {
+          sku_name:          sku.sku_name,
+          friendly_name:     sku.friendly_name,
+          cost_per_unit_brl: sku.cost_per_unit_brl,
+          renewal_date:      sku.renewal_date  || '',
+          billing_cycle:     sku.billing_cycle || 'monthly',
+          notes:             sku.notes         || ''
+        };
+        this.msg       = '';
+        this.showModal = true;
+      },
+      closeEdit: function () {
+        this.showModal = false;
+        this.editing   = null;
+        this.msg       = '';
+      },
+      save: async function () {
+        this.saving = true;
+        try {
+          const r = await fetch(this._updateUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(this.form)
+          });
+          const d = await r.json();
+          if (d.ok) {
+            this.msg = 'Salvo!';
+            setTimeout(function () { location.reload(); }, 800);
+          } else {
+            this.msg = 'Erro: ' + (d.error || 'desconhecido');
+          }
+        } catch(e) { this.msg = 'Erro de rede'; }
+        this.saving = false;
+      }
     };
-    this.msg = '';
-  },
-  closeEdit() { this.editing = null; this.msg = ''; },
-  async save() {
-    this.saving = true;
-    try {
-      const r = await fetch('{{ url_for('dashboards.m365_licenses_update') }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(this.form)
-      });
-      const d = await r.json();
-      if (d.ok) { this.msg = 'Salvo!'; setTimeout(() => location.reload(), 800); }
-      else { this.msg = 'Erro: ' + (d.error || 'desconhecido'); }
-    } catch(e) { this.msg = 'Erro de rede'; }
-    this.saving = false;
-  },
-  filterFree: false
-}">
+  });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="licensesPage">
 
 {% if not data.has_data %}
 <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
@@ -159,7 +185,8 @@
           {% else %}—{% endif %}
         </td>
         <td class="px-4 py-3">
-          <button @click="openEdit({{ sku | tojson }})"
+          <button @click="openEdit($event.currentTarget.dataset.sku)"
+                  data-sku='{{ sku | tojson }}'
                   class="text-blue-600 hover:text-blue-800 text-xs underline">
             Editar
           </button>
@@ -171,8 +198,9 @@
 </div>
 
 <!-- Modal de edicao -->
-<div x-show="editing !== null" x-cloak
-     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+<div x-show="showModal" x-cloak
+     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+     @click.self="closeEdit()">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" @click.stop>
     <h3 class="text-lg font-bold text-gray-800 mb-4">Editar SKU: <span x-text="form.sku_name" class="font-mono text-sm text-blue-600"></span></h3>
     <div class="space-y-3">
@@ -206,12 +234,14 @@
       </div>
     </div>
     <div class="flex items-center justify-between mt-5">
-      <span x-text="msg" class="text-sm" :class="msg.startsWith('Erro') ? 'text-red-600' : 'text-green-600'"></span>
+      <span x-text="msg" class="text-sm"
+            :class="msgIsError ? 'text-red-600' : 'text-green-600'"></span>
       <div class="flex gap-2">
-        <button @click="closeEdit()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+        <button @click="closeEdit()"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
         <button @click="save()" :disabled="saving"
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
-          <span x-text="saving ? 'Salvando...' : 'Salvar'"></span>
+          <span x-text="saveLabel"></span>
         </button>
       </div>
     </div>

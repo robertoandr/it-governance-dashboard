@@ -77,10 +77,27 @@
 
     <!-- Footer -->
     <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700
-                   px-6 py-2 text-xs text-slate-400 flex justify-between">
+                   px-6 py-2 text-xs text-slate-400 flex justify-between items-center">
       <span>Governança de TI Dashboard &mdash; v{{ app_version }}</span>
+      <span id="footer-last-update" class="text-slate-300 dark:text-slate-600"></span>
       <span>{{ environment | upper }}</span>
     </footer>
+    <script nonce="{{ csp_nonce() }}">
+    fetch('/api/health')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var ts = d.last_collect || d.last_update || d.timestamp;
+        if (!ts) return;
+        var el = document.getElementById('footer-last-update');
+        if (!el) return;
+        var dt = new Date(ts);
+        el.textContent = 'Dados: ' + dt.toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        });
+      })
+      .catch(function(){});
+    </script>
   </div>
 
 </div>

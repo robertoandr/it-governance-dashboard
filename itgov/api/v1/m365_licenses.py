@@ -22,7 +22,7 @@ _cache_lock = threading.Lock()
 _cache_dados: dict | None = None
 _cache_ts: float = 0.0
 
-_COSTS_FILE = Path(__file__).parent.parent.parent.parent / "app" / "data" / "license_costs.json"
+_COSTS_FILE = Path(__file__).parent.parent.parent.parent / "data" / "license_costs.json"
 
 # SKUs gratuitas/trial que têm total = 10000 ou similares não fazem sentido para custo
 _FREE_SKUS = {

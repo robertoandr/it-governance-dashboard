@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Relatorios — IT Governance{% endblock %}
+
+{% block content %}
+<div class="space-y-6" id="relatorio-root">
+
+  {# Cabeçalho #}
+  <div class="flex items-center justify-between print:hidden">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Relatorios de Governanca de TI</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        Gerado em {{ governance.computed_at[:10] | replace('-','/') }}
+        &bull; Score global: <strong>{{ governance.global_score | round(1) }}/100</strong>
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="window.print()"
+              class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Imprimir / PDF
+      </button>
+    </div>
+  </div>
+
+  {# -- CAPA para impressão -- #}
+  <div class="hidden print:block text-center py-16 border-b border-slate-200 mb-8">
+    <h1 class="text-3xl font-bold text-slate-800">Relatorio de Governanca de TI</h1>
+    <p class="text-slate-500 mt-2">Grupo Gadens &bull; {{ governance.computed_at[:10] | replace('-','/') }}</p>
+    <p class="text-6xl font-bold text-blue-700 mt-8">{{ governance.global_score | round(1) }}</p>
+    <p class="text-slate-400 text-lg">Score Global /100</p>
+  </div>
+
+  {# Score Global #}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wide">Score Global de Governanca</h2>
+      <span class="text-xs px-2 py-1 rounded-full font-medium
+        {% if governance.status == 'OPERACIONAL' %}bg-green-50 text-green-700 border border-green-200
+        {% elif governance.status == 'DEGRADADO' %}bg-amber-50 text-amber-700 border border-amber-200
+        {% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">
+        {{ governance.status }}
+      </span>
+    </div>
+    <div class="flex items-end gap-4 mb-4">
+      <p class="text-5xl font-bold text-slate-800 dark:text-slate-100">{{ governance.global_score | round(1) }}</p>
+      <p class="text-slate-400 text-xl pb-1">/100</p>
+    </div>
+    <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 mb-4">
+      <div class="h-3 rounded-full transition-all
+        {% if governance.global_score >= 80 %}bg-green-500
+        {% elif governance.global_score >= 60 %}bg-amber-500
+        {% else %}bg-red-500{% endif %}"
+           style="width: {{ governance.global_score | round(1) }}%"></div>
+    </div>
+
+    {# Tabela de pilares #}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-100 dark:border-slate-700">
+            <th class="text-left py-2 text-xs font-medium text-slate-400 uppercase">Pilar</th>
+            <th class="text-center py-2 text-xs font-medium text-slate-400 uppercase">Peso</th>
+            <th class="text-center py-2 text-xs font-medium text-slate-400 uppercase">Score</th>
+            <th class="text-center py-2 text-xs font-medium text-slate-400 uppercase">Status</th>
+            <th class="py-2 text-xs font-medium text-slate-400 uppercase">Progresso</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+          {% for p in governance.pillars %}
+          <tr>
+            <td class="py-2.5 font-medium text-slate-700 dark:text-slate-200">{{ p.label }}</td>
+            <td class="py-2.5 text-center text-slate-500">{{ (p.weight * 100) | int }}%</td>
+            <td class="py-2.5 text-center font-bold
+              {% if p.data_source == 'coming_soon' %}text-slate-300
+              {% elif p.score >= 80 %}text-green-600
+              {% elif p.score >= 60 %}text-amber-600
+              {% else %}text-red-600{% endif %}">
+              {% if p.data_source == 'coming_soon' %}–{% else %}{{ p.score | round(1) }}{% endif %}
+            </td>
+            <td class="py-2.5 text-center">
+              {% if p.data_source == 'coming_soon' %}
+              <span class="text-xs text-slate-400">em breve</span>
+              {% else %}
+              <span class="text-xs font-medium
+                {% if p.status == 'OPERACIONAL' %}text-green-600
+                {% elif p.status == 'DEGRADADO' %}text-amber-600
+                {% else %}text-red-600{% endif %}">{{ p.status }}</span>
+              {% endif %}
+            </td>
+            <td class="py-2.5">
+              <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
+                {% if p.data_source != 'coming_soon' %}
+                <div class="h-1.5 rounded-full" style="width: {{ p.score | round(1) }}%; background: {{ p.color }}"></div>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# PMO — Resumo de Projetos #}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wide mb-4">PMO — Projetos de TI (ClickUp)</h2>
+
+    {% if pmo.has_data %}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+      {% for label, val, color in [
+        ("Total", pmo.total, "text-blue-600"),
+        ("Em andamento", pmo.in_progress, "text-amber-600"),
+        ("Concluidos", pmo.done, "text-green-600"),
+        ("Atrasados", pmo.overdue, "text-red-600"),
+      ] %}
+      <div class="text-center">
+        <p class="text-3xl font-bold {{ color }}">{{ val }}</p>
+        <p class="text-xs text-slate-400 mt-0.5">{{ label }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 mb-2">
+      <div class="h-2 rounded-full bg-green-500" style="width: {{ pmo.taxa_conclusao }}%"></div>
+    </div>
+    <p class="text-xs text-slate-400 mb-4">Taxa de conclusao: {{ pmo.taxa_conclusao }}% ({{ pmo.done }}/{{ pmo.total }})</p>
+
+    {# Projetos ativos em tabela compacta #}
+    {% if pmo.ativos %}
+    <p class="text-xs font-medium text-slate-500 mb-2 uppercase">Em andamento</p>
+    <table class="w-full text-xs">
+      <thead>
+        <tr class="border-b border-slate-100 dark:border-slate-700">
+          <th class="text-left py-1.5 text-slate-400 font-medium">Projeto</th>
+          <th class="text-center py-1.5 text-slate-400 font-medium">%</th>
+          <th class="text-right py-1.5 text-slate-400 font-medium">Prazo</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-50 dark:divide-slate-700">
+        {% for t in pmo.ativos[:8] %}
+        <tr>
+          <td class="py-1.5 text-slate-700 dark:text-slate-200 truncate max-w-xs">
+            {% if t.overdue %}<span class="text-red-500 mr-1">!</span>{% endif %}
+            {{ t.name }}
+          </td>
+          <td class="py-1.5 text-center font-medium
+            {% if t.pct_complete >= 80 %}text-green-600
+            {% elif t.pct_complete >= 40 %}text-amber-600
+            {% else %}text-slate-400{% endif %}">{{ t.pct_complete }}%</td>
+          <td class="py-1.5 text-right {% if t.overdue %}text-red-600 font-medium{% else %}text-slate-400{% endif %}">
+            {{ t.due_date or 'sem prazo' }}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if pmo.ativos | length > 8 %}
+        <tr><td colspan="3" class="py-1.5 text-slate-400 text-center">... +{{ pmo.ativos | length - 8 }} projetos</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% else %}
+    <p class="text-sm text-slate-400 text-center py-4">
+      {% if not pmo.token_ok %}Adicione CLICKUP_TOKEN ao .env para carregar projetos.
+      {% else %}Nenhum projeto encontrado.{% endif %}
+    </p>
+    {% endif %}
+  </div>
+
+  {# Indicadores por pilar (que têm métricas e não são coming_soon) #}
+  {% for p in governance.pillars %}
+  {% if p.data_source != 'coming_soon' and p.components %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="w-2.5 h-2.5 rounded-full" style="background: {{ p.color }}"></span>
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wide">{{ p.label }}</h2>
+      <span class="ml-auto text-xs font-medium
+        {% if p.status == 'OPERACIONAL' %}text-green-600{% elif p.status == 'DEGRADADO' %}text-amber-600{% else %}text-red-600{% endif %}">
+        {{ p.score | round(1) }} — {{ p.status }}
+      </span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {% for m in p.components[:6] %}
+      <div class="text-center py-2">
+        <p class="text-xl font-bold {% if m.value >= 80 %}text-green-600{% elif m.value >= 60 %}text-amber-600{% else %}text-red-600{% endif %}">
+          {{ m.raw_value | round(1) if m.raw_value is number else m.raw_value }}{% if m.unit %}<span class="text-xs font-normal text-slate-400">{{ m.unit }}</span>{% endif %}
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5 leading-tight">{{ m.label }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  {# Rodapé para impressão #}
+  <div class="hidden print:block text-center text-xs text-slate-400 border-t border-slate-200 pt-4 mt-8">
+    IT Governance Dashboard &bull; Grupo Gadens &bull; {{ governance.computed_at[:10] | replace('-','/') }}
+    &bull; Documento gerado automaticamente — nao requer assinatura
+  </div>
+
+</div>
+
+<style>
+@media print {
+  body { background: white !important; color: black !important; }
+  .print\:hidden { display: none !important; }
+  .hidden.print\:block { display: block !important; }
+  nav, .sidebar, aside, header { display: none !important; }
+  main, #relatorio-root { padding: 0 !important; margin: 0 !important; }
+  .dark\:bg-slate-800 { background: white !important; }
+  .dark\:text-slate-100, .dark\:text-slate-200 { color: black !important; }
+  .rounded-xl, .rounded-lg { border-radius: 0 !important; }
+  .shadow { box-shadow: none !important; }
+  page { size: A4; margin: 20mm; }
+}
+</style>
+{% endblock %}

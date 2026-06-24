@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}PMO — IT Governance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# Cabeçalho #}
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">PMO — Projetos de TI</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        Fonte: ClickUp &bull; Atualizado {{ data.updated_at }}
+      </p>
+    </div>
+    {% if data.token_ok %}
+    <span class="inline-flex items-center gap-1.5 text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 px-2.5 py-1 rounded-full">
+      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>ClickUp conectado
+    </span>
+    {% else %}
+    <span class="inline-flex items-center gap-1.5 text-xs bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full">
+      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>CLICKUP_TOKEN ausente no .env
+    </span>
+    {% endif %}
+  </div>
+
+  {% if not data.has_data %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
+    <svg class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Nenhum projeto carregado</p>
+    <p class="text-slate-400 dark:text-slate-500 text-xs mt-1">
+      {% if not data.token_ok %}Adicione <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">CLICKUP_TOKEN</code> no .env e reinicie o app.
+      {% else %}Nenhuma tarefa encontrada na lista configurada.{% endif %}
+    </p>
+  </div>
+  {% else %}
+
+  {# KPIs #}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    {% set kpis = [
+      ("Total", data.total, "text-blue-600 dark:text-blue-400", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"),
+      ("Em andamento", data.in_progress, "text-amber-600 dark:text-amber-400", "M13 10V3L4 14h7v7l9-11h-7z"),
+      ("Concluidos", data.done, "text-green-600 dark:text-green-400", "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"),
+      ("Atrasados", data.overdue, "text-red-600 dark:text-red-400", "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"),
+    ] %}
+    {% for label, val, color, icon in kpis %}
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{{ label }}</span>
+        <svg class="w-4 h-4 {{ color }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon }}"/>
+        </svg>
+      </div>
+      <p class="text-3xl font-bold {{ color }}">{{ val }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Taxa de conclusão + por equipe #}
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 col-span-1">
+      <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Taxa de Conclusao</p>
+      <p class="text-4xl font-bold text-slate-800 dark:text-slate-100 mb-2">{{ data.taxa_conclusao }}%</p>
+      <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2">
+        <div class="h-2 rounded-full bg-green-500 transition-all"
+             style="width: {{ [data.taxa_conclusao, 100] | min }}%"></div>
+      </div>
+      <p class="text-xs text-slate-400 mt-1">{{ data.done }} de {{ data.total }} projetos</p>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 col-span-2">
+      <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Por Equipe</p>
+      <div class="space-y-3">
+        {% set equipes = [
+          ("Infraestrutura e Suporte", data.infra_count, "#0231E8"),
+          ("Sistemas e Integracao", data.sistemas_count, "#E65100"),
+        ] %}
+        {% for label, count, color in equipes %}
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-600 dark:text-slate-300">{{ label }}</span>
+            <span class="font-medium text-slate-700 dark:text-slate-200">{{ count }}</span>
+          </div>
+          <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5">
+            {% set pct = (count / data.total * 100) | round | int if data.total else 0 %}
+            <div class="h-1.5 rounded-full transition-all" style="width: {{ pct }}%; background: {{ color }}"></div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if data.sem_equipe_count %}
+        <p class="text-xs text-slate-400">+ {{ data.sem_equipe_count }} sem equipe definida</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Projetos ativos #}
+  {% if data.ativos %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Projetos em Andamento</h2>
+      <span class="text-xs text-slate-400">{{ data.ativos | length }} projeto(s)</span>
+    </div>
+    <div class="divide-y divide-slate-100 dark:divide-slate-700">
+      {% for t in data.ativos %}
+      <div class="px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+        {# % barra #}
+        <div class="w-12 flex-shrink-0 text-center">
+          <p class="text-sm font-bold {% if t.pct_complete >= 80 %}text-green-600{% elif t.pct_complete >= 40 %}text-amber-600{% else %}text-slate-500{% endif %}">
+            {{ t.pct_complete }}%
+          </p>
+          <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1 mt-0.5">
+            <div class="h-1 rounded-full bg-blue-500" style="width: {{ t.pct_complete }}%"></div>
+          </div>
+        </div>
+
+        {# Nome + labels #}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            {% if t.overdue %}
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Atrasado"></span>
+            {% endif %}
+            {% if t.url %}
+            <a href="{{ t.url }}" target="_blank" rel="noopener"
+               class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-blue-600 truncate">{{ t.name }}</a>
+            {% else %}
+            <span class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{{ t.name }}</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+            {% for label in t.projeto[:2] %}
+            <span class="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">{{ label }}</span>
+            {% endfor %}
+            {% if t.equipe %}
+            <span class="text-[10px] text-slate-400">{{ t.equipe }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {# Responsáveis #}
+        <div class="hidden sm:flex items-center gap-1 flex-shrink-0">
+          {% for a in t.assignees[:2] %}
+          <span class="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center"
+                title="{{ a }}">{{ a[0] | upper }}</span>
+          {% endfor %}
+          {% if t.assignees | length > 2 %}
+          <span class="text-xs text-slate-400">+{{ t.assignees | length - 2 }}</span>
+          {% endif %}
+        </div>
+
+        {# Prazo #}
+        <div class="flex-shrink-0 text-right">
+          {% if t.due_date %}
+          <p class="text-xs {% if t.overdue %}text-red-600 font-medium{% else %}text-slate-500{% endif %}">
+            {{ t.due_date }}
+          </p>
+          {% if t.overdue %}
+          <p class="text-[10px] text-red-500">atrasado</p>
+          {% endif %}
+          {% else %}
+          <p class="text-xs text-slate-400">sem prazo</p>
+          {% endif %}
+        </div>
+
+        {# Priority badge #}
+        {% if t.priority in ("urgent","high") %}
+        <span class="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium
+          {% if t.priority == 'urgent' %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400
+          {% else %}bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400{% endif %}">
+          {{ t.priority }}
+        </span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# Últimos concluídos #}
+  {% if data.concluidos %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Ultimos Concluidos</h2>
+    </div>
+    <div class="divide-y divide-slate-100 dark:divide-slate-700">
+      {% for t in data.concluidos %}
+      <div class="px-5 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+        <svg class="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span class="text-sm text-slate-700 dark:text-slate-200 flex-1 truncate">{{ t.name }}</span>
+        {% for label in t.projeto[:1] %}
+        <span class="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded">{{ label }}</span>
+        {% endfor %}
+        <span class="text-xs text-slate-400 flex-shrink-0">{{ t.date_closed }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# end has_data #}
+</div>
+{% endblock %}

@@ -4,11 +4,15 @@
 
 {% block head %}
 <script nonce="{{ csp_nonce() }}">
+var _urlUsersCreate = "{{ url_for('users.create_user') }}";
+var _urlUsersEdit   = "{{ url_for('users.edit_user',      user_id=0) }}";
+var _urlUsersReset  = "{{ url_for('users.reset_password', user_id=0) }}";
+
 document.addEventListener('alpine:init', function () {
   Alpine.data('usersPage', function () {
     return {
       showModal:   false,
-      modalMode:   'create',   /* 'create' | 'edit' | 'reset' */
+      modalMode:   'create',
       editId:      null,
       editName:    '',
       editEmail:   '',
@@ -44,9 +48,9 @@ document.addEventListener('alpine:init', function () {
         return 'Novo usuario';
       },
       get actionUrl() {
-        if (this.modalMode === 'edit')  return '/users/' + this.editId + '/edit';
-        if (this.modalMode === 'reset') return '/users/' + this.editId + '/reset-password';
-        return '/users';
+        if (this.modalMode === 'edit')  return _urlUsersEdit.replace('/0/', '/' + this.editId + '/');
+        if (this.modalMode === 'reset') return _urlUsersReset.replace('/0/', '/' + this.editId + '/');
+        return _urlUsersCreate;
       },
     };
   });
