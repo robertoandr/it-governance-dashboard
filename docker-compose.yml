@@ -159,6 +159,7 @@ services:
       AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
       AZURE_CLIENT_ID: "${AZURE_CLIENT_ID:-}"
       AZURE_CLIENT_SECRET: "${AZURE_CLIENT_SECRET:-}"
+      M365_TENANT_DOMAIN: "${M365_TENANT_DOMAIN:-}"
       # AD + WinRM patch collector (NTLM — servidor Linux fora do domínio)
       LDAP_SERVER: "${LDAP_SERVER:-}"
       LDAP_BASE_DN: "${LDAP_BASE_DN:-}"
