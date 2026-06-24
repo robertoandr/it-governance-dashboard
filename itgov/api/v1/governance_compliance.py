@@ -57,6 +57,7 @@ compliance_summary_model = ns.model(
         "pct": fields.Float(allow_null=True, description="% do Secure Score, ou null se sem dados"),
         "category_breakdown": fields.Raw,
         "recomendacoes": fields.List(fields.Nested(ns.model("RecomendacaoControle", recomendacao_fields))),
+        "security_controls": fields.Raw(description="Status dos controles Safe Links, Safe Attachments e Audit Log"),
     },
 )
 
@@ -66,8 +67,18 @@ def _buscar_do_graph() -> dict:
     from itgov.services.secure_score_graph_client import SecureScoreGraphClient
 
     client = SecureScoreGraphClient()
-    secure_score = asyncio.run(client.get_latest_secure_score())
-    return calcular_resumo_compliance(secure_score).model_dump()
+
+    async def _fetch_all():
+        secure_score = await client.get_latest_secure_score()
+        try:
+            control_profiles = await client.get_security_controls()
+        except Exception as exc:
+            log.warning("gov_compliance.security_controls_failed", error=str(exc))
+            control_profiles = []
+        return secure_score, control_profiles
+
+    secure_score, control_profiles = asyncio.run(_fetch_all())
+    return calcular_resumo_compliance(secure_score, control_profiles=control_profiles).model_dump()
 
 
 def _obter_dados() -> dict:

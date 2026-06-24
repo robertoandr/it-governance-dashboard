@@ -48,9 +48,18 @@ mfa_summary_model = ns.model(
     {
         "enabled": fields.Boolean(description="True se dados MFA estão disponíveis"),
         "mfa_enabled_pct": fields.Float(allow_null=True, description="% usuários com MFA registrado"),
+        "sspr_registered_pct": fields.Float(allow_null=True, description="% usuários com SSPR registrado"),
         "total_users": fields.Integer(allow_null=True),
         "guest_users": fields.Integer(allow_null=True),
-        "ca_policies_count": fields.Integer(allow_null=True, description="Políticas de Acesso Condicional"),
+        "ca_policies_count": fields.Integer(
+            allow_null=True, description="Políticas de Acesso Condicional ativas (legado)"
+        ),
+        "ca_total": fields.Integer(allow_null=True, description="Total de políticas CA"),
+        "ca_enabled": fields.Integer(allow_null=True, description="CA policies ativas"),
+        "ca_report_only": fields.Integer(allow_null=True, description="CA policies em modo report-only"),
+        "ca_disabled": fields.Integer(allow_null=True, description="CA policies desabilitadas"),
+        "admin_total": fields.Integer(allow_null=True, description="Total de admins privilegiados"),
+        "admin_sem_mfa": fields.Integer(allow_null=True, description="Admins sem MFA registrado"),
         "stale_accounts_90d": fields.Integer(allow_null=True, description="Contas sem login há 90+ dias"),
         "source": fields.String(description="Fonte dos dados"),
         "last_collected": fields.String(allow_null=True, description="ISO 8601 da última coleta"),
@@ -78,9 +87,18 @@ from(bucket: "{provider._bucket_raw}")
         return {
             "enabled": True,
             "mfa_enabled_pct": float(row.get("mfa_enabled_pct", 0.0)),
+            "sspr_registered_pct": float(row.get("sspr_registered_pct", 0.0))
+            if row.get("sspr_registered_pct") is not None
+            else None,
             "total_users": int(row.get("total_users", 0) or 0),
             "guest_users": int(row.get("guest_users", 0) or 0),
             "ca_policies_count": int(row.get("ca_policies_count", 0) or 0),
+            "ca_total": int(row.get("ca_total", 0) or 0) if row.get("ca_total") is not None else None,
+            "ca_enabled": int(row.get("ca_enabled", 0) or 0) if row.get("ca_enabled") is not None else None,
+            "ca_report_only": int(row.get("ca_report_only", 0) or 0) if row.get("ca_report_only") is not None else None,
+            "ca_disabled": int(row.get("ca_disabled", 0) or 0) if row.get("ca_disabled") is not None else None,
+            "admin_total": int(row.get("admin_total", 0) or 0) if row.get("admin_total") is not None else None,
+            "admin_sem_mfa": int(row.get("admin_sem_mfa", 0) or 0) if row.get("admin_sem_mfa") is not None else None,
             "stale_accounts_90d": int(row.get("stale_accounts_90d", 0) or 0),
             "source": "influxdb",
             "last_collected": str(row.get("_time", "")) or None,

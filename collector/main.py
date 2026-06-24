@@ -18,6 +18,7 @@ from jobs.intune_patch_collector import run as collect_intune_patch
 from jobs.m365_gov_collector import run as collect_m365_gov
 from jobs.patch_collector import run as collect_patch
 from jobs.secure_score_collector import run as collect_secure_score
+from jobs.security_alerts_collector import run as collect_security_alerts
 from jobs.zabbix_availability_collector import run as collect_zabbix_availability
 from jobs.zabbix_risk_collector import run as collect_zabbix_risks
 
@@ -161,6 +162,16 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("m365_gov_job_registrado")
+
+        scheduler.add_job(
+            collect_security_alerts,
+            CronTrigger(hour="*/1"),
+            id="security_alerts_collector",
+            name="Microsoft Defender Security Alerts Collector (KPI-END-01)",
+            max_instances=1,
+            coalesce=True,
+        )
+        log.info("security_alerts_job_registrado")
     else:
         log.warning("entra_id_job_skipped", reason="AZURE_* env vars not set")
 

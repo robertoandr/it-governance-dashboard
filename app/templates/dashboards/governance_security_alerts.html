@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Alertas de Segurança — IT Governance{% endblock %}
+
+{% block page_title %}Governança M365 — Alertas de Segurança (Defender){% endblock %}
+
+{% block content %}
+{% macro stat_card(label, value, color, sublabel) %}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+  {% if value is none %}
+    <p class="text-3xl font-bold text-gray-300">--</p>
+    <p class="text-xs text-gray-400 mt-1">sem dados</p>
+  {% else %}
+    <p class="text-3xl font-bold {{ color }}">{{ value }}</p>
+    {% if sublabel %}<p class="text-xs text-gray-400 mt-1">{{ sublabel }}</p>{% endif %}
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Alertas de Segurança — Microsoft Defender</h1>
+  <p class="text-sm text-gray-500">KPI-END-01: alertas abertos no Microsoft Defender, com destaque para os sem resolucao em mais de 24h.</p>
+</div>
+
+{% if not summary.enabled %}
+<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 mb-6">
+  <p class="text-sm font-semibold text-yellow-800">Dados indisponíveis</p>
+  <p class="text-xs text-yellow-700 mt-1">
+    O coletor security_alerts_collector nao encontrou dados no InfluxDB.
+    Verifique se a permissao <span class="font-mono">SecurityAlert.Read.All</span> esta concedida ao app registration.
+  </p>
+</div>
+{% else %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  {{ stat_card(
+      'Total Abertos',
+      summary.total_open,
+      'text-gray-800',
+      'alertas com status new'
+  ) }}
+  {{ stat_card(
+      'Alta Severidade',
+      summary.high,
+      'text-red-600' if summary.high > 0 else 'text-green-600',
+      'requer acao imediata'
+  ) }}
+  {{ stat_card(
+      'Media Severidade',
+      summary.medium,
+      'text-yellow-600' if summary.medium > 0 else 'text-green-600',
+      'monitoramento ativo'
+  ) }}
+  {{ stat_card(
+      'Abertos > 24h (KPI-END-01)',
+      summary.older_than_24h,
+      'text-red-700 font-extrabold' if summary.older_than_24h > 0 else 'text-green-600',
+      'alertas sem resolucao em 24h'
+  ) }}
+</div>
+
+{% if summary.last_collected %}
+<p class="text-xs text-gray-400 mb-4">Ultima coleta: {{ summary.last_collected }}</p>
+{% endif %}
+
+{% if summary.older_than_24h > 0 %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+  <p class="text-sm font-semibold text-red-800">Atencao: {{ summary.older_than_24h }} alerta(s) aberto(s) ha mais de 24h</p>
+  <p class="text-xs text-red-700 mt-1">Revise e resolva os alertas no portal Microsoft Defender para cumprir o KPI-END-01.</p>
+</div>
+{% else %}
+<div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+  <p class="text-sm font-semibold text-green-800">KPI-END-01 OK — nenhum alerta aberto ha mais de 24h</p>
+</div>
+{% endif %}
+
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Distribuicao por Severidade</p>
+  <div class="space-y-2">
+    {% set total = summary.total_open or 1 %}
+    <div class="flex items-center gap-3">
+      <span class="w-16 text-xs text-gray-600">Alta</span>
+      <div class="flex-1 bg-gray-100 rounded-full h-3">
+        <div class="bg-red-500 h-3 rounded-full" style="width: {{ [(summary.high or 0) / total * 100, 100] | min }}%"></div>
+      </div>
+      <span class="w-10 text-xs font-semibold text-gray-700 text-right">{{ summary.high or 0 }}</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="w-16 text-xs text-gray-600">Media</span>
+      <div class="flex-1 bg-gray-100 rounded-full h-3">
+        <div class="bg-yellow-400 h-3 rounded-full" style="width: {{ [(summary.medium or 0) / total * 100, 100] | min }}%"></div>
+      </div>
+      <span class="w-10 text-xs font-semibold text-gray-700 text-right">{{ summary.medium or 0 }}</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="w-16 text-xs text-gray-600">Baixa</span>
+      <div class="flex-1 bg-gray-100 rounded-full h-3">
+        <div class="bg-gray-400 h-3 rounded-full" style="width: {{ [(summary.low or 0) / total * 100, 100] | min }}%"></div>
+      </div>
+      <span class="w-10 text-xs font-semibold text-gray-700 text-right">{{ summary.low or 0 }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

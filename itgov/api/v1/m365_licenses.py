@@ -169,11 +169,12 @@ def get_licenses_summary() -> dict:
 
     licenses.sort(key=lambda x: (-x["desperdicio_brl"], -x["consumed"]))
 
+    non_free_licenses = [lic for lic in licenses if not lic["is_free"]]
     result: dict = {
         "has_data": len(licenses) > 0,
         "licenses": licenses,
         "summary": {
-            "total_skus": len([lic for lic in licenses if not lic["is_free"]]),
+            "total_skus": len(non_free_licenses),
             "total_skus_free": len([lic for lic in licenses if lic["is_free"]]),
             "total_consumed": total_consumed,
             "total_seats": total_seats,
@@ -181,6 +182,8 @@ def get_licenses_summary() -> dict:
             "custo_mensal_total_brl": round(custo_mensal_total, 2),
             "desperdicio_total_brl": round(desperdicio_total, 2),
             "skus_com_custo": len([lic for lic in licenses if lic["cost_per_unit_brl"] > 0]),
+            "total_unassigned": sum(lic["available"] for lic in non_free_licenses),
+            "skus_ociosas": len([lic for lic in non_free_licenses if lic["available"] > 0]),
         },
         "costs_file": str(_COSTS_FILE),
     }

@@ -158,6 +158,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_governance_service_health_unavailable", error=str(_e))
 
+    # Governança Security Alerts — Defender KPI-END-01
+    try:
+        from itgov.api.v1.governance_security_alerts import ns as governance_security_alerts_ns
+
+        api.add_namespace(governance_security_alerts_ns, path="/v1/governance")
+        log.info("itgov_governance_security_alerts_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_security_alerts_unavailable", error=str(_e))
+
     # HTML blueprints
     import os
 

@@ -154,12 +154,21 @@ def governance_compliance() -> str:
     import os
 
     from itgov.api.v1.governance_compliance import get_cached_compliance_summary
+    from itgov.services.dns_check_service import _get_domain, get_email_security_summary
 
     if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
         abort(404)
 
     summary = get_cached_compliance_summary()
-    return render_template("dashboards/governance_compliance.html", summary=summary)
+
+    domain = _get_domain()
+    email_security = get_email_security_summary(domain) if domain else None
+
+    return render_template(
+        "dashboards/governance_compliance.html",
+        summary=summary,
+        email_security=email_security,
+    )
 
 
 @bp.route("/governance/data")
@@ -176,6 +185,22 @@ def governance_data() -> str:
 
     summary = get_cached_data_summary()
     return render_template("dashboards/governance_data.html", summary=summary)
+
+
+@bp.route("/governance/security-alerts")
+@login_required
+@require_role("admin", "gestor")
+def governance_security_alerts() -> str:
+    """Render pilar Endpoint — Alertas de Segurança (Defender, KPI-END-01)."""
+    import os
+
+    from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
+
+    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+        abort(404)
+
+    summary = get_cached_security_alerts_summary()
+    return render_template("dashboards/governance_security_alerts.html", summary=summary)
 
 
 @bp.route("/governance/service-health")

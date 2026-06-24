@@ -19,6 +19,9 @@ class ComplianceSummary(BaseModel):
 
     ``pct`` é ``None`` quando não há dado coletado (Graph indisponível ou
     sem histórico) — não deve ser confundido com 0% de compliance.
+
+    ``security_controls`` contém status dos controles de segurança específicos
+    (Safe Links, Safe Attachments, Audit Log) quando disponíveis.
     """
 
     current_score: float | None = Field(default=None, ge=0.0)
@@ -26,3 +29,4 @@ class ComplianceSummary(BaseModel):
     pct: float | None = Field(default=None, ge=0.0, le=100.0)
     category_breakdown: dict[str, float] = Field(default_factory=dict)
     recomendacoes: list[RecomendacaoControle] = Field(default_factory=list)
+    security_controls: dict = Field(default_factory=dict)
