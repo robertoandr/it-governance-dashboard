@@ -169,6 +169,45 @@ class M365GovCollector(BaseOAuthCollector):
         except Exception as exc:
             log.error(f"{kpi}_falhou", erro=str(exc))
 
+    # ── KPI 5: Service Health ────────────────────────────────────────────────
+
+    def collect_service_health(self, ts: datetime) -> None:
+        """Grava status de cada serviço M365 em m365_service_status.
+
+        Requer permissão ServiceHealth.Read.All no App Registration.
+        """
+        kpi = "service_health"
+        status_code_map = {
+            "serviceOperational": 0,
+            "serviceRestored": 0,
+            "postIncidentReviewPublished": 0,
+            "falsePositive": 0,
+            "verifyingService": 1,
+            "investigating": 1,
+            "restoringService": 1,
+            "extendedRecovery": 1,
+            "serviceDegradation": 2,
+            "serviceInterruption": 2,
+        }
+        try:
+            data = self._get(f"{_GRAPH}/admin/serviceAnnouncement/healthOverviews")
+            services = data.get("value", [])
+            points: list[Point] = []
+            for svc in services:
+                status_raw = svc.get("status", "")
+                points.append(
+                    Point("m365_service_status")
+                    .tag("service", svc.get("id", "unknown"))
+                    .field("status_code", status_code_map.get(status_raw, 1))
+                    .field("status_text", status_raw)
+                    .field("display_name", svc.get("service", ""))
+                    .time(ts, WritePrecision.S)
+                )
+            self._write.write(bucket=_BUCKET, record=points)
+            log.info(f"{kpi}_coletado", services_count=len(points))
+        except Exception as exc:
+            log.error(f"{kpi}_falhou", erro=str(exc))
+
     # ── Orquestrador ─────────────────────────────────────────────────────────
 
     def collect(self) -> None:
@@ -178,6 +217,7 @@ class M365GovCollector(BaseOAuthCollector):
         self.collect_mfa_percent(ts)
         self.collect_critical_alerts(ts)
         self.collect_licenses(ts)
+        self.collect_service_health(ts)
         self._influx.close()
         log.info("m365_gov_coleta_concluida", timestamp=datetime.now(UTC).isoformat())
 

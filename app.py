@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 
 from flask import Flask, jsonify, redirect, render_template, request
 from flask_restx import Api
-from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
 
 import config
 from app_utils import safe
@@ -24,6 +23,8 @@ from itgov.api.v1.governance_apps import ns as governance_apps_ns
 from itgov.api.v1.governance_compliance import ns as governance_compliance_ns
 from itgov.api.v1.governance_data import ns as governance_data_ns
 from itgov.api.v1.governance_devices import ns as governance_devices_ns
+from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
+from itgov.api.v1.governance_service_health import ns as governance_service_health_ns
 from itgov.api.v1.zabbix import ns as zabbix_ns
 from itgov.api.v1.zendesk import ns as zendesk_ns
 
@@ -67,6 +68,7 @@ itgov_api.add_namespace(governance_devices_ns)
 itgov_api.add_namespace(governance_apps_ns)
 itgov_api.add_namespace(governance_compliance_ns)
 itgov_api.add_namespace(governance_data_ns)
+itgov_api.add_namespace(governance_service_health_ns)
 
 _cache: dict = {
     "hosts": {},

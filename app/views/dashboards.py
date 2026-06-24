@@ -178,6 +178,22 @@ def governance_data() -> str:
     return render_template("dashboards/governance_data.html", summary=summary)
 
 
+@bp.route("/governance/service-health")
+@login_required
+@require_role("admin", "gestor")
+def governance_service_health() -> str:
+    """Render Service Health M365 — status dos serviços do tenant."""
+    import os
+
+    from itgov.api.v1.governance_service_health import get_cached_service_health_summary
+
+    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+        abort(404)
+
+    summary = get_cached_service_health_summary()
+    return render_template("dashboards/governance_service_health.html", summary=summary)
+
+
 @bp.route("/backup")
 @login_required
 @require_role("admin", "gestor")

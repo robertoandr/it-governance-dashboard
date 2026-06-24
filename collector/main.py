@@ -15,6 +15,7 @@ from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
 from jobs.intune_patch_collector import run as collect_intune_patch
+from jobs.m365_gov_collector import run as collect_m365_gov
 from jobs.patch_collector import run as collect_patch
 from jobs.secure_score_collector import run as collect_secure_score
 from jobs.zabbix_availability_collector import run as collect_zabbix_availability
@@ -149,6 +150,17 @@ if __name__ == "__main__":
             coalesce=True,
         )
         log.info("intune_patch_job_registered")
+
+        scheduler.add_job(
+            collect_m365_gov,
+            CronTrigger(minute="*/30"),
+            id="m365_gov_collector",
+            name="M365 Gov KPIs Collector (Secure Score, MFA, Alerts, Licenses, Service Health)",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("m365_gov_job_registrado")
     else:
         log.warning("entra_id_job_skipped", reason="AZURE_* env vars not set")
 

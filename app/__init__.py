@@ -149,6 +149,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_governance_data_unavailable", error=str(_e))
 
+    # Governança Service Health — ServiceHealth.Read.All
+    try:
+        from itgov.api.v1.governance_service_health import ns as governance_service_health_ns
+
+        api.add_namespace(governance_service_health_ns, path="/v1/governance")
+        log.info("itgov_governance_service_health_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_service_health_unavailable", error=str(_e))
+
     # HTML blueprints
     import os
 
