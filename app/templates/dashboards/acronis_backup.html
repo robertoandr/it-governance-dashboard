@@ -24,7 +24,7 @@
 </div>
 
 {# --- KPIs principais --- #}
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
   {{ stat_card('Total de agentes', data.total_agents, '', 'text-gray-800', none) }}
   {{ stat_card('Online', data.online, '',
       'text-green-600' if data.online == data.total_agents else 'text-yellow-600',
@@ -41,6 +41,22 @@
   {{ stat_card('Incidentes', data.incidents_total, '',
       'text-red-600' if data.incidents_total > 0 else 'text-green-600',
       'críticos ativos') }}
+  {{ stat_card('Ameacas detectadas', data.edr_total, '',
+      'text-red-600' if data.edr_total > 0 else 'text-green-600',
+      'EDR / antivirus') }}
+  {# Ultimo login #}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Ultimo login</p>
+    {% if data.last_login_user %}
+      <p class="text-sm font-bold text-gray-800 truncate" title="{{ data.last_login_user }}">{{ data.last_login_user }}</p>
+      {% if data.last_login_fmt %}
+        <p class="text-xs text-gray-400 mt-1">{{ data.last_login_fmt }}</p>
+      {% endif %}
+    {% else %}
+      <p class="text-3xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">sem dados</p>
+    {% endif %}
+  </div>
 </div>
 
 {# --- Alertas secundários --- #}
@@ -100,7 +116,6 @@
           <thead>
             <tr class="border-b text-xs text-gray-400 uppercase">
               <th class="text-left py-1 pr-3 font-medium">Máquina</th>
-              <th class="text-left py-1 pr-3 font-medium">Tenant</th>
               <th class="text-right py-1 font-medium">Dias</th>
             </tr>
           </thead>
@@ -110,7 +125,6 @@
               <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate" title="{{ m.name }}">
                 {{ m.name }}
               </td>
-              <td class="py-1.5 pr-3 text-gray-500 text-xs">{{ m.tenant }}</td>
               <td class="py-1.5 text-right font-bold
                   {% if m.offline_days > 60 %}text-red-600
                   {% elif m.offline_days > 30 %}text-orange-500
@@ -149,7 +163,6 @@
           <thead>
             <tr class="border-b text-xs text-gray-400 uppercase">
               <th class="text-left py-1 pr-3 font-medium">Máquina</th>
-              <th class="text-left py-1 pr-3 font-medium">Tenant</th>
               <th class="text-left py-1 font-medium">Status</th>
             </tr>
           </thead>
@@ -159,7 +172,6 @@
               <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate" title="{{ m.name }}">
                 {{ m.name }}
               </td>
-              <td class="py-1.5 pr-3 text-gray-500 text-xs">{{ m.tenant }}</td>
               <td class="py-1.5">
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium
                     {% if m.status == 'online' %}bg-green-100 text-green-700
@@ -201,7 +213,6 @@
         <thead>
           <tr class="border-b text-xs text-gray-400 uppercase">
             <th class="text-left py-1 pr-3 font-medium">Máquina</th>
-            <th class="text-left py-1 pr-3 font-medium">Tenant</th>
             <th class="text-left py-1 pr-3 font-medium">Tipo</th>
             <th class="text-left py-1 pr-3 font-medium">Severidade</th>
             <th class="text-left py-1 font-medium">Quando</th>
@@ -213,7 +224,6 @@
             <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[140px] truncate" title="{{ inc.resource_name }}">
               {{ inc.resource_name }}
             </td>
-            <td class="py-1.5 pr-3 text-gray-500 text-xs">{{ inc.tenant }}</td>
             <td class="py-1.5 pr-3 text-xs text-gray-600 max-w-[160px] truncate" title="{{ inc.alert_type }}">
               {{ inc.alert_type }}
             </td>

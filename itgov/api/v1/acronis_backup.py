@@ -93,6 +93,18 @@ from(bucket: "{bucket}")
   |> last()
 """)
 
+    # ── 5. Último login (audit log coletado pelo acronis_risk_collector) ───
+    rows_login = _query(f"""
+from(bucket: "{bucket}")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_last_login")
+  |> filter(fn: (r) => r._field == "user_email")
+  |> last()
+""")
+    login_row = rows_login[-1] if rows_login else {}
+    last_login_user: str | None = login_row.get("_value") or None
+    last_login_time = login_row.get("_time") or None
+
     # ── Processar máquinas ─────────────────────────────────────────────────
     offline_gt20: list[dict] = []
     sem_plano: list[dict] = []
@@ -135,6 +147,21 @@ from(bucket: "{bucket}")
     offline = int(agents_row.get("offline", 0) or 0)
     protected = total - int(risk_row.get("sem_plano", 0) or 0)
 
+    # Formatar timestamp do último login para exibição
+    last_login_fmt: str | None = None
+    if last_login_time:
+        try:
+            from datetime import UTC, datetime
+
+            lt = (
+                last_login_time
+                if hasattr(last_login_time, "strftime")
+                else datetime.fromisoformat(str(last_login_time).replace("Z", "+00:00"))
+            )
+            last_login_fmt = lt.astimezone(UTC).strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            last_login_fmt = str(last_login_time)[:16]
+
     return {
         # KPIs
         "total_agents": total,
@@ -147,6 +174,9 @@ from(bucket: "{bucket}")
         "offline_gt_20d_count": int(risk_row.get("offline_gt_20d", 0) or 0),
         "incidents_total": int(risk_row.get("incidents_total", 0) or 0),
         "license_issues": int(risk_row.get("license_issues", 0) or 0),
+        "edr_total": int(risk_row.get("edr_total", 0) or 0),
+        "last_login_user": last_login_user,
+        "last_login_fmt": last_login_fmt,
         # Listas
         "offline_gt20": offline_gt20,
         "sem_plano": sem_plano,

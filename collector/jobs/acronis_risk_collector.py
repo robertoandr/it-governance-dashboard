@@ -17,6 +17,8 @@ Fallback se sem match: KPIs agregados preservados, join_fallback logado.
 
 from __future__ import annotations
 
+import base64
+import json
 import sys
 import time
 from base64 import b64encode
@@ -109,6 +111,78 @@ class AcronisRiskCollector:
 
     def _coletar_alertas(self) -> list[dict[str, Any]]:
         return self._paginar("/api/alert_manager/v1/alerts")
+
+    def _tenant_id_from_token(self) -> str | None:
+        """Extrai tenant_id do JWT (claim 'scope[0].tid' ou 'owner_tuid')."""
+        try:
+            token = self._get_token()
+            payload_b64 = token.split(".")[1]
+            # Adiciona padding se necessário
+            payload_b64 += "=" * (-len(payload_b64) % 4)
+            claims = json.loads(base64.b64decode(payload_b64))
+            scope = claims.get("scope", [])
+            if scope and isinstance(scope, list):
+                return scope[0].get("tid")
+            return claims.get("owner_tuid")
+        except Exception as exc:
+            log.warning("acronis_tenant_id_extract_error", error=str(exc))
+            return None
+
+    def _coletar_ultimo_login(self) -> dict[str, str] | None:
+        """Retorna {'user': email, 'time': ISO8601} do último evento de login.
+
+        Tenta /api/2/audit_log primeiro (indisponível em alguns MSPs — retorna 404).
+        Fallback: /api/2/tenants/{tid}/users + /api/2/users?uuids=... usando
+        updated_at como proxy de atividade recente.
+        """
+        # 1. Audit log (disponível apenas em algumas instalações Acronis)
+        for type_filter in ("user.login", None):
+            try:
+                params: dict[str, Any] = {"order": "desc", "limit": 10, "lod": "short"}
+                if type_filter:
+                    params["type"] = type_filter
+                data = self._get("/api/2/audit_log", params=params)
+                for ev in data.get("items", []):
+                    user = ev.get("user_login") or ev.get("user_email") or ""
+                    ev_time = ev.get("time") or ev.get("created_at") or ""
+                    if user:
+                        return {"user": user, "time": ev_time}
+            except Exception as exc:
+                log.warning("acronis_audit_log_error", type_filter=type_filter, error=str(exc))
+
+        # 2. Fallback: listar usuários do tenant e usar updated_at como proxy
+        try:
+            tid = self._tenant_id_from_token()
+            if not tid:
+                return None
+            user_ids: list[str] = self._get(f"/api/2/tenants/{tid}/users").get("items", [])
+            if not user_ids:
+                return None
+
+            uuids_str = ",".join(user_ids[:20])
+            users_data = self._get("/api/2/users", params={"uuids": uuids_str})
+            users = users_data.get("items", [])
+            if not users:
+                return None
+
+            # Ordenar por updated_at desc para encontrar o mais recentemente ativo
+            def _parse_ts(u: dict[str, Any]) -> datetime:
+                raw = u.get("updated_at") or u.get("created_at") or ""
+                try:
+                    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                except Exception:
+                    return datetime.min.replace(tzinfo=UTC)
+
+            most_recent = max(users, key=_parse_ts)
+            email = most_recent.get("login") or (most_recent.get("contact") or {}).get("email") or ""
+            ts = most_recent.get("updated_at") or most_recent.get("created_at") or ""
+            if email and ts:
+                log.info("acronis_ultimo_login_via_users", user=email, updated_at=ts)
+                return {"user": email, "time": ts}
+        except Exception as exc:
+            log.warning("acronis_users_fallback_error", error=str(exc))
+
+        return None
 
     # ── Calculos ─────────────────────────────────────────────────────────────
 
@@ -236,7 +310,13 @@ class AcronisRiskCollector:
 
         agentes = self._coletar_agentes()
         alertas = self._coletar_alertas()
-        log.info("acronis_risk_dados_coletados", agentes=len(agentes), alertas=len(alertas))
+        ultimo_login = self._coletar_ultimo_login()
+        log.info(
+            "acronis_risk_dados_coletados",
+            agentes=len(agentes),
+            alertas=len(alertas),
+            ultimo_login_user=ultimo_login.get("user", "") if ultimo_login else None,
+        )
 
         hn_idx = self._build_hostname_index(agentes)
         por_maquina, license_issues, no_match, incidentes = self._agrupar_alertas(alertas, hn_idx)
@@ -328,6 +408,18 @@ class AcronisRiskCollector:
             .field("incidents_total", stats["incidents_total"])
             .time(ts, WritePrecision.S)
         )
+
+        # Último login do audit log
+        if ultimo_login and ultimo_login.get("user"):
+            try:
+                login_ts = datetime.fromisoformat(ultimo_login["time"].replace("Z", "+00:00"))
+            except Exception:
+                login_ts = ts
+            pontos.append(
+                Point("gov_acronis_last_login")
+                .field("user_email", ultimo_login["user"])
+                .time(login_ts, WritePrecision.S)
+            )
 
         with InfluxDBClient(
             url=settings.INFLUX_URL,
