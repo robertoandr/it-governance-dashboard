@@ -15,7 +15,7 @@ from flask import Flask
 from flask_restx import Api
 
 from itgov.api.v1.zendesk import _svc, ns
-from itgov.models.zendesk import CSATSummary, SLAMetric, Ticket, TicketPriority, TicketStatus
+from itgov.models.zendesk import Ticket, TicketPriority, TicketStatus
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +72,7 @@ def test_svc_uses_config_credentials(monkeypatch):
     monkeypatch.setattr("config.ZENDESK_SUBDOMAIN", FAKE_SUBDOMAIN)
     monkeypatch.setattr("config.ZENDESK_EMAIL", FAKE_EMAIL)
     monkeypatch.setattr("config.ZENDESK_API_TOKEN", FAKE_TOKEN)
+    monkeypatch.setattr("config.ZENDESK_GROUP_ID", 0)  # 0 → group_id=None
 
     with patch("itgov.api.v1.zendesk.ZendeskService") as mock_cls:
         mock_cls.return_value = MagicMock()
@@ -80,6 +81,7 @@ def test_svc_uses_config_credentials(monkeypatch):
             subdomain=FAKE_SUBDOMAIN,
             email=FAKE_EMAIL,
             api_token=FAKE_TOKEN,
+            group_id=None,
         )
 
 
@@ -97,6 +99,7 @@ def test_svc_config_values_propagated(monkeypatch):
     monkeypatch.setattr("config.ZENDESK_SUBDOMAIN", "acme")
     monkeypatch.setattr("config.ZENDESK_EMAIL", "ops@acme.com")
     monkeypatch.setattr("config.ZENDESK_API_TOKEN", "secret-token")
+    monkeypatch.setattr("config.ZENDESK_GROUP_ID", 0)
 
     with patch("itgov.api.v1.zendesk.ZendeskService") as mock_cls:
         mock_cls.return_value = MagicMock()
@@ -169,12 +172,24 @@ def test_tickets_volume(client):
 
 
 def test_sla_metrics(client):
-    """GET /zendesk/sla retorna métricas de SLA."""
-    metric = SLAMetric(total_tickets=50, breached=3, compliance_pct=94.0, avg_first_reply_minutes=12.5)
-    mock_svc = _mock_svc_ctx()
-    mock_svc.get_sla_metrics.return_value = metric
+    """GET /zendesk/sla retorna métricas de SLA via get_cached_mttr_summary."""
+    summary_dict = {
+        "total_open": 50,
+        "breached": 3,
+        "compliance_pct": 94.0,
+        "csat_pct": 90.0,
+        "csat_good": 27,
+        "csat_bad": 3,
+        "csat_sample": 30,
+        "by_priority": {},
+        "oldest_tickets": [],
+        "age_buckets": {},
+        "resolved_7d": 0,
+        "resolved_30d": 0,
+        "volume_by_status": {},
+    }
 
-    with patch("itgov.api.v1.zendesk._svc", return_value=mock_svc):
+    with patch("itgov.api.v1.zendesk.get_cached_mttr_summary", return_value=summary_dict):
         resp = client.get("/api/v1/zendesk/sla")
 
     assert resp.status_code == 200
@@ -185,12 +200,24 @@ def test_sla_metrics(client):
 
 
 def test_csat_summary(client):
-    """GET /zendesk/csat retorna resumo de CSAT."""
-    summary = CSATSummary(total_ratings=30, good=27, bad=3, csat_pct=90.0, sample_size=30)
-    mock_svc = _mock_svc_ctx()
-    mock_svc.get_csat_summary.return_value = summary
+    """GET /zendesk/csat retorna resumo de CSAT via get_cached_mttr_summary."""
+    summary_dict = {
+        "total_open": 0,
+        "breached": 0,
+        "compliance_pct": 100.0,
+        "csat_pct": 90.0,
+        "csat_good": 27,
+        "csat_bad": 3,
+        "csat_sample": 30,
+        "by_priority": {},
+        "oldest_tickets": [],
+        "age_buckets": {},
+        "resolved_7d": 0,
+        "resolved_30d": 0,
+        "volume_by_status": {},
+    }
 
-    with patch("itgov.api.v1.zendesk._svc", return_value=mock_svc):
+    with patch("itgov.api.v1.zendesk.get_cached_mttr_summary", return_value=summary_dict):
         resp = client.get("/api/v1/zendesk/csat")
 
     assert resp.status_code == 200

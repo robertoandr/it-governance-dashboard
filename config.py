@@ -53,6 +53,7 @@ ZENDESK_SUBDOMAIN = _env("ZENDESK_SUBDOMAIN", required=False)
 ZENDESK_EMAIL = _env("ZENDESK_EMAIL", required=False)
 ZENDESK_API_TOKEN = _env("ZENDESK_API_TOKEN", required=False)
 ZENDESK_MAX_PAGES = _env_int("ZENDESK_MAX_PAGES", 100)
+ZENDESK_GROUP_ID: int = _env_int("ZENDESK_GROUP_ID", 0)
 ZENDESK_ENABLED = bool(ZENDESK_SUBDOMAIN and ZENDESK_EMAIL and ZENDESK_API_TOKEN)
 
 # ── Maintenance PIN (vazio = endpoints de escrita bloqueados por design)

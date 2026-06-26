@@ -451,6 +451,16 @@ class InfluxDBMetricsProvider:
                     "weight": 1.0,
                     "trend": "stable",
                 },
+                {
+                    "id": "deployment_frequency",
+                    "label": "Frequência de deploys",
+                    "value": 70.0,
+                    "raw_value": None,
+                    "unit": "deploys/mês",
+                    "source": "coming_soon",
+                    "weight": 1.0,
+                    "trend": "stable",
+                },
             ]
         )
 

@@ -50,6 +50,14 @@ def _tickets_page(tickets: list[dict], has_more: bool = False) -> dict:
     }
 
 
+def _search_page(tickets: list[dict], next_page: str | None = None) -> dict:
+    return {
+        "results": tickets,
+        "count": len(tickets),
+        "next_page": next_page,
+    }
+
+
 class TestGetTickets:
     @respx.mock
     def test_returns_tickets_parsed(self, svc: ZendeskService) -> None:
@@ -87,19 +95,16 @@ class TestGetTickets:
 class TestGetOpenTickets:
     @respx.mock
     def test_filters_open_tickets(self, svc: ZendeskService) -> None:
-        raw = [
+        # get_open_tickets() usa search API — server retorna apenas os status filtrados
+        matching = [
             _ticket(1, status="open"),
-            _ticket(2, status="solved"),
             _ticket(3, status="new"),
-            _ticket(4, status="closed"),
             _ticket(5, status="pending"),
         ]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_tickets_page(raw)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_search_page(matching)))
         open_tickets = svc.get_open_tickets()
         open_ids = {t.id for t in open_tickets}
         assert open_ids == {1, 3, 5}  # open, new, pending
-        assert 2 not in open_ids  # solved excluído
-        assert 4 not in open_ids  # closed excluído
 
 
 class TestSLAMetrics:
@@ -108,7 +113,7 @@ class TestSLAMetrics:
         """Tickets recentes não devem ter breach."""
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         raw = [_ticket(status="open", created_at=now, updated_at=now)]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_tickets_page(raw)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_search_page(raw)))
         metric = svc.get_sla_metrics()
         assert metric.total_tickets == 1
         assert metric.breached == 0
@@ -116,7 +121,7 @@ class TestSLAMetrics:
 
     @respx.mock
     def test_empty_returns_100_compliance(self, svc: ZendeskService) -> None:
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_tickets_page([])))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_search_page([])))
         metric = svc.get_sla_metrics()
         assert metric.compliance_pct == 100.0
         assert metric.total_tickets == 0

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import threading
 import time
 
@@ -10,6 +9,7 @@ import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+import config
 from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
@@ -31,12 +31,12 @@ _lock_sla = threading.Lock()
 _cache_sla: dict | None = None
 _cache_sla_ts: float = 0.0
 
-# SLA thresholds por prioridade (horas). Sobrescrevíveis via env.
+# SLA thresholds por prioridade (horas)
 _SLA_H: dict[str, float] = {
-    "urgent": float(os.getenv("ZENDESK_SLA_URGENT_H", "2")),
-    "high": float(os.getenv("ZENDESK_SLA_HIGH_H", "8")),
-    "normal": float(os.getenv("ZENDESK_SLA_NORMAL_H", "48")),
-    "low": float(os.getenv("ZENDESK_SLA_LOW_H", "120")),
+    "urgent": 2.0,
+    "high": 8.0,
+    "normal": 48.0,
+    "low": 120.0,
 }
 
 
@@ -258,12 +258,11 @@ def _svc() -> ZendeskService:
     pelo grupo (ex: TI / Infra), reduzindo drasticamente o payload nas
     consultas de SLA e MTTR.
     """
-    raw_gid = os.getenv("ZENDESK_GROUP_ID", "")
-    group_id = int(raw_gid) if raw_gid.strip().isdigit() else None
+    group_id = config.ZENDESK_GROUP_ID or None
     return ZendeskService(
-        subdomain=os.getenv("ZENDESK_SUBDOMAIN", ""),
-        email=os.getenv("ZENDESK_EMAIL", ""),
-        api_token=os.getenv("ZENDESK_API_TOKEN", ""),
+        subdomain=config.ZENDESK_SUBDOMAIN or "",
+        email=config.ZENDESK_EMAIL or "",
+        api_token=config.ZENDESK_API_TOKEN or "",
         group_id=group_id,
     )
 
