@@ -312,9 +312,11 @@ def rede_monitoring() -> str:
 def links_manager() -> str:
     """Render gerenciador de links WAN/Internet."""
     from itgov.api.v1.links_manager import get_cached_links
+    from itgov.services.fortinet_service import get_cached_fortinet
 
     data = get_cached_links()
-    return render_template("dashboards/links_manager.html", data=data)
+    fortinet = get_cached_fortinet()
+    return render_template("dashboards/links_manager.html", data=data, fortinet=fortinet)
 
 
 @bp.route("/links/novo", methods=["GET", "POST"])
