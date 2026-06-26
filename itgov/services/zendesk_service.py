@@ -109,6 +109,7 @@ class ZendeskService(SyncAPIClient):
         api_token: str,
         timeout: float = 10.0,
         max_retries: int = 3,
+        group_id: int | None = None,
     ) -> None:
         credentials = base64.b64encode(f"{email}/token:{api_token}".encode()).decode()
         super().__init__(
@@ -121,6 +122,7 @@ class ZendeskService(SyncAPIClient):
             },
         )
         self._subdomain = subdomain
+        self._group_id = group_id
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -135,17 +137,23 @@ class ZendeskService(SyncAPIClient):
         root_key: str,
         *,
         max_pages: int | None = None,
+        cursor: bool = True,
         **params: Any,
     ) -> list[dict[str, Any]]:
-        """Coleta todas as páginas de um endpoint paginado (cursor-based).
+        """Coleta todas as páginas de um endpoint paginado.
+
+        Suporta dois estilos de paginação do Zendesk:
+
+        * ``cursor=True`` (padrão) — usa ``page[size]`` + ``links.next``.
+          Funciona em /api/v2/tickets.json, /api/v2/groups/<id>/tickets.json.
+        * ``cursor=False`` — usa ``per_page`` + ``next_page`` (offset).
+          Obrigatório para /api/v2/search.json, que retorna 400 com ``page[size]``.
 
         Args:
-            path: Caminho do endpoint (ex: "/api/v2/tickets.json").
+            path: Caminho do endpoint.
             root_key: Chave raiz da resposta JSON com os registros.
             max_pages: Cap de páginas. Padrão: ZENDESK_MAX_PAGES (100).
-                100 páginas × 100 tickets/página = 10k registros por chamada.
-                Se excedido, emite WARN estruturado e interrompe (Opção A:
-                dados parciais preferíveis a erro 500 no dashboard).
+            cursor: True para cursor-based, False para offset-based.
             **params: Query params adicionais para a primeira página.
 
         Returns:
@@ -153,7 +161,12 @@ class ZendeskService(SyncAPIClient):
         """
         cap = max_pages if max_pages is not None else _DEFAULT_MAX_PAGES
         results: list[dict[str, Any]] = []
-        query_params: dict[str, Any] = {"page[size]": _PAGE_SIZE, **params}
+
+        if cursor:
+            query_params: dict[str, Any] = {"page[size]": _PAGE_SIZE, **params}
+        else:
+            query_params = {"per_page": _PAGE_SIZE, **params}
+
         url: str | None = path
         page_count = 0
 
@@ -172,27 +185,42 @@ class ZendeskService(SyncAPIClient):
             results.extend(data.get(root_key, []))
             page_count += 1
 
+            # Cursor-based: meta.has_more + links.next
+            # Offset-based: next_page como URL no topo da resposta
             meta = data.get("meta", {})
             links = data.get("links", {})
-            # Cursor-based pagination (API v2)
             if meta.get("has_more") and links.get("next"):
-                url = links["next"]
-                query_params = {}  # próxima página usa URL completa
+                next_url: str | None = links["next"]
             else:
-                url = None
+                next_url = data.get("next_page") or None
+
+            url = next_url
+            query_params = {}  # próximas páginas usam URL completa
 
         log.debug(
             "zendesk.pagination.completed",
             pages_traversed=page_count,
             cap=cap,
             capped=page_count >= cap,
+            mode="cursor" if cursor else "offset",
         )
         return results
 
     # ── Public Methods ────────────────────────────────────────────────────────
 
+    def get_groups(self) -> list[dict[str, Any]]:
+        """Lista todos os grupos do Zendesk. Útil para descobrir o group_id."""
+        data = self._get_json("/api/v2/groups.json")
+        groups = data.get("groups", [])
+        log.info("zendesk_groups_fetched", count=len(groups))
+        return [{"id": g["id"], "name": g["name"]} for g in groups]
+
     def get_tickets(self, status: str | None = None) -> list[Ticket]:
         """Retorna tickets com filtro opcional por status.
+
+        Quando ``group_id`` foi passado no construtor, usa a Search API com
+        ``group_id:<id>`` — única forma de filtrar por grupo server-side no
+        Zendesk (o param ``group_id`` em /tickets.json é ignorado pela API).
 
         Args:
             status: "open", "pending", "solved", etc. None retorna todos.
@@ -200,19 +228,56 @@ class ZendeskService(SyncAPIClient):
         Returns:
             Lista de Ticket ordenada por data de criação decrescente.
         """
-        params: dict[str, Any] = {"sort_by": "created_at", "sort_order": "desc"}
-        if status:
-            params["status"] = status
+        if self._group_id:
+            query = f"type:ticket group_id:{self._group_id}"
+            if status:
+                query += f" status:{status}"
+            raw = self._paginate(
+                "/api/v2/search.json",
+                "results",
+                cursor=False,
+                query=query,
+                sort_by="created_at",
+                sort_order="desc",
+            )
+            raw = [t for t in raw if t.get("result_type") == "ticket" or "subject" in t]
+        else:
+            params: dict[str, Any] = {"sort_by": "created_at", "sort_order": "desc"}
+            if status:
+                params["status"] = status
+            raw = self._paginate("/api/v2/tickets.json", "tickets", **params)
 
-        raw = self._paginate("/api/v2/tickets.json", "tickets", **params)
         tickets = [Ticket.model_validate(t) for t in raw]
-        log.info("zendesk_tickets_fetched", count=len(tickets), status_filter=status)
+        log.info(
+            "zendesk_tickets_fetched",
+            count=len(tickets),
+            status_filter=status,
+            group_id=self._group_id,
+        )
         return tickets
 
     def get_open_tickets(self) -> list[Ticket]:
-        """Atalho: retorna apenas tickets abertos (new + open + pending)."""
-        all_tickets = self.get_tickets()
-        return [t for t in all_tickets if t.is_open]
+        """Retorna tickets abertos (new + open + pending) via search server-side.
+
+        Quando ``group_id`` configurado, acrescenta ``group_id:<id>`` à query
+        para que a API retorne apenas tickets do grupo — reduz drasticamente
+        o payload transferido em tenants grandes.
+        """
+        query = "type:ticket status:new OR status:open OR status:pending"
+        if self._group_id:
+            query += f" group_id:{self._group_id}"
+
+        raw = self._paginate(
+            "/api/v2/search.json",
+            "results",
+            cursor=False,  # search API usa offset pagination (per_page), não cursor (page[size])
+            query=query,
+            sort_by="created_at",
+            sort_order="desc",
+        )
+        tickets = [Ticket.model_validate(t) for t in raw if t.get("result_type") == "ticket" or "subject" in t]
+        log.info("zendesk_open_tickets_fetched", count=len(tickets), group_id=self._group_id)
+        return tickets
 
     def get_sla_metrics(self) -> SLAMetric:
         """Calcula métricas de SLA a partir dos tickets ativos.
@@ -238,13 +303,47 @@ class ZendeskService(SyncAPIClient):
             compliance_pct=compliance,
         )
 
-    def get_satisfaction_ratings(self) -> list[SatisfactionRating]:
-        """Retorna avaliações de satisfação (CSAT) recentes.
+    def get_solved_tickets(self, days: int = 30) -> list[Ticket]:
+        """Retorna tickets resolvidos nos últimos ``days`` dias.
 
-        Returns:
-            Lista de SatisfactionRating (últimas 100 avaliações).
+        Usa Search API com filtro de data — muito mais rápido que buscar
+        todos os tickets e filtrar por ``updated_at`` em Python.
         """
-        raw = self._paginate("/api/v2/satisfaction_ratings.json", "satisfaction_ratings", sort_order="desc")
+        from datetime import UTC, datetime, timedelta
+
+        cutoff_date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
+        query = f"type:ticket status:solved updated_at>{cutoff_date}"
+        if self._group_id:
+            query += f" group_id:{self._group_id}"
+
+        raw = self._paginate(
+            "/api/v2/search.json",
+            "results",
+            cursor=False,
+            query=query,
+            sort_by="updated_at",
+            sort_order="desc",
+        )
+        tickets = [Ticket.model_validate(t) for t in raw if "subject" in t]
+        log.info("zendesk_solved_tickets_fetched", count=len(tickets), days=days, group_id=self._group_id)
+        return tickets
+
+    def get_satisfaction_ratings(self) -> list[SatisfactionRating]:
+        """Retorna avaliações de satisfação (CSAT) dos últimos 90 dias.
+
+        Usa ``start_time`` para evitar varrer todos os ratings do tenant
+        (pode ser dezenas de milhares) — limitado a 3 páginas (300 ratings).
+        """
+        from datetime import UTC, datetime, timedelta
+
+        start_time = int((datetime.now(UTC) - timedelta(days=90)).timestamp())
+        raw = self._paginate(
+            "/api/v2/satisfaction_ratings.json",
+            "satisfaction_ratings",
+            max_pages=3,
+            sort_order="desc",
+            start_time=start_time,
+        )
         ratings = [SatisfactionRating.model_validate(r) for r in raw if r.get("score") in ("good", "bad")]
         log.info("zendesk_csat_fetched", count=len(ratings))
         return ratings

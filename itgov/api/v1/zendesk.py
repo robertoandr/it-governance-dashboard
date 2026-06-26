@@ -60,13 +60,14 @@ def get_cached_sla_detail() -> dict:
     from datetime import UTC, datetime, timedelta
 
     with _svc() as svc:
-        all_tickets = svc.get_tickets()
+        # Duas queries rápidas em vez de uma lenta (todos os tickets)
+        # 1) Tickets abertos do grupo — base para SLA/fila/buckets/volume
+        open_tickets = svc.get_open_tickets()
+        # 2) Tickets resolvidos dos últimos 30 dias — base para resolved_7d/30d
+        solved_recent = svc.get_solved_tickets(days=30)
 
     now = datetime.now(UTC)
     cutoff_7d = now - timedelta(days=7)
-    cutoff_30d = now - timedelta(days=30)
-
-    open_tickets = [t for t in all_tickets if t.is_open]
 
     # ── SLA por prioridade ────────────────────────────────────────────────
     by_priority: dict[str, dict] = {}
@@ -116,22 +117,22 @@ def get_cached_sla_detail() -> dict:
         else:
             age_buckets[">168h"] += 1
 
-    # ── Resolvidos recentes ────────────────────────────────────────────────
+    # ── Resolvidos recentes (últimos 30 dias já filtrados na query) ────────
     def _aware(dt: datetime) -> datetime:
         return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
-    solved = [t for t in all_tickets if str(t.status) in ("solved", "closed")]
-    resolved_7d = sum(1 for t in solved if _aware(t.updated_at) >= cutoff_7d)
-    resolved_30d = sum(1 for t in solved if _aware(t.updated_at) >= cutoff_30d)
+    resolved_7d = sum(1 for t in solved_recent if _aware(t.updated_at) >= cutoff_7d)
+    resolved_30d = len(solved_recent)
 
-    # ── Volume por status ──────────────────────────────────────────────────
+    # ── Volume por status (a partir dos abertos + resolvidos recentes) ─────
     from collections import Counter
 
-    vol_counter = Counter(str(t.status) for t in all_tickets)
+    vol_counter = Counter(str(t.status) for t in open_tickets)
+    vol_counter.update(str(t.status) for t in solved_recent)
 
     dados = {
         "total_open": len(open_tickets),
-        "total_all": len(all_tickets),
+        "total_all": len(open_tickets) + len(solved_recent),
         "by_priority": by_priority,
         "oldest": oldest_list,
         "age_buckets": age_buckets,
@@ -157,17 +158,19 @@ def get_cached_mttr_summary() -> dict:
 
     log.info("zendesk.mttr.cache.miss")
     with _svc() as svc:
-        sla = svc.get_sla_metrics()
+        open_tickets = svc.get_open_tickets()  # único fetch de tickets
         csat = svc.get_csat_summary()
-        open_tickets = svc.get_open_tickets()
 
     total_open = len(open_tickets)
+    _sla_threshold_hours = 8.0
+    breached = sum(1 for t in open_tickets if t.age_hours > _sla_threshold_hours)
+    compliance = round((1 - breached / total_open) * 100, 1) if total_open else 100.0
     avg_age = round(sum(t.age_hours for t in open_tickets) / total_open, 1) if total_open else 0.0
 
     dados = {
         "total_open": total_open,
-        "breached": sla.breached,
-        "compliance_pct": sla.compliance_pct,
+        "breached": breached,
+        "compliance_pct": compliance,
         "avg_age_hours": avg_age,
         "csat_pct": csat.csat_pct,
         "csat_sample": csat.sample_size,
@@ -249,15 +252,32 @@ volume_model = ns.model(
 
 
 def _svc() -> ZendeskService:
-    """Instancia ZendeskService com credenciais do ambiente."""
+    """Instancia ZendeskService com credenciais do ambiente.
+
+    Se ``ZENDESK_GROUP_ID`` estiver definido, filtra tickets server-side
+    pelo grupo (ex: TI / Infra), reduzindo drasticamente o payload nas
+    consultas de SLA e MTTR.
+    """
+    raw_gid = os.getenv("ZENDESK_GROUP_ID", "")
+    group_id = int(raw_gid) if raw_gid.strip().isdigit() else None
     return ZendeskService(
         subdomain=os.getenv("ZENDESK_SUBDOMAIN", ""),
         email=os.getenv("ZENDESK_EMAIL", ""),
         api_token=os.getenv("ZENDESK_API_TOKEN", ""),
+        group_id=group_id,
     )
 
 
 # ── Resources ─────────────────────────────────────────────────────────────────
+
+
+@ns.route("/groups")
+class GroupListResource(Resource):
+    @ns.doc(description="Lista grupos Zendesk — use para descobrir o ZENDESK_GROUP_ID")
+    def get(self) -> list[dict]:
+        """Retorna id + name de todos os grupos do Zendesk."""
+        with _svc() as svc:
+            return svc.get_groups()
 
 
 @ns.route("/tickets")
@@ -306,8 +326,7 @@ class VolumeResource(Resource):
     @ns.doc(description="Contagem de tickets por status")
     def get(self) -> dict:
         """Volume de tickets agrupado por status."""
-        with _svc() as svc:
-            return svc.get_ticket_volume_by_status()
+        return get_cached_volume_by_status()
 
 
 @ns.route("/sla")
@@ -316,9 +335,13 @@ class SLAResource(Resource):
     @ns.doc(description="Métricas de SLA — compliance e tickets em breach")
     def get(self) -> dict:
         """Métricas de SLA dos tickets ativos."""
-        with _svc() as svc:
-            metric = svc.get_sla_metrics()
-        return metric.model_dump()
+        summary = get_cached_mttr_summary()
+        return {
+            "total_tickets": summary["total_open"],
+            "breached": summary["breached"],
+            "compliance_pct": summary["compliance_pct"],
+            "avg_first_reply_minutes": None,
+        }
 
 
 @ns.route("/csat")
@@ -327,6 +350,11 @@ class CSATResource(Resource):
     @ns.doc(description="Customer Satisfaction Score — resumo de avaliações")
     def get(self) -> dict:
         """Resumo de CSAT (satisfação do cliente)."""
-        with _svc() as svc:
-            summary = svc.get_csat_summary()
-        return summary.model_dump()
+        summary = get_cached_mttr_summary()
+        return {
+            "total_ratings": summary["csat_sample"],
+            "good": summary["csat_good"],
+            "bad": summary["csat_bad"],
+            "csat_pct": summary["csat_pct"],
+            "sample_size": summary["csat_sample"],
+        }
