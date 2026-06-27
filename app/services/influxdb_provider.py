@@ -371,9 +371,10 @@ class InfluxDBMetricsProvider:
         }
 
     def get_value_metrics(self) -> dict[str, Any]:
-        """Value Delivery: GitHub PR velocity + Zabbix SLA."""
+        """Value Delivery: GitHub PR velocity + Zabbix SLA + Zendesk SLA/CSAT."""
         zabbix = self._zabbix_stats()
         pr_count, avg_hours = self._github_pr_stats()
+        zendesk = self._zendesk_sla_stats()
 
         components: list[dict[str, Any]] = []
         last_collected: datetime | None = None
@@ -428,40 +429,88 @@ class InfluxDBMetricsProvider:
             )
             has_real_data = True
 
-        # Remaining without real sources
-        components.extend(
-            [
-                {
-                    "id": "ticket_resolution_rate",
-                    "label": "Taxa de resolução no prazo",
-                    "value": 85.0,
-                    "raw_value": None,
-                    "unit": "%",
-                    "source": "coming_soon",
-                    "weight": 2.0,
-                    "trend": "stable",
-                },
-                {
-                    "id": "user_satisfaction",
-                    "label": "Satisfação dos usuários (NPS TI)",
-                    "value": 76.0,
-                    "raw_value": None,
-                    "unit": "pts",
-                    "source": "coming_soon",
-                    "weight": 1.0,
-                    "trend": "stable",
-                },
-                {
-                    "id": "deployment_frequency",
-                    "label": "Frequência de deploys",
-                    "value": 70.0,
-                    "raw_value": None,
-                    "unit": "deploys/mês",
-                    "source": "coming_soon",
-                    "weight": 1.0,
-                    "trend": "stable",
-                },
-            ]
+        # Zendesk SLA compliance
+        if zendesk:
+            zdsk_compliance = zendesk.get("compliance_pct")
+            if zdsk_compliance is not None:
+                components.append(
+                    {
+                        "id": "ticket_resolution_rate",
+                        "label": "Taxa de resolução no prazo (SLA Zendesk)",
+                        "value": round(float(zdsk_compliance), 1),
+                        "raw_value": float(zdsk_compliance),
+                        "unit": "%",
+                        "source": "zendesk",
+                        "weight": 2.0,
+                        "trend": "stable",
+                    }
+                )
+                has_real_data = True
+            csat = zendesk.get("csat_pct")
+            csat_sample = zendesk.get("csat_sample", 0)
+            if csat is not None and csat_sample > 0:
+                components.append(
+                    {
+                        "id": "user_satisfaction",
+                        "label": "Satisfação dos usuários (CSAT Zendesk)",
+                        "value": round(float(csat), 1),
+                        "raw_value": float(csat),
+                        "unit": "%",
+                        "source": "zendesk",
+                        "weight": 1.0,
+                        "trend": "stable",
+                    }
+                )
+            else:
+                components.append(
+                    {
+                        "id": "user_satisfaction",
+                        "label": "Satisfação dos usuários (CSAT Zendesk)",
+                        "value": 76.0,
+                        "raw_value": None,
+                        "unit": "%",
+                        "source": "coming_soon",
+                        "weight": 1.0,
+                        "trend": "stable",
+                    }
+                )
+        else:
+            components.extend(
+                [
+                    {
+                        "id": "ticket_resolution_rate",
+                        "label": "Taxa de resolução no prazo",
+                        "value": 85.0,
+                        "raw_value": None,
+                        "unit": "%",
+                        "source": "coming_soon",
+                        "weight": 2.0,
+                        "trend": "stable",
+                    },
+                    {
+                        "id": "user_satisfaction",
+                        "label": "Satisfação dos usuários (NPS TI)",
+                        "value": 76.0,
+                        "raw_value": None,
+                        "unit": "%",
+                        "source": "coming_soon",
+                        "weight": 1.0,
+                        "trend": "stable",
+                    },
+                ]
+            )
+
+        components.append(
+            {
+                "id": "deployment_frequency",
+                "label": "Frequência de deploys",
+                "value": 70.0,
+                "raw_value": None,
+                "unit": "deploys/mês",
+                "source": "coming_soon",
+                "weight": 1.0,
+                "trend": "stable",
+            }
         )
 
         log.info(
@@ -472,7 +521,7 @@ class InfluxDBMetricsProvider:
 
         return {
             "_meta": {
-                "data_source": "partial" if has_real_data else "coming_soon",
+                "data_source": "live" if has_real_data else "coming_soon",
                 "last_collected": last_collected,
                 "collector_eta": None,
             },
@@ -1155,3 +1204,22 @@ from(bucket: "{self._bucket_raw}")
             return 0, None
         avg_hours = sum(values) / len(values) / 3600
         return len(values), avg_hours
+
+    def _zendesk_sla_stats(self) -> dict[str, Any]:
+        """Return Zendesk SLA compliance and CSAT via live API call (no InfluxDB measurement)."""
+        try:
+            from itgov.services.zendesk_service import ZendeskService
+
+            svc = ZendeskService()
+            sla = svc.get_sla_metrics()
+            csat_summary = svc.get_satisfaction_ratings()
+            return {
+                "compliance_pct": float(sla.compliance_pct),
+                "total_open": int(sla.total),
+                "breached": int(sla.breached),
+                "csat_pct": float(csat_summary.csat_pct) if csat_summary.csat_pct is not None else None,
+                "csat_sample": int(csat_summary.sample_size),
+            }
+        except Exception as exc:
+            log.warning("zendesk_sla_stats_failed", error=str(exc))
+            return {}
