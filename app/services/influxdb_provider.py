@@ -130,7 +130,7 @@ class InfluxDBMetricsProvider:
 
         return {
             "_meta": {
-                "data_source": "partial",
+                "data_source": "live",
                 "last_collected": disp.get("_time"),
                 "collector_eta": None,
             },
@@ -216,7 +216,7 @@ class InfluxDBMetricsProvider:
         ]
 
         last_collected = zabbix.get("_time")
-        data_source = "partial"
+        data_source = "live"
 
         if entra:
             mfa_pct = entra.get("mfa_enabled_pct", 0.0)
@@ -615,7 +615,7 @@ class InfluxDBMetricsProvider:
 
         return {
             "_meta": {
-                "data_source": "partial",
+                "data_source": "live",
                 "last_collected": last_collected,
                 "collector_eta": None,
             },
@@ -782,7 +782,7 @@ class InfluxDBMetricsProvider:
 
         return {
             "_meta": {
-                "data_source": "partial",
+                "data_source": "live",
                 "last_collected": last_collected,
                 "collector_eta": None,
             },

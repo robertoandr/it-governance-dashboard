@@ -498,11 +498,14 @@ def zabbix_triggers() -> str:
 @require_role("admin", "gestor")
 def m365_overview() -> str:
     """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
+    import os
     from datetime import date
 
     from app.services.influxdb_provider import InfluxDBMetricsProvider
+    from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
     from itgov.api.v1.m365_licenses import get_licenses_summary
     from itgov.api.v1.zabbix_triggers import get_cached_triggers
+    from itgov.services.dns_check_service import get_email_security_summary
 
     provider = InfluxDBMetricsProvider()
 
@@ -532,6 +535,13 @@ from(bucket: "{provider._bucket_raw}")
     # Triggers
     triggers = get_cached_triggers()
 
+    # Security Alerts Defender (>24h)
+    security_alerts = get_cached_security_alerts_summary()
+
+    # DNS check — DMARC / SPF / DKIM
+    _tenant_domain = os.getenv("M365_TENANT_DOMAIN", "")
+    dns_check = get_email_security_summary(_tenant_domain) if _tenant_domain else {}
+
     # Soft-deleted mailboxes (COBIT BAI09)
     mb_rows = provider._query(f"""
 from(bucket: "{provider._bucket_raw}")
@@ -553,6 +563,8 @@ from(bucket: "{provider._bucket_raw}")
         licenses=lic,
         triggers=triggers,
         mailbox=mailbox,
+        security_alerts=security_alerts,
+        dns_check=dns_check,
         reajuste_date="01/07/2026",
         dias_reajuste=dias_reajuste,
     )

@@ -22,6 +22,19 @@
 {% set mb_total    = mailbox.get('total_soft_deleted', 0) | int %}
 {% set mb_pending  = mailbox.get('pending_cleanup', 0) | int %}
 {% set mb_oldest   = mailbox.get('oldest_days', 0) | int %}
+{% set sspr_pct    = entra.get('sspr_registered_pct', none) | float if entra.get('sspr_registered_pct') is not none else none %}
+{% set ca_total    = entra.get('ca_total', none) %}
+{% set ca_enabled  = entra.get('ca_enabled', 0) | int %}
+{% set ca_disabled = entra.get('ca_disabled', 0) | int %}
+{% set admin_total = entra.get('admin_total', 0) | int %}
+{% set admin_sem_mfa = entra.get('admin_sem_mfa', none) %}
+{% set lic_ociosas = lic_sum.total_unassigned | int if lic_sum.total_unassigned is defined else 0 %}
+{% set sa_enabled  = security_alerts.get('enabled', false) %}
+{% set sa_gt24h    = security_alerts.get('older_than_24h', 0) | int %}
+{% set sa_high     = security_alerts.get('high', 0) | int %}
+{% set spf_found   = dns_check.get('spf', {}).get('found', false) %}
+{% set dmarc_found = dns_check.get('dmarc', {}).get('found', false) %}
+{% set dkim_found  = dns_check.get('dkim', {}).get('found', false) %}
 
 {# Cores por threshold #}
 {% if mfa_pct >= 90 %}{% set mfa_c = "green" %}{% elif mfa_pct >= 70 %}{% set mfa_c = "yellow" %}{% else %}{% set mfa_c = "red" %}{% endif %}
@@ -156,6 +169,109 @@
       <div class="h-full rounded-full bg-{{ mb_c }}-500" style="width: 100%"></div>
     </div>
     <p class="text-xs text-gray-300 mt-1.5">COBIT BAI09</p>
+  </div>
+
+</div>
+
+<!-- BLOCO 2B — KPIs Sprint 13 -->
+<div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+
+  <!-- SSPR -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">SSPR</p>
+    {% if sspr_pct is not none %}
+      {% if sspr_pct >= 80 %}{% set sspr_c = "green" %}{% elif sspr_pct >= 50 %}{% set sspr_c = "yellow" %}{% else %}{% set sspr_c = "red" %}{% endif %}
+      <p class="text-3xl font-bold text-{{ sspr_c }}-600">{{ sspr_pct | round(1) }}%</p>
+      <p class="text-xs text-gray-400 mt-1">usuarios com reset proprio</p>
+      <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-full rounded-full bg-{{ sspr_c }}-500" style="width: {{ [sspr_pct, 100] | min }}%"></div>
+      </div>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Sem dados</p>
+    {% endif %}
+    <p class="text-xs text-gray-300 mt-1.5">KPI-ID-02</p>
+  </div>
+
+  <!-- CA Policies -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Acesso Condicional</p>
+    {% if ca_total is not none %}
+      {% set ca_int = ca_total | int %}
+      {% if ca_int >= 5 %}{% set ca_c = "green" %}{% elif ca_int >= 2 %}{% set ca_c = "yellow" %}{% else %}{% set ca_c = "red" %}{% endif %}
+      <p class="text-3xl font-bold text-{{ ca_c }}-600">{{ ca_int }}</p>
+      <p class="text-xs text-gray-400 mt-1">{{ ca_enabled }} ativas · {{ ca_disabled }} desab.</p>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Sem dados</p>
+    {% endif %}
+    <p class="text-xs text-gray-300 mt-1.5">KPI-ID-01</p>
+  </div>
+
+  <!-- Admins sem MFA -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Admins sem MFA</p>
+    {% if admin_sem_mfa is not none %}
+      {% set asem = admin_sem_mfa | int %}
+      {% if asem == 0 %}{% set asem_c = "green" %}{% elif asem <= 2 %}{% set asem_c = "yellow" %}{% else %}{% set asem_c = "red" %}{% endif %}
+      <p class="text-3xl font-bold text-{{ asem_c }}-600">{{ asem }}</p>
+      <p class="text-xs text-gray-400 mt-1">de {{ admin_total }} admins privilegiados</p>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Sem dados</p>
+    {% endif %}
+    <p class="text-xs text-gray-300 mt-1.5">KPI-ID-03</p>
+  </div>
+
+  <!-- Licencas ociosas -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Licencas Ociosas</p>
+    {% if licenses.has_data %}
+      {% if lic_ociosas == 0 %}{% set loc_c = "green" %}{% elif lic_ociosas <= 10 %}{% set loc_c = "yellow" %}{% else %}{% set loc_c = "red" %}{% endif %}
+      <p class="text-3xl font-bold text-{{ loc_c }}-600">{{ lic_ociosas }}</p>
+      <p class="text-xs text-gray-400 mt-1">licencas nao atribuidas</p>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
+    {% endif %}
+    <p class="text-xs text-gray-300 mt-1.5">KPI-LIC-02</p>
+  </div>
+
+  <!-- Alertas Defender -->
+  <a href="{{ url_for('dashboards.governance_security_alerts') }}"
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Alertas Defender</p>
+    {% if sa_enabled %}
+      {% if sa_gt24h == 0 %}{% set sa_c = "green" %}{% elif sa_gt24h <= 3 %}{% set sa_c = "yellow" %}{% else %}{% set sa_c = "red" %}{% endif %}
+      <p class="text-3xl font-bold text-{{ sa_c }}-600">{{ sa_gt24h }}</p>
+      <p class="text-xs text-gray-400 mt-1">abertos >24h · {{ sa_high }} alto</p>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
+    {% endif %}
+    <p class="text-xs text-gray-300 mt-1.5">KPI-END-01</p>
+  </a>
+
+  <!-- DMARC / SPF / DKIM -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Email Auth</p>
+    {% if dns_check %}
+      <div class="flex flex-col gap-1 mt-1">
+        <span class="text-xs font-semibold {% if spf_found %}text-green-600{% else %}text-red-500{% endif %}">
+          {% if spf_found %}SPF{% else %}SPF ausente{% endif %}
+        </span>
+        <span class="text-xs font-semibold {% if dmarc_found %}text-green-600{% else %}text-red-500{% endif %}">
+          {% if dmarc_found %}DMARC{% else %}DMARC ausente{% endif %}
+        </span>
+        <span class="text-xs font-semibold {% if dkim_found %}text-green-600{% else %}text-red-500{% endif %}">
+          {% if dkim_found %}DKIM{% else %}DKIM ausente{% endif %}
+        </span>
+      </div>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Dominio nao configurado</p>
+    {% endif %}
+    <p class="text-xs text-gray-300 mt-1.5">KPI-EMAIL-02</p>
   </div>
 
 </div>
