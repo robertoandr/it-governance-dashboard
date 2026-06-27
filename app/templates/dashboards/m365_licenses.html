@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Licencas M365 — Governanca de TI{% endblock %}
+{% block page_title %}Licencas Microsoft 365{% endblock %}
+
+{% block head %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('alpine:init', function () {
+  Alpine.data('licensesPage', function () {
+    return {
+      showModal: false,
+      editing:   null,
+      form:      {},
+      saving:    false,
+      msg:       '',
+      filterFree: false,
+      _updateUrl: '{{ url_for("dashboards.m365_licenses_update") }}',
+
+      get saveLabel()  { return this.saving ? 'Salvando...' : 'Salvar'; },
+      get msgIsError() { return this.msg !== '' && this.msg.indexOf('Erro') === 0; },
+
+      openEdit: function (skuJson) {
+        var sku = JSON.parse(skuJson);
+        this.editing = sku.sku_name;
+        this.form = {
+          sku_name:          sku.sku_name,
+          friendly_name:     sku.friendly_name,
+          cost_per_unit_brl: sku.cost_per_unit_brl,
+          renewal_date:      sku.renewal_date  || '',
+          billing_cycle:     sku.billing_cycle || 'monthly',
+          notes:             sku.notes         || ''
+        };
+        this.msg       = '';
+        this.showModal = true;
+      },
+      closeEdit: function () {
+        this.showModal = false;
+        this.editing   = null;
+        this.msg       = '';
+      },
+      save: async function () {
+        this.saving = true;
+        try {
+          const r = await fetch(this._updateUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(this.form)
+          });
+          const d = await r.json();
+          if (d.ok) {
+            this.msg = 'Salvo!';
+            setTimeout(function () { location.reload(); }, 800);
+          } else {
+            this.msg = 'Erro: ' + (d.error || 'desconhecido');
+          }
+        } catch(e) { this.msg = 'Erro de rede'; }
+        this.saving = false;
+      }
+    };
+  });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="licensesPage">
+
+{% if not data.has_data %}
+<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+  <p class="text-yellow-700 font-semibold">Nenhum dado de licenca disponivel.</p>
+  <p class="text-yellow-600 text-sm mt-1">O coletor Entra ID escrevera os dados na proxima coleta (a cada 6h).</p>
+</div>
+{% else %}
+
+{% set s = data.summary %}
+
+<!-- Cards resumo -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <p class="text-xs text-gray-500 mb-1">SKUs pagas</p>
+    <p class="text-3xl font-bold text-gray-800">{{ s.total_skus }}</p>
+    <p class="text-xs text-gray-400 mt-1">+ {{ s.total_skus_free }} gratuitas</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <p class="text-xs text-gray-500 mb-1">Utilizacao geral</p>
+    <p class="text-3xl font-bold {% if s.uso_pct >= 95 %}text-red-600{% elif s.uso_pct >= 80 %}text-yellow-600{% else %}text-green-600{% endif %}">
+      {{ s.uso_pct }}%
+    </p>
+    <p class="text-xs text-gray-400 mt-1">{{ s.total_consumed }} / {{ s.total_seats }} licencas</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <p class="text-xs text-gray-500 mb-1">Custo mensal total</p>
+    {% if s.custo_mensal_total_brl > 0 %}
+    <p class="text-3xl font-bold text-blue-700">R$ {{ '{:,.2f}'.format(s.custo_mensal_total_brl) }}</p>
+    {% else %}
+    <p class="text-2xl font-bold text-gray-300">Nao informado</p>
+    <p class="text-xs text-gray-400 mt-1">Edite as SKUs para adicionar custo</p>
+    {% endif %}
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 text-center">
+    <p class="text-xs text-gray-500 mb-1">Desperdicio estimado</p>
+    {% if s.desperdicio_total_brl > 0 %}
+    <p class="text-3xl font-bold text-red-600">R$ {{ '{:,.2f}'.format(s.desperdicio_total_brl) }}</p>
+    <p class="text-xs text-gray-400 mt-1">Licencas pagas nao usadas</p>
+    {% else %}
+    <p class="text-2xl font-bold text-gray-300">—</p>
+    <p class="text-xs text-gray-400 mt-1">Informe os custos para calcular</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Filtro -->
+<div class="flex items-center gap-3 mb-3">
+  <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+    <input type="checkbox" x-model="filterFree" class="rounded">
+    Mostrar SKUs gratuitas/ilimitadas
+  </label>
+</div>
+
+<!-- Tabela -->
+<div class="bg-white rounded-xl shadow overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 text-left">
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold">SKU / Nome</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">Usadas</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">Total</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">Livres</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">Uso %</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">R$/unit</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">Custo/mes</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right">Desperdicio</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold">Renovacao</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold">Acao</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for sku in data.licenses %}
+      <tr x-show="{{ 'true' if not sku.is_free else 'filterFree' }}"
+          class="hover:bg-gray-50 {% if sku.over_provisioned %}bg-red-50{% elif sku.available > (sku.total * 0.2) and sku.total > 0 and not sku.is_free %}bg-yellow-50{% endif %}">
+        <td class="px-4 py-3">
+          <p class="font-medium text-gray-800">{{ sku.friendly_name }}</p>
+          <p class="text-xs text-gray-400 font-mono">{{ sku.sku_name }}</p>
+          {% if sku.over_provisioned %}
+          <span class="text-xs text-red-600 font-semibold">ACIMA DO LIMITE</span>
+          {% endif %}
+          {% if sku.is_free %}
+          <span class="text-xs text-gray-400 bg-gray-100 rounded px-1">gratuita</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-right font-mono {% if sku.over_provisioned %}text-red-700 font-bold{% endif %}">{{ sku.consumed }}</td>
+        <td class="px-4 py-3 text-right font-mono text-gray-600">{{ sku.total if not sku.is_free else '∞' }}</td>
+        <td class="px-4 py-3 text-right font-mono {% if sku.available == 0 and not sku.is_free %}text-red-600{% else %}text-gray-600{% endif %}">
+          {{ sku.available if not sku.is_free else '—' }}
+        </td>
+        <td class="px-4 py-3 text-right">
+          {% if not sku.is_free %}
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium
+            {% if sku.uso_pct >= 100 %}bg-red-100 text-red-700
+            {% elif sku.uso_pct >= 80 %}bg-yellow-100 text-yellow-700
+            {% else %}bg-green-100 text-green-700{% endif %}">
+            {{ sku.uso_pct }}%
+          </span>
+          {% else %}
+          <span class="text-gray-300">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-right text-gray-600">
+          {% if sku.cost_per_unit_brl > 0 %}R$ {{ '%.2f'|format(sku.cost_per_unit_brl) }}
+          {% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-right text-gray-700">
+          {% if sku.custo_mensal_brl > 0 %}R$ {{ '{:,.2f}'.format(sku.custo_mensal_brl) }}
+          {% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-right {% if sku.desperdicio_brl > 0 %}text-red-600 font-medium{% else %}text-gray-300{% endif %}">
+          {% if sku.desperdicio_brl > 0 %}R$ {{ '{:,.2f}'.format(sku.desperdicio_brl) }}
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-600 text-xs">
+          {% if sku.renewal_date %}
+            {% set days_left = ((sku.renewal_date | string)[:10] | strptime('%Y-%m-%d') - now()).days if sku.renewal_date else None %}
+            <span class="{% if days_left is not none and days_left < 30 %}text-red-600 font-semibold{% endif %}">
+              {{ sku.renewal_date[:10] if sku.renewal_date else '—' }}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          <button @click="openEdit($event.currentTarget.dataset.sku)"
+                  data-sku='{{ sku | tojson }}'
+                  class="text-blue-600 hover:text-blue-800 text-xs underline">
+            Editar
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de edicao -->
+<div x-show="showModal" x-cloak
+     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+     @click.self="closeEdit()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" @click.stop>
+    <h3 class="text-lg font-bold text-gray-800 mb-4">Editar SKU: <span x-text="form.sku_name" class="font-mono text-sm text-blue-600"></span></h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs text-gray-500">Nome amigavel</label>
+        <input x-model="form.friendly_name" type="text"
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Custo por unidade (R$)</label>
+        <input x-model="form.cost_per_unit_brl" type="number" step="0.01" min="0"
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Data de renovacao</label>
+        <input x-model="form.renewal_date" type="date"
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Ciclo de cobranca</label>
+        <select x-model="form.billing_cycle"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <option value="monthly">Mensal</option>
+          <option value="annual">Anual</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Observacoes</label>
+        <textarea x-model="form.notes" rows="2"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300"></textarea>
+      </div>
+    </div>
+    <div class="flex items-center justify-between mt-5">
+      <span x-text="msg" class="text-sm"
+            :class="msgIsError ? 'text-red-600' : 'text-green-600'"></span>
+      <div class="flex gap-2">
+        <button @click="closeEdit()"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+        <button @click="save()" :disabled="saving"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+          <span x-text="saveLabel"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+</div>
+{% endblock %}

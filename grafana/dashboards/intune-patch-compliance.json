@@ -1,0 +1,291 @@
+{
+  "uid": "intune-patch-001",
+  "title": "Intune — Patch Compliance",
+  "description": "Conformidade de patches Intune: global + breakdown por SO. Dado stale (>15h) não aparece como 0 — aparece como N/A.",
+  "tags": ["governance", "intune", "patch", "compliance"],
+  "timezone": "America/Sao_Paulo",
+  "refresh": "5m",
+  "time": { "from": "now-24h", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Conformidade de Patches — Intune\nDenominador: `compliant + noncompliant`. `inGracePeriod` e `notApplicable` excluídos do pct. **N/A** = sem coleta nas últimas 15h."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Compliance Global",
+      "description": "% de dispositivos compliant sobre o total avaliável (excluindo notApplicable e inGracePeriod). N/A = sem dado fresco.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 85 },
+              { "color": "green",  "value": 95 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "N/A", "color": "gray", "index": 0 }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -15h)\n  |> filter(fn: (r) => r._measurement == \"gov_intune_patch_compliance\")\n  |> filter(fn: (r) => r._field == \"compliant\" or r._field == \"total_evaluated\")\n  |> last()\n  |> group(columns: [\"_field\"])\n  |> sum()\n  |> pivot(rowKey: [\"_measurement\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_value: if r.total_evaluated > 0 then float(v: r.compliant) / float(v: r.total_evaluated) * 100.0 else 0.0, _time: now()}))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Dispositivos Avaliados",
+      "description": "Total de dispositivos com política aplicável (excluindo notApplicable).",
+      "gridPos": { "h": 3, "w": 4, "x": 6, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "N/A", "color": "gray", "index": 0 }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -15h)\n  |> filter(fn: (r) => r._measurement == \"gov_intune_patch_compliance\")\n  |> filter(fn: (r) => r._field == \"total_evaluated\")\n  |> last()\n  |> group(columns: [\"_measurement\"])\n  |> sum()"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Em Grace Period",
+      "description": "Dispositivos em inGracePeriod — excluídos do compliance_pct mas visíveis aqui.",
+      "gridPos": { "h": 3, "w": 4, "x": 10, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 10 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "N/A", "color": "gray", "index": 0 }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -15h)\n  |> filter(fn: (r) => r._measurement == \"gov_intune_patch_compliance\")\n  |> filter(fn: (r) => r._field == \"in_grace\")\n  |> last()\n  |> group(columns: [\"_measurement\"])\n  |> sum()"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Não-Compliant",
+      "description": "Inclui: noncompliant + conflict + error + unknown.",
+      "gridPos": { "h": 3, "w": 4, "x": 14, "y": 2 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 10 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "N/A", "color": "gray", "index": 0 }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -15h)\n  |> filter(fn: (r) => r._measurement == \"gov_intune_patch_compliance\")\n  |> filter(fn: (r) => r._field == \"noncompliant\")\n  |> last()\n  |> group(columns: [\"_measurement\"])\n  |> sum()"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "bargauge",
+      "title": "Compliance por SO",
+      "description": "% compliance de patches por sistema operacional. N/A = OS sem dispositivos avaliáveis.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "legendDisplayMode": "hidden"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 85 },
+              { "color": "green",  "value": 95 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "N/A", "color": "gray", "index": 0 }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -15h)\n  |> filter(fn: (r) => r._measurement == \"gov_intune_patch_compliance\")\n  |> filter(fn: (r) => r._field == \"compliance_pct\")\n  |> last()"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Histórico — Compliance Global (24h)",
+      "description": "Série temporal do compliance_pct calculado pelo collector. Gaps = coleta ausente.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "hidden" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 85 },
+              { "color": "green",  "value": 95 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gov_intune_patch_compliance\")\n  |> filter(fn: (r) => r._field == \"compliant\" or r._field == \"total_evaluated\")\n  |> group(columns: [\"_field\", \"_time\"])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, _value: if r.total_evaluated > 0 then float(v: r.compliant) / float(v: r.total_evaluated) * 100.0 else 0.0}))\n  |> aggregateWindow(every: 1h, fn: last, createEmpty: false)"
+        }
+      ]
+    }
+  ]
+}

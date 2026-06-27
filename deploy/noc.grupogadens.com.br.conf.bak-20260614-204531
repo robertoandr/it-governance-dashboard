@@ -1,0 +1,456 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOC GRUPO GADENS - Configuração Consolidada
+# Atualizado: 2026-05-17
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# SERVIDOR PRINCIPAL - HTTP (Porta 8080)
+# ─────────────────────────────────────────────────────────────────────────────────
+server {
+    listen 8080;
+    server_name noc.grupogadens.com.br 172.29.2.11;
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # NOVA DASHBOARD DE GOVERNANÇA TI
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Raiz → Nova Dashboard
+    location = / {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # /dashboard/ → Nova Dashboard
+    location /dashboard/ {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # /governanca/ → Nova Dashboard
+    location /governanca/ {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # /gov/ → Governance Score Dashboard (COBIT 5 pilares)
+    location /gov/ {
+        proxy_pass http://127.0.0.1:5000/gov/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATIC + API da Dashboard (CSS/JS/IMG e endpoints Flask)
+    # fix(nginx): blocos ausentes no servidor HTTP causavam 404 em assets
+    # ══════════════════════════════════════════════════════════════════════════
+
+    location /static/ {
+        proxy_pass http://127.0.0.1:5000/static/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        expires 1h;
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5000/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    location /v2/ {
+        proxy_pass http://127.0.0.1:5000/v2/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    location /auth/ {
+        proxy_pass http://127.0.0.1:5000/auth/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # ACME challenge - Let's Encrypt (NAT externo porta 80 -> 8080)
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        auth_basic off;
+        allow all;
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # DASHBOARD ANTIGA (mantida para referência)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    location = /dashboard-ti.html {
+        alias /usr/share/nginx/html/dashboard-ti.html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    location /legacy/ {
+        alias /usr/share/nginx/html/;
+        index dashboard-ti.html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ZABBIX (Interface Web)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    location /zabbix/ {
+        alias /usr/share/zabbix/;
+        index index.php;
+
+        location ~ ^/zabbix/(.+\.php)(/|$) {
+            alias /usr/share/zabbix/$1;
+            fastcgi_pass unix:/var/run/php/zabbix.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME /usr/share/zabbix/$1;
+            include fastcgi_params;
+            fastcgi_param QUERY_STRING $query_string;
+            fastcgi_param REQUEST_METHOD $request_method;
+            fastcgi_param CONTENT_TYPE $content_type;
+            fastcgi_param CONTENT_LENGTH $content_length;
+            fastcgi_intercept_errors on;
+            fastcgi_connect_timeout 60;
+            fastcgi_send_timeout 180;
+            fastcgi_read_timeout 180;
+            fastcgi_buffer_size 128k;
+            fastcgi_buffers 4 256k;
+            fastcgi_busy_buffers_size 256k;
+        }
+
+        location ~ ^/zabbix/(.+\.(css|js|png|jpg|gif|ico|woff|woff2|ttf|svg))$ {
+            alias /usr/share/zabbix/$1;
+            expires 7d;
+            access_log off;
+        }
+    }
+
+    # API do Zabbix (CORS habilitado)
+    location = /api_jsonrpc.php {
+        proxy_pass http://127.0.0.1:8080/zabbix/api_jsonrpc.php;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_hide_header Access-Control-Allow-Origin;
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'POST, GET, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+
+        if ($request_method = OPTIONS) {
+            return 204;
+        }
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # M365 DATA (JSON estáticos)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    location /m365data/ {
+        alias /var/www/m365data/;
+        autoindex off;
+        default_type application/json;
+        add_header Access-Control-Allow-Origin *;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # LOGS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    access_log /var/log/nginx/noc-access.log;
+    error_log  /var/log/nginx/noc-error.log;
+}
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# SERVIDOR HTTPS (Porta 8443) - Dashboard com SSL
+# ─────────────────────────────────────────────────────────────────────────────────
+server {
+    listen 8443 ssl;
+    server_name 172.29.2.11 noc.grupogadens.com.br;
+    ssl_certificate /etc/letsencrypt/live/noc.grupogadens.com.br/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/noc.grupogadens.com.br/privkey.pem; # managed by Certbot
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # Cabeçalhos de segurança
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # Nova Dashboard via HTTPS
+    location / {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    # API da Dashboard
+    location /api/ {
+        proxy_pass http://127.0.0.1:5000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 30s;
+    }
+
+    access_log /var/log/nginx/noc-ssl-access.log;
+    error_log  /var/log/nginx/noc-ssl-error.log;
+
+
+}
+
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# SERVIDOR HTTPS (Porta 443) - Let's Encrypt
+# ─────────────────────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl http2;
+    server_name noc.grupogadens.com.br;
+
+    # Certificado Let's Encrypt
+    ssl_certificate     /etc/letsencrypt/live/noc.grupogadens.com.br/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/noc.grupogadens.com.br/privkey.pem;
+
+    # Configurações SSL modernas
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # Cabeçalhos de segurança
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ROTAS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Raiz → Nova Dashboard
+    location = / {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    # /dashboard/ → Nova Dashboard
+    location /dashboard/ {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    # /governanca/ → Nova Dashboard
+    location /governanca/ {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+    # /gov/ → Governance Score Dashboard (COBIT 5 pilares)
+    location /gov/ {
+        proxy_pass http://127.0.0.1:5000/gov/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 60s;
+    }
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATIC + API da Dashboard (CSS/JS/IMG e endpoints Flask)
+    # ══════════════════════════════════════════════════════════════════════════
+    location /static/ {
+        proxy_pass http://127.0.0.1:5000/static/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+        # Cache leve (1h) - permite F5 ver mudanças
+        expires 1h;
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+    location /api/ {
+        proxy_pass http://127.0.0.1:5000/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+    # /v2/ → Dashboard v2 (em paralelo)
+    location /v2/ {
+        proxy_pass http://127.0.0.1:5000/v2/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+    }
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ZABBIX (Interface Web)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    location /zabbix/ {
+        alias /usr/share/zabbix/;
+        index index.php;
+
+        location ~ ^/zabbix/(.+\.php)(/|$) {
+            alias /usr/share/zabbix/$1;
+            fastcgi_pass unix:/var/run/php/zabbix.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME /usr/share/zabbix/$1;
+            include fastcgi_params;
+            fastcgi_param QUERY_STRING $query_string;
+            fastcgi_param REQUEST_METHOD $request_method;
+            fastcgi_param CONTENT_TYPE $content_type;
+            fastcgi_param CONTENT_LENGTH $content_length;
+            fastcgi_intercept_errors on;
+            fastcgi_connect_timeout 60;
+            fastcgi_send_timeout 180;
+            fastcgi_read_timeout 180;
+            fastcgi_buffer_size 128k;
+            fastcgi_buffers 4 256k;
+            fastcgi_busy_buffers_size 256k;
+        }
+
+        location ~ ^/zabbix/(.+\.(css|js|png|jpg|gif|ico|woff|woff2|ttf|svg))$ {
+            alias /usr/share/zabbix/$1;
+            expires 7d;
+            access_log off;
+        }
+    }
+
+    # API do Zabbix (CORS habilitado)
+    location = /api_jsonrpc.php {
+        proxy_pass http://127.0.0.1:8080/zabbix/api_jsonrpc.php;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_hide_header Access-Control-Allow-Origin;
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'POST, GET, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+
+        if ($request_method = OPTIONS) {
+            return 204;
+        }
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # M365 DATA (JSON estáticos)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    location /m365data/ {
+        alias /var/www/m365data/;
+        autoindex off;
+        default_type application/json;
+        add_header Access-Control-Allow-Origin *;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # LOGS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    access_log /var/log/nginx/noc-https-access.log;
+    error_log  /var/log/nginx/noc-https-error.log;
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SERVIDOR HTTP (Porta 80) - ACME + redirect HTTPS [FIX AUTOMÁTICO]
+# ─────────────────────────────────────────────────────────────────────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name noc.grupogadens.com.br;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        auth_basic off;
+        allow all;
+        default_type "text/plain";
+        allow all;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}

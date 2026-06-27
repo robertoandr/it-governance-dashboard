@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance — IT Governance{% endblock %}
+
+{% block page_title %}Governança M365 — Compliance{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Compliance — Microsoft Secure Score</h1>
+  <p class="text-sm text-gray-500">Score de segurança do tenant e controles com maior impacto pendentes de implementação.</p>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Secure Score</p>
+    {% if summary.pct is none %}
+      <p class="text-3xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">sem dados</p>
+    {% else %}
+      <p class="text-3xl font-bold {{ 'text-green-600' if summary.pct >= 60 else 'text-yellow-600' if summary.pct >= 40 else 'text-red-600' }}">
+        {{ summary.pct }}<span class="text-base text-gray-400 ml-1">%</span>
+      </p>
+      <p class="text-xs text-gray-400 mt-1">{{ summary.current_score }} / {{ summary.max_score }} pontos</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-3">Score por categoria</p>
+    <div class="space-y-2">
+      {% for categoria, pct in summary.category_breakdown.items() %}
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-gray-600">{{ categoria }}</span>
+        <span class="font-semibold {{ 'text-green-600' if pct >= 60 else 'text-yellow-600' if pct >= 40 else 'text-red-600' }}">{{ pct }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Top recomendações (controles com menor implementação)</p>
+  {% if summary.recomendacoes %}
+  <div class="space-y-3">
+    {% for rec in summary.recomendacoes %}
+    <div class="border-b border-gray-100 pb-3">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-sm font-medium text-gray-800">{{ rec.control_name }}</span>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+                     {{ 'bg-red-50 text-red-700' if rec.score_pct < 30 else 'bg-yellow-50 text-yellow-700' }}">
+          {{ rec.score_pct }}% — {{ rec.categoria }}
+        </span>
+      </div>
+      <p class="text-xs text-gray-500">{{ rec.descricao }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-green-600">Todos os controles avaliados estão 100% implementados.</p>
+  {% endif %}
+</div>
+
+{% if summary.security_controls %}
+<div class="bg-white rounded-xl shadow p-5 mt-4">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Controles de Segurança</p>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+    {% set sl = summary.security_controls.get('safe_links_enabled') %}
+    <div class="border rounded-lg p-4 {{ 'border-green-200 bg-green-50' if sl == true else 'border-red-200 bg-red-50' if sl == false else 'border-gray-200 bg-gray-50' }}">
+      <p class="text-xs font-semibold {{ 'text-green-700' if sl == true else 'text-red-700' if sl == false else 'text-gray-500' }} uppercase tracking-wide mb-1">Safe Links</p>
+      {% if sl is none %}
+        <p class="text-sm text-gray-400">sem dados</p>
+      {% elif sl %}
+        <p class="text-sm font-bold text-green-700">Implementado</p>
+      {% else %}
+        <p class="text-sm font-bold text-red-700">Pendente</p>
+      {% endif %}
+      <p class="text-xs text-gray-500 mt-1">Proteção de links maliciosos em e-mails (KPI-EMAIL-01)</p>
+    </div>
+
+    {% set sa = summary.security_controls.get('safe_attachments_enabled') %}
+    <div class="border rounded-lg p-4 {{ 'border-green-200 bg-green-50' if sa == true else 'border-red-200 bg-red-50' if sa == false else 'border-gray-200 bg-gray-50' }}">
+      <p class="text-xs font-semibold {{ 'text-green-700' if sa == true else 'text-red-700' if sa == false else 'text-gray-500' }} uppercase tracking-wide mb-1">Safe Attachments</p>
+      {% if sa is none %}
+        <p class="text-sm text-gray-400">sem dados</p>
+      {% elif sa %}
+        <p class="text-sm font-bold text-green-700">Implementado</p>
+      {% else %}
+        <p class="text-sm font-bold text-red-700">Pendente</p>
+      {% endif %}
+      <p class="text-xs text-gray-500 mt-1">Sandbox de anexos maliciosos em e-mails (KPI-EMAIL-01)</p>
+    </div>
+
+    {% set al = summary.security_controls.get('audit_log_enabled') %}
+    <div class="border rounded-lg p-4 {{ 'border-green-200 bg-green-50' if al == true else 'border-red-200 bg-red-50' if al == false else 'border-gray-200 bg-gray-50' }}">
+      <p class="text-xs font-semibold {{ 'text-green-700' if al == true else 'text-red-700' if al == false else 'text-gray-500' }} uppercase tracking-wide mb-1">Audit Log</p>
+      {% if al is none %}
+        <p class="text-sm text-gray-400">sem dados</p>
+      {% elif al %}
+        <p class="text-sm font-bold text-green-700">Implementado</p>
+      {% else %}
+        <p class="text-sm font-bold text-red-700">Pendente</p>
+      {% endif %}
+      <p class="text-xs text-gray-500 mt-1">Registro de auditoria unificado (KPI-AUD-01)</p>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+{% if email_security is defined and email_security %}
+<div class="bg-white rounded-xl shadow p-5 mt-4">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Segurança de E-mail (DNS)</p>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+    {% set spf = email_security.spf %}
+    <div class="border rounded-lg p-4 {{ 'border-green-200 bg-green-50' if spf and spf.found else 'border-red-200 bg-red-50' }}">
+      <p class="text-xs font-semibold {{ 'text-green-700' if spf and spf.found else 'text-red-700' }} uppercase tracking-wide mb-1">SPF</p>
+      {% if spf and spf.found %}
+        <p class="text-sm font-bold text-green-700">Configurado</p>
+        {% if spf.record %}<p class="text-xs text-gray-500 mt-1 font-mono break-all">{{ spf.record[:80] }}{% if spf.record|length > 80 %}...{% endif %}</p>{% endif %}
+      {% else %}
+        <p class="text-sm font-bold text-red-700">Ausente</p>
+        <p class="text-xs text-gray-500 mt-1">Registro SPF não encontrado no DNS</p>
+      {% endif %}
+    </div>
+
+    {% set dmarc = email_security.dmarc %}
+    <div class="border rounded-lg p-4 {{ 'border-green-200 bg-green-50' if dmarc and dmarc.found else 'border-red-200 bg-red-50' }}">
+      <p class="text-xs font-semibold {{ 'text-green-700' if dmarc and dmarc.found else 'text-red-700' }} uppercase tracking-wide mb-1">DMARC</p>
+      {% if dmarc and dmarc.found %}
+        <p class="text-sm font-bold text-green-700">Configurado</p>
+        {% if dmarc.policy %}<p class="text-xs text-gray-500 mt-1">Política: <span class="font-semibold">{{ dmarc.policy }}</span></p>{% endif %}
+      {% else %}
+        <p class="text-sm font-bold text-red-700">Ausente</p>
+        <p class="text-xs text-gray-500 mt-1">Registro DMARC não encontrado</p>
+      {% endif %}
+    </div>
+
+    {% set dkim = email_security.dkim %}
+    <div class="border rounded-lg p-4 {{ 'border-green-200 bg-green-50' if dkim and dkim.found else 'border-red-200 bg-red-50' }}">
+      <p class="text-xs font-semibold {{ 'text-green-700' if dkim and dkim.found else 'text-red-700' }} uppercase tracking-wide mb-1">DKIM</p>
+      {% if dkim and dkim.found %}
+        <p class="text-sm font-bold text-green-700">Configurado</p>
+        <p class="text-xs text-gray-500 mt-1">Seletor: <span class="font-mono">{{ dkim.selector }}</span></p>
+      {% else %}
+        <p class="text-sm font-bold text-red-700">Ausente / Não verificado</p>
+        <p class="text-xs text-gray-500 mt-1">Seletor <span class="font-mono">selector1</span> não encontrado</p>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endif %}
+{% endblock %}

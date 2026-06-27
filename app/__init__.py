@@ -1,4 +1,4 @@
-"""Flask application factory for the IT Governance Dashboard."""
+"""Flask application factory for the Governança de TI Dashboard."""
 
 from __future__ import annotations
 
@@ -36,18 +36,39 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     log = structlog.get_logger(__name__)
 
+    from pathlib import Path
+
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
     # Core Flask config
+    _users_db = Path(__file__).resolve().parent.parent / "data" / "app.db"
     app.config.update(
         SECRET_KEY=settings.app.secret_key.get_secret_value(),
         TESTING=settings.app.testing,
         DEBUG=settings.app.debug,
         APP_VERSION=settings.app.version,
         APP_ENVIRONMENT=settings.app.environment,
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{_users_db}",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
 
-    # Database
+    # Flask-SQLAlchemy + Flask-Login + Flask-Bcrypt
+    from app.extensions import bcrypt, db, login_manager
+
+    db.init_app(app)
+    login_manager.init_app(app)
+    bcrypt.init_app(app)
+
+    # Ensure tables exist (idempotent).
+    # Use "from ... import" — plain "import app.models.user" would rebind the
+    # local variable "app" to the Python package, shadowing the Flask instance.
+    with app.app_context():
+        from app.models import link as _link_model  # noqa: F401
+        from app.models import user as _user_model  # noqa: F401
+
+        db.create_all()
+
+    # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
 
     init_db(app, settings)
@@ -58,7 +79,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     api = Api(
         app,
         version=settings.app.version,
-        title="IT Governance Dashboard API",
+        title="Governança de TI Dashboard API",
         description="5-pillar COBIT-aligned governance score API",
         prefix="/api",
         doc="/api/docs",
@@ -66,6 +87,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     from app.api.dashboards import ns as overview_ns
     from app.api.health import ns as health_ns
+    from app.api.intune import ns as intune_ns
     from app.api.pillars import ns as pillars_ns
     from app.api.pmo import ns as pmo_ns
 
@@ -73,6 +95,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     api.add_namespace(pillars_ns, path="/pillars")
     api.add_namespace(health_ns, path="/health")
     api.add_namespace(pmo_ns, path="/pmo")
+    api.add_namespace(intune_ns, path="/intune")
 
     # Legacy itgov namespaces (Sprint 10E) — preserved under /api/v1/ path
     try:
@@ -88,10 +111,78 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_legacy_api_unavailable", error=str(_e))
 
-    # HTML blueprints
-    from app.views.dashboards import bp as dashboards_bp
+    # Governança MFA — bloco separado: não depende de ZABBIX/Zendesk
+    try:
+        from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
 
-    app.register_blueprint(dashboards_bp)
+        api.add_namespace(governance_mfa_ns, path="/v1/governance")
+        log.info("itgov_governance_mfa_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_mfa_unavailable", error=str(_e))
+
+    # Governança Dispositivos + Aplicativos (pilares M365) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_apps import ns as governance_apps_ns
+        from itgov.api.v1.governance_devices import ns as governance_devices_ns
+
+        api.add_namespace(governance_devices_ns, path="/v1/governance")
+        api.add_namespace(governance_apps_ns, path="/v1/governance")
+        log.info("itgov_governance_devices_apps_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_devices_apps_unavailable", error=str(_e))
+
+    # Governança Compliance (Secure Score) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_compliance import ns as governance_compliance_ns
+
+        api.add_namespace(governance_compliance_ns, path="/v1/governance")
+        log.info("itgov_governance_compliance_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_compliance_unavailable", error=str(_e))
+
+    # Governança Dados (Sensitivity Labels) — mesmo padrão do MFA
+    try:
+        from itgov.api.v1.governance_data import ns as governance_data_ns
+
+        api.add_namespace(governance_data_ns, path="/v1/governance")
+        log.info("itgov_governance_data_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_data_unavailable", error=str(_e))
+
+    # Governança Service Health — ServiceHealth.Read.All
+    try:
+        from itgov.api.v1.governance_service_health import ns as governance_service_health_ns
+
+        api.add_namespace(governance_service_health_ns, path="/v1/governance")
+        log.info("itgov_governance_service_health_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_service_health_unavailable", error=str(_e))
+
+    # Governança Security Alerts — Defender KPI-END-01
+    try:
+        from itgov.api.v1.governance_security_alerts import ns as governance_security_alerts_ns
+
+        api.add_namespace(governance_security_alerts_ns, path="/v1/governance")
+        log.info("itgov_governance_security_alerts_registered")
+    except Exception as _e:
+        log.warning("itgov_governance_security_alerts_unavailable", error=str(_e))
+
+    # HTML blueprints
+    import os
+
+    from app.auth import bp as auth_bp
+    from app.views.dashboards import bp as dashboards_bp
+    from app.views.users import bp as users_bp
+
+    _gov_prefix = os.getenv("APP_ROOT_PATH", "/gov")
+    app.register_blueprint(auth_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(dashboards_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(users_bp, url_prefix=_gov_prefix)
+
+    # CLI commands
+    from app.commands import register_commands
+
+    register_commands(app)
 
     # Error handlers
     @app.errorhandler(404)
@@ -136,14 +227,28 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         )
         return response
 
+    # Error handlers for auth
+    @app.errorhandler(401)
+    def unauthorized(e: Exception) -> Any:
+        from flask import redirect, url_for
+
+        return redirect(url_for("auth.login")), 302
+
+    @app.errorhandler(403)
+    def forbidden(e: Exception) -> Any:
+        return _render_error("errors/403.html", 403)
+
     # Context processors
     @app.context_processor
     def inject_globals() -> dict[str, Any]:
+        from flask_login import current_user as cu
+
         return {
             "app_version": settings.app.version,
             "app_name": settings.app.name,
             "environment": settings.app.environment,
             "csp_nonce": lambda: getattr(g, "csp_nonce", ""),
+            "current_user": cu,
         }
 
     log.info(

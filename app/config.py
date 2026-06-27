@@ -13,7 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class AppConfig(BaseSettings):
     """Core Flask settings."""
 
-    name: str = "IT Governance Dashboard"
+    name: str = "Governança de TI Dashboard"
     version: str = "1.1.0"
     environment: Literal["development", "testing", "production"] = "development"
     secret_key: SecretStr = SecretStr("dev-secret-change-in-prod")

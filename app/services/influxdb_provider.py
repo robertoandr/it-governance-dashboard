@@ -24,6 +24,8 @@ _IDEAL_MERGE_HOURS = 8.0  # avg merge time (h) considered excellent
 _EXPECTED_HOSTS = 150  # baseline for 100% monitoring coverage
 _PENALTY_DISASTER = 20.0  # score penalty per disaster-severity incident
 _PENALTY_HIGH = 5.0  # score penalty per high-severity incident
+_MIN_UPTIME_PCT = 99.5  # below = availability degraded
+_MIN_BACKUP_COVERAGE_PCT = 95.0  # below = backup coverage concern
 
 _COMING_SOON_ETA_STRATEGIC = "Sprint 13 - PMO"
 _COMING_SOON_ETA_RESOURCE = "Sprint 13 - Intune/M365"
@@ -100,11 +102,11 @@ class InfluxDBMetricsProvider:
     # ── Public pillar methods ────────────────────────────────────────────────
 
     def get_performance_metrics(self) -> dict[str, Any]:
-        """Performance Measure: real availability + coverage from Zabbix."""
-        zabbix = self._zabbix_stats()
+        """Performance Measure: real availability + coverage from gov_zabbix_disponibilidade."""
+        disp = self._zabbix_disp_stats()
 
-        if not zabbix:
-            log.warning("zabbix_no_data_performance", fallback="coming_soon")
+        if not disp:
+            log.warning("zabbix_disp_no_data_performance", fallback="coming_soon")
             mock = self._mock.get_performance_metrics()
             mock["_meta"] = {
                 "data_source": "coming_soon",
@@ -113,24 +115,23 @@ class InfluxDBMetricsProvider:
             }
             return mock
 
-        hosts = zabbix.get("hosts", 0)
-        disaster = zabbix.get("disaster", 0)
-
-        avail_raw = round((hosts - disaster) / hosts * 100, 2) if hosts else 0.0
-        coverage_raw = round(min(100.0, hosts / _EXPECTED_HOSTS * 100), 1)
+        uptime_pct = disp.get("uptime_pct", 0.0)
+        hosts_down = disp.get("hosts_down", 0)
+        total = disp.get("total_monitorado", 0)
+        coverage_raw = round(min(100.0, total / _EXPECTED_HOSTS * 100), 1)
 
         log.info(
-            "performance_metrics_from_zabbix",
-            hosts=hosts,
-            disaster=disaster,
-            availability=avail_raw,
+            "performance_metrics_from_zabbix_disp",
+            uptime_pct=uptime_pct,
+            hosts_down=hosts_down,
+            total_monitorado=total,
             coverage=coverage_raw,
         )
 
         return {
             "_meta": {
                 "data_source": "partial",
-                "last_collected": zabbix.get("_time"),
+                "last_collected": disp.get("_time"),
                 "collector_eta": None,
             },
             "previous_score": None,
@@ -138,9 +139,9 @@ class InfluxDBMetricsProvider:
                 {
                     "id": "availability",
                     "label": "Disponibilidade de sistemas críticos",
-                    "value": round(min(100.0, avail_raw), 1),
-                    "raw_value": avail_raw,
-                    "unit": "%",
+                    "value": round(min(100.0, uptime_pct), 1),
+                    "raw_value": hosts_down,
+                    "unit": "hosts down",
                     "source": "zabbix",
                     "weight": 3.0,
                     "trend": "stable",
@@ -149,8 +150,8 @@ class InfluxDBMetricsProvider:
                     "id": "monitoring_coverage",
                     "label": "Cobertura de monitoramento",
                     "value": coverage_raw,
-                    "raw_value": hosts,
-                    "unit": "%",
+                    "raw_value": total,
+                    "unit": "hosts",
                     "source": "zabbix",
                     "weight": 1.5,
                     "trend": "stable",
@@ -179,9 +180,11 @@ class InfluxDBMetricsProvider:
         }
 
     def get_risk_metrics(self) -> dict[str, Any]:
-        """Risk Management: Zabbix incidents + Entra ID MFA when available."""
+        """Risk Management: Zabbix incidents + risk score + Acronis backup + Entra MFA."""
         zabbix = self._zabbix_stats()
         entra = self._entra_stats()
+        zabbix_risk = self._zabbix_risk_stats()
+        acronis = self._acronis_stats()
 
         if not zabbix:
             log.warning("zabbix_no_data_risk", fallback="coming_soon")
@@ -248,6 +251,77 @@ class InfluxDBMetricsProvider:
                 }
             )
 
+        # Zabbix risk score (pre-calculated by collector across all severity levels)
+        if zabbix_risk:
+            zr_score = round(zabbix_risk.get("score", 0.0), 1)
+            components.append(
+                {
+                    "id": "risk_score_zabbix",
+                    "label": "Score de risco Zabbix",
+                    "value": zr_score,
+                    "raw_value": float(zabbix_risk.get("total_problemas", 0)),
+                    "unit": "score",
+                    "source": "zabbix",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            zr_time = zabbix_risk.get("_time")
+            if zr_time and last_collected:
+                last_collected = max(last_collected, zr_time)
+            elif zr_time:
+                last_collected = zr_time
+        else:
+            components.append(
+                {
+                    "id": "risk_score_zabbix",
+                    "label": "Score de risco Zabbix",
+                    "value": 60.0,
+                    "raw_value": None,
+                    "unit": "score",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
+        # Acronis backup coverage (real data from gov_acronis_protection)
+        if acronis:
+            protected = acronis.get("protected_machines", 0)
+            total_m = acronis.get("total_machines", 0)
+            backup_pct = round(protected / total_m * 100, 1) if total_m else 0.0
+            components.append(
+                {
+                    "id": "backup_coverage",
+                    "label": "Cobertura de Backup (Acronis)",
+                    "value": backup_pct,
+                    "raw_value": float(protected),
+                    "unit": "máquinas protegidas",
+                    "source": "acronis",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            acr_time = acronis.get("_time")
+            if acr_time and last_collected:
+                last_collected = max(last_collected, acr_time)
+            elif acr_time:
+                last_collected = acr_time
+        else:
+            backup_pct = None
+            components.append(
+                {
+                    "id": "backup_coverage",
+                    "label": "Cobertura de Backup (Acronis)",
+                    "value": 95.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
         # Remaining components without real sources
         components.extend(
             [
@@ -271,26 +345,19 @@ class InfluxDBMetricsProvider:
                     "weight": 2.5,
                     "trend": "stable",
                 },
-                {
-                    "id": "backup_success_rate",
-                    "label": "Taxa de sucesso de backups",
-                    "value": 95.0,
-                    "raw_value": None,
-                    "unit": "%",
-                    "source": "coming_soon",
-                    "weight": 2.0,
-                    "trend": "stable",
-                },
             ]
         )
 
         log.info(
-            "risk_metrics_from_zabbix",
+            "risk_metrics_assembled",
             hosts=hosts,
             disaster=disaster,
             high=high,
             incidents_score=incidents_score,
+            zabbix_risk_score=zabbix_risk.get("score") if zabbix_risk else None,
+            backup_pct=backup_pct,
             entra_available=bool(entra),
+            acronis_available=bool(acronis),
         )
 
         return {
@@ -384,6 +451,16 @@ class InfluxDBMetricsProvider:
                     "weight": 1.0,
                     "trend": "stable",
                 },
+                {
+                    "id": "deployment_frequency",
+                    "label": "Frequência de deploys",
+                    "value": 70.0,
+                    "raw_value": None,
+                    "unit": "deploys/mês",
+                    "source": "coming_soon",
+                    "weight": 1.0,
+                    "trend": "stable",
+                },
             ]
         )
 
@@ -404,24 +481,314 @@ class InfluxDBMetricsProvider:
         }
 
     def get_strategic_metrics(self) -> dict[str, Any]:
-        """Strategic Alignment: COMING_SOON — requires PMO manual input."""
-        mock = self._mock.get_strategic_metrics()
-        mock["_meta"] = {
-            "data_source": "coming_soon",
-            "last_collected": None,
-            "collector_eta": _COMING_SOON_ETA_STRATEGIC,
+        """Strategic Alignment: Secure Score M365 + Entra privileged access (partial).
+
+        Real sources:
+          gov_m365_secure_score.pct          → maturidade de segurança estratégica
+          gov_entra_summary.privileged_roles_count → governança de acessos privilegiados
+        Coming soon: PMO (projetos alinhados, KPIs, orçamento).
+        """
+        secure = self._secure_score_stats()
+        entra = self._entra_stats()
+
+        if not secure and not entra:
+            log.warning("strategic_no_data", fallback="coming_soon")
+            mock = self._mock.get_strategic_metrics()
+            mock["_meta"] = {
+                "data_source": "coming_soon",
+                "last_collected": None,
+                "collector_eta": _COMING_SOON_ETA_STRATEGIC,
+            }
+            return mock
+
+        components: list[dict[str, Any]] = []
+        last_collected: datetime | None = None
+
+        if secure:
+            pct = float(secure.get("pct", 0.0))
+            components.append(
+                {
+                    "id": "security_posture",
+                    "label": "Maturidade de segurança (Secure Score M365)",
+                    "value": round(pct, 1),
+                    "raw_value": pct,
+                    "unit": "%",
+                    "source": "m365_secure_score",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            last_collected = secure.get("_time")
+
+        if entra:
+            roles = int(entra.get("privileged_roles_count", 0))
+            # Baseline 4 roles expected; each extra = -10 pts.
+            priv_score = round(max(0.0, 100.0 - max(0, roles - 4) * 10.0), 1)
+            components.append(
+                {
+                    "id": "privileged_access",
+                    "label": "Governança de acessos privilegiados",
+                    "value": priv_score,
+                    "raw_value": float(roles),
+                    "unit": "roles",
+                    "source": "entra_id",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+            entra_time = entra.get("_time")
+            if entra_time and last_collected:
+                last_collected = max(last_collected, entra_time)
+            elif entra_time:
+                last_collected = entra_time
+
+        # PMO components — ClickUp taxa_conclusao como proxy de alinhamento estratégico
+        try:
+            from itgov.api.v1.pmo_clickup import get_cached_pmo
+
+            pmo = get_cached_pmo()
+            pmo_taxa = float(pmo.get("taxa_conclusao", 0.0)) if pmo.get("has_data") else None
+            pmo_total = int(pmo.get("total", 0))
+        except Exception:
+            pmo_taxa = None
+            pmo_total = 0
+
+        if pmo_taxa is not None:
+            components.append(
+                {
+                    "id": "pmo_alignment",
+                    "label": "Projetos alinhados ao planejamento estratégico",
+                    "value": round(pmo_taxa, 1),
+                    "raw_value": float(pmo_total),
+                    "unit": "% concluídos",
+                    "source": "clickup",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+        else:
+            components.append(
+                {
+                    "id": "pmo_alignment",
+                    "label": "Projetos alinhados ao planejamento estratégico",
+                    "value": 75.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
+        components.extend(
+            [
+                {
+                    "id": "kpi_coverage",
+                    "label": "Cobertura de KPIs estratégicos",
+                    "value": 68.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 1.5,
+                    "trend": "stable",
+                },
+                {
+                    "id": "budget_alignment",
+                    "label": "Aderência orçamentária TI vs negócio",
+                    "value": 79.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 1.0,
+                    "trend": "stable",
+                },
+            ]
+        )
+
+        log.info(
+            "strategic_metrics_assembled",
+            secure_score_available=bool(secure),
+            entra_available=bool(entra),
+            secure_pct=secure.get("pct") if secure else None,
+            privileged_roles=entra.get("privileged_roles_count") if entra else None,
+        )
+
+        return {
+            "_meta": {
+                "data_source": "partial",
+                "last_collected": last_collected,
+                "collector_eta": None,
+            },
+            "previous_score": None,
+            "components": components,
         }
-        return mock
 
     def get_resource_metrics(self) -> dict[str, Any]:
-        """Resource Management: COMING_SOON — requires Intune/M365 integration."""
-        mock = self._mock.get_resource_metrics()
-        mock["_meta"] = {
-            "data_source": "coming_soon",
-            "last_collected": None,
-            "collector_eta": _COMING_SOON_ETA_RESOURCE,
+        """Resource Management: Entra identity hygiene + Secure Score M365 (partial).
+
+        Real sources:
+          gov_entra_summary.stale_accounts_90d / total_users → higiene de identidades
+          gov_entra_summary.ca_policies_count               → políticas de Acesso Condicional
+          gov_m365_secure_score.pct / current_score         → controles M365 implementados
+        Coming soon: utilização de licenças M365 (requer m365_licenses no InfluxDB).
+        """
+        entra = self._entra_stats()
+        secure = self._secure_score_stats()
+
+        if not entra and not secure:
+            log.warning("resource_no_data", fallback="coming_soon")
+            mock = self._mock.get_resource_metrics()
+            mock["_meta"] = {
+                "data_source": "coming_soon",
+                "last_collected": None,
+                "collector_eta": _COMING_SOON_ETA_RESOURCE,
+            }
+            return mock
+
+        components: list[dict[str, Any]] = []
+        last_collected: datetime | None = None
+
+        if entra:
+            total = int(entra.get("total_users", 0))
+            stale = int(entra.get("stale_accounts_90d", 0))
+            hygiene_score = round(max(0.0, (1.0 - stale / total) * 100.0), 1) if total else 0.0
+            components.append(
+                {
+                    "id": "identity_hygiene",
+                    "label": "Higiene de identidades (contas ativas)",
+                    "value": hygiene_score,
+                    "raw_value": float(stale),
+                    "unit": "%",
+                    "source": "entra_id",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
+            ca = int(entra.get("ca_policies_count", 0))
+            # 10 pts per CA policy, capped at 100.
+            ca_score = round(min(100.0, ca * 10.0), 1)
+            components.append(
+                {
+                    "id": "conditional_access",
+                    "label": "Políticas de Acesso Condicional (CA)",
+                    "value": ca_score,
+                    "raw_value": float(ca),
+                    "unit": "políticas",
+                    "source": "entra_id",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+            last_collected = entra.get("_time")
+
+        if secure:
+            pct = float(secure.get("pct", 0.0))
+            current = float(secure.get("current_score", 0.0))
+            components.append(
+                {
+                    "id": "m365_controls",
+                    "label": "Controles M365 implementados (Secure Score)",
+                    "value": round(pct, 1),
+                    "raw_value": current,
+                    "unit": "%",
+                    "source": "m365_secure_score",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+            secure_time = secure.get("_time")
+            if secure_time and last_collected:
+                last_collected = max(last_collected, secure_time)
+            elif secure_time:
+                last_collected = secure_time
+
+        # Utilização de licenças M365 — via m365_licenses measurement
+        lic_usage_pct = self._license_utilization_pct()
+        if lic_usage_pct is not None:
+            components.append(
+                {
+                    "id": "license_utilization",
+                    "label": "Utilização de licenças M365",
+                    "value": round(lic_usage_pct, 1),
+                    "raw_value": round(lic_usage_pct, 1),
+                    "unit": "%",
+                    "source": "m365_licenses",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+        else:
+            components.append(
+                {
+                    "id": "license_utilization",
+                    "label": "Utilização de licenças M365",
+                    "value": 74.0,
+                    "raw_value": None,
+                    "unit": "%",
+                    "source": "coming_soon",
+                    "weight": 2.0,
+                    "trend": "stable",
+                }
+            )
+
+        # Caixas Exchange soft-deleted pendentes (COBIT BAI09)
+        mailbox = self._exchange_mailbox_stats()
+        if mailbox:
+            pending = int(mailbox.get("pending_cleanup", 0))
+            total_sd = int(mailbox.get("total_soft_deleted", 0))
+            oldest = int(mailbox.get("oldest_days", 0))
+            # 100% sem pendentes; -15 pts por caixa pendente (piso 0)
+            score = round(max(0.0, 100.0 - pending * 15.0), 1)
+            components.append(
+                {
+                    "id": "mailbox_hygiene",
+                    "label": f"Caixas excluidas pendentes (BAI09) — {total_sd} total, {oldest}d mais antiga",
+                    "value": score,
+                    "raw_value": float(pending),
+                    "unit": "pendentes >7d",
+                    "source": "exchange_online",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+        else:
+            components.append(
+                {
+                    "id": "mailbox_hygiene",
+                    "label": "Caixas excluidas pendentes (BAI09)",
+                    "value": 100.0,
+                    "raw_value": None,
+                    "unit": "pendentes >7d",
+                    "source": "coming_soon",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+        mb_time = mailbox.get("_time") if mailbox else None
+        if mb_time and last_collected:
+            last_collected = max(last_collected, mb_time)
+        elif mb_time:
+            last_collected = mb_time
+
+        log.info(
+            "resource_metrics_assembled",
+            entra_available=bool(entra),
+            secure_score_available=bool(secure),
+            stale_accounts=entra.get("stale_accounts_90d") if entra else None,
+            ca_policies=entra.get("ca_policies_count") if entra else None,
+            secure_pct=secure.get("pct") if secure else None,
+        )
+
+        return {
+            "_meta": {
+                "data_source": "partial",
+                "last_collected": last_collected,
+                "collector_eta": None,
+            },
+            "previous_score": None,
+            "components": components,
         }
-        return mock
 
     # ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -447,6 +814,26 @@ from(bucket: "{self._bucket_raw}")
             "_time": row.get("_time"),
         }
 
+    def _exchange_mailbox_stats(self) -> dict[str, Any]:
+        """Return the latest soft-deleted mailbox record from gov_exchange_mailbox."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -25h)
+  |> filter(fn: (r) => r._measurement == "gov_exchange_mailbox")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "total_soft_deleted": int(row.get("total_soft_deleted", 0)),
+            "pending_cleanup": int(row.get("pending_cleanup", 0)),
+            "oldest_days": int(row.get("oldest_days", 0)),
+            "_time": row.get("_time"),
+        }
+
     def _entra_stats(self) -> dict[str, Any]:
         """Return the latest Entra ID summary record from InfluxDB."""
         flux = f"""
@@ -468,6 +855,290 @@ from(bucket: "{self._bucket_raw}")
             "privileged_roles_count": int(row.get("privileged_roles_count", 0)),
             "ca_policies_count": int(row.get("ca_policies_count", 0)),
             "_time": row.get("_time"),
+        }
+
+    def _secure_score_stats(self) -> dict[str, Any]:
+        """Return the latest Microsoft Secure Score record from InfluxDB."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -25h)
+  |> filter(fn: (r) => r._measurement == "gov_m365_secure_score")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "current_score": float(row.get("current_score", 0.0)),
+            "max_score": float(row.get("max_score", 0.0)),
+            "pct": float(row.get("pct", 0.0)),
+            "active_user_count": int(row.get("active_user_count", 0)),
+            "control_scores_count": int(row.get("control_scores_count", 0)),
+            "_time": row.get("_time"),
+        }
+
+    def _zabbix_disp_stats(self) -> dict[str, Any]:
+        """Return the latest Zabbix availability record from gov_zabbix_disponibilidade."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_disponibilidade")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "uptime_pct": float(row.get("uptime_pct", 0.0)),
+            "score": float(row.get("score", 0.0)),
+            "hosts_up": int(row.get("hosts_up", 0)),
+            "hosts_down": int(row.get("hosts_down", 0)),
+            "hosts_unknown": int(row.get("hosts_unknown", 0)),
+            "total_monitorado": int(row.get("total_monitorado", 0)),
+            "top_host_down": str(row.get("top_host_down", "")),
+            "_time": row.get("_time"),
+        }
+
+    def _zabbix_risk_stats(self) -> dict[str, Any]:
+        """Return the latest Zabbix risk score from gov_zabbix_riscos."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_zabbix_riscos")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "score": float(row.get("score", 0.0)),
+            "criticos": int(row.get("criticos", 0)),
+            "altos": int(row.get("altos", 0)),
+            "medios": int(row.get("medios", 0)),
+            "avisos": int(row.get("avisos", 0)),
+            "total_problemas": int(row.get("total_problemas", 0)),
+            "incidentes_criticos": int(row.get("incidentes_criticos", 0)),
+            "top_incidente": str(row.get("top_incidente", "")),
+            "_time": row.get("_time"),
+        }
+
+    def _acronis_stats(self) -> dict[str, Any]:
+        """Return Acronis protection coverage + risk summary from InfluxDB."""
+        flux_prot = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -7d)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_protection")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        flux_risk = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_risk_summary")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        flux_agents = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_acronis_agents")
+  |> filter(fn: (r) => r._field == "total")
+  |> last()
+"""
+        prot_rows = self._query(flux_prot)
+        risk_rows = self._query(flux_risk)
+        if not prot_rows and not risk_rows:
+            return {}
+        result: dict[str, Any] = {}
+        if prot_rows:
+            row = prot_rows[-1]
+            result.update(
+                {
+                    "protected_machines": int(row.get("protected_machines", 0)),
+                    "total_machines": int(row.get("total_machines", 0)),
+                    "_time": row.get("_time"),
+                }
+            )
+        if risk_rows:
+            row = risk_rows[-1]
+            result.update(
+                {
+                    "offline_gt_20d": int(row.get("offline_gt_20d", 0)),
+                    "incidents_total": int(row.get("incidents_total", 0)),
+                    "license_issues": int(row.get("license_issues", 0)),
+                }
+            )
+            if "_time" not in result:
+                result["_time"] = row.get("_time")
+            # Fallback: derive protection from gov_acronis_agents + sem_plano when
+            # gov_acronis_protection measurement is absent (collector < v2 schema).
+            if "protected_machines" not in result:
+                sem_plano = int(row.get("sem_plano", 0))
+                agents_rows = self._query(flux_agents)
+                total_m = int(agents_rows[0]["_value"]) if agents_rows else 0
+                if total_m:
+                    result["total_machines"] = total_m
+                    result["protected_machines"] = max(0, total_m - sem_plano)
+        return result
+
+    def _license_utilization_pct(self) -> float | None:
+        """Return overall M365 license utilization % from m365_licenses measurement.
+
+        Excludes free/unlimited SKUs (total >= 10000). Returns None if no data.
+        """
+        flux_consumed = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._measurement == "m365_licenses")
+  |> filter(fn: (r) => r._field == "consumed" or r._field == "total")
+  |> group(columns: ["sku_name", "_field"])
+  |> last()
+  |> keep(columns: ["sku_name", "_field", "_value"])
+"""
+        rows = self._query(flux_consumed)
+        if not rows:
+            return None
+        by_sku: dict[str, dict] = {}
+        for row in rows:
+            key = str(row.get("sku_name", ""))
+            if key not in by_sku:
+                by_sku[key] = {}
+            field = str(row.get("_field", ""))
+            if field:
+                by_sku[key][field] = int(row.get("_value", 0) or 0)
+        total_consumed = 0
+        total_seats = 0
+        for sku_data in by_sku.values():
+            total = sku_data.get("total", 0)
+            consumed = sku_data.get("consumed", 0)
+            if total >= 10000 or total == 0:
+                continue
+            total_consumed += consumed
+            total_seats += total
+        if total_seats == 0:
+            return None
+        return round(min(100.0, total_consumed / total_seats * 100), 1)
+
+    def _intune_stats(self) -> dict[str, Any]:
+        """Return Intune patch compliance aggregated from InfluxDB.
+
+        Aggregation rule: sum raw fields across OS types, then divide.
+        Arithmetic mean of per-OS compliance_pct is wrong (ignores fleet size).
+        Staleness window: 15 h — collector runs every 6 h, so >2 missed runs = stale.
+        """
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -15h)
+  |> filter(fn: (r) => r._measurement == "gov_intune_patch_compliance")
+  |> filter(fn: (r) => r._field == "compliant" or r._field == "total_evaluated")
+  |> last()
+  |> pivot(rowKey: ["os_type"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+
+        if not rows:
+            log.info("intune_stats_stale", reason="no data in last 15h")
+            return {
+                "global": {"compliant": 0, "total_evaluated": 0, "compliance_pct": None},
+                "by_os": [],
+                "stale": True,
+            }
+
+        by_os: list[dict[str, Any]] = []
+        total_compliant = 0
+        total_evaluated = 0
+
+        for row in rows:
+            os_type = row.get("os_type") or "Other"
+            compliant = int(row.get("compliant") or 0)
+            evaluated = int(row.get("total_evaluated") or 0)
+            pct = round(compliant / evaluated * 100, 1) if evaluated else None
+
+            by_os.append(
+                {
+                    "os_type": os_type,
+                    "compliant": compliant,
+                    "total_evaluated": evaluated,
+                    "compliance_pct": pct,
+                }
+            )
+            total_compliant += compliant
+            total_evaluated += evaluated
+
+        global_pct: float | None = round(total_compliant / total_evaluated * 100, 1) if total_evaluated else None
+
+        log.info(
+            "intune_stats",
+            os_count=len(by_os),
+            total_compliant=total_compliant,
+            total_evaluated=total_evaluated,
+            pct_global=global_pct,
+        )
+
+        return {
+            "global": {
+                "compliant": total_compliant,
+                "total_evaluated": total_evaluated,
+                "compliance_pct": global_pct,
+            },
+            "by_os": sorted(by_os, key=lambda r: r["os_type"]),
+            "stale": False,
+        }
+
+    def _patch_stats(self) -> dict[str, Any]:
+        """Return AD+WinRM patch compliance summary from InfluxDB.
+
+        Fonte: gov_patch_compliance (collector: patch_collector.py via WinRM/NTLM).
+        Staleness: 15h — coleta a cada 6h, stale após 2 ciclos perdidos.
+        Diferente de _intune_stats(): aqui é summary agregado (sem breakdown por OS).
+        """
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -15h)
+  |> filter(fn: (r) => r._measurement == "gov_patch_compliance")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+
+        if not rows:
+            log.info("patch_stats_stale", reason="no data in last 15h")
+            return {
+                "compliance_pct": None,
+                "compliant": 0,
+                "non_compliant": 0,
+                "total_machines": 0,
+                "reachable": 0,
+                "unreachable": 0,
+                "low_confidence": 0,
+                "stale": True,
+            }
+
+        row = rows[-1]
+        pct_raw = row.get("compliance_pct")
+
+        log.info(
+            "patch_stats",
+            compliance_pct=pct_raw,
+            total_machines=row.get("total_machines"),
+            reachable=row.get("reachable"),
+        )
+
+        return {
+            "compliance_pct": float(pct_raw) if pct_raw is not None else None,
+            "compliant": int(row.get("compliant") or 0),
+            "non_compliant": int(row.get("non_compliant") or 0),
+            "total_machines": int(row.get("total_machines") or 0),
+            "reachable": int(row.get("reachable") or 0),
+            "unreachable": int(row.get("unreachable") or 0),
+            "low_confidence": int(row.get("low_confidence") or 0),
+            "stale": False,
         }
 
     def _github_pr_stats(self) -> tuple[int, float | None]:

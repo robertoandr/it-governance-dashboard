@@ -35,6 +35,7 @@ class Ticket(BaseModel):
     updated_at: datetime
     assignee_id: int | None = None
     requester_id: int
+    group_id: int | None = None
     tags: list[str] = Field(default_factory=list)
 
     @field_validator("priority", mode="before")

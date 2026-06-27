@@ -1,7 +1,8 @@
 """Entra ID (Azure AD) collector — writes gov_entra_summary to InfluxDB.
 
-Collects: total_users, guest_users, mfa_enabled_pct, stale_accounts_90d,
-privileged_roles_count, ca_policies_count.
+Collects: total_users, guest_users, mfa_enabled_pct, sspr_registered_pct,
+stale_accounts_90d, privileged_roles_count, ca_policies_count (+ breakdown),
+admin_total, admin_sem_mfa.
 
 Token: client_credentials flow via MSAL (BaseOAuthCollector).
 Schedule: every 6 hours via APScheduler.
@@ -12,6 +13,7 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import structlog
 from influxdb_client import InfluxDBClient, Point, WritePrecision
@@ -54,23 +56,26 @@ class EntraIdCollector(BaseOAuthCollector):
         guests = sum(1 for u in all_users if u.get("userType") == "Guest")
         return total, guests
 
-    def _mfa_enabled_pct(self, total_users: int) -> float:
-        """Return percentage of users with at least one MFA method registered."""
+    def _mfa_enabled_pct(self, total_users: int) -> tuple[float, float]:
+        """Return (mfa_pct, sspr_pct) — % users with MFA and SSPR registered."""
         if total_users == 0:
-            return 0.0
-        # credentialUserRegistrationDetails requires Reports.Read.All
+            return 0.0, 0.0
+        # userRegistrationDetails requires UserAuthenticationMethod.Read.All
         try:
             items = list(
                 self._paginate(
-                    f"{_GRAPH_BASE}/reports/credentialUserRegistrationDetails",
-                    params={"$select": "isMfaRegistered", "$top": "999"},
+                    f"{_GRAPH_BASE}/reports/authenticationMethods/userRegistrationDetails",
+                    params={"$select": "isMfaRegistered,isSsprRegistered", "$top": "999"},
                 )
             )
             mfa_count = sum(1 for i in items if i.get("isMfaRegistered"))
-            return round(mfa_count / total_users * 100, 2) if total_users else 0.0
+            sspr_count = sum(1 for i in items if i.get("isSsprRegistered"))
+            mfa_pct = round(mfa_count / total_users * 100, 2) if total_users else 0.0
+            sspr_pct = round(sspr_count / total_users * 100, 2) if total_users else 0.0
+            return mfa_pct, sspr_pct
         except Exception as exc:
             log.warning("mfa_count_failed", error=str(exc))
-            return 0.0
+            return 0.0, 0.0
 
     def _stale_accounts(self) -> int:
         """Count accounts with no interactive sign-in in the past 90 days."""
@@ -111,17 +116,174 @@ class EntraIdCollector(BaseOAuthCollector):
             log.warning("privileged_roles_failed", error=str(exc))
             return 0
 
-    def _ca_policies_count(self) -> int:
-        """Count enabled Conditional Access policies."""
+    def _ca_policies_breakdown(self) -> dict[str, int]:
+        """Return breakdown of Conditional Access policies by state.
+
+        Returns dict with keys: total, enabled, report_only, disabled.
+        """
         try:
-            data = self._get(
-                f"{_GRAPH_BASE}/identity/conditionalAccess/policies",
-                params={"$filter": "state eq 'enabled'", "$select": "id"},
+            items = list(
+                self._paginate(
+                    f"{_GRAPH_BASE}/identity/conditionalAccess/policies",
+                    params={"$select": "id,state"},
+                )
             )
-            return len(data.get("value", []))
+            enabled = sum(1 for p in items if p.get("state") == "enabled")
+            report_only = sum(1 for p in items if p.get("state") == "enabledForReportingButNotEnforced")
+            disabled = sum(1 for p in items if p.get("state") == "disabled")
+            return {
+                "total": len(items),
+                "enabled": enabled,
+                "report_only": report_only,
+                "disabled": disabled,
+            }
         except Exception as exc:
             log.warning("ca_policies_failed", error=str(exc))
-            return 0
+            return {"total": 0, "enabled": 0, "report_only": 0, "disabled": 0}
+
+    def _admin_mfa_status(self) -> tuple[int, int]:
+        """Return (admin_total, admin_sem_mfa) across privileged directory roles.
+
+        Requires RoleManagement.Read.Directory and UserAuthenticationMethod.Read.All.
+        Returns (0, 0) gracefully if permission is missing.
+        """
+        privileged_roles = {
+            "Global Administrator",
+            "Privileged Role Administrator",
+            "Security Administrator",
+            "Exchange Administrator",
+            "SharePoint Administrator",
+            "Compliance Administrator",
+        }
+        try:
+            roles_data = self._get(
+                f"{_GRAPH_BASE}/directoryRoles",
+                params={"$select": "id,displayName"},
+            )
+            roles = [r for r in roles_data.get("value", []) if r.get("displayName") in privileged_roles]
+
+            admin_ids: set[str] = set()
+            for role in roles:
+                members = list(
+                    self._paginate(
+                        f"{_GRAPH_BASE}/directoryRoles/{role['id']}/members",
+                        params={"$select": "id,userPrincipalName"},
+                    )
+                )
+                for m in members:
+                    uid = m.get("id", "")
+                    if uid:
+                        admin_ids.add(uid)
+
+            if not admin_ids:
+                return 0, 0
+
+            # Fetch MFA registration for all users (with pagination)
+            reg_items = list(
+                self._paginate(
+                    f"{_GRAPH_BASE}/reports/authenticationMethods/userRegistrationDetails",
+                    params={"$select": "id,userPrincipalName,isMfaRegistered", "$top": "999"},
+                )
+            )
+            reg_by_id = {r.get("id", ""): r for r in reg_items}
+
+            admin_total = len(admin_ids)
+            admin_sem_mfa = sum(1 for uid in admin_ids if not reg_by_id.get(uid, {}).get("isMfaRegistered", False))
+            return admin_total, admin_sem_mfa
+        except Exception as exc:
+            log.warning("admin_mfa_status_failed", error=str(exc))
+            return 0, 0
+
+    def _collect_licenses(self, write_api: Any, bucket: str, collected_at: datetime) -> None:
+        """Collect M365 subscribed SKUs and write to m365_licenses measurement."""
+        try:
+            data = self._get(
+                f"{_GRAPH_BASE}/subscribedSkus",
+                params={"$select": "skuId,skuPartNumber,consumedUnits,prepaidUnits"},
+            )
+            skus = data.get("value", [])
+            points = []
+            for sku in skus:
+                consumed = int(sku.get("consumedUnits", 0))
+                prepaid = sku.get("prepaidUnits") or {}
+                total = int(prepaid.get("enabled", 0))
+                warning_units = int(prepaid.get("warning", 0))
+                available = max(0, total - consumed)
+                sku_id = sku.get("skuId", "")
+                sku_name = sku.get("skuPartNumber", "")
+                if not sku_id or total == 0:
+                    continue
+                points.append(
+                    Point("m365_licenses")
+                    .tag("sku_id", sku_id)
+                    .tag("sku_name", sku_name)
+                    .field("consumed", consumed)
+                    .field("total", total)
+                    .field("available", available)
+                    .field("warning_units", warning_units)
+                    .time(collected_at, WritePrecision.S)
+                )
+            if points:
+                write_api.write(bucket=bucket, record=points)
+                log.info("m365_licenses_written", count=len(points))
+        except Exception as exc:
+            log.warning("licenses_collect_failed", error=str(exc))
+
+    def _collect_soft_deleted_mailboxes(self, write_api: Any, bucket: str, collected_at: datetime) -> None:
+        """Query soft-deleted mailboxes via /directory/deletedItems and write to gov_exchange_mailbox.
+
+        Alerta COBIT BAI09: caixas com deletedDateTime > 7 dias bloqueiam restore/criação
+        de usuários com endereço conflitante.
+        """
+        alert_threshold = timedelta(days=7)
+        try:
+            deleted_users = list(
+                self._paginate(
+                    f"{_GRAPH_BASE}/directory/deletedItems/microsoft.graph.user",
+                    params={
+                        "$select": "id,mail,deletedDateTime,userPrincipalName",
+                        "$top": "999",
+                    },
+                )
+            )
+        except Exception as exc:
+            log.warning("soft_deleted_mailboxes_failed", error=str(exc))
+            return
+
+        now = datetime.now(UTC)
+        # Considera apenas entradas com endereço de e-mail (= têm caixa Exchange)
+        mailboxes = [u for u in deleted_users if u.get("mail")]
+        total = len(mailboxes)
+
+        pending_cleanup = 0
+        oldest_days = 0
+        for user in mailboxes:
+            deleted_str = user.get("deletedDateTime", "")
+            if not deleted_str:
+                continue
+            try:
+                deleted_at = datetime.fromisoformat(deleted_str.replace("Z", "+00:00"))
+                age_days = (now - deleted_at).days
+                oldest_days = max(oldest_days, age_days)
+                if age_days > alert_threshold.days:
+                    pending_cleanup += 1
+            except ValueError:
+                pass
+
+        point = (
+            Point("gov_exchange_mailbox")
+            .field("total_soft_deleted", total)
+            .field("pending_cleanup", pending_cleanup)
+            .field("oldest_days", oldest_days)
+            .time(collected_at, WritePrecision.S)
+        )
+        write_api.write(bucket=bucket, record=point)
+        log.info(
+            "exchange_mailbox_written",
+            total=total,
+            pending_cleanup=pending_cleanup,
+            oldest_days=oldest_days,
+        )
 
     # ── Main collection cycle ────────────────────────────────────────────────
 
@@ -132,22 +294,31 @@ class EntraIdCollector(BaseOAuthCollector):
 
         try:
             total_users, guest_users = self._count_users()
-            mfa_pct = self._mfa_enabled_pct(total_users)
+            mfa_pct, sspr_pct = self._mfa_enabled_pct(total_users)
             stale = self._stale_accounts()
             priv_roles = self._privileged_roles_count()
-            ca_count = self._ca_policies_count()
+            ca_breakdown = self._ca_policies_breakdown()
+            admin_total, admin_sem_mfa = self._admin_mfa_status()
         except Exception as exc:
             log.error("entra_collection_failed", error=str(exc))
             raise
+
+        ca_enabled = ca_breakdown["enabled"]
 
         log.info(
             "entra_metrics_collected",
             total_users=total_users,
             guest_users=guest_users,
             mfa_enabled_pct=mfa_pct,
+            sspr_registered_pct=sspr_pct,
             stale_accounts_90d=stale,
             privileged_roles_count=priv_roles,
-            ca_policies_count=ca_count,
+            ca_policies_count=ca_enabled,
+            ca_total=ca_breakdown["total"],
+            ca_report_only=ca_breakdown["report_only"],
+            ca_disabled=ca_breakdown["disabled"],
+            admin_total=admin_total,
+            admin_sem_mfa=admin_sem_mfa,
         )
 
         point = (
@@ -155,10 +326,17 @@ class EntraIdCollector(BaseOAuthCollector):
             .field("total_users", total_users)
             .field("guest_users", guest_users)
             .field("mfa_enabled_pct", mfa_pct)
+            .field("sspr_registered_pct", sspr_pct)
             .field("stale_accounts_90d", stale)
             .field("privileged_roles_count", priv_roles)
-            .field("ca_policies_count", ca_count)
-            .time(collected_at, WritePrecision.SECONDS)
+            .field("ca_policies_count", ca_enabled)
+            .field("ca_total", ca_breakdown["total"])
+            .field("ca_enabled", ca_enabled)
+            .field("ca_report_only", ca_breakdown["report_only"])
+            .field("ca_disabled", ca_breakdown["disabled"])
+            .field("admin_total", admin_total)
+            .field("admin_sem_mfa", admin_sem_mfa)
+            .time(collected_at, WritePrecision.S)
         )
 
         with InfluxDBClient(
@@ -166,10 +344,10 @@ class EntraIdCollector(BaseOAuthCollector):
             token=settings.INFLUX_TOKEN,
             org=settings.INFLUX_ORG,
         ) as client:
-            client.write_api(write_options=SYNCHRONOUS).write(
-                bucket=settings.INFLUX_BUCKET_RAW,
-                record=point,
-            )
+            api = client.write_api(write_options=SYNCHRONOUS)
+            api.write(bucket=settings.INFLUX_BUCKET_RAW, record=point)
+            self._collect_licenses(api, settings.INFLUX_BUCKET_RAW, collected_at)
+            self._collect_soft_deleted_mailboxes(api, settings.INFLUX_BUCKET_RAW, collected_at)
 
         log.info("entra_metrics_written", measurement="gov_entra_summary")
 

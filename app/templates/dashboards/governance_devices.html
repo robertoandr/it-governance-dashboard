@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Dispositivos — IT Governance{% endblock %}
+
+{% block page_title %}Governança M365 — Dispositivos{% endblock %}
+
+{% block content %}
+{% macro stat_card(label, value, unit, color) %}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+  {% if value is none %}
+    <p class="text-3xl font-bold text-gray-300">—</p>
+    <p class="text-xs text-gray-400 mt-1">sem dados (Intune não usado)</p>
+  {% else %}
+    <p class="text-3xl font-bold {{ color }}">{{ value }}<span class="text-base text-gray-400 ml-1">{{ unit }}</span></p>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-800">Dispositivos — Microsoft 365</h1>
+  <p class="text-sm text-gray-500">Inventário de dispositivos registrados no Entra ID (Workplace/Hybrid/Azure AD Join).</p>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+  {{ stat_card('Total de dispositivos', summary.total_devices, '', 'text-gray-800') }}
+  {{ stat_card('Inativos (90d+)', summary.stale_90d, '', 'text-red-600' if summary.stale_90d > 0 else 'text-green-600') }}
+  {{ stat_card('Gerenciados (Intune)', summary.managed_pct, '%', 'text-blue-600') }}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-3">Distribuição por sistema operacional</p>
+    <div class="space-y-2">
+      {% for os, count in summary.os_distribution.items() %}
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-gray-600">{{ os }}</span>
+        <span class="font-semibold text-gray-800">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-3">Distribuição por tipo de confiança (trust type)</p>
+    <div class="space-y-2">
+      {% for trust, count in summary.trust_type_distribution.items() %}
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-gray-600">{{ trust }}</span>
+        <span class="font-semibold text-gray-800">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

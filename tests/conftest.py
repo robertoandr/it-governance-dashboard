@@ -33,6 +33,9 @@ os.environ.setdefault("INFLUX_URL", "http://localhost:8086")
 os.environ.setdefault("INFLUX_TOKEN", "test-token-not-real")
 os.environ.setdefault("INFLUX_ORG", "test-org")
 os.environ.setdefault("INFLUX_BUCKET", "test-bucket")
+# Desabilitar integração InfluxDB nos testes — .env de prod tem INFLUX__ENABLED=true
+# env vars têm prioridade sobre o arquivo .env no Pydantic Settings
+os.environ["INFLUX__ENABLED"] = "false"
 
 # Zabbix (obrigatórias)
 os.environ.setdefault("ZABBIX_URL", "http://localhost/zabbix/api_jsonrpc.php")
@@ -57,6 +60,14 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 # ZABBIX_URL / ZENDESK_MAX_PAGES) vaza e quebra collectors/zabbix.py
 # e itgov/services/zendesk_service.py na coleta.
 import config as _config_preload  # noqa: F401, E402
+
+# Limpar cache de AppSettings para garantir que INFLUX__ENABLED=false seja lido
+try:
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+except Exception:
+    pass
 
 # ─────────────────────────────────────────────────────────────────────
 # 🧪 Variáveis de infra MOCK — evita falha no import de config.py

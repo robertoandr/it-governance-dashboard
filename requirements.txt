@@ -1,4 +1,7 @@
 flask>=3.0
+flask-sqlalchemy>=3.1
+flask-login>=0.6
+flask-bcrypt>=1.0
 requests>=2.31
 python-dotenv>=1.0
 influxdb-client>=1.50.0
@@ -35,3 +38,7 @@ opentelemetry-instrumentation-flask>=0.63b0
 opentelemetry-instrumentation-httpx>=0.63b0
 opentelemetry-instrumentation-sqlalchemy>=0.63b0
 gunicorn[gthread]>=21
+pycryptodome
+
+# DNS check for email security (KPI-EMAIL-02 — SPF, DMARC, DKIM)
+dnspython>=2.6

@@ -1,0 +1,244 @@
+{
+  "uid": "m365-gov-kpis-v1",
+  "title": "Governanca M365 - KPIs",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["m365", "governanca", "kpis"],
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "gauge",
+      "title": "Secure Score (%)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 8 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "minVizWidth": 75,
+        "minVizHeight": 75
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 60,   "color": "orange" },
+              { "value": 75,   "color": "green" }
+            ]
+          },
+          "mappings": [],
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"m365_secure_score\")\n  |> filter(fn: (r) => r._field == \"percent\")\n  |> last()",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
+        }
+      ]
+    },
+
+    {
+      "id": 2,
+      "type": "gauge",
+      "title": "MFA Habilitado (%)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 8 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null,  "color": "red" },
+              { "value": 80,    "color": "orange" },
+              { "value": 100,   "color": "green" }
+            ]
+          },
+          "mappings": [],
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"m365_mfa_percent\")\n  |> filter(fn: (r) => r._field == \"percent\")\n  |> last()",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Alertas Criticos Abertos > 24h",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 8 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1,    "color": "red" }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "NENHUM", "color": "green" } } }
+          ],
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"m365_critical_alerts_24h\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> last()",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "type": "barchart",
+      "title": "Licencas M365 - Uso vs Contratado por SKU",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 8 },
+      "options": {
+        "orientation": "vertical",
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "fillOpacity": 80,
+        "gradientMode": "none",
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "value": null, "color": "blue" }]
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "enabled" },
+            "properties": [{ "id": "displayName", "value": "Contratado" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "consumed" },
+            "properties": [{ "id": "displayName", "value": "Em uso" }]
+          }
+        ]
+      },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"m365_licenses\")\n  |> filter(fn: (r) => r._field == \"enabled\" or r._field == \"consumed\")\n  |> last()\n  |> pivot(rowKey: [\"skuPartNumber\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
+        }
+      ]
+    },
+
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Historico Secure Score (6h)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 7 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 75,   "color": "green" }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"m365_secure_score\")\n  |> filter(fn: (r) => r._field == \"percent\")\n  |> aggregateWindow(every: 30m, fn: last, createEmpty: false)",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
+        }
+      ]
+    },
+
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Historico MFA % (6h)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 7 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "orange" },
+              { "value": 100,  "color": "green" }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"m365_mfa_percent\")\n  |> filter(fn: (r) => r._field == \"percent\")\n  |> aggregateWindow(every: 30m, fn: last, createEmpty: false)",
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
+        }
+      ]
+    }
+
+  ]
+}

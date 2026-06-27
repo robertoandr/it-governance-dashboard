@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}SLA / Chamados — IT Governance{% endblock %}
+
+{% block page_title %}Suporte — SLA & Chamados{% endblock %}
+
+{% block content %}
+{% macro stat_card(label, value, unit, color, sub) %}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+  <p class="text-3xl font-bold {{ color }}">{{ value }}<span class="text-base text-gray-400 ml-1">{{ unit }}</span></p>
+  {% if sub %}<p class="text-xs text-gray-400 mt-1">{{ sub }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+<div class="mb-4">
+  <h1 class="text-xl font-bold text-gray-800">SLA / Chamados — Zendesk</h1>
+  <p class="text-sm text-gray-500">Análise de SLA por prioridade, fila de tickets mais antigos e volume histórico.</p>
+</div>
+
+{# --- KPIs principais --- #}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  {{ stat_card('Tickets abertos', data.total_open, '', 'text-gray-800', 'new + open + pending') }}
+  {{ stat_card('Resolvidos (7d)', data.resolved_7d, '', 'text-green-600', 'últimos 7 dias') }}
+  {{ stat_card('Resolvidos (30d)', data.resolved_30d, '', 'text-blue-600', 'últimos 30 dias') }}
+  {{ stat_card('Total histórico', data.total_all, '', 'text-gray-500', 'todos os status') }}
+</div>
+
+{# --- SLA por prioridade + Baldes de idade --- #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+  {# SLA por prioridade #}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-4">SLA por Prioridade</p>
+    {% set prio_order = ['urgent', 'high', 'normal', 'low'] %}
+    {% set prio_labels = {'urgent': 'Urgente', 'high': 'Alta', 'normal': 'Normal', 'low': 'Baixa'} %}
+    {% set prio_badge = {
+      'urgent': 'bg-rose-100 text-rose-700',
+      'high':   'bg-red-100 text-red-700',
+      'normal': 'bg-blue-100 text-blue-700',
+      'low':    'bg-gray-100 text-gray-500',
+    } %}
+    <div class="space-y-3">
+      {% for prio in prio_order %}
+      {% set p = data.by_priority.get(prio, {}) %}
+      {% set count = p.get('count', 0) %}
+      {% set breached = p.get('breached', 0) %}
+      {% set compliance = p.get('compliance_pct', 100.0) %}
+      {% set threshold = p.get('threshold_h', 0) %}
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-16 justify-center
+            {{ prio_badge.get(prio, 'bg-gray-100 text-gray-500') }}">
+          {{ prio_labels.get(prio, prio) }}
+        </span>
+        <div class="flex-1">
+          {% if count == 0 %}
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 h-2 bg-gray-100 rounded-full"></div>
+              <span class="text-xs text-gray-400 w-10 text-right">—</span>
+            </div>
+          {% else %}
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full rounded-full
+                    {% if compliance >= 80 %}bg-green-500
+                    {% elif compliance >= 50 %}bg-yellow-400
+                    {% else %}bg-red-500{% endif %}"
+                  style="width: {{ compliance | round(0) }}%"></div>
+              </div>
+              <span class="text-xs font-semibold w-10 text-right
+                  {% if compliance >= 80 %}text-green-600
+                  {% elif compliance >= 50 %}text-yellow-600
+                  {% else %}text-red-600{% endif %}">
+                {{ compliance | round(1) }}%
+              </span>
+            </div>
+          {% endif %}
+        </div>
+        <div class="text-right w-24 flex-shrink-0">
+          <span class="text-xs text-gray-600">
+            {{ count }} ticket{{ 's' if count != 1 }}
+            {% if breached > 0 %}
+            <span class="text-red-500 font-medium">({{ breached }} em breach)</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+      <p class="text-[10px] text-gray-400 pl-[76px]">SLA: {{ threshold | int }}h</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# Baldes de idade #}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-4">Tickets abertos por tempo de espera</p>
+    {% set total_open = data.total_open %}
+    {% set buckets = [
+      ('<8h',     data.age_buckets.get('<8h', 0),     'bg-green-500',  'text-green-600'),
+      ('8-48h',   data.age_buckets.get('8-48h', 0),   'bg-yellow-400', 'text-yellow-600'),
+      ('48-168h', data.age_buckets.get('48-168h', 0), 'bg-orange-400', 'text-orange-600'),
+      ('>168h',   data.age_buckets.get('>168h', 0),   'bg-red-500',    'text-red-600'),
+    ] %}
+    <div class="space-y-3">
+      {% for label, count, bar_cls, text_cls in buckets %}
+      <div>
+        <div class="flex justify-between items-baseline mb-1">
+          <span class="text-xs text-gray-600">{{ label }}</span>
+          <span class="text-sm font-semibold {{ text_cls }}">
+            {{ count }}
+            {% if total_open > 0 %}
+            <span class="text-xs font-normal text-gray-400">
+              ({{ (count / total_open * 100) | round(0) | int }}%)
+            </span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+          {% if total_open > 0 %}
+          <div class="h-full {{ bar_cls }} rounded-full"
+            style="width: {{ (count / total_open * 100) | round(0) }}%"></div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Volume por status #}
+    <div class="mt-5 pt-4 border-t">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Volume por status</p>
+      {% set status_info = [
+        ('new',     'Novo',      'bg-blue-100 text-blue-700'),
+        ('open',    'Aberto',    'bg-yellow-100 text-yellow-700'),
+        ('pending', 'Pendente',  'bg-orange-100 text-orange-700'),
+        ('hold',    'Em espera', 'bg-gray-100 text-gray-600'),
+        ('solved',  'Resolvido', 'bg-green-100 text-green-700'),
+        ('closed',  'Fechado',   'bg-slate-100 text-slate-600'),
+      ] %}
+      <div class="grid grid-cols-2 gap-1">
+        {% for key, label, cls in status_info %}
+        {% set n = data.volume.get(key, 0) %}
+        {% if n > 0 %}
+        <div class="flex items-center justify-between">
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ cls }}">{{ label }}</span>
+          <span class="text-sm font-semibold text-gray-700">{{ n }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# --- Fila de tickets mais antigos --- #}
+<div class="bg-white rounded-xl shadow p-5">
+  <p class="text-sm font-semibold text-gray-700 mb-3">
+    Tickets abertos mais antigos
+    <span class="ml-1 text-xs font-normal text-gray-400">(top 25 por tempo de espera)</span>
+  </p>
+  {% if not data.oldest %}
+    <p class="text-sm text-green-600">Nenhum ticket aberto.</p>
+  {% else %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b text-xs text-gray-400 uppercase">
+            <th class="text-left py-1 pr-3 font-medium w-12">#</th>
+            <th class="text-left py-1 pr-3 font-medium">Assunto</th>
+            <th class="text-left py-1 pr-3 font-medium">Prioridade</th>
+            <th class="text-left py-1 pr-3 font-medium">Status</th>
+            <th class="text-left py-1 pr-3 font-medium">Aberto em</th>
+            <th class="text-right py-1 font-medium">Tempo em fila</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for t in data.oldest %}
+          {% set prio_cls = {
+            'urgent': 'bg-rose-100 text-rose-700',
+            'high':   'bg-red-100 text-red-700',
+            'normal': 'bg-blue-100 text-blue-700',
+            'low':    'bg-gray-100 text-gray-500',
+          }.get(t.priority, 'bg-gray-100 text-gray-500') %}
+          {% set status_cls = {
+            'new':     'bg-blue-100 text-blue-700',
+            'open':    'bg-yellow-100 text-yellow-700',
+            'pending': 'bg-orange-100 text-orange-700',
+          }.get(t.status, 'bg-gray-100 text-gray-600') %}
+          <tr class="hover:bg-gray-50 {% if t.breached %}bg-red-50 hover:bg-red-50{% endif %}">
+            <td class="py-1.5 pr-3 text-gray-400 text-xs">{{ t.id }}</td>
+            <td class="py-1.5 pr-3 text-gray-700 max-w-[280px] truncate text-xs" title="{{ t.subject }}">
+              {{ t.subject }}
+              {% if t.breached %}
+              <span class="ml-1 text-[9px] bg-red-100 text-red-600 rounded px-1">SLA</span>
+              {% endif %}
+            </td>
+            <td class="py-1.5 pr-3">
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ prio_cls }}">
+                {{ t.priority }}
+              </span>
+            </td>
+            <td class="py-1.5 pr-3">
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ status_cls }}">
+                {{ t.status }}
+              </span>
+            </td>
+            <td class="py-1.5 pr-3 text-gray-400 text-xs whitespace-nowrap">{{ t.created_fmt }}</td>
+            <td class="py-1.5 text-right font-semibold text-xs whitespace-nowrap
+                {% if t.age_hours > 168 %}text-red-600
+                {% elif t.age_hours > 48 %}text-orange-500
+                {% elif t.age_hours > 8 %}text-yellow-600
+                {% else %}text-green-600{% endif %}">
+              {{ t.age_str }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

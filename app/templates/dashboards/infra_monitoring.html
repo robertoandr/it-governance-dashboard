@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Infraestrutura — IT Governance{% endblock %}
+
+{% block page_title %}Monitoramento — Infraestrutura{% endblock %}
+
+{% block content %}
+{% set influx = data.influx %}
+
+<div class="mb-4 flex items-center justify-between">
+  <div>
+    <h1 class="text-xl font-bold text-gray-800">Infraestrutura</h1>
+    <p class="text-sm text-gray-500">Visão global do ambiente monitorado pelo Zabbix — servidores, rede e cloud. Cache 3min.</p>
+  </div>
+  {% if data.get('_erro') %}
+  <span class="text-xs bg-red-100 text-red-700 rounded px-2 py-1 font-medium">Erro ao consultar Zabbix</span>
+  {% endif %}
+</div>
+
+{% if not data.enabled %}
+<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+  <p class="text-yellow-700 font-medium">Nao foi possivel carregar dados de infraestrutura.</p>
+</div>
+{% else %}
+
+{# --- KPIs globais (InfluxDB) --- #}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Total monitorado</p>
+    <p class="text-3xl font-bold text-gray-800">{{ influx.hosts_total }}</p>
+    <div class="flex gap-2 mt-2 text-[10px] text-gray-400">
+      <span class="bg-blue-50 text-blue-600 rounded px-1">CFTV {{ influx.hosts_cftv }}</span>
+      <span class="bg-purple-50 text-purple-600 rounded px-1">M365 {{ influx.hosts_m365 }}</span>
+      {% set outros = influx.hosts_total - influx.hosts_cftv - influx.hosts_m365 %}
+      {% if outros > 0 %}<span class="bg-gray-100 text-gray-500 rounded px-1">outros {{ outros }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Disponibilidade</p>
+    <p class="text-3xl font-bold
+      {% if influx.uptime_pct >= 99 %}text-green-600
+      {% elif influx.uptime_pct >= 95 %}text-yellow-600
+      {% else %}text-red-600{% endif %}">
+      {{ influx.uptime_pct }}%
+    </p>
+    <p class="text-xs text-gray-400 mt-1">{{ influx.hosts_up }} up / {{ influx.hosts_down }} down</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Problemas ativos</p>
+    <p class="text-3xl font-bold {{ 'text-red-600' if influx.problems_total > 0 else 'text-gray-400' }}">
+      {{ influx.problems_total }}
+    </p>
+    <p class="text-xs text-gray-400 mt-1">todos os grupos Zabbix</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Hosts nao-CFTV</p>
+    <p class="text-3xl font-bold text-gray-700">{{ data.total }}</p>
+    <p class="text-xs text-gray-400 mt-1">{{ data.up }} online / {{ data.down }} offline</p>
+  </div>
+</div>
+
+{# Problemas por severidade (InfluxDB) #}
+{% if influx.problems_total > 0 %}
+<div class="bg-white rounded-xl shadow p-5 mb-4">
+  <p class="text-sm font-semibold text-gray-700 mb-4">Distribuicao de problemas ativos (todos os grupos)</p>
+  {% set sev_data = [
+    ('Disaster', influx.problems_disaster, 'bg-red-600', 'text-red-600'),
+    ('High',     influx.problems_high,    'bg-orange-500', 'text-orange-600'),
+    ('Average',  influx.problems_average, 'bg-yellow-400', 'text-yellow-600'),
+    ('Warning',  influx.problems_warning, 'bg-blue-400', 'text-blue-600'),
+  ] %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    {% for label, count, bar_cls, text_cls in sev_data %}
+    <div class="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+      <span class="w-3 h-3 rounded-full {{ bar_cls }} flex-shrink-0"></span>
+      <div>
+        <p class="text-xs text-gray-500">{{ label }}</p>
+        <p class="text-xl font-bold {{ text_cls }}">{{ count }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# --- Hosts nao-CFTV por categoria + problemas em tempo real --- #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+  {# Por categoria #}
+  {% if data.by_category %}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-4">
+      Hosts nao-CFTV por categoria
+      <span class="text-xs font-normal text-gray-400">({{ data.total }} hosts)</span>
+    </p>
+    {% set cat_order = ['Servidores', 'Hypervisors', 'Bancos de Dados', 'Firewall / Rede', 'Cloud', 'Aplicacoes', 'Microsoft 365', 'Monitoramento', 'Lojas', 'Outros'] %}
+    {% set cat_icon = {
+      'Microsoft 365':   'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18',
+      'Monitoramento':   'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+      'Servidores':      'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01',
+      'Hypervisors':     'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18',
+      'Bancos de Dados': 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4',
+      'Firewall / Rede': 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+      'Cloud':           'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z',
+      'Aplicacoes':      'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+      'Lojas':           'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+      'Outros':          'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    } %}
+    <div class="space-y-3">
+      {% set rendered = [] %}
+      {% for cat in cat_order %}
+        {% if cat in data.by_category %}
+          {% set s = data.by_category[cat] %}
+          {% set up_pct = (s.up / s.total * 100) | round(1) if s.total > 0 else 0 %}
+          {% set _ = rendered.append(cat) %}
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="{{ cat_icon.get(cat, 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18') }}"/>
+            </svg>
+            <span class="text-sm text-gray-600 w-32 flex-shrink-0 truncate">{{ cat }}</span>
+            <div class="flex-1 flex items-center gap-2">
+              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                {% if s.total > 0 %}
+                <div class="h-full bg-green-500" style="width:{{ (s.up/s.total*100)|round(0) }}%"></div>
+                <div class="h-full bg-red-500" style="width:{{ (s.down/s.total*100)|round(0) }}%"></div>
+                <div class="h-full bg-yellow-400" style="width:{{ (s.maint/s.total*100)|round(0) }}%"></div>
+                <div class="h-full bg-gray-300" style="width:{{ (s.nodata/s.total*100)|round(0) }}%"></div>
+                {% endif %}
+              </div>
+              <span class="text-xs font-semibold w-10 text-right
+                  {% if up_pct >= 99 %}text-green-600
+                  {% elif up_pct >= 95 %}text-yellow-600
+                  {% else %}text-red-600{% endif %}">{{ up_pct }}%</span>
+            </div>
+            <div class="text-xs text-gray-500 w-24 text-right flex-shrink-0">
+              <span class="text-green-600 font-medium">{{ s.up }}</span>
+              / <span class="{{ 'text-red-600 font-medium' if s.down > 0 else 'text-gray-400' }}">{{ s.down }}</span>
+              / {{ s.total }}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+      {% for cat, s in data.by_category.items() %}
+        {% if cat not in rendered %}
+          {% set up_pct = (s.up / s.total * 100) | round(1) if s.total > 0 else 0 %}
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18"/>
+            </svg>
+            <span class="text-sm text-gray-600 w-32 flex-shrink-0 truncate">{{ cat }}</span>
+            <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
+              <div class="h-full bg-green-500" style="width:{{ (s.up/s.total*100)|round(0) }}%"></div>
+              <div class="h-full bg-red-500" style="width:{{ (s.down/s.total*100)|round(0) }}%"></div>
+            </div>
+            <div class="text-xs text-gray-500 w-24 text-right flex-shrink-0">
+              {{ s.up }} / {{ s.down }} / {{ s.total }}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <p class="text-[10px] text-gray-400 mt-3">up / down / total</p>
+  </div>
+  {% endif %}
+
+  {# Problemas em tempo real (nao-CFTV) #}
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm font-semibold text-gray-700 mb-3">
+      Problemas em tempo real — hosts nao-CFTV
+      {% if data.total_problems > 40 %}
+      <span class="text-xs font-normal text-gray-400">(top 40)</span>
+      {% endif %}
+    </p>
+    {% set sev_cls = {5:'bg-red-600 text-white', 4:'bg-orange-500 text-white', 3:'bg-yellow-400 text-gray-800', 2:'bg-blue-100 text-blue-700', 1:'bg-gray-100 text-gray-500', 0:'bg-gray-50 text-gray-400'} %}
+    {% set sev_pt = {5:'Disaster', 4:'High', 3:'Average', 2:'Warning', 1:'Info', 0:'N/C'} %}
+    {% if not data.problems %}
+    <div class="flex items-center gap-3 text-green-700 bg-green-50 rounded-lg p-3">
+      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <span class="text-sm font-medium">Nenhum problema ativo nos hosts monitorados.</span>
+    </div>
+    {% else %}
+    <div class="overflow-y-auto max-h-80 space-y-1.5 pr-1">
+      {% for p in data.problems %}
+      <div class="flex items-start gap-2 py-1.5 border-b border-gray-50 last:border-0">
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0
+            {{ sev_cls.get(p.severity, 'bg-gray-100 text-gray-500') }}">
+          {{ sev_pt.get(p.severity, '?') }}
+        </span>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-gray-700 truncate" title="{{ p.name }}">{{ p.name }}</p>
+          {% if p.hosts %}<p class="text-[10px] text-gray-400 truncate">{{ p.hosts | join(', ') }}</p>{% endif %}
+        </div>
+        <div class="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 text-right">
+          {{ p.clock_fmt }}
+          {% if p.acknowledged %}<span class="block text-blue-400">ack</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# --- Hosts offline --- #}
+{% if data.down_list %}
+<div class="bg-white rounded-xl shadow p-5">
+  <div class="flex items-center gap-2 mb-3">
+    <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+    <p class="text-sm font-semibold text-gray-700">Hosts offline ({{ data.down_list | length }})</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b text-xs text-gray-400 uppercase">
+          <th class="text-left py-1 pr-3 font-medium">Host</th>
+          <th class="text-left py-1 pr-3 font-medium">IP</th>
+          <th class="text-left py-1 pr-3 font-medium">Categoria</th>
+          <th class="text-right py-1 font-medium">Problemas</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for d in data.down_list %}
+        <tr class="hover:bg-red-50">
+          <td class="py-1.5 pr-3 text-xs text-gray-700 font-medium">{{ d.name }}</td>
+          <td class="py-1.5 pr-3 text-xs text-gray-400 font-mono">{{ d.ip }}</td>
+          <td class="py-1.5 pr-3">
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">{{ d.category }}</span>
+          </td>
+          <td class="py-1.5 text-right text-xs">
+            {% if d.problems > 0 %}
+            <span class="bg-red-100 text-red-600 rounded px-1.5 py-0.5 font-medium">{{ d.problems }}</span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+  <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <p class="text-sm text-green-700 font-medium">Todos os hosts monitorados estao online.</p>
+</div>
+{% endif %}
+
+{% endif %}{# /enabled #}
+{% endblock %}

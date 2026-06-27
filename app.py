@@ -19,6 +19,12 @@ from collectors.influx import InfluxCollector
 from collectors.ldap_collector import LDAPCollector
 from collectors.zabbix import ZabbixCollector
 from itgov.api.v1.ativos import ns as ativos_ns
+from itgov.api.v1.governance_apps import ns as governance_apps_ns
+from itgov.api.v1.governance_compliance import ns as governance_compliance_ns
+from itgov.api.v1.governance_data import ns as governance_data_ns
+from itgov.api.v1.governance_devices import ns as governance_devices_ns
+from itgov.api.v1.governance_mfa import ns as governance_mfa_ns
+from itgov.api.v1.governance_service_health import ns as governance_service_health_ns
 from itgov.api.v1.zabbix import ns as zabbix_ns
 from itgov.api.v1.zendesk import ns as zendesk_ns
 
@@ -57,6 +63,12 @@ itgov_api = Api(app, prefix="/api/v1", title="IT Gov API", version="1.0", doc=Fa
 itgov_api.add_namespace(zabbix_ns)
 itgov_api.add_namespace(zendesk_ns)
 itgov_api.add_namespace(ativos_ns)
+itgov_api.add_namespace(governance_mfa_ns)
+itgov_api.add_namespace(governance_devices_ns)
+itgov_api.add_namespace(governance_apps_ns)
+itgov_api.add_namespace(governance_compliance_ns)
+itgov_api.add_namespace(governance_data_ns)
+itgov_api.add_namespace(governance_service_health_ns)
 
 _cache: dict = {
     "hosts": {},

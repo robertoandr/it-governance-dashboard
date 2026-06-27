@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import AsyncIterator
 from urllib.parse import urlparse
@@ -9,7 +10,6 @@ import structlog
 from opentelemetry.trace import StatusCode
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-import config
 from itgov.observability import get_meter, get_tracer
 
 log = structlog.get_logger(__name__)
@@ -59,11 +59,11 @@ class GraphRateLimitError(Exception):
 
 
 def _get_credentials() -> tuple[str, str, str]:
-    """Read credentials from config — never log the returned values."""
+    """Read credentials from env — never log the returned values."""
     return (
-        config.GRAPH_TENANT_ID,
-        config.GRAPH_CLIENT_ID,
-        config.GRAPH_CLIENT_SECRET,
+        os.getenv("MSAL_TENANT_ID") or os.getenv("AZURE_TENANT_ID") or "",
+        os.getenv("MSAL_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID") or "",
+        os.getenv("MSAL_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET") or "",
     )
 
 
@@ -240,6 +240,6 @@ class GraphClient:
 async def iter_service_principals(timeout: float = 60.0) -> AsyncIterator[dict]:
     """Yield all Service Principals via delta full-scan (no persistence)."""
     client = GraphClient(timeout=timeout)
-    tenant_id = config.GRAPH_TENANT_ID or "unknown"
+    tenant_id = os.getenv("MSAL_TENANT_ID") or os.getenv("AZURE_TENANT_ID") or "unknown"
     async for sp in client.get_service_principals_delta(tenant_id):
         yield sp

@@ -23,8 +23,8 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt && \
 # ─── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM python:3.12-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="IT Governance Dashboard" \
-      org.opencontainers.image.description="5-pillar COBIT governance dashboard" \
+LABEL org.opencontainers.image.title="Governança de TI Dashboard" \
+      org.opencontainers.image.description="Dashboard COBIT 5 pilares — Governança de TI" \
       org.opencontainers.image.url="https://github.com/robertoandr/it-governance-dashboard" \
       org.opencontainers.image.source="https://github.com/robertoandr/it-governance-dashboard"
 
@@ -56,22 +56,18 @@ COPY --chown=appuser:appgroup . .
 RUN mkdir -p /app/data /app/logs /app/tmp \
     && chown -R appuser:appgroup /app/data /app/logs /app/tmp
 
+COPY --chown=appuser:appgroup docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 USER appuser
 
 EXPOSE 5000
+
+ENV FLASK_APP=app
 
 # Healthcheck against the /health endpoint (factory app)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fs http://localhost:5000/health || exit 1
 
-# gunicorn: 4 workers × gthread, timeout 30s
-ENTRYPOINT ["python", "-m", "gunicorn"]
-CMD ["--bind", "0.0.0.0:5000", \
-     "--workers", "4", \
-     "--worker-class", "gthread", \
-     "--threads", "2", \
-     "--timeout", "30", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--log-level", "info", \
-     "wsgi:application"]
+# Entrypoint: flask db -> flask seed-admin -> gunicorn (factory pattern)
+ENTRYPOINT ["/app/entrypoint.sh"]

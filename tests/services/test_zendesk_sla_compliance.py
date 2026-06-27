@@ -56,7 +56,7 @@ def _ticket(id: int = 1, status: str = "open", created_at: str | None = None) ->
 
 
 def _page(tickets: list[dict]) -> dict:
-    return {"tickets": tickets, "meta": {"has_more": False}, "links": {"next": None}}
+    return {"results": tickets, "count": len(tickets), "next_page": None}
 
 
 class TestSLAComplianceFormula:
@@ -66,7 +66,7 @@ class TestSLAComplianceFormula:
     def test_100_percent_when_no_breaches(self, svc: ZendeskService) -> None:
         """All tickets recent → 100% compliance."""
         tickets = [_ticket(i, created_at=_now()) for i in range(1, 6)]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
         metric = svc.get_sla_metrics()
         assert metric.total_tickets == 5
         assert metric.breached == 0
@@ -76,7 +76,7 @@ class TestSLAComplianceFormula:
     def test_0_percent_when_all_breached(self, svc: ZendeskService) -> None:
         """All tickets old → 0% compliance."""
         tickets = [_ticket(i, created_at=_old()) for i in range(1, 5)]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
         metric = svc.get_sla_metrics()
         assert metric.total_tickets == 4
         assert metric.breached == 4
@@ -91,7 +91,7 @@ class TestSLAComplianceFormula:
             _ticket(3, created_at=_now()),
             _ticket(4, created_at=_now()),
         ]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
         metric = svc.get_sla_metrics()
         assert metric.breached == 2
         assert metric.compliance_pct == 50.0
@@ -104,7 +104,7 @@ class TestSLAComplianceFormula:
             _ticket(2, created_at=_now()),
             _ticket(3, created_at=_now()),
         ]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
         metric = svc.get_sla_metrics()
         assert metric.breached == 1
         assert metric.compliance_pct == pytest.approx(66.7, abs=0.1)
@@ -112,7 +112,7 @@ class TestSLAComplianceFormula:
     @respx.mock
     def test_single_ticket_breached(self, svc: ZendeskService) -> None:
         """1 of 1 breached → 0%."""
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(
             return_value=httpx.Response(200, json=_page([_ticket(1, created_at=_old())]))
         )
         metric = svc.get_sla_metrics()
@@ -123,7 +123,7 @@ class TestSLAComplianceFormula:
     @respx.mock
     def test_zero_total_returns_100_no_division_error(self, svc: ZendeskService) -> None:
         """Empty ticket list → 100% (no ZeroDivisionError, nothing breached)."""
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_page([])))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_page([])))
         metric = svc.get_sla_metrics()
         assert metric.total_tickets == 0
         assert metric.breached == 0
@@ -131,15 +131,15 @@ class TestSLAComplianceFormula:
 
     @respx.mock
     def test_solved_tickets_excluded_from_sla(self, svc: ZendeskService) -> None:
-        """Solved/closed tickets are not open → excluded from SLA calculation."""
+        """Solved/closed tickets are excluded server-side by the search query."""
+        # Search API query filters to new/open/pending — mock simulates server-side filtering
         tickets = [
             _ticket(1, status="open", created_at=_old()),
-            _ticket(2, status="solved", created_at=_old()),  # excluded
-            _ticket(3, status="closed", created_at=_old()),  # excluded
+            # solved/closed tickets would NOT be returned by the query
         ]
-        respx.get(f"{BASE_URL}/api/v2/tickets.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
+        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_page(tickets)))
         metric = svc.get_sla_metrics()
-        # Only ticket 1 is open and old → 1 breach, 1 total
+        # Only ticket 1 is returned → 1 breach, 1 total
         assert metric.total_tickets == 1
         assert metric.breached == 1
         assert metric.compliance_pct == 0.0
