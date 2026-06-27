@@ -229,6 +229,62 @@ class EntraIdCollector(BaseOAuthCollector):
         except Exception as exc:
             log.warning("licenses_collect_failed", error=str(exc))
 
+    def _collect_soft_deleted_mailboxes(self, write_api: Any, bucket: str, collected_at: datetime) -> None:
+        """Query soft-deleted mailboxes via /directory/deletedItems and write to gov_exchange_mailbox.
+
+        Alerta COBIT BAI09: caixas com deletedDateTime > 7 dias bloqueiam restore/criação
+        de usuários com endereço conflitante.
+        """
+        alert_threshold = timedelta(days=7)
+        try:
+            deleted_users = list(
+                self._paginate(
+                    f"{_GRAPH_BASE}/directory/deletedItems/microsoft.graph.user",
+                    params={
+                        "$select": "id,mail,deletedDateTime,userPrincipalName",
+                        "$top": "999",
+                    },
+                )
+            )
+        except Exception as exc:
+            log.warning("soft_deleted_mailboxes_failed", error=str(exc))
+            return
+
+        now = datetime.now(UTC)
+        # Considera apenas entradas com endereço de e-mail (= têm caixa Exchange)
+        mailboxes = [u for u in deleted_users if u.get("mail")]
+        total = len(mailboxes)
+
+        pending_cleanup = 0
+        oldest_days = 0
+        for user in mailboxes:
+            deleted_str = user.get("deletedDateTime", "")
+            if not deleted_str:
+                continue
+            try:
+                deleted_at = datetime.fromisoformat(deleted_str.replace("Z", "+00:00"))
+                age_days = (now - deleted_at).days
+                oldest_days = max(oldest_days, age_days)
+                if age_days > alert_threshold.days:
+                    pending_cleanup += 1
+            except ValueError:
+                pass
+
+        point = (
+            Point("gov_exchange_mailbox")
+            .field("total_soft_deleted", total)
+            .field("pending_cleanup", pending_cleanup)
+            .field("oldest_days", oldest_days)
+            .time(collected_at, WritePrecision.S)
+        )
+        write_api.write(bucket=bucket, record=point)
+        log.info(
+            "exchange_mailbox_written",
+            total=total,
+            pending_cleanup=pending_cleanup,
+            oldest_days=oldest_days,
+        )
+
     # ── Main collection cycle ────────────────────────────────────────────────
 
     def collect(self) -> None:
@@ -291,6 +347,7 @@ class EntraIdCollector(BaseOAuthCollector):
             api = client.write_api(write_options=SYNCHRONOUS)
             api.write(bucket=settings.INFLUX_BUCKET_RAW, record=point)
             self._collect_licenses(api, settings.INFLUX_BUCKET_RAW, collected_at)
+            self._collect_soft_deleted_mailboxes(api, settings.INFLUX_BUCKET_RAW, collected_at)
 
         log.info("entra_metrics_written", measurement="gov_entra_summary")
 

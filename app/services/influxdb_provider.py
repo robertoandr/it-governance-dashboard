@@ -732,6 +732,45 @@ class InfluxDBMetricsProvider:
                 }
             )
 
+        # Caixas Exchange soft-deleted pendentes (COBIT BAI09)
+        mailbox = self._exchange_mailbox_stats()
+        if mailbox:
+            pending = int(mailbox.get("pending_cleanup", 0))
+            total_sd = int(mailbox.get("total_soft_deleted", 0))
+            oldest = int(mailbox.get("oldest_days", 0))
+            # 100% sem pendentes; -15 pts por caixa pendente (piso 0)
+            score = round(max(0.0, 100.0 - pending * 15.0), 1)
+            components.append(
+                {
+                    "id": "mailbox_hygiene",
+                    "label": f"Caixas excluidas pendentes (BAI09) — {total_sd} total, {oldest}d mais antiga",
+                    "value": score,
+                    "raw_value": float(pending),
+                    "unit": "pendentes >7d",
+                    "source": "exchange_online",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+        else:
+            components.append(
+                {
+                    "id": "mailbox_hygiene",
+                    "label": "Caixas excluidas pendentes (BAI09)",
+                    "value": 100.0,
+                    "raw_value": None,
+                    "unit": "pendentes >7d",
+                    "source": "coming_soon",
+                    "weight": 1.5,
+                    "trend": "stable",
+                }
+            )
+        mb_time = mailbox.get("_time") if mailbox else None
+        if mb_time and last_collected:
+            last_collected = max(last_collected, mb_time)
+        elif mb_time:
+            last_collected = mb_time
+
         log.info(
             "resource_metrics_assembled",
             entra_available=bool(entra),
@@ -772,6 +811,26 @@ from(bucket: "{self._bucket_raw}")
             "high": int(row.get("problems_high", 0)),
             "average": int(row.get("problems_average", 0)),
             "warning": int(row.get("problems_warning", 0)),
+            "_time": row.get("_time"),
+        }
+
+    def _exchange_mailbox_stats(self) -> dict[str, Any]:
+        """Return the latest soft-deleted mailbox record from gov_exchange_mailbox."""
+        flux = f"""
+from(bucket: "{self._bucket_raw}")
+  |> range(start: -25h)
+  |> filter(fn: (r) => r._measurement == "gov_exchange_mailbox")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+"""
+        rows = self._query(flux)
+        if not rows:
+            return {}
+        row = rows[-1]
+        return {
+            "total_soft_deleted": int(row.get("total_soft_deleted", 0)),
+            "pending_cleanup": int(row.get("pending_cleanup", 0)),
+            "oldest_days": int(row.get("oldest_days", 0)),
             "_time": row.get("_time"),
         }
 

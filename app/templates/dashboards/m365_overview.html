@@ -19,12 +19,16 @@
 {% set trig_high    = triggers.get('counts', {}).get('Alto', 0) %}
 {% set trig_medio   = triggers.get('counts', {}).get('Médio', 0) %}
 {% set mfa_habilitados = ((mfa_pct / 100) * total_users) | round(0) | int %}
+{% set mb_total    = mailbox.get('total_soft_deleted', 0) | int %}
+{% set mb_pending  = mailbox.get('pending_cleanup', 0) | int %}
+{% set mb_oldest   = mailbox.get('oldest_days', 0) | int %}
 
 {# Cores por threshold #}
 {% if mfa_pct >= 90 %}{% set mfa_c = "green" %}{% elif mfa_pct >= 70 %}{% set mfa_c = "yellow" %}{% else %}{% set mfa_c = "red" %}{% endif %}
 {% if ss_pct >= 70 %}{% set ss_c = "green" %}{% elif ss_pct >= 50 %}{% set ss_c = "yellow" %}{% else %}{% set ss_c = "red" %}{% endif %}
 {% if uso > 100 %}{% set lic_c = "red" %}{% elif uso > 95 %}{% set lic_c = "yellow" %}{% else %}{% set lic_c = "green" %}{% endif %}
 {% if trig_disaster > 0 %}{% set trig_c = "red" %}{% elif trig_total > 0 %}{% set trig_c = "yellow" %}{% else %}{% set trig_c = "green" %}{% endif %}
+{% if mb_pending > 0 %}{% set mb_c = "red" %}{% elif mb_total > 0 %}{% set mb_c = "yellow" %}{% else %}{% set mb_c = "green" %}{% endif %}
 
 <!-- BLOCO 1 — Banner -->
 <div class="rounded-2xl bg-gradient-to-r from-blue-700 to-blue-500 text-white px-6 py-5 mb-6 flex items-center justify-between shadow">
@@ -48,7 +52,7 @@
 </div>
 
 <!-- BLOCO 2 — KPIs linkáveis -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
 
   <a href="{{ url_for('dashboards.governance_compliance') }}"
      class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
@@ -127,6 +131,32 @@
       <div class="h-full rounded-full bg-{{ trig_c }}-500" style="width: 100%"></div>
     </div>
   </a>
+
+
+  <!-- Card: Caixas soft-deleted (BAI09) -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Lixeira Exchange</p>
+      {% if mb_pending > 0 %}
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">!</span>
+      {% endif %}
+    </div>
+    {% if mailbox %}
+      <p class="text-3xl font-bold text-{{ mb_c }}-600">{{ mb_pending }}</p>
+      <p class="text-xs text-gray-400 mt-1">
+        {% if mb_pending > 0 %}pendentes >7d · {{ mb_oldest }}d mais antiga
+        {% elif mb_total > 0 %}{{ mb_total }} excluidas · todas recentes
+        {% else %}nenhuma caixa excluida{% endif %}
+      </p>
+    {% else %}
+      <p class="text-2xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
+    {% endif %}
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div class="h-full rounded-full bg-{{ mb_c }}-500" style="width: 100%"></div>
+    </div>
+    <p class="text-xs text-gray-300 mt-1.5">COBIT BAI09</p>
+  </div>
 
 </div>
 

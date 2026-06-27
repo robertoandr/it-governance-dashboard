@@ -532,6 +532,16 @@ from(bucket: "{provider._bucket_raw}")
     # Triggers
     triggers = get_cached_triggers()
 
+    # Soft-deleted mailboxes (COBIT BAI09)
+    mb_rows = provider._query(f"""
+from(bucket: "{provider._bucket_raw}")
+  |> range(start: -25h)
+  |> filter(fn: (r) => r._measurement == "gov_exchange_mailbox")
+  |> last()
+  |> keep(columns: ["_field", "_value"])
+""")
+    mailbox: dict = {r["_field"]: r["_value"] for r in mb_rows}
+
     # Reajuste countdown
     reajuste_iso = "2026-07-01"
     dias_reajuste = (date.fromisoformat(reajuste_iso) - date.today()).days
@@ -542,6 +552,7 @@ from(bucket: "{provider._bucket_raw}")
         entra=entra,
         licenses=lic,
         triggers=triggers,
+        mailbox=mailbox,
         reajuste_date="01/07/2026",
         dias_reajuste=dias_reajuste,
     )

@@ -123,29 +123,31 @@ def _buscar_fortinets() -> list[dict]:
         or []
     )
 
-    # Buscar alias/descrição das interfaces (FortiGate by HTTP template)
+    # Buscar alias/descrição das interfaces via fgate.netif.get_data[*].
+    # O template FortiGate by HTTP não cria fgate.interface.alias[*]; os aliases
+    # estão no nome do item: "Interface [wan1(VIVO-EMPRESA)]: Get data"
     alias_items = (
         _zbx(
             "item.get",
             {
-                "output": ["hostid", "key_", "lastvalue"],
+                "output": ["hostid", "key_", "name"],
                 "hostids": host_ids,
-                "search": {"key_": "fgate.interface.alias"},
-                "searchWildcardsEnabled": True,
+                "search": {"key_": "fgate.netif.get_data["},
+                "searchWildcardsEnabled": False,
             },
         )
         or []
     )
-    # Formato da key: fgate.interface.alias[wan1] → lastvalue = "Algar"
-    # Monta mapa hostid -> {iface: label}
+    # Extrai iface e alias do nome: "Interface [wan1(ALIAS)]: Get data"
     alias_by_host: dict[str, dict[str, str]] = {h["hostid"]: {} for h in fortigates}
-    _iface_key_re = re.compile(r"fgate\.interface\.alias\[([^\]]+)\]")
+    _netif_name_re = re.compile(r"Interface \[([^\(]+)\(([^\)]+)\)\]")
     for ai in alias_items:
         hid = ai["hostid"]
-        m = _iface_key_re.match(ai.get("key_", ""))
-        label = ai.get("lastvalue", "").strip()
-        if m and label:
-            alias_by_host.setdefault(hid, {})[m.group(1)] = label
+        m = _netif_name_re.search(ai.get("name", ""))
+        if m:
+            iface, alias = m.group(1).strip(), m.group(2).strip()
+            if alias:
+                alias_by_host.setdefault(hid, {})[iface] = alias
 
     # Fallback: env var FORTINET_IFACE_LABELS (sobrescreve os aliases do Zabbix)
     _env_labels = _load_iface_labels()
