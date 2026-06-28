@@ -33,7 +33,9 @@ def check_spf(domain: str) -> dict:
     try:
         import dns.resolver
 
-        answers = dns.resolver.resolve(domain, "TXT")
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+        answers = resolver.resolve(domain, "TXT")
         for rdata in answers:
             record = str(rdata).strip('"').strip()
             if record.startswith("v=spf1"):
@@ -61,7 +63,9 @@ def check_dmarc(domain: str) -> dict:
     try:
         import dns.resolver
 
-        answers = dns.resolver.resolve(dmarc_domain, "TXT")
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+        answers = resolver.resolve(dmarc_domain, "TXT")
         for rdata in answers:
             record = str(rdata).strip('"').strip()
             if "v=DMARC1" in record:
@@ -92,7 +96,9 @@ def check_dkim(domain: str, selector: str = "selector1") -> dict:
     try:
         import dns.resolver
 
-        answers = dns.resolver.resolve(dkim_domain, "TXT")
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+        answers = resolver.resolve(dkim_domain, "TXT")
         for rdata in answers:
             record = str(rdata).strip('"').strip()
             if record:
