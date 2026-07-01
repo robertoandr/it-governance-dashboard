@@ -55,6 +55,9 @@ _overview_model = ns.model(
         "trend": fields.String,
         "computed_at": fields.String,
         "pillars": fields.List(fields.Nested(_pillar_model)),
+        "provider_name": fields.String(
+            description="Classe do provider ativo: InfluxDBMetricsProvider ou MockMetricsProvider"
+        ),
     },
 )
 
@@ -72,9 +75,10 @@ def _get_cached_or_compute() -> dict[str, Any]:
     aggregator = MetricsAggregator()
     governance = asyncio.run(aggregator.calculate_full_score())
     data: dict[str, Any] = governance.model_dump(mode="json")
+    data["provider_name"] = aggregator.provider_name
     _cache["data"] = data
     _cache["expires_at"] = now + _TTL_SECONDS
-    log.info("overview_cache_refreshed", ttl=_TTL_SECONDS)
+    log.info("overview_cache_refreshed", ttl=_TTL_SECONDS, provider=aggregator.provider_name)
     return data
 
 

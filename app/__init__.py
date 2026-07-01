@@ -251,10 +251,26 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             "current_user": cu,
         }
 
+    # Startup: resolver e logar provider de métricas de governança
+    _provider_kind = "InfluxDBMetricsProvider" if settings.influx.enabled else "MockMetricsProvider"
+    if settings.influx.enabled:
+        log.info(
+            "MetricsProvider ativo: InfluxDBMetricsProvider",
+            url=settings.influx.url,
+            org=settings.influx.org,
+            bucket_raw=settings.influx.bucket_raw,
+        )
+    else:
+        log.warning(
+            "MetricsProvider ativo: MockMetricsProvider — dados fictícios",
+            motivo="INFLUX__ENABLED=false ou ausente no .env",
+        )
+
     log.info(
         "app_created",
         version=settings.app.version,
         environment=settings.app.environment,
+        metrics_provider=_provider_kind,
     )
     return app
 

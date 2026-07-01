@@ -21,9 +21,13 @@ def _build_provider() -> MockMetricsProvider:
     if settings.influx.enabled:
         from app.services.influxdb_provider import InfluxDBMetricsProvider
 
-        log.info("metrics_provider", kind="influxdb")
+        log.info("metrics_provider_active", kind="InfluxDBMetricsProvider", url=settings.influx.url)
         return InfluxDBMetricsProvider()  # type: ignore[return-value]
-    log.info("metrics_provider", kind="mock")
+    log.warning(
+        "metrics_provider_mock_ativo",
+        kind="MockMetricsProvider",
+        motivo="INFLUX__ENABLED ausente ou False — dados fictícios sendo exibidos",
+    )
     return MockMetricsProvider()
 
 
@@ -71,6 +75,10 @@ class MetricsAggregator:
     ) -> None:
         self._provider = provider or _build_provider()
         self._calculator = calculator or ScoreCalculator()
+
+    @property
+    def provider_name(self) -> str:
+        return type(self._provider).__name__
 
     async def calculate_full_score(self) -> GovernanceScore:
         """Collect all pillar metrics in parallel and compute global score.
