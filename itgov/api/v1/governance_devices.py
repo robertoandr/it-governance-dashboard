@@ -46,7 +46,7 @@ device_summary_model = ns.model(
     "DeviceSummary",
     {
         "total_devices": fields.Integer,
-        "stale_90d": fields.Integer(description="Sem sign-in nos últimos 90 dias"),
+        "stale_45d": fields.Integer(description="Sem sign-in nos últimos 45 dias"),
         "managed_pct": fields.Float(allow_null=True, description="% gerenciado via Intune, ou null se não aplicável"),
         "os_distribution": fields.Raw,
         "trust_type_distribution": fields.Raw,

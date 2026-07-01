@@ -30,7 +30,7 @@ class TestCalcularResumoDispositivos:
         resumo = calcular_resumo_dispositivos([])
 
         assert resumo.total_devices == 0
-        assert resumo.stale_90d == 0
+        assert resumo.stale_45d == 0
         assert resumo.managed_pct is None
         assert resumo.os_distribution == {}
         assert resumo.trust_type_distribution == {}
@@ -48,7 +48,7 @@ class TestCalcularResumoDispositivos:
         assert resumo.os_distribution == {"Windows": 2, "iOS": 1}
         assert resumo.trust_type_distribution == {"Workplace": 2, "AzureAd": 1}
 
-    def test_dispositivo_sem_sign_in_90_dias_conta_como_stale(self) -> None:
+    def test_dispositivo_sem_sign_in_45_dias_conta_como_stale(self) -> None:
         devices = [
             _device(last_signin_days_ago=10),
             _device(last_signin_days_ago=200),
@@ -56,7 +56,7 @@ class TestCalcularResumoDispositivos:
 
         resumo = calcular_resumo_dispositivos(devices)
 
-        assert resumo.stale_90d == 1
+        assert resumo.stale_45d == 1
 
     def test_managed_pct_none_quando_todos_isManaged_null(self) -> None:
         """isManaged sempre null (Intune não usado) -> managed_pct None, não 0%."""
@@ -84,7 +84,7 @@ class TestCalcularResumoDispositivos:
 
         resumo = calcular_resumo_dispositivos([device])
 
-        assert resumo.stale_90d == 0
+        assert resumo.stale_45d == 0
 
     def test_os_e_trust_ausentes_caem_em_desconhecido(self) -> None:
         device = {"isManaged": None}

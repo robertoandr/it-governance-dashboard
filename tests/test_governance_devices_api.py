@@ -8,7 +8,7 @@ import pytest
 
 _DADOS_FAKE = {
     "total_devices": 10,
-    "stale_90d": 2,
+    "stale_45d": 2,
     "managed_pct": None,
     "os_distribution": {"Windows": 10},
     "trust_type_distribution": {"Workplace": 10},

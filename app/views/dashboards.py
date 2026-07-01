@@ -40,7 +40,9 @@ _VALID_PILLAR_IDS = {
 def _get_governance() -> dict:
     aggregator = MetricsAggregator()
     governance = asyncio.run(aggregator.calculate_full_score())
-    return governance.model_dump(mode="json")
+    data = governance.model_dump(mode="json")
+    data["provider_name"] = aggregator.provider_name
+    return data
 
 
 @bp.route("/dashboard")
@@ -499,7 +501,6 @@ def zabbix_triggers() -> str:
 def m365_overview() -> str:
     """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
     import os
-    from datetime import date
 
     from app.services.influxdb_provider import InfluxDBMetricsProvider
     from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
@@ -552,10 +553,6 @@ from(bucket: "{provider._bucket_raw}")
 """)
     mailbox: dict = {r["_field"]: r["_value"] for r in mb_rows}
 
-    # Reajuste countdown
-    reajuste_iso = "2026-07-01"
-    dias_reajuste = (date.fromisoformat(reajuste_iso) - date.today()).days
-
     return render_template(
         "dashboards/m365_overview.html",
         secure_score=secure_score,
@@ -565,8 +562,6 @@ from(bucket: "{provider._bucket_raw}")
         mailbox=mailbox,
         security_alerts=security_alerts,
         dns_check=dns_check,
-        reajuste_date="01/07/2026",
-        dias_reajuste=dias_reajuste,
     )
 
 

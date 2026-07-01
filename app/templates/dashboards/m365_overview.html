@@ -57,11 +57,6 @@
       <p class="text-blue-100 text-sm">Governanca · Versao 1.0 · Maio 2026 — Grupo Gadens</p>
     </div>
   </div>
-  <div class="text-right hidden sm:block">
-    <p class="text-xs text-blue-200">Reajuste previsto</p>
-    <p class="text-lg font-bold">{{ reajuste_date }}</p>
-    <p class="text-xs text-blue-200">Business Basic +16,7% · Standard +12%</p>
-  </div>
 </div>
 
 <!-- BLOCO 2 — KPIs linkáveis -->
@@ -274,109 +269,6 @@
     <p class="text-xs text-gray-300 mt-1.5">KPI-EMAIL-02</p>
   </div>
 
-</div>
-
-<!-- BLOCO 3 — Alerta de Reajuste (sempre visível enquanto data < 2026-08-01) -->
-{% if dias_reajuste is defined and dias_reajuste > -31 %}
-<div class="rounded-xl border
-  {% if dias_reajuste <= 0 %}bg-gray-50 border-gray-200
-  {% elif dias_reajuste <= 7 %}bg-red-50 border-red-200
-  {% else %}bg-yellow-50 border-yellow-200{% endif %}
-  px-5 py-4 mb-6 flex items-start gap-3">
-  <svg class="w-5 h-5 flex-shrink-0 mt-0.5
-    {% if dias_reajuste <= 0 %}text-gray-400
-    {% elif dias_reajuste <= 7 %}text-red-500
-    {% else %}text-yellow-500{% endif %}"
-    fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-  </svg>
-  <div class="flex-1">
-    <p class="text-sm font-semibold
-      {% if dias_reajuste <= 0 %}text-gray-600
-      {% elif dias_reajuste <= 7 %}text-red-800
-      {% else %}text-yellow-800{% endif %}">
-      {% if dias_reajuste <= 0 %}
-        Reajuste de licencas aplicado em {{ reajuste_date }}
-      {% else %}
-        Reajuste de licencas em {{ dias_reajuste }} dia{% if dias_reajuste != 1 %}s{% endif %} ({{ reajuste_date }})
-      {% endif %}
-    </p>
-    <p class="text-xs mt-1
-      {% if dias_reajuste <= 0 %}text-gray-500
-      {% elif dias_reajuste <= 7 %}text-red-600
-      {% else %}text-yellow-700{% endif %}">
-      Business Basic +16,7% (US$6 &rarr; US$7) &nbsp;·&nbsp;
-      Business Standard +12% (US$12,50 &rarr; US$14) &nbsp;·&nbsp;
-      Business Premium mantido (US$22)
-    </p>
-  </div>
-  {% if dias_reajuste > 0 %}
-  <span class="flex-shrink-0 text-xs font-bold px-2 py-1 rounded
-    {% if dias_reajuste <= 7 %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
-    {{ dias_reajuste }}d
-  </span>
-  {% endif %}
-</div>
-{% endif %}
-
-<!-- BLOCO 4 — Comparativo de Planos -->
-<div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
-  <div class="px-5 py-3 border-b border-gray-100">
-    <h3 class="text-sm font-semibold text-gray-700">Comparativo de Planos M365</h3>
-    <p class="text-xs text-gray-400">Precos mensais por usuario (BRL) — reajuste em {{ reajuste_date }}</p>
-  </div>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold">
-          <th class="px-4 py-3 text-left">Plano</th>
-          <th class="px-4 py-3 text-right">Preco/usuario</th>
-          <th class="px-4 py-3 text-center">E-mail</th>
-          <th class="px-4 py-3 text-center">Office Desktop</th>
-          <th class="px-4 py-3 text-center">Seg. avancada</th>
-          <th class="px-4 py-3 text-center">Reajuste</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-50">
-        {% set planos = [
-          ("Apps for Business", "R$ 55,10",  false, true,  false, "—",       false),
-          ("Business Basic",    "R$ 33,40",  true,  false, false, "+16,7%",  false),
-          ("Business Standard", "R$ 83,50",  true,  true,  false, "+12%",    false),
-          ("Business Premium",  "R$ 146,90", true,  true,  true,  "Mantido", true),
-        ] %}
-        {% for plano, preco, email, desktop, seg, reaj, padrao in planos %}
-        <tr class="{% if padrao %}bg-blue-50 ring-1 ring-inset ring-blue-200{% endif %} hover:bg-blue-50 transition">
-          <td class="px-4 py-3 font-medium text-gray-800">
-            <div class="flex items-center gap-2">
-              {{ plano }}
-              {% if padrao %}
-              <span class="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 font-semibold">&#9733; Padrao</span>
-              {% endif %}
-            </div>
-          </td>
-          <td class="px-4 py-3 text-right font-mono font-semibold {% if padrao %}text-blue-700{% else %}text-gray-700{% endif %}">{{ preco }}</td>
-          <td class="px-4 py-3 text-center">
-            {% if email %}<span class="text-green-600 font-bold">&#10003;</span><span class="text-xs text-gray-400 ml-1">50GB</span>
-            {% else %}<span class="text-gray-300">&#10005;</span>{% endif %}
-          </td>
-          <td class="px-4 py-3 text-center">
-            {% if desktop %}<span class="text-green-600 font-bold">&#10003;</span>
-            {% else %}<span class="text-xs text-gray-500">Web/mobile</span>{% endif %}
-          </td>
-          <td class="px-4 py-3 text-center">
-            {% if seg %}<span class="text-green-600 font-bold">&#10003;</span>
-            {% else %}<span class="text-gray-300">&#10005;</span>{% endif %}
-          </td>
-          <td class="px-4 py-3 text-center text-xs font-bold
-            {% if '+' in reaj %}text-red-600{% elif reaj == 'Mantido' %}text-green-600{% else %}text-gray-400{% endif %}">
-            {{ reaj }}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
 </div>
 
 <!-- BLOCO 5 — 6 Pilares expansíveis -->

@@ -24,7 +24,7 @@
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
   {{ stat_card('Total de dispositivos', summary.total_devices, '', 'text-gray-800') }}
-  {{ stat_card('Inativos (90d+)', summary.stale_90d, '', 'text-red-600' if summary.stale_90d > 0 else 'text-green-600') }}
+  {{ stat_card('Inativos (45d+)', summary.stale_45d, '', 'text-red-600' if summary.stale_45d > 0 else 'text-green-600') }}
   {{ stat_card('Gerenciados (Intune)', summary.managed_pct, '%', 'text-blue-600') }}
 </div>
 

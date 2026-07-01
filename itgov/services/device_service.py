@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from itgov.models.governance_devices import DeviceSummary
 
-_STALE_DAYS = 90
+_STALE_DAYS = 45
 
 
 def calcular_resumo_dispositivos(devices: list[dict]) -> DeviceSummary:
@@ -54,7 +54,7 @@ def calcular_resumo_dispositivos(devices: list[dict]) -> DeviceSummary:
 
     return DeviceSummary(
         total_devices=total,
-        stale_90d=stale,
+        stale_45d=stale,
         managed_pct=managed_pct,
         os_distribution=os_dist,
         trust_type_distribution=trust_dist,

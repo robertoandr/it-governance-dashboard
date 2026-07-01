@@ -14,7 +14,7 @@ class DeviceSummary(BaseModel):
     """
 
     total_devices: int = Field(ge=0)
-    stale_90d: int = Field(ge=0, description="Sem sign-in nos últimos 90 dias")
+    stale_45d: int = Field(ge=0, description="Sem sign-in nos últimos 45 dias")
     managed_pct: float | None = Field(default=None, ge=0.0, le=100.0)
     os_distribution: dict[str, int] = Field(default_factory=dict)
     trust_type_distribution: dict[str, int] = Field(default_factory=dict)
