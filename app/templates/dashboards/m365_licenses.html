@@ -141,9 +141,13 @@ document.addEventListener('alpine:init', function () {
           {% if sku.has_friendly_name %}
           <p class="font-medium text-gray-800">{{ sku.friendly_name }}</p>
           {% else %}
-          <p class="italic text-gray-400">{{ sku.friendly_name }}</p>
+          <p class="italic text-gray-400">{{ sku.friendly_name or sku.sku_name or sku.sku_id or "SKU sem identificador" }}</p>
           {% endif %}
+          {% if sku.sku_name %}
           <p class="text-xs text-gray-400 font-mono">{{ sku.sku_name }}</p>
+          {% elif sku.sku_id %}
+          <p class="text-xs text-gray-400 font-mono">{{ sku.sku_id }}</p>
+          {% endif %}
           {% if sku.over_provisioned %}
           <span class="text-xs text-red-600 font-semibold"
                 title="Licenças em uso excedem o total contratado. Verificar junto à Microsoft.">ACIMA DO LIMITE</span>
