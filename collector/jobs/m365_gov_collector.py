@@ -6,8 +6,11 @@ Measurements:
   m365_secure_score        fields: current (float), max (float), percent (float)
   m365_mfa_percent         fields: percent (float), users_with_mfa (int), total_users (int)
   m365_critical_alerts_24h fields: count (int)
-  m365_licenses            fields: enabled (int), consumed (int), utilization_pct (float)
+  m365_licenses_kpi        fields: enabled (int), consumed (int), utilization_pct (float)
                            tags:   skuPartNumber
+                           (renomeado de "m365_licenses" — colidia com a measurement escrita
+                           por entra_id_collector.py, que usa tags/campos diferentes e é a
+                           fonte usada por /gov/licenses. Ver LIC-01.)
 
 Permissões Graph necessárias (Application permissions):
   SecurityEvents.Read.All   — /security/secureScores, /security/alerts_v2
@@ -157,7 +160,7 @@ class M365GovCollector(BaseOAuthCollector):
                 consumed = int(sku.get("consumedUnits", 0))
                 utilization_pct = round(consumed / enabled * 100, 1) if enabled > 0 else 0.0
                 points.append(
-                    Point("m365_licenses")
+                    Point("m365_licenses_kpi")
                     .tag("skuPartNumber", part_number)
                     .field("enabled", enabled)
                     .field("consumed", consumed)

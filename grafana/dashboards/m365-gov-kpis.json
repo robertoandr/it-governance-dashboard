@@ -164,7 +164,7 @@
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"m365_licenses\")\n  |> filter(fn: (r) => r._field == \"enabled\" or r._field == \"consumed\")\n  |> last()\n  |> pivot(rowKey: [\"skuPartNumber\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
+          "query": "from(bucket: \"governance_raw\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"m365_licenses_kpi\")\n  |> filter(fn: (r) => r._field == \"enabled\" or r._field == \"consumed\")\n  |> last()\n  |> pivot(rowKey: [\"skuPartNumber\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
           "datasource": { "type": "influxdb", "uid": "InfluxDB-Governanca" }
         }
       ]
