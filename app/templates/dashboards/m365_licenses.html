@@ -138,10 +138,15 @@ document.addEventListener('alpine:init', function () {
       <tr x-show="{{ 'true' if not sku.is_free else 'filterFree' }}"
           class="hover:bg-gray-50 {% if sku.over_provisioned %}bg-red-50{% elif sku.available > (sku.total * 0.2) and sku.total > 0 and not sku.is_free %}bg-yellow-50{% endif %}">
         <td class="px-4 py-3">
+          {% if sku.has_friendly_name %}
           <p class="font-medium text-gray-800">{{ sku.friendly_name }}</p>
+          {% else %}
+          <p class="italic text-gray-400">{{ sku.friendly_name }}</p>
+          {% endif %}
           <p class="text-xs text-gray-400 font-mono">{{ sku.sku_name }}</p>
           {% if sku.over_provisioned %}
-          <span class="text-xs text-red-600 font-semibold">ACIMA DO LIMITE</span>
+          <span class="text-xs text-red-600 font-semibold"
+                title="Licenças em uso excedem o total contratado. Verificar junto à Microsoft.">ACIMA DO LIMITE</span>
           {% endif %}
           {% if sku.is_free %}
           <span class="text-xs text-gray-400 bg-gray-100 rounded px-1">gratuita</span>

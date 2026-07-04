@@ -1,13 +1,16 @@
 """API de Licenças M365 — uso vs disponível + custos manuais.
 
 Fonte primária: InfluxDB measurement m365_licenses (escrito pelo entra_id_collector).
-Custos e renovação: app/data/license_costs.json (entrada manual via UI).
+Custos e renovação: LICENSE_COSTS_PATH (default /app/data/license_costs.json, no volume
+persistente), com seed inicial a partir de app/data/license_costs.json (entrada manual via UI).
 Cache: TTL 300s em memória.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -22,7 +25,23 @@ _cache_lock = threading.Lock()
 _cache_dados: dict | None = None
 _cache_ts: float = 0.0
 
-_COSTS_FILE = Path(__file__).parent.parent.parent.parent / "data" / "license_costs.json"
+# FIX(LIC-01): path é configurável via LICENSE_COSTS_PATH (default: volume /app/data,
+# montado pelo docker-compose). O arquivo versionado em <repo_root>/app/data/license_costs.json
+# serve como seed inicial — ver ensure_costs_file().
+_COSTS_FILE = Path(os.environ.get("LICENSE_COSTS_PATH", "/app/data/license_costs.json"))
+_SEED_FILE = Path(__file__).parent.parent.parent.parent / "app" / "data" / "license_costs.json"
+
+
+def ensure_costs_file() -> None:
+    """Popula _COSTS_FILE a partir do seed versionado no primeiro boot (volume vazio)."""
+    try:
+        if not _COSTS_FILE.exists() and _SEED_FILE.exists():
+            _COSTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(_SEED_FILE, _COSTS_FILE)
+            log.info("license_costs_seeded", path=str(_COSTS_FILE))
+    except Exception as exc:
+        log.warning("license_costs_seed_failed", error=str(exc))
+
 
 # SKUs gratuitas/trial que têm total = 10000 ou similares não fazem sentido para custo
 _FREE_SKUS = {
@@ -126,6 +145,7 @@ def get_licenses_summary() -> dict:
         warning_units = int(row.get("warning_units", 0) or 0)
 
         cost_info = costs.get(sku_name, {})
+        has_friendly_name = "friendly_name" in cost_info
         friendly_name = cost_info.get("friendly_name", sku_name)
         cost_unit = float(cost_info.get("cost_per_unit_brl", 0.0) or 0.0)
         renewal_date = cost_info.get("renewal_date", "")
@@ -133,9 +153,14 @@ def get_licenses_summary() -> dict:
         notes = cost_info.get("notes", "")
 
         custo_mensal = round(consumed * cost_unit, 2)
-        desperdicio = round(available * cost_unit, 2)
         uso_pct = round(consumed / total * 100, 1) if total > 0 else 0.0
         over_provisioned = consumed > total
+        # Regra de negócio: SKU acima do limite contratado (consumed > total) não entra no
+        # cálculo de desperdício — não faz sentido "desperdício" quando já está estourado.
+        # Checagem explícita aqui em vez de confiar no clamp available=max(0, total-consumed)
+        # feito no coletor (collector/jobs/entra_id_collector.py), que pode mudar sem avisar
+        # esta camada de agregação.
+        desperdicio = 0.0 if over_provisioned else round(available * cost_unit, 2)
 
         is_free = sku_name in _FREE_SKUS or total >= 10000
 
@@ -150,6 +175,7 @@ def get_licenses_summary() -> dict:
                 "sku_id": sku_id,
                 "sku_name": sku_name,
                 "friendly_name": friendly_name,
+                "has_friendly_name": has_friendly_name,
                 "consumed": consumed,
                 "total": total,
                 "available": available,

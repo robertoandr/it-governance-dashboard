@@ -251,6 +251,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             "current_user": cu,
         }
 
+    # LIC-01: garantir que o arquivo de custos de licenças exista no volume persistente,
+    # populando a partir do seed versionado no primeiro boot
+    try:
+        from itgov.api.v1.m365_licenses import ensure_costs_file
+
+        ensure_costs_file()
+    except Exception as _e:
+        log.warning("license_costs_ensure_failed", error=str(_e))
+
     # Startup: resolver e logar provider de métricas de governança
     _provider_kind = "InfluxDBMetricsProvider" if settings.influx.enabled else "MockMetricsProvider"
     if settings.influx.enabled:
