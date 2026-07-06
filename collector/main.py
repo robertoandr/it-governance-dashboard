@@ -16,6 +16,7 @@ from jobs.github_pr_collector import run as collect_github_prs
 from jobs.gitleaks_scan import run_gitleaks_scan
 from jobs.intune_patch_collector import run as collect_intune_patch
 from jobs.m365_gov_collector import run as collect_m365_gov
+from jobs.m365_secure_score_controls_collector import run as collect_secure_score_controls
 from jobs.patch_collector import run as collect_patch
 from jobs.secure_score_collector import run as collect_secure_score
 from jobs.security_alerts_collector import run as collect_security_alerts
@@ -141,6 +142,17 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("secure_score_job_registrado")
+
+        scheduler.add_job(
+            collect_secure_score_controls,
+            CronTrigger(hour="*/6"),
+            id="secure_score_controls_collector",
+            name="Microsoft Secure Score Control Profiles Collector",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("secure_score_controls_job_registrado")
 
         scheduler.add_job(
             collect_intune_patch,

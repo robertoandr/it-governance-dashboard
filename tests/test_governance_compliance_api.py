@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -91,3 +91,36 @@ class TestGetCachedComplianceSummaryWrapper:
             dados = get_cached_compliance_summary()
 
         assert dados == _DADOS_FAKE
+
+
+class TestBuscarHistoricoInflux:
+    def test_retorna_lista_vazia_quando_query_falha(self) -> None:
+        from itgov.api.v1.governance_compliance import _buscar_historico_influx
+
+        with patch("app.services.influxdb_provider.InfluxDBMetricsProvider") as mock_provider_cls:
+            mock_provider_cls.side_effect = RuntimeError("influx indisponível")
+            resultado = _buscar_historico_influx()
+
+        assert resultado == []
+
+    def test_converte_rows_do_influx_em_pontos(self) -> None:
+        from datetime import UTC, datetime
+
+        from itgov.api.v1.governance_compliance import _buscar_historico_influx
+
+        fake_rows = [
+            {"_time": datetime(2026, 6, 1, tzinfo=UTC), "_value": 40.0},
+            {"_time": datetime(2026, 6, 2, tzinfo=UTC), "_value": 42.0},
+        ]
+
+        mock_provider = MagicMock()
+        mock_provider._bucket_raw = "governance_raw"
+        mock_provider._query.return_value = fake_rows
+
+        with patch("app.services.influxdb_provider.InfluxDBMetricsProvider", return_value=mock_provider):
+            resultado = _buscar_historico_influx()
+
+        assert resultado == [
+            {"time": "2026-06-01T00:00:00+00:00", "pct": 40.0},
+            {"time": "2026-06-02T00:00:00+00:00", "pct": 42.0},
+        ]

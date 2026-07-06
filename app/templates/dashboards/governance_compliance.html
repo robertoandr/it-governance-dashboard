@@ -1,16 +1,29 @@
 {% extends "base.html" %}
 
 {% block title %}Compliance — IT Governance{% endblock %}
-
 {% block page_title %}Governança M365 — Compliance{% endblock %}
 
+{% block head %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('alpine:init', function () {
+  Alpine.data('compliancePage', function () {
+    return {
+      showAll: false,
+    };
+  });
+});
+</script>
+{% endblock %}
+
 {% block content %}
+<div x-data="compliancePage">
+
 <div class="mb-4">
   <h1 class="text-xl font-bold text-gray-800">Compliance — Microsoft Secure Score</h1>
   <p class="text-sm text-gray-500">Score de segurança do tenant e controles com maior impacto pendentes de implementação.</p>
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
   <div class="bg-white rounded-xl shadow p-5">
     <p class="text-xs text-gray-500 mb-1">Secure Score</p>
     {% if summary.pct is none %}
@@ -25,6 +38,34 @@
   </div>
 
   <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">Variação vs 30 dias</p>
+    {% if summary.variacao_30d is none %}
+      <p class="text-3xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">histórico insuficiente</p>
+    {% else %}
+      <p class="text-3xl font-bold {{ 'text-green-600' if summary.variacao_30d >= 0 else 'text-red-600' }}">
+        {{ '+' if summary.variacao_30d >= 0 else '' }}{{ summary.variacao_30d }}<span class="text-base text-gray-400 ml-1">pts</span>
+      </p>
+      <p class="text-xs text-gray-400 mt-1">vs ~30 dias atrás</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-5">
+    <p class="text-xs text-gray-500 mb-1">vs. tenants similares</p>
+    {% if summary.comparative_pct is none %}
+      <p class="text-3xl font-bold text-gray-300">—</p>
+      <p class="text-xs text-gray-400 mt-1">comparativo indisponível</p>
+    {% else %}
+      <p class="text-3xl font-bold {{ 'text-green-600' if summary.pct is not none and summary.pct >= summary.comparative_pct else 'text-yellow-600' }}">
+        {{ summary.comparative_pct }}<span class="text-base text-gray-400 ml-1">%</span>
+      </p>
+      <p class="text-xs text-gray-400 mt-1">
+        média ({{ 'porte similar' if summary.comparative_basis == 'TotalSeats' else 'todos os tenants' }})
+      </p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-5">
     <p class="text-sm font-semibold text-gray-700 mb-3">Score por categoria</p>
     <div class="space-y-2">
       {% for categoria, pct in summary.category_breakdown.items() %}
@@ -35,6 +76,15 @@
       {% endfor %}
     </div>
   </div>
+</div>
+
+<div class="bg-white rounded-xl shadow p-5 mb-6">
+  <p class="text-sm font-semibold text-gray-700 mb-3">Evolução do score — últimos 90 dias</p>
+  {% if summary.historico_90d %}
+  <canvas id="secureScoreTrendChart" height="80"></canvas>
+  {% else %}
+  <p class="text-sm text-gray-400">Sem histórico suficiente ainda — o coletor grava um ponto a cada 6h.</p>
+  {% endif %}
 </div>
 
 <div class="bg-white rounded-xl shadow p-5">
@@ -56,6 +106,59 @@
   </div>
   {% else %}
   <p class="text-sm text-green-600">Todos os controles avaliados estão 100% implementados.</p>
+  {% endif %}
+</div>
+
+<div class="bg-white rounded-xl shadow p-5 mt-4">
+  <div class="flex items-center justify-between mb-3">
+    <p class="text-sm font-semibold text-gray-700">Controles do Secure Score</p>
+    <label class="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+      <input type="checkbox" x-model="showAll" class="rounded border-gray-300">
+      Mostrar todos (inclusive implementados)
+    </label>
+  </div>
+
+  {% if summary.controles %}
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs text-gray-500 uppercase border-b border-gray-100">
+          <th class="py-2 pr-3">Controle</th>
+          <th class="py-2 pr-3">Categoria</th>
+          <th class="py-2 pr-3 text-right">Pontos possíveis</th>
+          <th class="py-2 pr-3">Status</th>
+          <th class="py-2 pr-3">Ação recomendada</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in summary.controles %}
+        <tr class="border-b border-gray-50" x-show="showAll || {{ 'false' if c.status == 'implementado' else 'true' }}">
+          <td class="py-2 pr-3 font-medium text-gray-800">{{ c.title or c.control_name }}</td>
+          <td class="py-2 pr-3 text-gray-600">{{ c.categoria }}</td>
+          <td class="py-2 pr-3 text-right text-gray-600">{{ c.max_score | round(1) }}</td>
+          <td class="py-2 pr-3">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+                         {{ 'bg-green-50 text-green-700' if c.status == 'implementado'
+                            else 'bg-gray-100 text-gray-500' if c.status == 'ignorado'
+                            else 'bg-red-50 text-red-700' }}">
+              {{ c.status }}
+            </span>
+          </td>
+          <td class="py-2 pr-3 text-gray-500 max-w-md">
+            {% if c.acao %}
+              {{ c.acao[:140] }}{% if c.acao|length > 140 %}…{% endif %}
+            {% else %}
+              <span class="text-gray-300">—</span>
+            {% endif %}
+            <!-- M-05b: botão "Criar trigger Zabbix" entra aqui -->
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400">Sem dados de controles disponíveis.</p>
   {% endif %}
 </div>
 
@@ -150,5 +253,45 @@
 
   </div>
 </div>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if summary.historico_90d %}
+<script nonce="{{ csp_nonce() }}">
+(function() {
+  const labels = {{ summary.historico_90d | map(attribute='time') | list | tojson }};
+  const data = {{ summary.historico_90d | map(attribute='pct') | list | tojson }};
+  const displayLabels = labels.map(function (iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+  });
+
+  new Chart(document.getElementById('secureScoreTrendChart'), {
+    type: 'line',
+    data: {
+      labels: displayLabels,
+      datasets: [{
+        label: 'Secure Score (%)',
+        data: data,
+        borderColor: '#2563eb',
+        backgroundColor: '#2563eb22',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 1,
+      }]
+    },
+    options: {
+      scales: {
+        y: { min: 0, max: 100, ticks: { stepSize: 20 } },
+        x: { ticks: { maxTicksLimit: 8 } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

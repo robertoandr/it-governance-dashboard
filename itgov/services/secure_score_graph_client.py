@@ -17,10 +17,14 @@ from itgov.services.graph_client import _fetch_token, _get
 log = structlog.get_logger(__name__)
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-_SECURE_SCORE_URL = f"{GRAPH_BASE}/security/secureScores?$top=1"
+_SECURE_SCORE_URL = (
+    f"{GRAPH_BASE}/security/secureScores"
+    "?$top=1&$select=id,currentScore,maxScore,averageComparativeScores,controlScores,activeUserCount"
+)
 _CONTROL_PROFILES_URL = (
     f"{GRAPH_BASE}/security/secureScoreControlProfiles"
-    "?$top=999&$select=id,controlName,title,controlCategory,implementationStatus,score,maxScore"
+    "?$top=999&$select=id,controlName,title,controlCategory,implementationStatus,score,maxScore,"
+    "remediation,actionUrl"
 )
 
 
@@ -51,7 +55,7 @@ class SecureScoreGraphClient:
 
         Pagina automaticamente via @odata.nextLink.
         Cada item inclui: id, controlName, title, controlCategory,
-        implementationStatus, score, maxScore.
+        implementationStatus, score, maxScore, remediation, actionUrl.
 
         Requer SecurityEvents.Read.All ou SecurityActions.Read.All.
         """
