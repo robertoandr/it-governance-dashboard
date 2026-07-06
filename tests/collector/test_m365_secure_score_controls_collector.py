@@ -27,12 +27,23 @@ _COLLECTED_AT = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
 
 
 def _perfil(**kwargs) -> dict:
+    """Item de secureScoreControlProfiles — chave estável é ``id``."""
     defaults = {
-        "controlName": "EnableMFA",
+        "id": "aad_mfa_admins",
         "controlCategory": "Identity",
-        "implementationStatus": "notImplemented",
-        "score": 0.0,
         "maxScore": 10.0,
+    }
+    defaults.update(kwargs)
+    return defaults
+
+
+def _control_score(**kwargs) -> dict:
+    """Item de secureScores.controlScores — referencia via ``controlName``."""
+    defaults = {
+        "controlName": "aad_mfa_admins",
+        "controlCategory": "Identity",
+        "score": 0.0,
+        "scoreInPercentage": 0.0,
     }
     defaults.update(kwargs)
     return defaults
@@ -40,27 +51,32 @@ def _perfil(**kwargs) -> dict:
 
 class TestBuildPoint:
     def test_ponto_contem_tags_e_fields_esperados(self) -> None:
-        point = _build_point(_perfil(), _COLLECTED_AT)
+        point = _build_point(_perfil(), _control_score(), _COLLECTED_AT)
         lp = point.to_line_protocol()
 
         assert "m365_secure_score_controls" in lp
-        assert "control_name=EnableMFA" in lp
+        assert "control_name=aad_mfa_admins" in lp
         assert "category=Identity" in lp
         assert "max_score=10" in lp
         assert "current_score=0" in lp
         assert "on=false" in lp
 
-    def test_controle_implementado_grava_on_true(self) -> None:
-        point = _build_point(_perfil(implementationStatus="implemented", score=10.0), _COLLECTED_AT)
+    def test_pct_100_grava_on_true(self) -> None:
+        point = _build_point(_perfil(), _control_score(score=10.0, scoreInPercentage=100.0), _COLLECTED_AT)
 
         assert "on=true" in point.to_line_protocol()
 
-    def test_campos_ausentes_nao_quebram(self) -> None:
-        point = _build_point({}, _COLLECTED_AT)
+    def test_pct_parcial_grava_on_false(self) -> None:
+        point = _build_point(_perfil(), _control_score(score=5.0, scoreInPercentage=50.0), _COLLECTED_AT)
+
+        assert "on=false" in point.to_line_protocol()
+
+    def test_perfil_ausente_ainda_grava_com_categoria_do_control_score(self) -> None:
+        point = _build_point({}, _control_score(controlName="orfao", controlCategory="Apps"), _COLLECTED_AT)
         lp = point.to_line_protocol()
 
-        assert "control_name=unknown" in lp
-        assert "category=Outros" in lp
+        assert "control_name=orfao" in lp
+        assert "category=Apps" in lp
         assert "max_score=0" in lp
 
 
@@ -80,11 +96,13 @@ class TestSecureScoreControlsCollectorInitFalhaSemCredenciais:
 
 
 class TestCollect:
-    def test_escreve_um_ponto_por_controle(self, monkeypatch) -> None:
-        perfis = [_perfil(controlName="A", maxScore=20.0), _perfil(controlName="B", maxScore=5.0)]
+    def test_escreve_um_ponto_por_control_score_via_join(self, monkeypatch) -> None:
+        perfis = [_perfil(id="a", maxScore=20.0), _perfil(id="b", maxScore=5.0)]
+        scores = [_control_score(controlName="a"), _control_score(controlName="b")]
 
         collector = SecureScoreControlsCollector.__new__(SecureScoreControlsCollector)
         monkeypatch.setattr(collector, "_fetch_control_profiles", lambda: perfis)
+        monkeypatch.setattr(collector, "_fetch_control_scores", lambda: scores)
 
         written = {}
 
@@ -112,14 +130,66 @@ class TestCollect:
         assert len(written["record"]) == 2
         assert written["bucket"] == "governance_raw"
 
-    def test_lista_vazia_nao_escreve(self, monkeypatch) -> None:
+    def test_catalogo_maior_que_control_scores_nao_gera_linhas_fantasma(self, monkeypatch) -> None:
+        """Regressão do bug real: 449 perfis no catálogo vs 73 control_scores —
+        só os control_scores (dados reais do tenant) viram pontos."""
+        perfis = [_perfil(id=f"c{i}") for i in range(449)]
+        scores = [_control_score(controlName="c0"), _control_score(controlName="c1")]
+
         collector = SecureScoreControlsCollector.__new__(SecureScoreControlsCollector)
-        monkeypatch.setattr(collector, "_fetch_control_profiles", lambda: [])
+        monkeypatch.setattr(collector, "_fetch_control_profiles", lambda: perfis)
+        monkeypatch.setattr(collector, "_fetch_control_scores", lambda: scores)
+
+        written = {}
+
+        class _FakeWriteApi:
+            def write(self, bucket, record):
+                written["record"] = record
+
+        class _FakeClient:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def write_api(self, write_options=None):
+                return _FakeWriteApi()
+
+        with patch(
+            "collector.jobs.m365_secure_score_controls_collector.InfluxDBClient",
+            return_value=_FakeClient(),
+        ):
+            collector.collect()
+
+        assert len(written["record"]) == 2
+
+    def test_sem_control_scores_nao_escreve(self, monkeypatch) -> None:
+        collector = SecureScoreControlsCollector.__new__(SecureScoreControlsCollector)
+        monkeypatch.setattr(collector, "_fetch_control_profiles", lambda: [_perfil()])
+        monkeypatch.setattr(collector, "_fetch_control_scores", lambda: [])
 
         with patch("collector.jobs.m365_secure_score_controls_collector.InfluxDBClient") as mock_client:
             collector.collect()
 
         mock_client.assert_not_called()
+
+
+class TestFetchControlScores:
+    def test_retorna_control_scores_do_primeiro_valor(self) -> None:
+        collector = SecureScoreControlsCollector.__new__(SecureScoreControlsCollector)
+        payload = {"value": [{"controlScores": [{"controlName": "x"}]}]}
+        with patch.object(collector, "_get", return_value=payload):
+            resultado = collector._fetch_control_scores()
+
+        assert resultado == [{"controlName": "x"}]
+
+    def test_retorna_vazio_quando_value_vazio(self) -> None:
+        collector = SecureScoreControlsCollector.__new__(SecureScoreControlsCollector)
+        with patch.object(collector, "_get", return_value={"value": []}):
+            resultado = collector._fetch_control_scores()
+
+        assert resultado == []
 
 
 class TestRun:

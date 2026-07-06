@@ -63,40 +63,59 @@ def _extract_comparative_score(secure_score: dict) -> tuple[float | None, str | 
     return None, None
 
 
-def montar_tabela_controles(control_profiles: list[dict] | None) -> list[ControlePendente]:
-    """Monta a tabela completa de controles a partir de secureScoreControlProfiles.
+def montar_tabela_controles(
+    control_profiles: list[dict] | None,
+    control_scores: list[dict] | None = None,
+) -> list[ControlePendente]:
+    """Monta a tabela de controles a partir do join entre os dois endpoints do Graph.
 
-    Inclui controles implementados e pendentes (o filtro "somente pendentes"
-    é feito na UI via toggle) — ordenados por maxScore decrescente, ou seja,
-    maior impacto potencial primeiro.
+    ``secureScoreControlProfiles`` (control_profiles) é um catálogo genérico de
+    controles — não tem o score real do tenant, e o campo ``controlName`` vem
+    vazio para este tenant; a chave estável desse recurso é ``id``.
+    ``secureScores.controlScores`` (control_scores) tem o score/percentual real
+    por controle deste tenant, referenciando o controle pelo campo
+    ``controlName`` — que na prática contém o mesmo valor do ``id`` do catálogo.
+
+    Sem ``control_scores`` não há como saber o estado real de nenhum controle
+    (o catálogo sozinho não diz nada sobre o tenant), então a tabela fica vazia
+    nesse caso — mostrar as ~449 linhas do catálogo cru como "pendente" seria
+    dado incorreto.
 
     Args:
         control_profiles: lista retornada por SecureScoreGraphClient.get_security_controls().
+        control_scores: lista ``secure_score["controlScores"]`` (score real por controle).
 
     Returns:
-        Lista de ControlePendente ordenada por max_score DESC.
+        Lista de ControlePendente ordenada por max_score DESC — um item por
+        controle efetivamente avaliado para o tenant.
     """
-    if not control_profiles:
+    if not control_scores:
         return []
 
+    perfis_por_id = {p.get("id"): p for p in (control_profiles or []) if p.get("id")}
+
     linhas = []
-    for perfil in control_profiles:
+    for cs in control_scores:
+        nome = cs.get("controlName") or ""
+        perfil = perfis_por_id.get(nome, {})
+
         max_score = float(perfil.get("maxScore") or 0.0)
-        score = float(perfil.get("score") or 0.0)
-        status_raw = perfil.get("implementationStatus") or ""
+        score = float(cs.get("score") or 0.0)
+        pct = cs.get("scoreInPercentage")
+        status_raw = (cs.get("implementationStatus") or perfil.get("implementationStatus") or "").lower()
 
         if status_raw == "ignored":
             status = "ignorado"
-        elif status_raw == "implemented" or score >= max_score > 0:
+        elif pct is not None and pct >= 100.0:
             status = "implementado"
         else:
             status = "pendente"
 
         linhas.append(
             ControlePendente(
-                control_name=perfil.get("controlName") or "",
-                title=perfil.get("title") or perfil.get("controlName") or "",
-                categoria=perfil.get("controlCategory") or "Outros",
+                control_name=nome,
+                title=perfil.get("title") or nome,
+                categoria=perfil.get("controlCategory") or cs.get("controlCategory") or "Outros",
                 max_score=max_score,
                 score=score,
                 status=status,
@@ -166,7 +185,7 @@ def calcular_resumo_compliance(
         similares, tabela completa de controles e histórico de 90 dias.
     """
     security_controls = _extract_security_controls(control_profiles) if control_profiles else {}
-    tabela_controles = montar_tabela_controles(control_profiles)
+    tabela_controles = montar_tabela_controles(control_profiles, (secure_score or {}).get("controlScores"))
     historico_pontos = [HistoricoPonto(**p) for p in (historico_90d or [])]
 
     if secure_score is None:

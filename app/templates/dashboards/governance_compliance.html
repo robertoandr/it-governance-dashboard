@@ -146,7 +146,10 @@ document.addEventListener('alpine:init', function () {
           </td>
           <td class="py-2 pr-3 text-gray-500 max-w-md">
             {% if c.acao %}
-              {{ c.acao[:140] }}{% if c.acao|length > 140 %}…{% endif %}
+              <details>
+                <summary class="cursor-pointer hover:text-gray-700">{{ c.acao | striptags | trim | truncate(140) }}</summary>
+                <div class="mt-2 text-xs leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4">{{ c.acao | safe }}</div>
+              </details>
             {% else %}
               <span class="text-gray-300">—</span>
             {% endif %}

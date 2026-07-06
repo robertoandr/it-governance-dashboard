@@ -1,13 +1,20 @@
-"""Coletor Microsoft Secure Score Control Profiles — escreve m365_secure_score_controls
+"""Coletor Microsoft Secure Score Controls — escreve m365_secure_score_controls
 no bucket governance_raw.
 
 Measurement exclusiva (não compartilhada com gov_m365_secure_score, o coletor
-do score agregado) — um ponto por controle, a cada coleta.
+do score agregado) — um ponto por controle efetivamente avaliado para o tenant.
 
-Métricas coletadas via Graph API /security/secureScoreControlProfiles (v1.0):
+Join necessário entre dois recursos do Graph API v1.0:
+  /security/secureScoreControlProfiles — catálogo genérico de controles
+    (maxScore, categoria, remediation); chave estável: ``id``. Não tem o
+    score real do tenant, e ``controlName`` vem vazio aqui.
+  /security/secureScores?$top=1 — score real do tenant por controle
+    (controlScores[]: score, scoreInPercentage); referencia o controle via
+    ``controlName``, que contém o mesmo valor do ``id`` do catálogo acima.
+
   m365_secure_score_controls
     tags: control_name, category
-    fields: max_score (float), current_score (float), on (bool, controle implementado)
+    fields: max_score (float), current_score (float), on (bool, scoreInPercentage >= 100)
 
 Auth: client_credentials via MSAL — herda BaseOAuthCollector (token cache + retry 429).
 Schedule: a cada 6 horas (mesma cadência do secure_score_collector).
@@ -35,18 +42,19 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _SCOPES = ["https://graph.microsoft.com/.default"]
 _MEASUREMENT = "m365_secure_score_controls"
 _CONTROL_PROFILES_URL = (
-    f"{_GRAPH_BASE}/security/secureScoreControlProfiles"
-    "?$top=999&$select=controlName,controlCategory,implementationStatus,score,maxScore"
+    f"{_GRAPH_BASE}/security/secureScoreControlProfiles?$top=999&$select=id,controlCategory,maxScore"
 )
+_SECURE_SCORE_URL = f"{_GRAPH_BASE}/security/secureScores?$top=1&$select=controlScores"
 
 
-def _build_point(perfil: dict, collected_at: datetime) -> Point:
-    """Constrói o Point de um único controle a partir do perfil retornado pelo Graph."""
-    control_name = perfil.get("controlName") or "unknown"
-    categoria = perfil.get("controlCategory") or "Outros"
+def _build_point(perfil: dict, control_score: dict, collected_at: datetime) -> Point:
+    """Constrói o Point de um controle a partir do join profile (catálogo) + control_score (tenant)."""
+    control_name = control_score.get("controlName") or "unknown"
+    categoria = perfil.get("controlCategory") or control_score.get("controlCategory") or "Outros"
     max_score = float(perfil.get("maxScore") or 0.0)
-    score = float(perfil.get("score") or 0.0)
-    implementado = perfil.get("implementationStatus") == "implemented"
+    score = float(control_score.get("score") or 0.0)
+    pct = control_score.get("scoreInPercentage")
+    implementado = pct is not None and pct >= 100.0
 
     return (
         Point(_MEASUREMENT)
@@ -60,7 +68,7 @@ def _build_point(perfil: dict, collected_at: datetime) -> Point:
 
 
 class SecureScoreControlsCollector(BaseOAuthCollector):
-    """Coleta os perfis de controle do Secure Score e grava no InfluxDB."""
+    """Coleta os control scores do tenant e junta com o catálogo de controles."""
 
     def __init__(self) -> None:
         if not all([settings.AZURE_TENANT_ID, settings.AZURE_CLIENT_ID, settings.AZURE_CLIENT_SECRET]):
@@ -73,20 +81,30 @@ class SecureScoreControlsCollector(BaseOAuthCollector):
         )
 
     def _fetch_control_profiles(self) -> list[dict]:
-        """Busca todos os perfis de controle, paginando via @odata.nextLink."""
+        """Busca o catálogo de controles (maxScore, categoria), paginando via @odata.nextLink."""
         return list(self._paginate(_CONTROL_PROFILES_URL))
 
+    def _fetch_control_scores(self) -> list[dict]:
+        """Busca o score real do tenant por controle (secureScores.controlScores)."""
+        data = self._get(_SECURE_SCORE_URL)
+        valores = data.get("value", [])
+        if not valores:
+            return []
+        return valores[0].get("controlScores", [])
+
     def collect(self) -> None:
-        """Coleta os perfis de controle e grava um ponto por controle no InfluxDB."""
+        """Faz o join profiles×scores e grava um ponto por controle avaliado no InfluxDB."""
         log.info("secure_score_controls_coleta_iniciada")
         collected_at = datetime.now(UTC)
 
         perfis = self._fetch_control_profiles()
-        if not perfis:
-            log.warning("secure_score_controls_lista_vazia")
+        control_scores = self._fetch_control_scores()
+        if not control_scores:
+            log.warning("secure_score_controls_sem_control_scores")
             return
 
-        pontos = [_build_point(perfil, collected_at) for perfil in perfis]
+        perfis_por_id = {p.get("id"): p for p in perfis if p.get("id")}
+        pontos = [_build_point(perfis_por_id.get(cs.get("controlName"), {}), cs, collected_at) for cs in control_scores]
 
         with InfluxDBClient(
             url=settings.INFLUX_URL,

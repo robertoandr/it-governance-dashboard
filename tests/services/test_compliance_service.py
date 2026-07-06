@@ -87,23 +87,37 @@ class TestCalcularResumoCompliance:
 
 
 def _perfil(
-    nome: str = "EnableMFA",
+    control_id: str = "EnableMFA",
     categoria: str = "Identity",
     max_score: float = 10.0,
-    score: float = 0.0,
-    status: str = "notImplemented",
     remediation: str = "Habilite MFA para todos os usuários.",
     action_url: str | None = "https://portal.example/action",
 ) -> dict:
+    """Simula um item de secureScoreControlProfiles — chave estável é ``id``."""
     return {
-        "controlName": nome,
-        "title": nome,
+        "id": control_id,
+        "title": control_id,
         "controlCategory": categoria,
         "maxScore": max_score,
-        "score": score,
-        "implementationStatus": status,
         "remediation": remediation,
         "actionUrl": action_url,
+    }
+
+
+def _control_score(
+    nome: str = "EnableMFA",
+    score: float = 0.0,
+    pct: float = 0.0,
+    status: str = "",
+    categoria: str = "Identity",
+) -> dict:
+    """Simula um item de secureScores.controlScores — referencia via ``controlName``."""
+    return {
+        "controlName": nome,
+        "controlCategory": categoria,
+        "score": score,
+        "scoreInPercentage": pct,
+        "implementationStatus": status,
     }
 
 
@@ -143,44 +157,95 @@ class TestExtractComparativeScore:
 
 class TestMontarTabelaControles:
     def test_lista_vazia_ou_none_retorna_vazio(self) -> None:
-        assert montar_tabela_controles(None) == []
-        assert montar_tabela_controles([]) == []
+        assert montar_tabela_controles(None, None) == []
+        assert montar_tabela_controles([], []) == []
+
+    def test_sem_control_scores_retorna_vazio_mesmo_com_perfis(self) -> None:
+        # Catálogo sozinho não diz nada sobre o tenant — mostrar como "pendente"
+        # seria dado incorreto (bug original do M-05).
+        perfis = [_perfil()]
+
+        assert montar_tabela_controles(perfis, None) == []
+        assert montar_tabela_controles(perfis, []) == []
+
+    def test_join_por_id_e_controlname(self) -> None:
+        perfis = [_perfil(control_id="aad_mfa_admins", categoria="Identity", max_score=10.0)]
+        scores = [_control_score(nome="aad_mfa_admins", score=5.0, pct=50.0)]
+
+        tabela = montar_tabela_controles(perfis, scores)
+
+        assert len(tabela) == 1
+        assert tabela[0].control_name == "aad_mfa_admins"
+        assert tabela[0].max_score == 10.0
+        assert tabela[0].score == 5.0
+
+    def test_control_score_sem_perfil_correspondente_ainda_aparece(self) -> None:
+        # Quando o catálogo não tem o id (ex.: controle descontinuado), o
+        # controle ainda deve aparecer na tabela — só sem metadados de catálogo.
+        scores = [_control_score(nome="orfao", score=0.0, pct=0.0)]
+
+        tabela = montar_tabela_controles([], scores)
+
+        assert len(tabela) == 1
+        assert tabela[0].control_name == "orfao"
+        assert tabela[0].max_score == 0.0
 
     def test_ordenado_por_max_score_desc(self) -> None:
-        perfis = [_perfil(nome="baixo", max_score=5.0), _perfil(nome="alto", max_score=30.0)]
-        tabela = montar_tabela_controles(perfis)
+        perfis = [_perfil(control_id="baixo", max_score=5.0), _perfil(control_id="alto", max_score=30.0)]
+        scores = [_control_score(nome="baixo"), _control_score(nome="alto")]
+
+        tabela = montar_tabela_controles(perfis, scores)
 
         assert [c.control_name for c in tabela] == ["alto", "baixo"]
 
-    def test_status_implementado_quando_status_implemented(self) -> None:
-        perfis = [_perfil(status="implemented", score=10.0, max_score=10.0)]
-        tabela = montar_tabela_controles(perfis)
+    def test_status_implementado_quando_pct_100(self) -> None:
+        perfis = [_perfil(control_id="x", max_score=10.0)]
+        scores = [_control_score(nome="x", score=10.0, pct=100.0)]
+
+        tabela = montar_tabela_controles(perfis, scores)
 
         assert tabela[0].status == "implementado"
 
-    def test_status_pendente_quando_nao_implementado(self) -> None:
-        perfis = [_perfil(status="notImplemented", score=0.0, max_score=10.0)]
-        tabela = montar_tabela_controles(perfis)
+    def test_status_pendente_quando_pct_menor_que_100(self) -> None:
+        perfis = [_perfil(control_id="x", max_score=10.0)]
+        scores = [_control_score(nome="x", score=3.0, pct=30.0)]
+
+        tabela = montar_tabela_controles(perfis, scores)
 
         assert tabela[0].status == "pendente"
 
     def test_status_ignorado(self) -> None:
-        perfis = [_perfil(status="ignored")]
-        tabela = montar_tabela_controles(perfis)
+        perfis = [_perfil(control_id="x")]
+        scores = [_control_score(nome="x", status="ignored")]
+
+        tabela = montar_tabela_controles(perfis, scores)
 
         assert tabela[0].status == "ignorado"
 
-    def test_acao_vem_do_campo_remediation(self) -> None:
-        perfis = [_perfil(remediation="Faça X para corrigir.")]
-        tabela = montar_tabela_controles(perfis)
+    def test_acao_vem_do_campo_remediation_do_perfil(self) -> None:
+        perfis = [_perfil(control_id="x", remediation="Faça X para corrigir.")]
+        scores = [_control_score(nome="x")]
+
+        tabela = montar_tabela_controles(perfis, scores)
 
         assert tabela[0].acao == "Faça X para corrigir."
 
     def test_action_url_ausente_vira_none(self) -> None:
-        perfis = [_perfil(action_url=None)]
-        tabela = montar_tabela_controles(perfis)
+        perfis = [_perfil(control_id="x", action_url=None)]
+        scores = [_control_score(nome="x")]
+
+        tabela = montar_tabela_controles(perfis, scores)
 
         assert tabela[0].action_url is None
+
+    def test_todos_449_pendente_sem_scores_eh_o_bug_original_agora_impossivel(self) -> None:
+        """Regressão do bug real: 449 perfis do catálogo sem nenhum controlScores
+        correspondente não devem mais gerar 449 linhas "pendente" fantasma."""
+        perfis = [_perfil(control_id=f"c{i}") for i in range(449)]
+
+        tabela = montar_tabela_controles(perfis, [])
+
+        assert tabela == []
 
 
 class TestCalcularVariacao30d:
