@@ -113,6 +113,102 @@ class TestOverProvisionedWasteExclusion:
         assert lic["desperdicio_brl"] == pytest.approx(33.4 * 8, abs=0.01)
 
 
+class TestDeficitField:
+    """LIC-01 (b/c) — magnitude do excedente exposta como campo numérico ``deficit``.
+
+    ``over_provisioned`` já existia como booleano; ``deficit`` expõe quantas
+    licenças além do contratado (ex.: EXCHANGEENTERPRISE consumed=16, total=10
+    → deficit=6), já que o coletor grava ``available`` clampado em 0 e por
+    isso não carrega essa informação.
+    """
+
+    def test_deficit_calculado_quando_acima_do_limite(self, monkeypatch, isolated_costs_file):
+        _write_costs(
+            isolated_costs_file,
+            {"EXCHANGEENTERPRISE": {"friendly_name": "Exchange Online Plan 2", "cost_per_unit_brl": 45.0}},
+        )
+        _mock_rows(
+            monkeypatch,
+            [
+                {
+                    "sku_id": "id1",
+                    "sku_name": "EXCHANGEENTERPRISE",
+                    "consumed": 16,
+                    "total": 10,
+                    "available": 0,
+                    "_time": "2026-07-03T00:00:00Z",
+                }
+            ],
+        )
+        result = m365_licenses.get_licenses_summary()
+        lic = result["licenses"][0]
+
+        assert lic["deficit"] == 6
+        assert lic["deficit_custo_brl"] == pytest.approx(45.0 * 6, abs=0.01)
+
+    def test_deficit_zero_quando_dentro_do_limite(self, monkeypatch, isolated_costs_file):
+        _write_costs(
+            isolated_costs_file,
+            {"O365_BUSINESS_ESSENTIALS": {"friendly_name": "Microsoft 365 Business Basic", "cost_per_unit_brl": 33.4}},
+        )
+        _mock_rows(
+            monkeypatch,
+            [
+                {
+                    "sku_id": "id2",
+                    "sku_name": "O365_BUSINESS_ESSENTIALS",
+                    "consumed": 12,
+                    "total": 20,
+                    "available": 8,
+                    "_time": "2026-07-03T00:00:00Z",
+                }
+            ],
+        )
+        result = m365_licenses.get_licenses_summary()
+        lic = result["licenses"][0]
+
+        assert lic["deficit"] == 0
+        assert lic["deficit_custo_brl"] == 0.0
+
+    def test_summary_agrega_skus_acima_do_limite_e_deficit_total(self, monkeypatch, isolated_costs_file):
+        _write_costs(
+            isolated_costs_file,
+            {
+                "EXCHANGEENTERPRISE": {"friendly_name": "Exchange Online Plan 2", "cost_per_unit_brl": 45.0},
+                "O365_BUSINESS_ESSENTIALS": {
+                    "friendly_name": "Microsoft 365 Business Basic",
+                    "cost_per_unit_brl": 33.4,
+                },
+            },
+        )
+        _mock_rows(
+            monkeypatch,
+            [
+                {
+                    "sku_id": "id1",
+                    "sku_name": "EXCHANGEENTERPRISE",
+                    "consumed": 16,
+                    "total": 10,
+                    "available": 0,
+                    "_time": "2026-07-03T00:00:00Z",
+                },
+                {
+                    "sku_id": "id2",
+                    "sku_name": "O365_BUSINESS_ESSENTIALS",
+                    "consumed": 12,
+                    "total": 20,
+                    "available": 8,
+                    "_time": "2026-07-03T00:00:00Z",
+                },
+            ],
+        )
+        result = m365_licenses.get_licenses_summary()
+
+        assert result["summary"]["skus_acima_do_limite"] == 1
+        assert result["summary"]["deficit_total"] == 6
+        assert result["summary"]["deficit_custo_total_brl"] == pytest.approx(270.0, abs=0.01)
+
+
 class TestFriendlyNameFlag:
     """(e) — sinaliza quando o SKU não tem nome amigável mapeado."""
 

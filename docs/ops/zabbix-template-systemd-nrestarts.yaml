@@ -1,0 +1,65 @@
+zabbix_export:
+  version: '7.0'
+
+  template_groups:
+    - uuid: 748ad2be80a44f22a4a079e1561481bd
+      name: 'Templates/Operating systems'
+
+  templates:
+    - uuid: 6156fe05b40a467ba8908cd2781b1c4f
+      template: 'Linux systemd NRestarts'
+      name: 'Linux systemd NRestarts'
+      description: |
+        Descobre servicos systemd via zabbix_agent2 e alerta quando NRestarts > 10 ou unidade em estado failed.
+        Requer zabbix_agent2 >= 5.4 com plugin Systemd habilitado.
+      groups:
+        - name: 'Templates/Operating systems'
+
+      discovery_rules:
+        - uuid: bf6f1a4bd2304204ae1e3e31ad83de80
+          name: 'Systemd service discovery'
+          key: systemd.unit.discovery
+          delay: 1h
+          description: 'Descobre servicos systemd ativos ou em falha.'
+
+          item_prototypes:
+            - uuid: 7306566dcda24f1a87d01e8795b055be
+              name: 'Systemd: {#UNIT.NAME}: NRestarts'
+              key: 'systemd.unit.info[{#UNIT.NAME},NRestarts,Service]'
+              delay: 5m
+              value_type: UNSIGNED
+              description: 'Numero de vezes que o servico foi reiniciado pelo systemd (interface Service).'
+              tags:
+                - tag: component
+                  value: systemd
+
+            - uuid: 3100988d06fa4f7ea04119076d0cc174
+              name: 'Systemd: {#UNIT.NAME}: ActiveState'
+              key: 'systemd.unit.info[{#UNIT.NAME},ActiveState]'
+              delay: 1m
+              value_type: CHAR
+              description: 'Estado ativo do servico systemd.'
+              tags:
+                - tag: component
+                  value: systemd
+
+          trigger_prototypes:
+            - uuid: cf56c26d46934b168e05a26066fb5de8
+              name: 'Systemd: {#UNIT.NAME} reiniciou mais de 10 vezes'
+              expression: 'last(/Linux systemd NRestarts/systemd.unit.info[{#UNIT.NAME},NRestarts,Service])>10'
+              priority: AVERAGE
+              description: |
+                O servico {#UNIT.NAME} reiniciou mais de 10 vezes.
+                Verificar causa: journalctl -u {#UNIT.NAME} --since -1h
+              tags:
+                - tag: scope
+                  value: availability
+
+            - uuid: a1df09cf1b4e4203b84f9ffeb40af640
+              name: 'Systemd: {#UNIT.NAME} em estado failed'
+              expression: 'last(/Linux systemd NRestarts/systemd.unit.info[{#UNIT.NAME},ActiveState])="failed"'
+              priority: HIGH
+              description: 'O servico {#UNIT.NAME} esta em estado failed.'
+              tags:
+                - tag: scope
+                  value: availability

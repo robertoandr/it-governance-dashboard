@@ -135,6 +135,7 @@ def get_licenses_summary() -> dict:
     total_seats = 0
     custo_mensal_total = 0.0
     desperdicio_total = 0.0
+    deficit_custo_total = 0.0
 
     for row in rows:
         sku_id = str(row.get("sku_id", ""))
@@ -155,6 +156,12 @@ def get_licenses_summary() -> dict:
         custo_mensal = round(consumed * cost_unit, 2)
         uso_pct = round(consumed / total * 100, 1) if total > 0 else 0.0
         over_provisioned = consumed > total
+        # FIX(LIC-01): deficit é a magnitude do excedente (quantas licenças além do
+        # contratado) — o coletor grava available=max(0, total-consumed), então essa
+        # camada é a única fonte confiável desse número (ex.: EXCHANGEENTERPRISE
+        # consumed=16, total=10 → deficit=6, custo estimado do excedente=6×cost_unit).
+        deficit = max(0, consumed - total)
+        deficit_custo_brl = round(deficit * cost_unit, 2)
         # Regra de negócio: SKU acima do limite contratado (consumed > total) não entra no
         # cálculo de desperdício — não faz sentido "desperdício" quando já está estourado.
         # Checagem explícita aqui em vez de confiar no clamp available=max(0, total-consumed)
@@ -169,6 +176,7 @@ def get_licenses_summary() -> dict:
             total_seats += total
             custo_mensal_total += custo_mensal
             desperdicio_total += desperdicio
+            deficit_custo_total += deficit_custo_brl
 
         licenses.append(
             {
@@ -182,6 +190,8 @@ def get_licenses_summary() -> dict:
                 "warning_units": warning_units,
                 "uso_pct": uso_pct,
                 "over_provisioned": over_provisioned,
+                "deficit": deficit,
+                "deficit_custo_brl": deficit_custo_brl,
                 "is_free": is_free,
                 "cost_per_unit_brl": cost_unit,
                 "custo_mensal_brl": custo_mensal,
@@ -210,6 +220,9 @@ def get_licenses_summary() -> dict:
             "skus_com_custo": len([lic for lic in licenses if lic["cost_per_unit_brl"] > 0]),
             "total_unassigned": sum(lic["available"] for lic in non_free_licenses),
             "skus_ociosas": len([lic for lic in non_free_licenses if lic["available"] > 0]),
+            "skus_acima_do_limite": len([lic for lic in non_free_licenses if lic["over_provisioned"]]),
+            "deficit_total": sum(lic["deficit"] for lic in non_free_licenses),
+            "deficit_custo_total_brl": round(deficit_custo_total, 2),
         },
         "costs_file": str(_COSTS_FILE),
     }
