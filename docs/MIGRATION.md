@@ -8,7 +8,7 @@
 | `collectors/influx.py` | ⚠️ Deprecated | Migrar em 10F |
 | `collectors/graph.py` | ⚠️ Deprecated | Migrar em 10F |
 | `collectors/grafana.py` | ⚠️ Deprecated | Migrar em 10F |
-| `collectors/ldap_collector.py` | ⚠️ Deprecated | Migrar em 10F |
+| `collectors/ldap_collector.py` | ✅ Migrado para `app/services/ldap_service.py` | 10F |
 
 ## Por que migrar
 

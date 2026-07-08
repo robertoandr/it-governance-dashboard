@@ -50,10 +50,24 @@ class InfluxConfig(BaseSettings):
 class ZabbixConfig(BaseSettings):
     """Zabbix API connection."""
 
+    model_config = SettingsConfigDict(env_prefix="ZABBIX_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
     url: str = "http://localhost/zabbix/api_jsonrpc.php"
     user: str = "Admin"
     password: SecretStr = SecretStr("")
     enabled: bool = False
+
+
+class LdapConfig(BaseSettings):
+    """LDAP / Active Directory connection (contagem de usuários)."""
+
+    model_config = SettingsConfigDict(env_prefix="LDAP_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    enabled: bool = False
+    server: str = ""
+    base_dn: str = ""
+    user: str = ""
+    password: SecretStr = SecretStr("")
 
 
 class GitHubConfig(BaseSettings):
@@ -118,6 +132,7 @@ class AppSettings(BaseSettings):
     db: DatabaseConfig = DatabaseConfig()
     influx: InfluxConfig = InfluxConfig()
     zabbix: ZabbixConfig = ZabbixConfig()
+    ldap: LdapConfig = LdapConfig()
     github: GitHubConfig = GitHubConfig()
     zendesk: ZendeskConfig = ZendeskConfig()
     graph: GraphConfig = GraphConfig()

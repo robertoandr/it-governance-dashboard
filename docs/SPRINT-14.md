@@ -33,6 +33,13 @@ Trabalho operacional fora do backlog de features abaixo, executado entre 2026-07
 - Autenticação alterada para NTLM explícito (`ldap3.NTLM`) — bind `SIMPLE` era rejeitado pelo AD para usuários no formato `DOMAIN\user`.
 - Corrigido erro de hash MD4 no `patch_collector`: OpenSSL 3.x desabilita MD4 por padrão, usado pelo `ldap3` no NTOWFv2 do bind NTLM. Resolvido com `pycryptodome==3.21.0` em `collector/requirements.txt` (implementação própria de MD4).
 
+**Auditoria do `ZabbixConfig` (débito técnico — Pydantic `BaseSettings`)**
+- Investigada suspeita de falha silenciosa de propagação de variáveis de ambiente (`env_prefix`) na classe `ZabbixConfig` em `app/config.py`.
+- Auditoria confirmou que a classe já possuía `model_config = SettingsConfigDict(env_prefix="ZABBIX_", env_file=".env", env_file_encoding="utf-8", extra="ignore")` explícito, no mesmo padrão do `LdapConfig`.
+- Bateria de 48 testes (`test_zabbix_service.py`, `test_zabbix_api_namespace.py`, `test_zabbix_collector.py`) executada sem falhas.
+- Confirmado por instanciação real que `ZABBIX_USER` e `ZABBIX_PASSWORD` são carregados corretamente a partir do `.env`.
+- Nenhuma alteração de código foi necessária.
+
 ---
 
 ## Auditoria de Dados Reais (Tarefa 2)

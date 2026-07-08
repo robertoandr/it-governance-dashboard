@@ -12,11 +12,11 @@ from flask import Flask, jsonify, redirect, render_template, request
 from flask_restx import Api
 
 import config
+from app.services.ldap_service import LdapService
 from app_utils import safe
 from collectors.grafana import GrafanaCollector
 from collectors.graph import GraphCollector
 from collectors.influx import InfluxCollector
-from collectors.ldap_collector import LDAPCollector
 from collectors.zabbix import ZabbixCollector
 from itgov.api.v1.ativos import ns as ativos_ns
 from itgov.api.v1.governance_apps import ns as governance_apps_ns
@@ -162,7 +162,7 @@ def _refresh_once():
     influx = InfluxCollector()
     graph = GraphCollector()
     grafana = GrafanaCollector()
-    ldap = LDAPCollector()
+    ldap = LdapService()
 
     new_data = {}
     errors = []
@@ -211,12 +211,11 @@ def _refresh_once():
             new_data["grafana_dashboards"] = grafana.list_dashboards()
         except Exception as e:
             log.warning("grafana: %s", e)
-    if config.LDAP_ENABLED:
-        try:
-            new_data["users_ad"] = ldap.get_user_summary()
-        except Exception as e:
-            log.warning("users_ad: %s", e)
-            errors.append(f"users_ad: {e}")
+    try:
+        new_data["users_ad"] = ldap.get_user_summary().as_dict()
+    except Exception as e:
+        log.warning("users_ad: %s", e)
+        errors.append(f"users_ad: {e}")
 
     merged = {**_cache, **new_data}
     new_data["health_score"] = _compute_health_score(merged)
