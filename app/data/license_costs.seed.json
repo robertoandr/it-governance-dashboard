@@ -1,0 +1,139 @@
+{
+  "VISIOONLINE_PLAN1": {
+    "friendly_name": "Visio Online Plan 1",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "O365_BUSINESS_ESSENTIALS": {
+    "friendly_name": "Microsoft 365 Business Basic",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "PROJECTPROFESSIONAL": {
+    "friendly_name": "Project Professional",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "EXCHANGEENTERPRISE": {
+    "friendly_name": "Exchange Online Plan 2",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "Teams_Premium_(for_Departments)": {
+    "friendly_name": "Teams Premium (Departamentos)",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "Microsoft_Teams_Rooms_Pro": {
+    "friendly_name": "Teams Rooms Pro",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "Microsoft_Entra_Suite": {
+    "friendly_name": "Microsoft Entra Suite",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "POWERAPPS_DEV": {
+    "friendly_name": "Power Apps Developer",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  },
+  "O365_BUSINESS": {
+    "friendly_name": "Microsoft 365 Apps for Business",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "POWER_BI_PRO": {
+    "friendly_name": "Power BI Pro",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "Microsoft_365_Copilot": {
+    "friendly_name": "Microsoft 365 Copilot",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "PROJECT_P1": {
+    "friendly_name": "Project Plan 1",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "O365_BUSINESS_PREMIUM": {
+    "friendly_name": "Microsoft 365 Business Standard",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": ""
+  },
+  "FLOW_FREE": {
+    "friendly_name": "Power Automate (Gratuito)",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  },
+  "POWER_BI_STANDARD": {
+    "friendly_name": "Power BI (Gratuito)",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  },
+  "WINDOWS_STORE": {
+    "friendly_name": "Windows Store",
+    "category": "free",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  },
+  "Dynamics_365_Customer_Service_Enterprise_viral_trial": {
+    "friendly_name": "Dynamics 365 Customer Service (Trial)",
+    "category": "free",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  },
+  "Microsoft_Teams_Exploratory_Dept": {
+    "friendly_name": "Microsoft Teams Exploratory",
+    "category": "free",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  },
+  "Power_Pages_vTrial_for_Makers": {
+    "friendly_name": "Power Pages (Trial)",
+    "category": "free",
+    "cost_per_unit_brl": 0.00,
+    "renewal_date": "",
+    "billing_cycle": "monthly",
+    "notes": "Plano gratuito"
+  }
+}
