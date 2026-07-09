@@ -44,6 +44,8 @@ services:
       INFLUX__BUCKET: "${INFLUX_BUCKET:-govti}"
       INFLUX__BUCKET_RAW: "${INFLUX_BUCKET_RAW:-governance_raw}"
       INFLUX__ENABLED: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${APP_PORT:-5000}:5000"
     volumes:
