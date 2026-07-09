@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import patch
 
 import pytest
@@ -71,7 +72,7 @@ class TestCacheData:
 
         with patch("itgov.api.v1.governance_data._buscar_do_graph", return_value=_DADOS_FAKE) as mock_graph:
             cliente.get("/api/v1/governance/data")
-            monkeypatch.setattr(mod, "_cache_ts", 0.0)
+            monkeypatch.setattr(mod, "_cache_ts", time.monotonic() - mod._CACHE_TTL - 1)
             cliente.get("/api/v1/governance/data")
 
         assert mock_graph.call_count == 2

@@ -53,7 +53,7 @@ def _zbx(method: str, params: dict[str, Any]) -> Any:
             json={"jsonrpc": "2.0", "method": method, "params": params, "id": 1},
             headers={"Content-Type": "application/json-rpc", "Authorization": f"Bearer {token}"},
             timeout=10,
-            verify=False,  # noqa: S501
+            verify=False,  # nosec B501 # noqa: S501
         )
         resp.raise_for_status()
         data = resp.json()

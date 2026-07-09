@@ -26,10 +26,12 @@ _cache_dados: dict | None = None
 _cache_ts: float = 0.0
 
 # FIX(LIC-01): path é configurável via LICENSE_COSTS_PATH (default: volume /app/data,
-# montado pelo docker-compose). O arquivo versionado em <repo_root>/app/data/license_costs.json
-# serve como seed inicial — ver ensure_costs_file().
+# montado pelo docker-compose). O arquivo versionado em
+# <repo_root>/app/data/license_costs.seed.json serve como seed inicial — ver
+# ensure_costs_file(). É um arquivo distinto de _COSTS_FILE (que é saída local
+# de runtime, gitignored) justamente para poder ser versionado no git.
 _COSTS_FILE = Path(os.environ.get("LICENSE_COSTS_PATH", "/app/data/license_costs.json"))
-_SEED_FILE = Path(__file__).parent.parent.parent.parent / "app" / "data" / "license_costs.json"
+_SEED_FILE = Path(__file__).parent.parent.parent.parent / "app" / "data" / "license_costs.seed.json"
 
 
 def ensure_costs_file() -> None:

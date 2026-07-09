@@ -476,3 +476,48 @@ Esforco estimado: **3d**
 18. ZBX-03 (Rede) — 2d
 19. SEG-01 (Vulnerabilidades spike) — 5d
 20. SUP-03 (Agentes Zabbix) — 1d
+
+---
+
+### Incidente de Infraestrutura - Perímetro (2026-07-08)
+
+**Status:** 🔴 AGUARDANDO INTERVENÇÃO (Firewall de Borda/FortiGate)
+
+**Sintoma:** Acesso externo à dashboard (`https://noc.grupogadens.com.br/gov/`) resulta em *Connection timed out*.
+
+**Diagnóstico:**
+- **Infraestrutura interna (servidor `172.29.2.11`):** 100% íntegra e funcional. Nginx (proxy reverso, systemd) responde corretamente em loopback e IP interno — HTTP redireciona para HTTPS (301), HTTPS retorna 302 para login com headers de segurança corretos, certificado Let's Encrypt válido. `itgov-app` respondendo na porta 5000.
+- **UFW:** inativo neste host — não é a causa do sintoma.
+- **Causa raiz:** bloqueio de rede no perímetro. `noc.grupogadens.com.br` resolve para o IP público `189.112.203.34`, diferente do IP do servidor (`172.29.2.11`). O tráfego externo não está sendo roteado (ou sofre *drop*) antes de chegar ao servidor interno — saída de internet do host funciona normalmente (teste de ping a IP público externo OK), mas requisição HTTPS ao IP público do domínio expira em timeout.
+
+**Ação necessária (equipe de Redes/FortiGate):**
+1. Validar NAT/Port-Forwarding (VIP): `189.112.203.34:443` → `172.29.2.11:443` (e equivalentes para 80/8443).
+2. Validar política de tráfego `WAN → LAN` para essa VIP.
+3. Confirmar se o IP público atual e o registro DNS de `noc.grupogadens.com.br` estão sincronizados.
+
+*Nota: não há integração, credenciais ou automação para o FortiGate neste projeto; a intervenção exige acesso direto ao equipamento de borda.*
+
+---
+
+### Incidente de Integração Zabbix - Falha em Produção (2026-07-08)
+
+**Status:** 🟢 RESOLVIDO (2026-07-08)
+
+**Sintoma:** Integração Zabbix falhando em produção (`Connection refused`) com `base_url` caindo no default `http://localhost/zabbix/api_jsonrpc.php`, ignorando o `.env`.
+
+**Diagnóstico (causa raiz):**
+- A imagem em produção (`ghcr.io/robertoandr/it-governance-dashboard:latest`) estava desatualizada. Não continha a correção do `model_config` (falta de `env_prefix` no Pydantic) que mapeia corretamente as variáveis `ZABBIX_*` do ambiente.
+- Correção completa acompanhada pelo PR #184 (branch `fix/sprint14-hotfixes-and-techdebt`, ainda aguardando merge/aprovação em `main`).
+
+**Resolução aplicada (hotfix direto, fora do merge do PR):**
+1. `model_config = SettingsConfigDict(env_prefix="ZABBIX_", env_file=".env", ...)` aplicado em `ZabbixConfig` (`app/config.py`).
+2. Imagem reconstruída localmente (`docker compose build app`) e `itgov-app` recriado com a correção.
+3. Descoberta uma duplicata de `ZABBIX_URL` no `.env` (uma apontando para `host.docker.internal`, outra para `172.29.2.11` — esta última vencia por ordem de leitura e não era alcançável de dentro do container). Duplicata removida.
+4. `host.docker.internal` não resolvia no Docker Engine deste host (Linux, sem o mapeamento automático do Docker Desktop). Adicionado `extra_hosts: ["host.docker.internal:host-gateway"]` ao serviço `app` em `docker-compose.yml`.
+5. Após recriação subsequente dos containers, a conectividade Docker→host:8080 (antes em timeout mesmo via gateway) normalizou — causa exata do timeout intermitente não confirmada (suspeita de estado de iptables/bridge `docker0`), mas o resultado final é estável.
+6. Validado com chamada real à API: `zabbix_login_ok`, `HTTP 200`, dados de hosts retornados (`total=140 up=2 down=0 unknown=138 up_pct=1.4`).
+
+**Ação de segurança executada:**
+- `ZABBIX_TOKEN` foi exposto acidentalmente durante o diagnóstico (e, num incidente separado, o `.env` inteiro foi exposto no transcript de uma sessão de edição). Rotação de secrets executada em 2026-07-08: `SECRET_KEY`/`APP__SECRET_KEY` gerados e aplicados via script; demais secrets do Grupo 2 (`ZABBIX_PASSWORD`, `ZABBIX_TOKEN`, `INFLUX_TOKEN`, `INFLUX_ADMIN_PASSWORD`, `GITHUB_TOKEN`, `GRAFANA_ADMIN_PASSWORD`, `MSAL_CLIENT_SECRET`/`AZURE_CLIENT_SECRET`, `LDAP_BIND_PASSWORD`/`LDAP_PASSWORD`, `WINRM_PASSWORD`, `CLICKUP_TOKEN`, `ZENDESK_API_TOKEN`) rotacionados interativamente via `scripts/rotate_secrets.sh` (criado nesta sessão). Duplicatas de `ZABBIX_TOKEN` e `ACRONIS_CLIENT_SECRET` no `.env` também removidas.
+
+**Pendência:** o hotfix foi aplicado diretamente no ambiente (fora do fluxo normal de PR) devido à criticidade do incidente. O PR #184 continua aberto e deve ser revisado/aprovado formalmente para que `main` reflita o estado real do `app/config.py` e `docker-compose.yml` em produção — hoje há divergência entre o código versionado em `main` e o que está de fato rodando no servidor.

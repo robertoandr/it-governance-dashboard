@@ -84,6 +84,11 @@ safety-report.json
 data/
 !data/schema.sql
 !data/seed.py
+# app/data/license_costs.seed.json é o seed versionado consumido por
+# ensure_costs_file() (itgov/api/v1/m365_licenses.py) — distinto do
+# app/data/license_costs.json mutável (saída local, ver regra abaixo).
+!app/data/
+!app/data/license_costs.seed.json
 _backups/
 backups/
 *.db
