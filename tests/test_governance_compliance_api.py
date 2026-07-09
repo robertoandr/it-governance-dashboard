@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -77,7 +78,7 @@ class TestCacheCompliance:
 
         with patch("itgov.api.v1.governance_compliance._buscar_do_graph", return_value=_DADOS_FAKE) as mock_graph:
             cliente.get("/api/v1/governance/compliance")
-            monkeypatch.setattr(mod, "_cache_ts", 0.0)
+            monkeypatch.setattr(mod, "_cache_ts", time.monotonic() - mod._CACHE_TTL - 1)
             cliente.get("/api/v1/governance/compliance")
 
         assert mock_graph.call_count == 2
