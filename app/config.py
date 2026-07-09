@@ -50,6 +50,8 @@ class InfluxConfig(BaseSettings):
 class ZabbixConfig(BaseSettings):
     """Zabbix API connection."""
 
+    model_config = SettingsConfigDict(env_prefix="ZABBIX_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
     url: str = "http://localhost/zabbix/api_jsonrpc.php"
     user: str = "Admin"
     password: SecretStr = SecretStr("")
