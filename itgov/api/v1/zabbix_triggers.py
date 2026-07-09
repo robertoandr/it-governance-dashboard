@@ -52,7 +52,7 @@ def _zbx(method: str, params: dict[str, Any]) -> Any:
             "Authorization": f"Bearer {_zbx_token()}",
         },
         timeout=10,
-        verify=False,  # noqa: S501 — Zabbix usa certificado self-signed interno
+        verify=False,  # nosec B501 -- Zabbix usa certificado self-signed interno # noqa: S501
     )
     resp.raise_for_status()
     data = resp.json()
