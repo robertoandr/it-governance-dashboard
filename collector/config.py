@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     ALERT_COOLDOWN_S: int = 3600
     ALERT_SCORE_THRESHOLD: float = 60.0
     ALERT_JOB_INTERVAL_S: int = 300
+    # ThingSpeak — sensor de temperatura do datacenter (Nextcon DSB WIFI)
+    NEXTCON_CHANNEL_ID: str = ""
 
     class Config:
         env_file = ".env"

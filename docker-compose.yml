@@ -187,6 +187,8 @@ services:
       SMTP_TO: "${SMTP_TO:-}"
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      # ThingSpeak — sensor de temperatura do datacenter (Nextcon DSB WIFI)
+      NEXTCON_CHANNEL_ID: "${NEXTCON_CHANNEL_ID:-}"
     volumes:
       - collector_data:/data
     depends_on:

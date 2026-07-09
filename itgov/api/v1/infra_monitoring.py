@@ -112,6 +112,60 @@ from(bucket: "{bucket}")
     }
 
 
+def _ler_datacenter_temp() -> dict:
+    """Lê gov_thingspeak_temperatura (sensor Nextcon) do InfluxDB.
+
+    Retorna último valor (atual/min/max/timestamp) + série de 2h para o
+    sparkline. `disponivel=False` quando não há dados no InfluxDB.
+    """
+    from app.config import get_settings
+
+    bucket = get_settings().influx.bucket_raw
+
+    vazio = {
+        "disponivel": False,
+        "temp_atual": None,
+        "temp_min": None,
+        "temp_max": None,
+        "atualizado_em": None,
+        "serie": [],
+    }
+
+    rows_last = _query_influx(f"""
+from(bucket: "{bucket}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_thingspeak_temperatura")
+  |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+""")
+    if not rows_last:
+        return vazio
+
+    rows_serie = _query_influx(f"""
+from(bucket: "{bucket}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r._measurement == "gov_thingspeak_temperatura")
+  |> filter(fn: (r) => r._field == "temp_atual")
+  |> sort(columns: ["_time"])
+""")
+
+    last = rows_last[-1]
+    serie = [
+        {"time": r["_time"].isoformat(), "value": float(r["_value"])}
+        for r in rows_serie
+        if r.get("_time") is not None and r.get("_value") is not None
+    ]
+
+    return {
+        "disponivel": True,
+        "temp_atual": float(last.get("temp_atual", 0.0) or 0.0),
+        "temp_min": float(last.get("temp_min", 0.0) or 0.0),
+        "temp_max": float(last.get("temp_max", 0.0) or 0.0),
+        "atualizado_em": last["_time"].isoformat() if last.get("_time") else None,
+        "serie": serie,
+    }
+
+
 def _categoria(group_name: str) -> str:
     if group_name in _CATEGORY_MAP:
         return _CATEGORY_MAP[group_name]
@@ -266,6 +320,7 @@ def _buscar_infra() -> dict:
         "down_list": zabbix["down_list"],
         "problems": zabbix["problems"],
         "total_problems": zabbix["total_problems"],
+        "datacenter_temp": _ler_datacenter_temp(),
     }
 
 
@@ -295,6 +350,14 @@ def get_cached_infra_summary() -> dict:
             "down_list": [],
             "problems": [],
             "total_problems": 0,
+            "datacenter_temp": {
+                "disponivel": False,
+                "temp_atual": None,
+                "temp_min": None,
+                "temp_max": None,
+                "atualizado_em": None,
+                "serie": [],
+            },
             "_erro": str(exc),
         }
     with _lock:

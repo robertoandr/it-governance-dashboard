@@ -10,6 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from jobs.acronis_collector import run as collect_acronis
 from jobs.acronis_risk_collector import run as collect_acronis_risk
 from jobs.alert_job import run as run_alerts
+from jobs.datacenter_temp_collector import collect as collect_datacenter_temp
 from jobs.entra_id_collector import run as collect_entra_id
 from jobs.github_pats import collect_github_pats
 from jobs.github_pr_collector import run as collect_github_prs
@@ -217,6 +218,20 @@ if __name__ == "__main__":
         log.info("alert_job_registrado", interval_s=settings.ALERT_JOB_INTERVAL_S)
     else:
         log.warning("alert_job_ignorado", motivo="SMTP_HOST/FROM/TO não configurados")
+
+    if settings.NEXTCON_CHANNEL_ID:
+        scheduler.add_job(
+            collect_datacenter_temp,
+            IntervalTrigger(minutes=5),
+            id="datacenter_temp_collector",
+            name="Datacenter Temperature Collector (Nextcon/ThingSpeak)",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
+        log.info("datacenter_temp_job_registrado")
+    else:
+        log.warning("datacenter_temp_job_ignorado", motivo="NEXTCON_CHANNEL_ID não configurado")
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
