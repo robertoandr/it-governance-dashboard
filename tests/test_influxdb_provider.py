@@ -12,6 +12,7 @@ from app.services.influxdb_provider import (
     _pr_velocity_score,
 )
 from app.services.mock_data import MockMetricsProvider
+from itgov.models.zendesk import CSATSummary, SLAMetric
 
 # ── Scoring helpers ─────────────────────────────────────────────────────────
 
@@ -129,6 +130,66 @@ class TestGetValueMetrics:
 
         github_comps = [c for c in result["components"] if c["source"] == "github"]
         assert len(github_comps) == 2
+
+
+class TestZendeskSlaStats:
+    """_zendesk_sla_stats() deve instanciar ZendeskService com credenciais
+    reais (subdomain/email/api_token) e usar get_csat_summary(), não
+    get_satisfaction_ratings() (que retorna uma lista, não um resumo)."""
+
+    def test_disabled_returns_empty_without_calling_service(self, provider: InfluxDBMetricsProvider) -> None:
+        with patch("config.ZENDESK_ENABLED", False):
+            result = provider._zendesk_sla_stats()
+
+        assert result == {}
+
+    def test_enabled_instantiates_service_with_credentials(self, provider: InfluxDBMetricsProvider) -> None:
+        mock_sla = MagicMock(spec=SLAMetric, compliance_pct=91.4, total_tickets=50, breached=4)
+        mock_csat = MagicMock(spec=CSATSummary, csat_pct=88.0, sample_size=12)
+        mock_svc = MagicMock()
+        mock_svc.get_sla_metrics.return_value = mock_sla
+        mock_svc.get_csat_summary.return_value = mock_csat
+
+        with (
+            patch("config.ZENDESK_ENABLED", True),
+            patch("config.ZENDESK_SUBDOMAIN", "grupogadens"),
+            patch("config.ZENDESK_EMAIL", "roberto@grupogadens.com.br"),
+            patch("config.ZENDESK_API_TOKEN", "fake-token"),
+            patch("config.ZENDESK_GROUP_ID", 123),
+            patch("itgov.services.zendesk_service.ZendeskService", return_value=mock_svc) as mock_cls,
+        ):
+            result = provider._zendesk_sla_stats()
+
+        mock_cls.assert_called_once_with(
+            subdomain="grupogadens",
+            email="roberto@grupogadens.com.br",
+            api_token="fake-token",
+            group_id=123,
+        )
+        mock_svc.get_csat_summary.assert_called_once()
+        assert result == {
+            "compliance_pct": 91.4,
+            "total_open": 50,
+            "breached": 4,
+            "csat_pct": 88.0,
+            "csat_sample": 12,
+        }
+
+    def test_service_exception_returns_empty(self, provider: InfluxDBMetricsProvider) -> None:
+        with (
+            patch("config.ZENDESK_ENABLED", True),
+            patch("config.ZENDESK_SUBDOMAIN", "grupogadens"),
+            patch("config.ZENDESK_EMAIL", "roberto@grupogadens.com.br"),
+            patch("config.ZENDESK_API_TOKEN", "fake-token"),
+            patch("config.ZENDESK_GROUP_ID", 0),
+            patch(
+                "itgov.services.zendesk_service.ZendeskService",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            result = provider._zendesk_sla_stats()
+
+        assert result == {}
 
 
 class TestPassThroughPillars:

@@ -1207,15 +1207,25 @@ from(bucket: "{self._bucket_raw}")
 
     def _zendesk_sla_stats(self) -> dict[str, Any]:
         """Return Zendesk SLA compliance and CSAT via live API call (no InfluxDB measurement)."""
+        import config as legacy_config
+
+        if not legacy_config.ZENDESK_ENABLED:
+            return {}
+
         try:
             from itgov.services.zendesk_service import ZendeskService
 
-            svc = ZendeskService()
+            svc = ZendeskService(
+                subdomain=legacy_config.ZENDESK_SUBDOMAIN,
+                email=legacy_config.ZENDESK_EMAIL,
+                api_token=legacy_config.ZENDESK_API_TOKEN,
+                group_id=legacy_config.ZENDESK_GROUP_ID or None,
+            )
             sla = svc.get_sla_metrics()
-            csat_summary = svc.get_satisfaction_ratings()
+            csat_summary = svc.get_csat_summary()
             return {
                 "compliance_pct": float(sla.compliance_pct),
-                "total_open": int(sla.total),
+                "total_open": int(sla.total_tickets),
                 "breached": int(sla.breached),
                 "csat_pct": float(csat_summary.csat_pct) if csat_summary.csat_pct is not None else None,
                 "csat_sample": int(csat_summary.sample_size),
