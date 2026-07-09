@@ -174,6 +174,81 @@
   {% endfor %}
 </div>
 
+{# ── Domínios COBIT 2019 → Pilares ─────────────────────────────────────────── #}
+{% set COBIT_DOMAINS = [
+  {
+    'code': 'EDM', 'name': 'Evaluate, Direct and Monitor',
+    'desc': 'Governança corporativa de TI — avaliação, direcionamento e monitoramento estratégico.',
+    'objectives': 5, 'pillars': ['strategic_alignment'],
+  },
+  {
+    'code': 'APO', 'name': 'Align, Plan and Organise',
+    'desc': 'Planejamento, arquitetura, gestão de riscos e de recursos.',
+    'objectives': 14, 'pillars': ['strategic_alignment', 'risk_management', 'resource_management'],
+  },
+  {
+    'code': 'BAI', 'name': 'Build, Acquire and Implement',
+    'desc': 'Entrega de projetos, mudanças e gestão de ativos de TI.',
+    'objectives': 11, 'pillars': ['value_delivery', 'resource_management'],
+  },
+  {
+    'code': 'DSS', 'name': 'Deliver, Service and Support',
+    'desc': 'Operação de serviços, segurança e continuidade.',
+    'objectives': 6, 'pillars': ['risk_management', 'performance_measure'],
+  },
+  {
+    'code': 'MEA', 'name': 'Monitor, Evaluate and Assess',
+    'desc': 'Monitoramento de desempenho, conformidade e auditoria.',
+    'objectives': 4, 'pillars': ['performance_measure'],
+  },
+] %}
+{% set PILLARS_BY_ID = {} %}
+{% for p in governance.pillars %}{% set _ = PILLARS_BY_ID.update({p.id: p}) %}{% endfor %}
+
+<div class="bg-white dark:bg-slate-800 rounded-2xl shadow border border-slate-100 dark:border-slate-700 p-6 mb-6">
+  <h2 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">Domínios COBIT 2019</h2>
+  <p class="text-xs text-slate-400 mb-4">Mapeamento dos 40 objetivos de governança/gestão do COBIT 2019 aos 5 pilares monitorados.</p>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 uppercase">
+          <th class="text-left py-2 pr-3 font-medium">Domínio</th>
+          <th class="text-left py-2 pr-3 font-medium">Objetivos</th>
+          <th class="text-left py-2 font-medium">Pilar(es) cobertos</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-50 dark:divide-slate-700">
+        {% for d in COBIT_DOMAINS %}
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+          <td class="py-2.5 pr-3 align-top">
+            <span class="font-mono font-bold text-slate-700 dark:text-slate-200">{{ d.code }}</span>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ d.name }}</p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{{ d.desc }}</p>
+          </td>
+          <td class="py-2.5 pr-3 align-top text-slate-600 dark:text-slate-300">{{ d.objectives }}</td>
+          <td class="py-2.5 align-top">
+            <div class="flex flex-wrap gap-1.5">
+              {% for pid in d.pillars %}
+                {% set p = PILLARS_BY_ID.get(pid) %}
+                {% if p %}
+                <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
+                   class="text-[10px] font-medium px-2 py-1 rounded-full inline-flex items-center gap-1
+                          hover:opacity-80 transition"
+                   style="background:{{ p.color }}22; color:{{ p.color }}">
+                  <span class="w-1.5 h-1.5 rounded-full" style="background:{{ p.color }}"></span>
+                  {{ p.label }}
+                </a>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {# ── Radar Chart ────────────────────────────────────────────────────────────── #}
 <div class="bg-white dark:bg-slate-800 rounded-2xl shadow border border-slate-100 dark:border-slate-700 p-6">
   <div class="flex items-center justify-between mb-4">

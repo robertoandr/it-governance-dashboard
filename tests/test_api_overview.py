@@ -113,3 +113,19 @@ class TestHTMLViews:
     def test_pillar_detail_html_404(self, factory_client) -> None:
         resp = factory_client.get("/gov/pillars/unknown_pillar")
         assert resp.status_code in (404, 302)  # 302 = redirect para login antes de avaliar rota
+
+    def test_pilares_alias_not_404(self, factory_client) -> None:
+        """G-03: /gov/pilares deve existir (não mais 404)."""
+        resp = factory_client.get("/gov/pilares")
+        assert resp.status_code != 404
+        assert resp.status_code in (200, 302)
+
+    def test_pilares_alias_route_registered(self, factory_client) -> None:
+        rules = [r.rule for r in factory_client.application.url_map.iter_rules()]
+        assert "/gov/pilares" in rules
+
+    def test_pilares_alias_same_status_as_pillars(self, factory_client) -> None:
+        """Alias em português deve se comportar igual à rota canônica /gov/pillars."""
+        resp_pt = factory_client.get("/gov/pilares")
+        resp_en = factory_client.get("/gov/pillars")
+        assert resp_pt.status_code == resp_en.status_code
