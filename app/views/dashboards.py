@@ -72,6 +72,13 @@ def pillars() -> str:
     return render_template("dashboards/pillars.html", governance=data)
 
 
+@bp.route("/pilares")
+@login_required
+def pilares_redirect():
+    """Alias em português de /pillars (G-03) — mesma página, mesma rota nomeada."""
+    return redirect(url_for("dashboards.pillars"))
+
+
 @bp.route("/sla")
 @login_required
 @require_role("admin", "gestor")
