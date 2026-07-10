@@ -1,5 +1,6 @@
 apscheduler==3.10.4
 ldap3==2.9.1
+pycryptodome==3.21.0  # ldap3 NTLM precisa de MD4; hashlib do Python 3.12 / OpenSSL 3.x não suporta mais
 pywinrm==0.4.3
 requests-ntlm==1.2.0
 httpx==0.27.2

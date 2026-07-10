@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     WINRM_PASSWORD: str = ""
     PATCH_THRESHOLD_DAYS: int = 35
     PATCH_MAX_WORKERS: int = 20  # início conservador; subir para 50 em redes estáveis
-    WINRM_TIMEOUT_S: int = 30
+    WINRM_TIMEOUT_S: int = 10  # timeout por host; fan-out cobre a lentidão agregada
     PATCH_STALE_MACHINE_DAYS: int = 60  # exclui máquinas sem logon há N dias do inventário AD
     # Zabbix — coletor de riscos e disponibilidade
     ZABBIX_URL: str = ""
