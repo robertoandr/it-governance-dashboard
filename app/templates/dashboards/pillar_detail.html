@@ -50,9 +50,16 @@
         <div>
           <span class="text-sm font-medium text-gray-700">{{ c.label }}</span>
           <span class="ml-2 text-xs text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">{{ c.source }}</span>
+          {% if c.error %}
+            <span class="ml-1 text-red-500 text-xs cursor-help" title="{{ c.error }}">&#9888; N/D</span>
+          {% endif %}
         </div>
         <div class="text-right">
-          <span class="text-lg font-bold text-gray-800">{{ c.value | round(1) }}</span>
+          {% if c.error %}
+            <span class="text-lg font-bold text-red-400" title="{{ c.error }}">N/D</span>
+          {% else %}
+            <span class="text-lg font-bold text-gray-800">{{ c.value | round(1) }}</span>
+          {% endif %}
           {% if c.raw_value is not none %}
             <span class="text-xs text-gray-400 ml-1">{{ c.raw_value }} {{ c.unit }}</span>
           {% endif %}
@@ -60,7 +67,7 @@
       </div>
       <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
         <div class="h-full rounded-full transition-all duration-700"
-             style="width:{{ c.value }}%; background:{{ pillar.color }}"></div>
+             style="width:{{ c.value }}%; background:{{ 'transparent' if c.error else pillar.color }}"></div>
       </div>
       <div class="flex justify-between text-xs text-gray-400 mt-0.5">
         <span>peso {{ c.weight }}</span>
