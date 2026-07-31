@@ -714,21 +714,37 @@ class InfluxDBMetricsProvider:
                 }
             )
 
-            ca = int(entra.get("ca_policies_count", 0))
-            # 10 pts per CA policy, capped at 100.
-            ca_score = round(min(100.0, ca * 10.0), 1)
-            components.append(
-                {
-                    "id": "conditional_access",
-                    "label": "Políticas de Acesso Condicional (CA)",
-                    "value": ca_score,
-                    "raw_value": float(ca),
-                    "unit": "políticas",
-                    "source": "entra_id",
-                    "weight": 1.5,
-                    "trend": "stable",
-                }
-            )
+            ca = entra.get("ca_policies_count")
+            if ca is not None:
+                # 10 pts per CA policy, capped at 100.
+                ca_score = round(min(100.0, ca * 10.0), 1)
+                components.append(
+                    {
+                        "id": "conditional_access",
+                        "label": "Políticas de Acesso Condicional (CA)",
+                        "value": ca_score,
+                        "raw_value": float(ca),
+                        "unit": "políticas",
+                        "source": "entra_id",
+                        "weight": 1.5,
+                        "trend": "stable",
+                        "error": None,
+                    }
+                )
+            else:
+                components.append(
+                    {
+                        "id": "conditional_access",
+                        "label": "Políticas de Acesso Condicional (CA)",
+                        "value": 0.0,
+                        "raw_value": None,
+                        "unit": "políticas",
+                        "source": "entra_id",
+                        "weight": 1.5,
+                        "trend": "stable",
+                        "error": entra.get("ca_collection_error") or "Falha ao coletar — ver logs do coletor",
+                    }
+                )
             last_collected = entra.get("_time")
 
         if secure:
@@ -896,13 +912,18 @@ from(bucket: "{self._bucket_raw}")
         if not rows:
             return {}
         row = rows[-1]
+        ca_raw = row.get("ca_policies_count")
         return {
             "total_users": int(row.get("total_users", 0)),
             "guest_users": int(row.get("guest_users", 0)),
             "mfa_enabled_pct": float(row.get("mfa_enabled_pct", 0.0)),
             "stale_accounts_90d": int(row.get("stale_accounts_90d", 0)),
             "privileged_roles_count": int(row.get("privileged_roles_count", 0)),
-            "ca_policies_count": int(row.get("ca_policies_count", 0)),
+            # None means the collector couldn't read CA policies (see
+            # entra_id_collector._ca_policies_breakdown) — distinct from a
+            # real 0. Do not coerce to int(..., 0) here.
+            "ca_policies_count": int(ca_raw) if ca_raw is not None else None,
+            "ca_collection_error": row.get("ca_collection_error"),
             "_time": row.get("_time"),
         }
 

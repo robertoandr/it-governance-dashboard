@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import requests
 import structlog
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -116,10 +117,15 @@ class EntraIdCollector(BaseOAuthCollector):
             log.warning("privileged_roles_failed", error=str(exc))
             return 0
 
-    def _ca_policies_breakdown(self) -> dict[str, int]:
+    def _ca_policies_breakdown(self) -> dict[str, Any]:
         """Return breakdown of Conditional Access policies by state.
 
-        Returns dict with keys: total, enabled, report_only, disabled.
+        Returns dict with keys total/enabled/report_only/disabled (int, or
+        None if the read failed) plus `error` (str | None). Failures must
+        surface as None, not 0 — a fleet with 0 real CA policies and a fleet
+        where the Graph call was denied are different situations, and
+        collapsing both to 0 makes the dashboard silently report a fake
+        "0 policies configured" KPI instead of "couldn't check".
         """
         try:
             items = list(
@@ -136,10 +142,36 @@ class EntraIdCollector(BaseOAuthCollector):
                 "enabled": enabled,
                 "report_only": report_only,
                 "disabled": disabled,
+                "error": None,
             }
+        except requests.exceptions.HTTPError as exc:
+            http_status = exc.response.status_code if exc.response is not None else None
+            error_code = None
+            graph_message = None
+            if exc.response is not None:
+                try:
+                    payload = exc.response.json().get("error", {})
+                    error_code = payload.get("code")
+                    graph_message = payload.get("message")
+                except ValueError:
+                    pass
+            log.warning(
+                "ca_policies_collection_failed",
+                http_status=http_status,
+                error_code=error_code,
+                graph_message=graph_message,
+            )
+            error_label = f"HTTP {http_status} {error_code or ''}".strip()
+            return {"total": None, "enabled": None, "report_only": None, "disabled": None, "error": error_label}
         except Exception as exc:
-            log.warning("ca_policies_failed", error=str(exc))
-            return {"total": 0, "enabled": 0, "report_only": 0, "disabled": 0}
+            log.warning("ca_policies_collection_failed", error_code="unexpected", graph_message=str(exc))
+            return {
+                "total": None,
+                "enabled": None,
+                "report_only": None,
+                "disabled": None,
+                "error": "unexpected_error",
+            }
 
     def _admin_mfa_status(self) -> tuple[int, int]:
         """Return (admin_total, admin_sem_mfa) across privileged directory roles.
@@ -304,6 +336,7 @@ class EntraIdCollector(BaseOAuthCollector):
             raise
 
         ca_enabled = ca_breakdown["enabled"]
+        ca_ok = ca_breakdown["error"] is None
 
         log.info(
             "entra_metrics_collected",
@@ -317,6 +350,7 @@ class EntraIdCollector(BaseOAuthCollector):
             ca_total=ca_breakdown["total"],
             ca_report_only=ca_breakdown["report_only"],
             ca_disabled=ca_breakdown["disabled"],
+            ca_collection_error=ca_breakdown["error"],
             admin_total=admin_total,
             admin_sem_mfa=admin_sem_mfa,
         )
@@ -329,15 +363,23 @@ class EntraIdCollector(BaseOAuthCollector):
             .field("sspr_registered_pct", sspr_pct)
             .field("stale_accounts_90d", stale)
             .field("privileged_roles_count", priv_roles)
-            .field("ca_policies_count", ca_enabled)
-            .field("ca_total", ca_breakdown["total"])
-            .field("ca_enabled", ca_enabled)
-            .field("ca_report_only", ca_breakdown["report_only"])
-            .field("ca_disabled", ca_breakdown["disabled"])
             .field("admin_total", admin_total)
             .field("admin_sem_mfa", admin_sem_mfa)
             .time(collected_at, WritePrecision.S)
         )
+        # CA fields are only written on success — on failure we skip them
+        # entirely (no 0-writing) so the read side can tell "0 real policies"
+        # apart from "collection failed" instead of silently showing zero.
+        if ca_ok:
+            point = (
+                point.field("ca_policies_count", ca_enabled)
+                .field("ca_total", ca_breakdown["total"])
+                .field("ca_enabled", ca_enabled)
+                .field("ca_report_only", ca_breakdown["report_only"])
+                .field("ca_disabled", ca_breakdown["disabled"])
+            )
+        else:
+            point = point.field("ca_collection_error", ca_breakdown["error"])
 
         with InfluxDBClient(
             url=settings.INFLUX_URL,
