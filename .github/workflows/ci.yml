@@ -44,7 +44,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
 
       - name: Install Ruff
-        run: pip install ruff
+        run: pip install "ruff==0.15.15"
 
       - name: Ruff Check
         run: ruff check . --output-format=github

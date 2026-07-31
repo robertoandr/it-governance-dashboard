@@ -42,3 +42,6 @@ pycryptodome
 
 # DNS check for email security (KPI-EMAIL-02 — SPF, DMARC, DKIM)
 dnspython>=2.6
+
+# WinRM patch collector — multi-host (PR #190)
+pywinrm>=0.4.3
