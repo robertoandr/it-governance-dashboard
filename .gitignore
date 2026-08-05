@@ -161,3 +161,6 @@ CLAUDE.md.bkp-*
 .env.backup*
 smtp.env
 fix-ldap-pass.sh
+
+# Uploads de usuário (não versionar)
+uploads/
