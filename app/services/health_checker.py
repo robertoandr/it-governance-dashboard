@@ -34,6 +34,7 @@ class CheckResult:
     ok: bool
     latency_ms: float
     error: str | None = None
+    extra: dict[str, Any] | None = None
 
 
 class HealthChecker:
@@ -103,7 +104,42 @@ class HealthChecker:
         log.debug("disk_space_ok", pct_free=round(pct_free, 4))
         return CheckResult(ok=True, latency_ms=latency_ms)
 
-    # TODO: add check_zabbix() once ZabbixConfig.enabled is wired to AppSettings
+    async def check_zabbix(self) -> CheckResult:
+        """Ping Zabbix API via JSON-RPC ``apiinfo.version`` (no auth required).
+
+        Skipped (returns ok=True) when ``zabbix.enabled`` is False —
+        treating a disabled integration as a non-dependency.
+
+        Returns:
+            CheckResult with connectivity status, latency and the Zabbix
+            API version in ``extra["version"]``.
+        """
+        settings = get_settings()
+
+        if not settings.zabbix.enabled:
+            log.debug("zabbix_check_skipped", reason="integration_disabled")
+            return CheckResult(ok=True, latency_ms=0.0)
+
+        payload = {"jsonrpc": "2.0", "method": "apiinfo.version", "params": [], "id": 1}
+        t0 = time.monotonic()
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(settings.zabbix.url, json=payload, timeout=2.0)
+            latency_ms = (time.monotonic() - t0) * 1000
+            data = resp.json()
+            version = data.get("result")
+            if resp.status_code == 200 and version:
+                log.debug("zabbix_apiinfo_ok", latency_ms=round(latency_ms, 2), version=version)
+                return CheckResult(ok=True, latency_ms=latency_ms, extra={"version": version})
+            log.warning("zabbix_apiinfo_bad_response", status=resp.status_code, body=data)
+            return CheckResult(
+                ok=False, latency_ms=latency_ms, error=f"HTTP {resp.status_code}", extra={"version": None}
+            )
+        except Exception as exc:
+            latency_ms = (time.monotonic() - t0) * 1000
+            log.warning("zabbix_apiinfo_failed", error=str(exc))
+            return CheckResult(ok=False, latency_ms=latency_ms, error=str(exc), extra={"version": None})
+
     # TODO: add check_zendesk() for Zendesk API connectivity
     # TODO: add check_github() for GitHub API connectivity
 
@@ -122,6 +158,7 @@ class HealthChecker:
         """
         checks: dict[str, Coroutine[Any, Any, CheckResult]] = {
             "influxdb": self.check_influxdb(),
+            "zabbix": self.check_zabbix(),
             "disk_space": self.check_disk_space(),
         }
 

@@ -44,6 +44,9 @@ services:
       INFLUX__BUCKET: "${INFLUX_BUCKET:-govti}"
       INFLUX__BUCKET_RAW: "${INFLUX_BUCKET_RAW:-governance_raw}"
       INFLUX__ENABLED: "true"
+      # ZabbixConfig has its own env_prefix="ZABBIX_" (single underscore,
+      # unlike the nested "__" delimiter above) — see app/config.py.
+      ZABBIX_ENABLED: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
