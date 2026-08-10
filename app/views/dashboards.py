@@ -96,6 +96,8 @@ def sla_chamados() -> str:
 
 
 @bp.route("/zendesk")
+@login_required
+@require_role("admin", "gestor")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""
     import os
