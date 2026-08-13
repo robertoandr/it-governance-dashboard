@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.config import get_settings
 from app.services.health_checker import CheckResult, HealthChecker
 
 log = structlog.get_logger(__name__)
@@ -34,6 +35,7 @@ readiness_model = ns.model(
     "Readiness",
     {
         "status": fields.String(description="'ready' or 'not_ready'"),
+        "version": fields.String(description="Application version"),
         "checks": fields.Raw(description="Per-dependency check results"),
         "timestamp": fields.String(description="ISO 8601 UTC timestamp"),
     },
@@ -77,19 +79,18 @@ class ReadinessProbe(Resource):
         checker = HealthChecker()
         results: dict[str, CheckResult] = asyncio.run(checker.check_all(timeout=2.0))
 
-        checks_payload: dict[str, dict[str, object]] = {
-            name: {
-                "ok": r.ok,
-                "latency_ms": round(r.latency_ms, 2),
-                "error": r.error,
-            }
-            for name, r in results.items()
-        }
+        checks_payload: dict[str, dict[str, object]] = {}
+        for name, r in results.items():
+            entry: dict[str, object] = {"ok": r.ok, "latency_ms": round(r.latency_ms, 2), "error": r.error}
+            if r.extra:
+                entry.update(r.extra)
+            checks_payload[name] = entry
 
         all_ok = all(r.ok for r in results.values())
         status = "ready" if all_ok else "not_ready"
         http_code = 200 if all_ok else 503
+        version = get_settings().app.version
 
         log.info("readiness_probe", status=status, checks=checks_payload, timestamp=ts)
 
-        return {"status": status, "checks": checks_payload, "timestamp": ts}, http_code
+        return {"status": status, "version": version, "checks": checks_payload, "timestamp": ts}, http_code
