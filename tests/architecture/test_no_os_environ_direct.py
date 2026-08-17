@@ -105,7 +105,6 @@ class TestNoOsEnvironDirect:
             PROJECT_ROOT / "itgov" / "api" / "v1" / "zabbix.py",
             PROJECT_ROOT / "itgov" / "api" / "v1" / "zendesk.py",
             PROJECT_ROOT / "itgov" / "services" / "zendesk_service.py",
-            PROJECT_ROOT / "routes" / "maintenance.py",
         ]
         still_importing_os = []
         for path in migrated:
