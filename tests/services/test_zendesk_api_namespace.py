@@ -89,9 +89,9 @@ def test_svc_does_not_import_os():
     """O módulo itgov/api/v1/zendesk.py não deve importar 'os' após refactor #78."""
     import itgov.api.v1.zendesk as mod
 
-    assert not hasattr(mod, "os"), (
-        "itgov/api/v1/zendesk.py não deve importar 'os' — use config.* para variáveis de ambiente"
-    )
+    assert not hasattr(
+        mod, "os"
+    ), "itgov/api/v1/zendesk.py não deve importar 'os' — use config.* para variáveis de ambiente"
 
 
 def test_svc_config_values_propagated(monkeypatch):

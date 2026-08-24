@@ -140,6 +140,6 @@ class TestNoOrphanBlueprintsInApp:
         with app.app_context():
             registered = set(app.blueprints.keys())
             unknown = registered - known_blueprints
-            assert not unknown, (
-                f"Novos blueprints detectados: {unknown}\nAdicione-os ao set known_blueprints neste teste após revisão."
-            )
+            assert (
+                not unknown
+            ), f"Novos blueprints detectados: {unknown}\nAdicione-os ao set known_blueprints neste teste após revisão."

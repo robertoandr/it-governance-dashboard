@@ -35,6 +35,8 @@ extend-exclude = [
     "migrations",
     "node_modules",
     "alembic",          # arquivos gerados pelo Alembic (env.py, versions/)
+    "docs",             # documentação Markdown — ruff >=0.6 tenta formatar .md (requer --preview)
+    "*.md",             # idem: exclui .md fora de docs/
 ]
 
 [tool.ruff.lint]
