@@ -26,7 +26,11 @@ _lock = threading.Lock()
 _cache_data: list | None = None
 _cache_ts: float = 0.0
 
-_FIREWALL_GROUP = "22"  # groupid do grupo Firewall no Zabbix
+# Nome-base dos templates FortiGate no Zabbix ("FortiGate by HTTP", "FortiGate by SNMP").
+# A busca de hosts e feita por template vinculado, nao por grupo: FortiGates ficam
+# espalhados em grupos de unidade/rede diferentes e um filtro por grupo unico
+# (antes _FIREWALL_GROUP = "22") deixava a maioria de fora.
+_FORTIGATE_TEMPLATE_NAME = "FortiGate"
 
 _SEV_LABEL = {0: "not classified", 1: "info", 2: "warning", 3: "average", 4: "high", 5: "disaster"}
 _SEV_COLOR = {0: "slate", 1: "blue", 2: "yellow", 3: "orange", 4: "red", 5: "red"}
@@ -78,16 +82,38 @@ def _zbx(method: str, params: dict[str, Any]) -> Any:
     return data["result"]
 
 
+def _resolver_template_ids() -> list[str]:
+    """Retorna os templateids cujo nome contem 'FortiGate' (HTTP e SNMP)."""
+    templates = (
+        _zbx(
+            "template.get",
+            {
+                "output": ["templateid", "name"],
+                "search": {"name": _FORTIGATE_TEMPLATE_NAME},
+                "searchWildcardsEnabled": False,
+            },
+        )
+        or []
+    )
+    return [t["templateid"] for t in templates if _FORTIGATE_TEMPLATE_NAME in t["name"]]
+
+
 def _buscar_fortinets() -> list[dict]:
+    template_ids = _resolver_template_ids()
+    if not template_ids:
+        log.warning("fortinet_service.template_nao_encontrado", nome=_FORTIGATE_TEMPLATE_NAME)
+        return []
+
     hosts = _zbx(
         "host.get",
         {
             "output": ["hostid", "host", "name"],
-            "groupids": [_FIREWALL_GROUP],
+            "templateids": template_ids,
             "selectParentTemplates": ["name"],
         },
     )
-    # Filtrar apenas hosts com template FortiGate
+    # Confirma o vinculo direto ao template FortiGate (templateids ja filtra, mas
+    # mantem a checagem para ignorar heranca indireta inesperada).
     fortigates = [h for h in (hosts or []) if any("FortiGate" in t["name"] for t in h.get("parentTemplates", []))]
     if not fortigates:
         return []
