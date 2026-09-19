@@ -166,11 +166,15 @@ class ZabbixService(SyncAPIClient):
             "params": params,
             "id": _RPC_ID,
         }
+        # Zabbix >= 6.4 removeu o campo "auth" do corpo JSON-RPC — o token de
+        # sessão vai no header Authorization (RFC 6750 Bearer). Ver
+        # https://www.zabbix.com/documentation/current/en/manual/api#authentication
+        headers: dict[str, str] = {}
         if auth:
-            payload["auth"] = self._get_token()
+            headers["Authorization"] = f"Bearer {self._get_token()}"
 
         try:
-            resp = self.post(ZABBIX_JSONRPC_PATH, json=payload)
+            resp = self.post(ZABBIX_JSONRPC_PATH, json=payload, headers=headers)
         except httpx.HTTPStatusError as exc:
             log.error("zabbix_http_error", method=method, status=exc.response.status_code)
             raise
@@ -184,8 +188,8 @@ class ZabbixService(SyncAPIClient):
             if auth and ("re-login" in err_data or "session" in err_data):
                 log.warning("zabbix_session_expired", method=method)
                 self._invalidate_token()
-                payload["auth"] = self._get_token()
-                resp = self.post(ZABBIX_JSONRPC_PATH, json=payload)
+                headers["Authorization"] = f"Bearer {self._get_token()}"
+                resp = self.post(ZABBIX_JSONRPC_PATH, json=payload, headers=headers)
                 body = resp.json()
                 if "error" in body:
                     raise RuntimeError(f"Zabbix API error: {body['error']}")
