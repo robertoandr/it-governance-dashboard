@@ -14,6 +14,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_service_health", description="Service Health M365 (status dos serviços)")
@@ -94,6 +96,7 @@ def get_cached_service_health_summary() -> dict:
 @ns.route("/service-health")
 class GovernancaServiceHealth(Resource):
     @ns.marshal_with(summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o status atual dos serviços Microsoft 365."""
         try:

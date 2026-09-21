@@ -8,6 +8,7 @@ import structlog
 from flask_restx import Namespace, Resource
 
 from app.api.dashboards import _get_cached_or_compute
+from app.auth.rbac import require_role
 
 log = structlog.get_logger(__name__)
 
@@ -27,6 +28,7 @@ class PillarListResource(Resource):
     """GET /api/pillars — list all pillar scores."""
 
     @ns.doc("list_pillars")
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> list[dict[str, Any]]:
         """Return a list of all five governance pillars."""
         data = _get_cached_or_compute()
@@ -39,6 +41,7 @@ class PillarDetailResource(Resource):
     """GET /api/pillars/<pillar_id> — single pillar detail."""
 
     @ns.doc("get_pillar")
+    @require_role("admin", "gestor", "visualizador")
     def get(self, pillar_id: str) -> tuple[dict[str, Any], int]:
         """Return a single pillar by its ID.
 

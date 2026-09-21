@@ -10,6 +10,7 @@ from flask import request
 from flask_restx import Namespace, Resource, fields
 
 import config
+from app.auth.rbac import require_role
 from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
@@ -273,6 +274,7 @@ def _svc() -> ZendeskService:
 @ns.route("/groups")
 class GroupListResource(Resource):
     @ns.doc(description="Lista grupos Zendesk — use para descobrir o ZENDESK_GROUP_ID")
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> list[dict]:
         """Retorna id + name de todos os grupos do Zendesk."""
         with _svc() as svc:
@@ -286,6 +288,7 @@ class TicketListResource(Resource):
         description="Lista tickets com filtro opcional por status",
         params={"status": "Filtro de status: new|open|pending|hold|solved|closed"},
     )
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> list[dict]:
         """Retorna tickets do Zendesk."""
         status_filter = request.args.get("status")
@@ -305,6 +308,7 @@ class TicketListResource(Resource):
 class OpenTicketResource(Resource):
     @ns.marshal_list_with(ticket_model)
     @ns.doc(description="Lista apenas tickets abertos (new + open + pending)")
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> list[dict]:
         """Tickets abertos (requerem atenção)."""
         with _svc() as svc:
@@ -323,6 +327,7 @@ class OpenTicketResource(Resource):
 class VolumeResource(Resource):
     @ns.marshal_with(volume_model)
     @ns.doc(description="Contagem de tickets por status")
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict:
         """Volume de tickets agrupado por status."""
         return get_cached_volume_by_status()
@@ -332,6 +337,7 @@ class VolumeResource(Resource):
 class SLAResource(Resource):
     @ns.marshal_with(sla_model)
     @ns.doc(description="Métricas de SLA — compliance e tickets em breach")
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict:
         """Métricas de SLA dos tickets ativos."""
         summary = get_cached_mttr_summary()
@@ -347,6 +353,7 @@ class SLAResource(Resource):
 class CSATResource(Resource):
     @ns.marshal_with(csat_model)
     @ns.doc(description="Customer Satisfaction Score — resumo de avaliações")
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict:
         """Resumo de CSAT (satisfação do cliente)."""
         summary = get_cached_mttr_summary()

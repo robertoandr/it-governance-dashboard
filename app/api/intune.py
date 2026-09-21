@@ -8,6 +8,8 @@ import structlog
 from flask import make_response
 from flask_restx import Namespace, Resource
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("intune", description="Intune patch compliance metrics")
@@ -38,6 +40,7 @@ class IntunePatchComplianceResource(Resource):
             503: "InfluxDB indisponível",
         },
     )
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Compliance de patches Intune: global + por OS."""
         try:

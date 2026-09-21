@@ -15,6 +15,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_compliance", description="Governança de Compliance M365 (Secure Score)")
@@ -162,6 +164,7 @@ def get_cached_compliance_summary() -> dict:
 @ns.route("/compliance")
 class GovernancaCompliance(Resource):
     @ns.marshal_with(compliance_summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o resumo de governança de Compliance (Secure Score)."""
         try:

@@ -15,6 +15,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_data", description="Governança de Dados M365 (Sensitivity Labels)")
@@ -87,6 +89,7 @@ def get_cached_data_summary() -> dict:
 @ns.route("/data")
 class GovernancaDados(Resource):
     @ns.marshal_with(data_summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o resumo de governança de dados (sensitivity labels)."""
         try:

@@ -16,6 +16,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_security_alerts", description="Alertas de Segurança M365/Defender (KPI-END-01)")
@@ -113,6 +115,7 @@ class SecurityAlertsSummaryResource(Resource):
 
     @ns.doc("get_security_alerts_summary")
     @ns.marshal_with(security_alerts_model, code=200)
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict:
         """Retorna alertas de segurança abertos no Microsoft Defender (KPI-END-01)."""
         return _obter_dados()

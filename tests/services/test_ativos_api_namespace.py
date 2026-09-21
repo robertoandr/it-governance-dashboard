@@ -23,17 +23,20 @@ from itgov.services.ativo_service import AtivoDuplicateError, AtivoNotFoundError
 
 
 @pytest.fixture
-def app():
+def app(login_manager_factory):
     flask_app = Flask(__name__)
     flask_app.config["TESTING"] = True
     api = Api(flask_app, prefix="/api/v1")
     api.add_namespace(ns, path="/ativos")
+    login_manager_factory(flask_app)
     return flask_app
 
 
 @pytest.fixture
-def client(app):
-    return app.test_client()
+def client(app, login_session):
+    c = app.test_client()
+    login_session(c)
+    return c
 
 
 def _mock_svc(svc: MagicMock) -> MagicMock:
@@ -325,3 +328,15 @@ class TestDeleteAtivo:
     def test_invalid_uuid_returns_400(self, client):
         resp = client.delete("/api/v1/ativos/not-a-uuid")
         assert resp.status_code == 400
+
+
+class TestAuth:
+    def test_list_sem_login_retorna_401(self, app):
+        with app.test_client() as c:
+            resp = c.get("/api/v1/ativos")
+        assert resp.status_code == 401
+
+    def test_create_sem_login_retorna_401(self, app):
+        with app.test_client() as c:
+            resp = c.post("/api/v1/ativos", json={})
+        assert resp.status_code == 401

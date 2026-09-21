@@ -15,6 +15,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_apps", description="Governança de App Registrations M365")
@@ -96,6 +98,7 @@ def get_cached_app_summary() -> dict:
 @ns.route("/apps")
 class GovernancaApps(Resource):
     @ns.marshal_with(app_summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o resumo de governança de App Registrations."""
         try:

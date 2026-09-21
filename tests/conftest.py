@@ -188,3 +188,77 @@ def factory_client(factory_app):
     """Test client for the new factory app."""
     with factory_app.test_client() as c:
         yield c
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 🔐 AUTH HELPERS — API endpoints now require login (require_role)
+# ═══════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def authed_user(factory_app):
+    """Persist (once per app) a test User with role=admin, return its id."""
+    from app.extensions import db
+    from app.models.user import User
+
+    with factory_app.app_context():
+        user = User.query.filter_by(email="pytest-admin@test.local").first()
+        if user is None:
+            user = User(name="Pytest Admin", email="pytest-admin@test.local", role="admin")
+            user.set_password("pytest-only-not-real")
+            db.session.add(user)
+            db.session.commit()
+        return user.id
+
+
+@pytest.fixture
+def authed_client(factory_app, authed_user):
+    """factory_client equivalent but with a logged-in session (role=admin)."""
+    with factory_app.test_client() as c:
+        with c.session_transaction() as sess:
+            sess["_user_id"] = str(authed_user)
+            sess["_fresh"] = True
+        yield c
+
+
+class FakeAuthUser:
+    """Minimal flask-login user for bare Flask-RESTX test apps (no real DB)."""
+
+    def __init__(self, role: str = "admin") -> None:
+        self.role = role
+        self.is_authenticated = True
+        self.is_active = True
+        self.is_anonymous = False
+
+    def get_id(self) -> str:
+        return "1"
+
+
+@pytest.fixture
+def login_manager_factory():
+    """Wire flask-login onto a bare test Flask app; returns a factory(app, role)."""
+
+    def _factory(app, role: str = "admin") -> FakeAuthUser:
+        from flask_login import LoginManager
+
+        if not app.config.get("SECRET_KEY"):  # Flask defaults this key to None, so setdefault() can't help
+            app.config["SECRET_KEY"] = "test-only"  # required to sign the session cookie
+        user = FakeAuthUser(role=role)
+        lm = LoginManager()
+        lm.init_app(app)
+        lm.user_loader(lambda _user_id: user)
+        return user
+
+    return _factory
+
+
+@pytest.fixture
+def login_session():
+    """Mark a bare-app test client's session as logged in (pairs with login_manager_factory)."""
+
+    def _login(client) -> None:
+        with client.session_transaction() as sess:
+            sess["_user_id"] = "1"
+            sess["_fresh"] = True
+
+    return _login

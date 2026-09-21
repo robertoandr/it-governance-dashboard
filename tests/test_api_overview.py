@@ -30,57 +30,57 @@ class TestHealth:
 
 
 class TestOverview:
-    def test_overview_200(self, factory_client) -> None:
-        resp = factory_client.get("/api/overview")
+    def test_overview_200(self, authed_client) -> None:
+        resp = authed_client.get("/api/overview")
         assert resp.status_code == 200
 
-    def test_overview_has_global_score(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/overview").data)
+    def test_overview_has_global_score(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/overview").data)
         assert "global_score" in data
         assert isinstance(data["global_score"], (int, float))
 
-    def test_overview_has_five_pillars(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/overview").data)
+    def test_overview_has_five_pillars(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/overview").data)
         assert len(data["pillars"]) == 5
 
-    def test_overview_status_valid(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/overview").data)
+    def test_overview_status_valid(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/overview").data)
         assert data["status"] in {"OPERACIONAL", "DEGRADADO", "CRÍTICO"}
 
-    def test_overview_pillars_have_components(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/overview").data)
+    def test_overview_pillars_have_components(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/overview").data)
         for p in data["pillars"]:
             assert len(p["components"]) >= 3, f"Pillar {p['id']} has too few components"
 
-    def test_overview_score_range(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/overview").data)
+    def test_overview_score_range(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/overview").data)
         assert 0 <= data["global_score"] <= 100
 
 
 class TestPillars:
-    def test_pillars_list_200(self, factory_client) -> None:
-        resp = factory_client.get("/api/pillars")
+    def test_pillars_list_200(self, authed_client) -> None:
+        resp = authed_client.get("/api/pillars")
         assert resp.status_code == 200
 
-    def test_pillars_list_count(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/pillars").data)
+    def test_pillars_list_count(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/pillars").data)
         assert len(data) == 5
 
-    def test_pillar_detail_200(self, factory_client) -> None:
-        resp = factory_client.get("/api/pillars/risk_management")
+    def test_pillar_detail_200(self, authed_client) -> None:
+        resp = authed_client.get("/api/pillars/risk_management")
         assert resp.status_code == 200
 
-    def test_pillar_detail_has_score(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/pillars/risk_management").data)
+    def test_pillar_detail_has_score(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/pillars/risk_management").data)
         assert "score" in data
         assert isinstance(data["score"], (int, float))
 
-    def test_pillar_detail_has_components(self, factory_client) -> None:
-        data = json.loads(factory_client.get("/api/pillars/risk_management").data)
+    def test_pillar_detail_has_components(self, authed_client) -> None:
+        data = json.loads(authed_client.get("/api/pillars/risk_management").data)
         assert "components" in data
         assert len(data["components"]) >= 3
 
-    def test_pillar_all_ids_valid(self, factory_client) -> None:
+    def test_pillar_all_ids_valid(self, authed_client) -> None:
         ids = [
             "strategic_alignment",
             "value_delivery",
@@ -89,12 +89,22 @@ class TestPillars:
             "performance_measure",
         ]
         for pid in ids:
-            resp = factory_client.get(f"/api/pillars/{pid}")
+            resp = authed_client.get(f"/api/pillars/{pid}")
             assert resp.status_code == 200, f"Expected 200 for {pid}, got {resp.status_code}"
 
-    def test_pillar_unknown_returns_404(self, factory_client) -> None:
-        resp = factory_client.get("/api/pillars/inexistente")
+    def test_pillar_unknown_returns_404(self, authed_client) -> None:
+        resp = authed_client.get("/api/pillars/inexistente")
         assert resp.status_code == 404
+
+
+class TestApiRequiresAuth:
+    def test_overview_unauthenticated_401(self, factory_client) -> None:
+        resp = factory_client.get("/api/overview")
+        assert resp.status_code == 401
+
+    def test_pillars_unauthenticated_401(self, factory_client) -> None:
+        resp = factory_client.get("/api/pillars")
+        assert resp.status_code == 401
 
 
 class TestHTMLViews:

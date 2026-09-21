@@ -17,7 +17,7 @@ _DADOS_FAKE = {
 
 
 @pytest.fixture
-def flask_app():
+def flask_app(login_manager_factory):
     from flask import Flask
     from flask_restx import Api
 
@@ -30,12 +30,14 @@ def flask_app():
     from itgov.api.v1.governance_compliance import ns as compliance_ns
 
     api.add_namespace(compliance_ns, path="/governance")
+    login_manager_factory(app)
     return app
 
 
 @pytest.fixture
-def cliente(flask_app):
+def cliente(flask_app, login_session):
     with flask_app.test_client() as c:
+        login_session(c)
         yield c
 
 
@@ -82,6 +84,13 @@ class TestCacheCompliance:
             cliente.get("/api/v1/governance/compliance")
 
         assert mock_graph.call_count == 2
+
+
+class TestAuth:
+    def test_get_sem_login_retorna_401(self, flask_app) -> None:
+        with flask_app.test_client() as c:
+            resp = c.get("/api/v1/governance/compliance")
+        assert resp.status_code == 401
 
 
 class TestGetCachedComplianceSummaryWrapper:
