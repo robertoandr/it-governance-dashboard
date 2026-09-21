@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -13,6 +14,12 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# DATABASE_URL overrides the ini default, matching itgov/db/session.py —
+# otherwise every environment (dev/prod) silently migrates sqlite:///itgov.db
+# regardless of what the app itself is actually configured to use.
+if os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 # Import all models so Alembic autogenerate can detect them
 from itgov.models.db.base import Base
