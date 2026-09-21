@@ -1,0 +1,12 @@
+[Unit]
+Description=Agenda diária da coleta de governança de TI + backup OneDrive
+
+[Timer]
+OnCalendar=daily
+# Se o host estava desligado/suspenso no horário agendado, roda assim que voltar.
+Persistent=true
+# Espalha em até 10min pra não bater exatamente à meia-noite junto com outros jobs do host.
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
