@@ -68,8 +68,14 @@ summary_model = ns.model(
 
 
 def _buscar_do_graph() -> dict:
+    import os
+
     from itgov.services.service_health_graph_client import ServiceHealthGraphClient
     from itgov.services.service_health_service import calcular_resumo_service_health
+
+    tenant_id = (os.environ.get("AZURE_TENANT_ID") or "").strip()
+    if not tenant_id:
+        raise RuntimeError("AZURE_TENANT_ID não configurado")
 
     client = ServiceHealthGraphClient()
     raw = asyncio.run(client.get_health_overviews())
@@ -101,6 +107,8 @@ class GovernancaServiceHealth(Resource):
         """Retorna o status atual dos serviços Microsoft 365."""
         try:
             return _obter_dados(), 200
+        except RuntimeError:
+            ns.abort(503, "Integração Graph não configurada")
         except Exception as exc:
             log.error("gov_service_health.get.erro", erro=str(exc))
             ns.abort(500, "Erro ao buscar Service Health")

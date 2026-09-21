@@ -54,6 +54,12 @@ class TestEndpointData:
         assert resp.status_code == 200
         assert resp.json["total_labels"] == 0
 
+    def test_graph_nao_configurado_retorna_503(self, cliente) -> None:
+        with patch("itgov.api.v1.governance_data._buscar_do_graph", side_effect=RuntimeError("sem tenant")):
+            resp = cliente.get("/api/v1/governance/data")
+
+        assert resp.status_code == 503
+
     def test_erro_inesperado_retorna_500(self, cliente) -> None:
         with patch("itgov.api.v1.governance_data._buscar_do_graph", side_effect=ValueError("boom")):
             resp = cliente.get("/api/v1/governance/data")

@@ -121,8 +121,14 @@ from(bucket: "{provider._bucket_raw}")
 
 
 def _buscar_do_graph() -> dict:
+    import os
+
     from itgov.services.compliance_service import calcular_resumo_compliance
     from itgov.services.secure_score_graph_client import SecureScoreGraphClient
+
+    tenant_id = (os.environ.get("AZURE_TENANT_ID") or "").strip()
+    if not tenant_id:
+        raise RuntimeError("AZURE_TENANT_ID não configurado")
 
     client = SecureScoreGraphClient()
 
@@ -169,6 +175,8 @@ class GovernancaCompliance(Resource):
         """Retorna o resumo de governança de Compliance (Secure Score)."""
         try:
             return _obter_dados(), 200
+        except RuntimeError:
+            ns.abort(503, "Integração Graph não configurada")
         except Exception as exc:
             log.error("gov_compliance.get.erro", erro=str(exc))
             ns.abort(500, "Erro ao buscar dados de compliance")

@@ -61,8 +61,14 @@ data_summary_model = ns.model(
 
 
 def _buscar_do_graph() -> dict:
+    import os
+
     from itgov.services.data_governance_service import calcular_resumo_dados
     from itgov.services.sensitivity_label_graph_client import SensitivityLabelGraphClient
+
+    tenant_id = (os.environ.get("AZURE_TENANT_ID") or "").strip()
+    if not tenant_id:
+        raise RuntimeError("AZURE_TENANT_ID não configurado")
 
     client = SensitivityLabelGraphClient()
     labels = asyncio.run(client.get_labels())
@@ -94,6 +100,8 @@ class GovernancaDados(Resource):
         """Retorna o resumo de governança de dados (sensitivity labels)."""
         try:
             return _obter_dados(), 200
+        except RuntimeError:
+            ns.abort(503, "Integração Graph não configurada")
         except Exception as exc:
             log.error("gov_data.get.erro", erro=str(exc))
             ns.abort(500, "Erro ao buscar dados de governança de dados")
