@@ -51,7 +51,17 @@ commit sem CI verde ter sido confirmado antes do push.
 
    Mesmo em projeto solo — captura problemas que o CI não cobre
    (simplificação, reuso, padrões de segurança fora do escopo do Bandit/
-   Semgrep/Trivy já automatizados).
+   Semgrep/Trivy já automatizados). Como parte do `/security-review`,
+   confirmar explicitamente:
+
+   ```bash
+   git ls-files | grep -iE "\.key$|\.pem$|\.crt$|\.p12$|\.pfx$|^\.env$|\.env\.[a-z]"
+   git check-ignore .env   # deve retornar .env (confirma que esta ignorado)
+   ```
+
+   Nenhum resultado real de segredo (arquivos `.example`/`.md`/scripts que
+   só mencionam o *nome* de uma variável não contam) — se aparecer algo,
+   não mergear até remover do histórico e rotacionar a credencial.
 
 7. **Merge via interface web do GitHub — nunca `git merge` local + push**
 
