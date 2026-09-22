@@ -8,7 +8,12 @@
 # (uma pane no M365, por exemplo, não pode deixar o backup de rodar).
 set -uo pipefail
 
-PROJECT_DIR="/home/zabbix/projects/it-governance-dashboard"
+# PROJECT_DIR = instância em execução (.env, backups/, docker-compose.yml da
+# stack no ar). O código deste script e de scripts/ vem do checkout onde ele
+# está — em produção, um checkout de operação fixo no main, para que trocar
+# de branch no checkout de desenvolvimento não quebre a coleta/backup.
+PROJECT_DIR="${PROJECT_DIR:-/home/zabbix/projects/it-governance-dashboard}"
+CODE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$PROJECT_DIR/.env"
 LOG_DIR="/var/log/governanca-ti"
 LOG_FILE="$LOG_DIR/coleta.log"
@@ -103,7 +108,7 @@ fi
 #      dump já substitui o antigo passo que só sincronizava $PROJECT_DIR/data
 #      (schema.sql/seed.py, já versionados em git — não protegia nada). ─────
 log INFO "backup: iniciando scripts/backup_governanca.sh"
-if "$PROJECT_DIR/scripts/backup_governanca.sh" >>"$LOG_FILE" 2>&1; then
+if PROJECT_ROOT="$PROJECT_DIR" "$CODE_DIR/scripts/backup_governanca.sh" >>"$LOG_FILE" 2>&1; then
     log SUCESSO "backup: concluído (local + sync externo, ver $LOG_FILE)"
 else
     log ERRO "backup: falhou (ver $LOG_FILE)"

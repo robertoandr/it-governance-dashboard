@@ -110,3 +110,33 @@ sudo rm -rf /opt/it-gov-dashboard
 sudo cp -a /opt/it-gov-dashboard.bkp-YYYYMMDD-HHMM /opt/it-gov-dashboard
 # reiniciar o processo manualmente (ver passo 3 acima)
 ```
+
+## Coleta diária + backup (`governanca-ti-coleta`)
+
+O timer `governanca-ti-coleta.timer` roda `deploy/governanca-ti-coleta` (coleta Zabbix/M365 +
+`scripts/backup_governanca.sh`). O **código** vem de um checkout de operação separado, fixo no
+`main`; os **dados** (`.env`, `backups/`, stack Docker no ar) continuam no checkout de
+desenvolvimento, indicado por `PROJECT_DIR` no unit:
+
+| Papel                         | Caminho                                          |
+|-------------------------------|--------------------------------------------------|
+| Código da coleta/backup       | `/home/zabbix/ops/it-governance-dashboard`       |
+| Instância (`PROJECT_DIR`)     | `/home/zabbix/projects/it-governance-dashboard`  |
+
+Motivo: o unit apontava direto para o checkout de desenvolvimento, e trocar de branch ali (uma
+branch sem `deploy/governanca-ti-coleta`) fazia o backup noturno falhar sem ninguém perceber.
+
+Instalação (uma vez):
+
+```bash
+git clone https://github.com/robertoandr/it-governance-dashboard.git /home/zabbix/ops/it-governance-dashboard
+sudo cp /home/zabbix/ops/it-governance-dashboard/deploy/systemd/governanca-ti-coleta.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start governanca-ti-coleta.service   # teste manual; acompanhe com journalctl
+```
+
+Atualizar o código em produção (depois do merge no `main`):
+
+```bash
+git -C /home/zabbix/ops/it-governance-dashboard pull --ff-only
+```

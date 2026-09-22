@@ -11,7 +11,11 @@
 # sync_cloud.sh, que nunca deixa a etapa de retenção de rodar.
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# PROJECT_ROOT = onde ficam .env, backups/ e logs/ (dados da instância). Por
+# padrão é o checkout que contém este script; o systemd sobrescreve para
+# rodar o código de um checkout de operação separado (ver deploy/README.md).
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BACKUP_DIR="$PROJECT_ROOT/backups"
 ENV_FILE="$PROJECT_ROOT/.env"
 RETENTION_DAYS=7
@@ -107,6 +111,6 @@ find "$BACKUP_DIR" \( -name 'zabbix_*.sql.gz' -o -name 'app_*.db.gz' -o -name 'g
 # ── 5. Sync externo (OneDrive via rclone) — falha aqui não é fatal para
 #      este script; sync_cloud.sh já loga e retorna código próprio ────────
 log "Sincronizando com armazenamento externo..."
-BACKUP_FILE_PATTERN="*.gz" "$PROJECT_ROOT/scripts/sync_cloud.sh" || log "AVISO: sync externo falhou — ver logs/backup_external.log"
+BACKUP_FILE_PATTERN="*.gz" "$SCRIPT_DIR/sync_cloud.sh" || log "AVISO: sync externo falhou — ver logs/backup_external.log"
 
 log "Backup diário concluído."
