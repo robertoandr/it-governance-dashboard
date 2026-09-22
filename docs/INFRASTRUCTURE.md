@@ -2,6 +2,16 @@
 
 > Última atualização: 2026-06-05 (gunicorn + systemd)
 > Mantenedor: Roberto Andrade
+>
+> ⚠️ **Desatualizado.** Este documento descreve a topologia pré-Docker Compose
+> (`it-gov-dashboard.service` via systemd, `/opt/it-gov-dashboard/`, Cloudflare
+> Access). Produção hoje roda 100% via `docker-compose.yml` (containers
+> `itgov-app`/`itgov-nginx`/`itgov-influxdb`/`itgov-redis`, gunicorn
+> `app:create_app()` na porta 5000), `/opt/it-gov-dashboard/` foi erradicado e
+> o systemd unit `it-gov-dashboard.service` nunca chegou a existir neste host
+> (era um template órfão em `deploy/`, removido nesta limpeza). Ver
+> `docs/SPRINT-14.md` (seção "Erradicação do ambiente órfão") para o estado
+> real. Reescrita completa deste documento é dívida técnica pendente.
 
 ## Servidor
 
