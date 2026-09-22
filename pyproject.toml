@@ -35,6 +35,8 @@ extend-exclude = [
     "migrations",
     "node_modules",
     "alembic",          # arquivos gerados pelo Alembic (env.py, versions/)
+    ".claude",          # skills instaladas via npx skills / plugins (não nosso código)
+    ".agents",          # idem — bundles de skills de terceiros
 ]
 
 [tool.ruff.lint]
@@ -87,6 +89,7 @@ addopts = [
     "--color=yes",
     "--durations=10",
     "--cov=itgov",
+    "--cov=app",
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--cov-report=html",
@@ -109,7 +112,11 @@ filterwarnings = [
 # Coverage
 # ============================================
 [tool.coverage.run]
-source = ["itgov"]
+# ADR-001 (piso 85%) media coverage só de itgov/ desde sempre — app/ (Flask
+# factory, views, config, api/) nunca era medido, apesar do gate de CI se
+# chamar "coverage gate (>=85%)". Escopo corrigido para refletir o app real;
+# baseline honesta em main (2026-09-22): 58.28% combinado.
+source = ["itgov", "app"]
 branch = true
 omit = [
     "tests/*",
