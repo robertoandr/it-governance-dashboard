@@ -37,6 +37,7 @@ virtualenv/
 .env.staging
 *.bak
 *.bak.*
+*.bak-*
 *.pre-*
 !.pre-commit-config.yaml
 *.orig
@@ -53,6 +54,12 @@ nginx/certs/
 *.pem
 *.key
 *.crt
+# Rotation backups keep a .bak-<timestamp> suffix (see scripts/backup_governanca.sh
+# and the .env.bak-* convention above) — *.key alone doesn't match these.
+*.key.bak-*
+*.pem.bak-*
+*.p12.bak-*
+*.pfx.bak-*
 !*.example
 
 # ===== Testes / Coverage =====
