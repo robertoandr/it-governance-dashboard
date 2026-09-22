@@ -59,6 +59,7 @@ device_summary_model = ns.model(
 def _buscar_do_graph() -> dict:
     import os
 
+    from app.config import get_settings
     from itgov.services.device_graph_client import DeviceGraphClient
     from itgov.services.device_service import calcular_resumo_dispositivos
 
@@ -68,7 +69,8 @@ def _buscar_do_graph() -> dict:
 
     client = DeviceGraphClient()
     devices = asyncio.run(client.get_devices(tenant_id))
-    return calcular_resumo_dispositivos(devices).model_dump()
+    stale_days = get_settings().graph.device_stale_days
+    return calcular_resumo_dispositivos(devices, stale_days=stale_days).model_dump()
 
 
 def _obter_dados() -> dict:
