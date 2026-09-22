@@ -40,11 +40,10 @@ cada abertura de aba M365 faria 3–8 chamadas Graph em série.
 # Esqueleto — itgov/cache/client.py
 from redis.asyncio import Redis, ConnectionPool
 
+
 class CacheClient:
     def __init__(self, url: str, max_connections: int = 50) -> None:
-        pool = ConnectionPool.from_url(
-            url, max_connections=max_connections, decode_responses=True
-        )
+        pool = ConnectionPool.from_url(url, max_connections=max_connections, decode_responses=True)
         self._redis = Redis(connection_pool=pool)
 
     async def get_json(self, key: str) -> dict | None: ...

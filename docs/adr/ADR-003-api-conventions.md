@@ -107,6 +107,7 @@ class StatsResource(Resource):
     def get(self):
         return svc.get_stats()
 
+
 # Rota COM caminhos de erro — usar @ns.response + tuplas
 @ns.route("/<string:id>")
 class ItemResource(Resource):

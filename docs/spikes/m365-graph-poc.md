@@ -86,6 +86,7 @@ Uso:
     export M365_CERT_PATH=... M365_CERT_THUMBPRINT=...
     python scripts/spike_graph.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -113,9 +114,7 @@ def get_token() -> str:
             "thumbprint": os.environ["M365_CERT_THUMBPRINT"],
         },
     )
-    result = app.acquire_token_for_client(
-        scopes=["https://graph.microsoft.com/.default"]
-    )
+    result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
     if "access_token" not in result:
         raise RuntimeError(f"Auth failed: {result.get('error_description')}")
     log.info("auth_ok", expires_in=result.get("expires_in"))
@@ -196,9 +195,7 @@ async def main() -> None:
 
     async with httpx.AsyncClient() as client:
         # 1. Secure Score
-        data = await timed_get(
-            client, "/security/secureScores?$top=1", token, "secure_score"
-        )
+        data = await timed_get(client, "/security/secureScores?$top=1", token, "secure_score")
         log.info("secure_score_sample", count=len(data.get("value", [])))
 
         # 2. Users
@@ -221,9 +218,7 @@ async def main() -> None:
 
         # 4. Latency measurements
         log.info("--- starting_latency_measurements ---")
-        await run_measurements(
-            client, token, "/security/secureScores?$top=1", "secure_score", n=5
-        )
+        await run_measurements(client, token, "/security/secureScores?$top=1", "secure_score", n=5)
         await run_measurements(
             client,
             token,

@@ -81,8 +81,10 @@ Antes de fechar a issue de cada endpoint:
 Compara output do legado vs novo código para um endpoint.
 Uso: python scripts/diff_m365_legacy.py --endpoint licenses
 """
+
 import asyncio
 import json
+
 
 async def main(endpoint: str) -> None:
     # Legado

@@ -62,9 +62,7 @@ class TestEndpointServiceHealth:
         assert resp.json["total"] == 10
 
     def test_graph_nao_configurado_retorna_503(self, cliente) -> None:
-        with patch(
-            "itgov.api.v1.governance_service_health._buscar_do_graph", side_effect=RuntimeError("sem tenant")
-        ):
+        with patch("itgov.api.v1.governance_service_health._buscar_do_graph", side_effect=RuntimeError("sem tenant")):
             resp = cliente.get("/api/v1/governance/service-health")
 
         assert resp.status_code == 503
@@ -78,9 +76,7 @@ class TestEndpointServiceHealth:
 
 class TestCacheServiceHealth:
     def test_dois_gets_chamam_graph_uma_vez(self, cliente) -> None:
-        with patch(
-            "itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE
-        ) as mock_graph:
+        with patch("itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE) as mock_graph:
             cliente.get("/api/v1/governance/service-health")
             cliente.get("/api/v1/governance/service-health")
 
@@ -89,9 +85,7 @@ class TestCacheServiceHealth:
     def test_cache_expirado_busca_novamente(self, cliente, monkeypatch) -> None:
         import itgov.api.v1.governance_service_health as mod
 
-        with patch(
-            "itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE
-        ) as mock_graph:
+        with patch("itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE) as mock_graph:
             cliente.get("/api/v1/governance/service-health")
             monkeypatch.setattr(mod, "_cache_ts", time.monotonic() - mod._CACHE_TTL - 1)
             cliente.get("/api/v1/governance/service-health")

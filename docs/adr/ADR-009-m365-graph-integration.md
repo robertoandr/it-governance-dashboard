@@ -50,6 +50,7 @@ Microsoft Graph é uma API externa com características específicas:
 # itgov/integrations/m365/auth.py
 from msal import ConfidentialClientApplication
 
+
 class GraphAuthProvider:
     """Token provider com client secret e cache MSAL."""
 
@@ -61,9 +62,7 @@ class GraphAuthProvider:
         )
 
     def get_token(self) -> str:
-        result = self._app.acquire_token_for_client(
-            scopes=["https://graph.microsoft.com/.default"]
-        )
+        result = self._app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
         if "access_token" not in result:
             raise GraphAuthError(result.get("error_description", "unknown"))
         return result["access_token"]
@@ -94,9 +93,12 @@ Carregar de `.env` via `python-dotenv` (padrão do projeto).
 
 ```python
 from tenacity import (
-    retry, stop_after_attempt,
-    wait_exponential, retry_if_exception_type,
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
 )
+
 
 class GraphClient:
     @retry(

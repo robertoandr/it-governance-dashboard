@@ -48,7 +48,7 @@ retorno de **tuplas** `(dict, status_code)` para controle de runtime.
 ```python
 # ✅ Padrão correto — sem marshal_with em rotas com múltiplos status codes
 @ns.doc("get_ativo")
-@ns.response(200, "Sucesso", ativo_model)   # ← apenas documentação
+@ns.response(200, "Sucesso", ativo_model)  # ← apenas documentação
 @ns.response(404, "Não encontrado", error_model)
 def get(self, ativo_id: str):
     try:

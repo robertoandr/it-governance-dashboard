@@ -73,7 +73,7 @@ sudo systemctl stop it-gov-dashboard
 Editar `deploy/gunicorn.conf.py`, alterar a fórmula ou o cap:
 
 ```python
-workers = min(_cpu * 2 + 1, 9)   # padrão: 9 em host de 4 CPUs
+workers = min(_cpu * 2 + 1, 9)  # padrão: 9 em host de 4 CPUs
 ```
 
 Depois reiniciar (não é zero-downtime — workers precisam ser recriados):

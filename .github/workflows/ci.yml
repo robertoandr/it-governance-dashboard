@@ -147,7 +147,12 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
+          # Em push direto (não-PR), base/head resolviam para o mesmo commit
+          # quando o alvo era o próprio default_branch, e o TruffleHog Action
+          # falha com "BASE and HEAD commits are the same". Em PR, compara
+          # contra a base real do PR; em push, contra o commit anterior ao
+          # push (github.event.before).
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           head: HEAD
           extra_args: --only-verified
 
