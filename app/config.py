@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -82,6 +82,11 @@ class GraphConfig(BaseSettings):
     client_id: str = ""
     client_secret: SecretStr = SecretStr("")
     enabled: bool = False
+    device_stale_days: int = Field(
+        default=45,
+        ge=1,
+        description="Days without sign-in before a device counts as stale (governance_devices pillar).",
+    )
 
 
 class LoggingConfig(BaseSettings):

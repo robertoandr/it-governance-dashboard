@@ -124,6 +124,7 @@ def governance_devices() -> str:
     """Render pilar Dispositivos (Governança M365)."""
     import os
 
+    from app.config import get_settings
     from itgov.api.v1.governance_devices import get_cached_device_summary
 
     if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
@@ -134,7 +135,8 @@ def governance_devices() -> str:
     except RuntimeError:
         abort(503)
 
-    return render_template("dashboards/governance_devices.html", summary=summary)
+    stale_days = get_settings().graph.device_stale_days
+    return render_template("dashboards/governance_devices.html", summary=summary, stale_days=stale_days)
 
 
 @bp.route("/governance/apps")

@@ -6,14 +6,19 @@ from datetime import UTC, datetime
 
 from itgov.models.governance_devices import DeviceSummary
 
-_STALE_DAYS = 45
+# Fallback quando chamado sem app context (ex.: scripts, testes unitários que não
+# passam stale_days explicitamente). Em produção, o valor vem de
+# app.config.get_settings().graph.device_stale_days — ver itgov/api/v1/governance_devices.py.
+_DEFAULT_STALE_DAYS = 45
 
 
-def calcular_resumo_dispositivos(devices: list[dict]) -> DeviceSummary:
+def calcular_resumo_dispositivos(devices: list[dict], stale_days: int = _DEFAULT_STALE_DAYS) -> DeviceSummary:
     """Calcula o resumo de governança a partir da lista de dispositivos do Graph.
 
     Args:
         devices: Lista de dicts retornados por DeviceGraphClient.get_devices().
+        stale_days: Dias sem sign-in a partir dos quais um dispositivo conta como
+            inativo. Configurável via GRAPH__DEVICE_STALE_DAYS (default 45).
 
     Returns:
         DeviceSummary agregado.
@@ -44,7 +49,7 @@ def calcular_resumo_dispositivos(devices: list[dict]) -> DeviceSummary:
         if last_signin:
             try:
                 last_dt = datetime.fromisoformat(last_signin.replace("Z", "+00:00"))
-                if (agora - last_dt).days > _STALE_DAYS:
+                if (agora - last_dt).days > stale_days:
                     stale += 1
             except ValueError:
                 pass

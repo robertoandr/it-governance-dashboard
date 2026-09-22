@@ -93,3 +93,11 @@ class TestCalcularResumoDispositivos:
 
         assert resumo.os_distribution == {"desconhecido": 1}
         assert resumo.trust_type_distribution == {"desconhecido": 1}
+
+    def test_stale_days_customizado_muda_o_limiar(self) -> None:
+        """stale_days é configurável (GRAPH__DEVICE_STALE_DAYS) — default 45 não é fixo no código."""
+        devices = [_device(last_signin_days_ago=10), _device(last_signin_days_ago=50)]
+
+        assert calcular_resumo_dispositivos(devices, stale_days=45).stale_45d == 1
+        assert calcular_resumo_dispositivos(devices, stale_days=5).stale_45d == 2
+        assert calcular_resumo_dispositivos(devices, stale_days=100).stale_45d == 0
