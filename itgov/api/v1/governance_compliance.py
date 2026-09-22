@@ -15,6 +15,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_compliance", description="Governança de Compliance M365 (Secure Score)")
@@ -119,8 +121,14 @@ from(bucket: "{provider._bucket_raw}")
 
 
 def _buscar_do_graph() -> dict:
+    import os
+
     from itgov.services.compliance_service import calcular_resumo_compliance
     from itgov.services.secure_score_graph_client import SecureScoreGraphClient
+
+    tenant_id = (os.environ.get("AZURE_TENANT_ID") or "").strip()
+    if not tenant_id:
+        raise RuntimeError("AZURE_TENANT_ID não configurado")
 
     client = SecureScoreGraphClient()
 
@@ -162,10 +170,13 @@ def get_cached_compliance_summary() -> dict:
 @ns.route("/compliance")
 class GovernancaCompliance(Resource):
     @ns.marshal_with(compliance_summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o resumo de governança de Compliance (Secure Score)."""
         try:
             return _obter_dados(), 200
+        except RuntimeError:
+            ns.abort(503, "Integração Graph não configurada")
         except Exception as exc:
             log.error("gov_compliance.get.erro", erro=str(exc))
             ns.abort(500, "Erro ao buscar dados de compliance")

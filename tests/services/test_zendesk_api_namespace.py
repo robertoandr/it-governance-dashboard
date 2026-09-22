@@ -27,18 +27,21 @@ _NOW = datetime(2026, 6, 2, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture()
-def app():
+def app(login_manager_factory):
     """Flask app mínima com o namespace zendesk registrado."""
     flask_app = Flask(__name__)
     flask_app.config["TESTING"] = True
     api = Api(flask_app, prefix="/api/v1")
     api.add_namespace(ns, path="/zendesk")
+    login_manager_factory(flask_app)
     return flask_app
 
 
 @pytest.fixture()
-def client(app):
-    return app.test_client()
+def client(app, login_session):
+    c = app.test_client()
+    login_session(c)
+    return c
 
 
 def _make_ticket(
@@ -225,3 +228,10 @@ def test_csat_summary(client):
     assert data["good"] == 27
     assert data["csat_pct"] == 90.0
     assert data["sample_size"] == 30
+
+
+class TestAuth:
+    def test_tickets_sem_login_retorna_401(self, app):
+        with app.test_client() as c:
+            resp = c.get("/api/v1/zendesk/tickets")
+        assert resp.status_code == 401

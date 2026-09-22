@@ -12,6 +12,7 @@ import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
 from app.models.governance import PmoManualInput
 
 log = structlog.get_logger(__name__)
@@ -54,6 +55,7 @@ class PmoManualResource(Resource):
 
     @ns.doc("get_pmo_manual")
     @ns.marshal_with(_pmo_model, code=200)
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict[str, Any]:
         """Return the current PMO manual score, or 404 if never set."""
         pmo = _read_pmo()
@@ -64,6 +66,7 @@ class PmoManualResource(Resource):
     @ns.doc("put_pmo_manual")
     @ns.expect(_pmo_model, validate=True)
     @ns.marshal_with(_pmo_model, code=200)
+    @require_role("admin", "gestor")
     def put(self) -> dict[str, Any]:
         """Set or update the PMO manual score (manager action)."""
         body = request.get_json() or {}

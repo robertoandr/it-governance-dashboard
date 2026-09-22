@@ -13,6 +13,7 @@ import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
 from itgov.services.ativo_service import (
     AtivoDuplicateError,
     AtivoNotFoundError,
@@ -176,6 +177,7 @@ class AtivoCollection(Resource):
     @ns.doc("list_ativos")
     @ns.expect(list_parser)
     @ns.marshal_with(ativo_list_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Lista ativos com filtros opcionais e paginação."""
         args = list_parser.parse_args()
@@ -205,6 +207,7 @@ class AtivoCollection(Resource):
     @ns.response(201, "Criado", ativo_model)
     @ns.response(400, "Payload inválido", error_model)
     @ns.response(409, "Ativo duplicado", error_model)
+    @require_role("admin", "gestor")
     def post(self):
         """Cria um novo ativo (valida via Pydantic AtivoCreate)."""
         payload = ns.payload or {}
@@ -224,6 +227,7 @@ class AtivoStatsResource(Resource):
 
     @ns.doc("get_ativo_stats")
     @ns.marshal_with(stats_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna contagens agregadas do inventário (ativas, por tipo, etc.)."""
         with _svc() as svc:
@@ -247,6 +251,7 @@ class AtivoResource(Resource):
     @ns.response(200, "Sucesso", ativo_model)
     @ns.response(400, "UUID inválido", error_model)
     @ns.response(404, "Não encontrado", error_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self, ativo_id: str):
         """Busca ativo por UUID."""
         if _invalid_uuid(ativo_id):
@@ -264,6 +269,7 @@ class AtivoResource(Resource):
     @ns.response(400, "Payload inválido", error_model)
     @ns.response(404, "Não encontrado", error_model)
     @ns.response(409, "Conflito de unique constraint", error_model)
+    @require_role("admin", "gestor")
     def patch(self, ativo_id: str):
         """Atualização parcial do ativo (PATCH)."""
         if _invalid_uuid(ativo_id):
@@ -284,6 +290,7 @@ class AtivoResource(Resource):
     @ns.response(204, "Deletado")
     @ns.response(400, "UUID inválido", error_model)
     @ns.response(404, "Não encontrado", error_model)
+    @require_role("admin", "gestor")
     def delete(self, ativo_id: str):
         """Soft delete por padrão. Use ?hard=true para remoção física."""
         if _invalid_uuid(ativo_id):

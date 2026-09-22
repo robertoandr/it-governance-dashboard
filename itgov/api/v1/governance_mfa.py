@@ -16,6 +16,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_mfa", description="Governança de MFA (Entra ID / M365)")
@@ -126,6 +128,7 @@ class MFASummaryResource(Resource):
 
     @ns.doc("get_mfa_summary")
     @ns.marshal_with(mfa_summary_model, code=200)
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict:
         """Retorna adoção de MFA e métricas de identidade do Entra ID."""
         return _obter_dados()

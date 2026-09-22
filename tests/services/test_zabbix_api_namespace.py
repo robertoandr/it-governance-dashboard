@@ -31,18 +31,21 @@ FAKE_PASSWORD = "test-password-not-real"
 
 
 @pytest.fixture()
-def app():
+def app(login_manager_factory):
     """Flask app mínima com o namespace zabbix registrado."""
     flask_app = Flask(__name__)
     flask_app.config["TESTING"] = True
     api = Api(flask_app, prefix="/api/v1")
     api.add_namespace(ns, path="/zabbix")
+    login_manager_factory(flask_app)
     return flask_app
 
 
 @pytest.fixture()
-def client(app):
-    return app.test_client()
+def client(app, login_session):
+    c = app.test_client()
+    login_session(c)
+    return c
 
 
 def _make_host(hostid: str = "1", name: str = "srv01", available: int = 1) -> ZabbixHost:
@@ -241,3 +244,15 @@ def test_ack_passes_correct_request(client):
     assert isinstance(call_args, AcknowledgeRequest)
     assert call_args.eventid == "999"
     assert call_args.message == "ACK from test"
+
+
+class TestAuth:
+    def test_hosts_sem_login_retorna_401(self, app):
+        with app.test_client() as c:
+            resp = c.get("/api/v1/zabbix/hosts")
+        assert resp.status_code == 401
+
+    def test_ack_sem_login_retorna_401(self, app):
+        with app.test_client() as c:
+            resp = c.post("/api/v1/zabbix/problems/1/ack", json={})
+        assert resp.status_code == 401

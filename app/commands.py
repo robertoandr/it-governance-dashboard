@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import secrets
+import string
+
 import click
 from flask import Flask
 from flask.cli import with_appcontext
@@ -25,7 +29,12 @@ def create_db() -> None:
 @click.command("seed-admin")
 @with_appcontext
 def seed_admin() -> None:
-    """Create the initial admin user if it doesn't exist."""
+    """Create the initial admin user if it doesn't exist.
+
+    The password comes from SEED_ADMIN_PASSWORD when set; otherwise a random
+    20-character credential is generated and printed once (never stored in
+    code, per CLAUDE.md regra 6).
+    """
     from app.extensions import db
     from app.models.user import User
 
@@ -34,8 +43,19 @@ def seed_admin() -> None:
         click.echo("Admin já existe — nenhuma ação necessária.")
         return
 
+    password = os.environ.get("SEED_ADMIN_PASSWORD")
+    generated = password is None
+    if generated:
+        alphabet = string.ascii_letters + string.digits
+        password = "".join(secrets.choice(alphabet) for _ in range(20))
+
     user = User(name="Admin", email="admin@ti.local", role="admin")
-    user.set_password("Admin@123")
+    user.set_password(password)
     db.session.add(user)
     db.session.commit()
-    click.echo("Admin criado: admin@ti.local / Admin@123")
+
+    if generated:
+        click.echo(f"Admin criado: admin@ti.local / {password}")
+        click.echo("Senha gerada automaticamente — anote agora e troque no primeiro login.")
+    else:
+        click.echo("Admin criado: admin@ti.local (senha definida via SEED_ADMIN_PASSWORD)")

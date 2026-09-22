@@ -1,0 +1,23 @@
+[Unit]
+Description=Coleta diária de governança de TI (Zabbix/M365) + backup externo OneDrive
+Documentation=https://github.com/robertoandr/it-governance-dashboard
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=zabbix
+Group=zabbix
+WorkingDirectory=/home/zabbix/projects/it-governance-dashboard
+# rclone fica em ~/.local/bin, fora do PATH padrão do systemd (systemd não
+# lê .bashrc/.profile do usuário).
+Environment="PATH=/home/zabbix/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/zabbix/projects/it-governance-dashboard/deploy/governanca-ti-coleta
+
+# stdout/stderr também vão pro journald, além do log próprio em
+# /var/log/governanca-ti/coleta.log (ver: journalctl -u governanca-ti-coleta)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=governanca-ti-coleta
+
+TimeoutStartSec=1800

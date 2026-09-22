@@ -15,6 +15,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_devices", description="Governança de Dispositivos M365")
@@ -89,6 +91,7 @@ def get_cached_device_summary() -> dict:
 @ns.route("/devices")
 class GovernancaDevices(Resource):
     @ns.marshal_with(device_summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o resumo de governança de dispositivos."""
         try:

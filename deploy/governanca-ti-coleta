@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# governanca-ti-coleta — coleta diária (Zabbix + M365) e backup externo via rclone.
+#
+# Roda no host (não em container): usa `docker compose run` para os jobs de
+# coleta, que já vivem na imagem `collector` do projeto, e `rclone` (binário
+# do host) para o sync externo. Idempotente e seguro para rodar via systemd
+# timer ou cron — cada etapa é logada e uma falha não impede as seguintes
+# (uma pane no M365, por exemplo, não pode deixar o backup de rodar).
+set -uo pipefail
+
+PROJECT_DIR="/home/zabbix/projects/it-governance-dashboard"
+ENV_FILE="$PROJECT_DIR/.env"
+LOG_DIR="/var/log/governanca-ti"
+LOG_FILE="$LOG_DIR/coleta.log"
+# RCLONE_REMOTE é lido do .env por scripts/sync_cloud.sh — ver ali.
+
+mkdir -p "$LOG_DIR"
+
+log() {
+    echo "$(date '+%F %T') [$1] ${*:2}" | tee -a "$LOG_FILE"
+}
+
+cd "$PROJECT_DIR" || { log ERRO "não foi possível entrar em $PROJECT_DIR"; exit 1; }
+
+# ── 1. Token de sessão do Zabbix (curto prazo, gerado a cada execução —
+#      evita depender de um token de API permanente guardado em disco) ──────
+zabbix_token() {
+    python3 - "$ENV_FILE" <<'PYEOF'
+import json
+import sys
+import urllib.request
+
+env_path = sys.argv[1]
+env = {}
+with open(env_path) as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        env[k] = v
+
+url = env.get("ZABBIX_URL", "")
+if not url.endswith("/api_jsonrpc.php"):
+    url = url.rstrip("/") + "/api_jsonrpc.php"
+
+payload = {
+    "jsonrpc": "2.0",
+    "method": "user.login",
+    "params": {"username": env["ZABBIX_USER"], "password": env["ZABBIX_PASSWORD"]},
+    "id": 1,
+}
+req = urllib.request.Request(
+    url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json-rpc"}
+)
+with urllib.request.urlopen(req, timeout=15) as resp:
+    print(json.load(resp)["result"])
+PYEOF
+}
+
+# ── 2. Coleta Zabbix (disponibilidade + riscos) ──────────────────────────────
+log INFO "coleta Zabbix: iniciando"
+ZBX_TOKEN="$(zabbix_token 2>>"$LOG_FILE")"
+if [ -z "$ZBX_TOKEN" ]; then
+    log ERRO "coleta Zabbix: falha ao autenticar (ver detalhes acima no log)"
+else
+    ZBX_URL_BASE="$(grep -m1 '^ZABBIX_URL=' "$ENV_FILE" | cut -d= -f2- | sed 's#/api_jsonrpc.php##')"
+    if docker compose run --rm \
+        -e GITHUB_TOKEN=unused -e GITHUB_ORG=unused \
+        -e ZABBIX_URL="$ZBX_URL_BASE" \
+        -e ZABBIX_TOKEN="$ZBX_TOKEN" \
+        -e INFLUX_URL=http://influxdb:8086 -e INFLUX_ORG=gadens -e INFLUX_BUCKET_RAW=governance_raw \
+        collector python -c "
+from jobs.zabbix_availability_collector import run as run_disp
+from jobs.zabbix_risk_collector import run as run_risk
+run_disp()
+run_risk()
+" >>"$LOG_FILE" 2>&1
+    then
+        log SUCESSO "coleta Zabbix concluída"
+    else
+        log ERRO "coleta Zabbix falhou (ver $LOG_FILE)"
+    fi
+fi
+
+# ── 3. Coleta M365 — só roda se as credenciais Azure estiverem configuradas.
+#      Sem isso, pula silenciosamente em vez de falhar (integração opcional). ──
+if grep -qE '^AZURE_TENANT_ID=.+' "$ENV_FILE" 2>/dev/null; then
+    log INFO "coleta M365: iniciando"
+    if docker compose run --rm collector python -c "from jobs.entra_id_collector import run; run()" \
+        >>"$LOG_FILE" 2>&1
+    then
+        log SUCESSO "coleta M365 concluída"
+    else
+        log ERRO "coleta M365 falhou (ver $LOG_FILE)"
+    fi
+else
+    log INFO "coleta M365: pulada — AZURE_TENANT_ID não configurado em .env"
+fi
+
+# ── 4. Backup dos dados reais (Postgres do Zabbix + SQLite app.db/govti.db)
+#      e sync externo via rclone — ver scripts/backup_governanca.sh. Este
+#      dump já substitui o antigo passo que só sincronizava $PROJECT_DIR/data
+#      (schema.sql/seed.py, já versionados em git — não protegia nada). ─────
+log INFO "backup: iniciando scripts/backup_governanca.sh"
+if "$PROJECT_DIR/scripts/backup_governanca.sh" >>"$LOG_FILE" 2>&1; then
+    log SUCESSO "backup: concluído (local + sync externo, ver $LOG_FILE)"
+else
+    log ERRO "backup: falhou (ver $LOG_FILE)"
+fi
+
+log INFO "coleta diária concluída"

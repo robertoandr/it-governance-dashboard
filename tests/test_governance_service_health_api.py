@@ -1,0 +1,116 @@
+"""Testes do endpoint GET /api/v1/governance/service-health — cache e wiring."""
+
+from __future__ import annotations
+
+import time
+from unittest.mock import patch
+
+import pytest
+
+_DADOS_FAKE = {
+    "total": 10,
+    "ok": 9,
+    "warning": 1,
+    "critical": 0,
+    "all_operational": False,
+    "services": [],
+}
+
+
+@pytest.fixture
+def flask_app(login_manager_factory):
+    from flask import Flask
+    from flask_restx import Api
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.config["SECRET_KEY"] = "test-only"
+
+    api = Api(app, prefix="/api/v1")
+
+    from itgov.api.v1.governance_service_health import ns as service_health_ns
+
+    api.add_namespace(service_health_ns, path="/governance")
+    login_manager_factory(app)
+    return app
+
+
+@pytest.fixture
+def cliente(flask_app, login_session):
+    with flask_app.test_client() as c:
+        login_session(c)
+        yield c
+
+
+@pytest.fixture(autouse=True)
+def limpar_cache():
+    import itgov.api.v1.governance_service_health as mod
+
+    mod._cache_dados = None
+    mod._cache_ts = 0.0
+    yield
+    mod._cache_dados = None
+    mod._cache_ts = 0.0
+
+
+class TestEndpointServiceHealth:
+    def test_get_retorna_200_com_dados(self, cliente) -> None:
+        with patch("itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE):
+            resp = cliente.get("/api/v1/governance/service-health")
+
+        assert resp.status_code == 200
+        assert resp.json["total"] == 10
+
+    def test_graph_nao_configurado_retorna_503(self, cliente) -> None:
+        with patch(
+            "itgov.api.v1.governance_service_health._buscar_do_graph", side_effect=RuntimeError("sem tenant")
+        ):
+            resp = cliente.get("/api/v1/governance/service-health")
+
+        assert resp.status_code == 503
+
+    def test_erro_inesperado_retorna_500(self, cliente) -> None:
+        with patch("itgov.api.v1.governance_service_health._buscar_do_graph", side_effect=ValueError("boom")):
+            resp = cliente.get("/api/v1/governance/service-health")
+
+        assert resp.status_code == 500
+
+
+class TestCacheServiceHealth:
+    def test_dois_gets_chamam_graph_uma_vez(self, cliente) -> None:
+        with patch(
+            "itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE
+        ) as mock_graph:
+            cliente.get("/api/v1/governance/service-health")
+            cliente.get("/api/v1/governance/service-health")
+
+        assert mock_graph.call_count == 1
+
+    def test_cache_expirado_busca_novamente(self, cliente, monkeypatch) -> None:
+        import itgov.api.v1.governance_service_health as mod
+
+        with patch(
+            "itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE
+        ) as mock_graph:
+            cliente.get("/api/v1/governance/service-health")
+            monkeypatch.setattr(mod, "_cache_ts", time.monotonic() - mod._CACHE_TTL - 1)
+            cliente.get("/api/v1/governance/service-health")
+
+        assert mock_graph.call_count == 2
+
+
+class TestAuth:
+    def test_get_sem_login_retorna_401(self, flask_app) -> None:
+        with flask_app.test_client() as c:
+            resp = c.get("/api/v1/governance/service-health")
+        assert resp.status_code == 401
+
+
+class TestGetCachedServiceHealthSummaryWrapper:
+    def test_wrapper_publico_retorna_mesmos_dados(self) -> None:
+        from itgov.api.v1.governance_service_health import get_cached_service_health_summary
+
+        with patch("itgov.api.v1.governance_service_health._buscar_do_graph", return_value=_DADOS_FAKE):
+            dados = get_cached_service_health_summary()
+
+        assert dados == _DADOS_FAKE

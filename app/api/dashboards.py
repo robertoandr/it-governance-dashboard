@@ -9,6 +9,7 @@ from typing import Any
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
 from app.services.metrics_aggregator import MetricsAggregator
 
 log = structlog.get_logger(__name__)
@@ -88,6 +89,7 @@ class OverviewResource(Resource):
 
     @ns.doc("get_overview")
     @ns.marshal_with(_overview_model, code=200)
+    @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict[str, Any]:
         """Return current global governance score with all pillar details."""
         return _get_cached_or_compute()

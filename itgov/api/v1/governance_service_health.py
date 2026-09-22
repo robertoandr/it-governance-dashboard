@@ -14,6 +14,8 @@ import time
 import structlog
 from flask_restx import Namespace, Resource, fields
 
+from app.auth.rbac import require_role
+
 log = structlog.get_logger(__name__)
 
 ns = Namespace("governance_service_health", description="Service Health M365 (status dos serviços)")
@@ -66,8 +68,14 @@ summary_model = ns.model(
 
 
 def _buscar_do_graph() -> dict:
+    import os
+
     from itgov.services.service_health_graph_client import ServiceHealthGraphClient
     from itgov.services.service_health_service import calcular_resumo_service_health
+
+    tenant_id = (os.environ.get("AZURE_TENANT_ID") or "").strip()
+    if not tenant_id:
+        raise RuntimeError("AZURE_TENANT_ID não configurado")
 
     client = ServiceHealthGraphClient()
     raw = asyncio.run(client.get_health_overviews())
@@ -94,10 +102,13 @@ def get_cached_service_health_summary() -> dict:
 @ns.route("/service-health")
 class GovernancaServiceHealth(Resource):
     @ns.marshal_with(summary_model)
+    @require_role("admin", "gestor", "visualizador")
     def get(self):
         """Retorna o status atual dos serviços Microsoft 365."""
         try:
             return _obter_dados(), 200
+        except RuntimeError:
+            ns.abort(503, "Integração Graph não configurada")
         except Exception as exc:
             log.error("gov_service_health.get.erro", erro=str(exc))
             ns.abort(500, "Erro ao buscar Service Health")
