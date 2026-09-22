@@ -88,12 +88,16 @@ npm run dev
 
 ## 🛟 Backup e Recuperação de Desastre
 
-Backup diário automático (systemd timer `governanca-ti-coleta.timer`, ~00:00 UTC ± 10min) dos 3
-armazenamentos reais do sistema — nenhum deles é git, todos são perdidos se a VM cair:
+Backup diário automático (systemd timer `governanca-ti-coleta.timer`, ~00:00 UTC ± 10min) dos
+armazenamentos reais do servidor — nenhum deles é git, todos são perdidos se a VM cair:
 
 - **Postgres do Zabbix** (container `zabbix_db`) — `pg_dump` compactado
 - **`app.db`** (SQLite — usuários/autenticação)
 - **`govti.db`** (SQLite — vendors/contracts/assets/governança)
+- **MapaCameras** (`/var/lib/mapa-cameras` — serviço systemd `mapa-cameras`, fora do Docker) —
+  `mapacameras_<timestamp>.tar.gz` com `cameras.json`, fotos, plantas e usuários do mapa. Exige
+  que o usuário `zabbix` esteja no grupo `mapacameras` (`sudo gpasswd -a zabbix mapacameras`);
+  sem isso a etapa é pulada com `AVISO` no log e o resto do backup segue normalmente.
 
 Retenção local de 7 dias (`scripts/backup_governanca.sh`); cada dump também sobe para o remote
 configurado em `RCLONE_REMOTE` no `.env` (OneDrive) via `scripts/sync_cloud.sh`. Logs em
@@ -115,6 +119,7 @@ Passos para restaurar em um servidor novo:
    rclone copy gov-onedrive:Backups/172.29.2.11/zabbix_<timestamp>.sql.gz .
    rclone copy gov-onedrive:Backups/172.29.2.11/app_<timestamp>.db.gz .
    rclone copy gov-onedrive:Backups/172.29.2.11/govti_<timestamp>.db.gz .
+   rclone copy gov-onedrive:Backups/172.29.2.11/mapacameras_<timestamp>.tar.gz .
    ```
 
 3. Suba a stack vazia (`docker compose up -d zabbix-db app`) e restaure:
@@ -132,6 +137,15 @@ Passos para restaurar em um servidor novo:
    docker cp app.db itgov-app:/app/data/app.db
    docker cp govti.db itgov-app:/app/data/govti.db
    docker compose up -d --force-recreate app   # reabre os arquivos copiados
+   ```
+
+   **MapaCameras:** instale o pacote `MapaCameras-linux` (`sudo bash instalar.sh`) e restaure os
+   dados por cima:
+   ```bash
+   sudo systemctl stop mapa-cameras
+   sudo tar xzf mapacameras_<timestamp>.tar.gz -C /var/lib/mapa-cameras
+   sudo chown -R mapacameras:mapacameras /var/lib/mapa-cameras
+   sudo systemctl start mapa-cameras
    ```
 
 4. Confirme a integridade (login na aplicação, contagem de linhas em tabelas-chave) antes de
