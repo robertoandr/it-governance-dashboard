@@ -209,7 +209,14 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: 🧪 Run tests with coverage gate (≥85%)
+      # Piso real hoje: 55% sobre app/+itgov/ combinados (baseline honesta:
+      # 58.28% em 2026-09-22, ver pyproject.toml [tool.coverage.run]).
+      # ADR-001 formaliza o piso definitivo em 85% como meta — este gate
+      # ainda não chegou lá; o nome do step refletia 85% sem aplicar,
+      # mascarando a lacuna. Subir o --cov-fail-under em etapas (55 -> 70 ->
+      # 85), igual ao histórico já documentado (60 -> 80 -> 85), é rastreado
+      # como dívida técnica, não corrigido de uma vez nesta branch.
+      - name: 🧪 Run tests with coverage gate (≥55%, ADR-001 target 85%)
         env:
           INFLUX_URL: http://localhost:8086
           INFLUX_TOKEN: ci-fake-token-not-real
