@@ -7,6 +7,18 @@
       "skillPath": "alpine-js/SKILL.md",
       "computedHash": "529e2ee02bf6e2adece466e7148b9288182637fefc3b5d4f3eeb18e12906445c"
     },
+    "git": {
+      "source": "julianobarbosa/claude-code-skills",
+      "sourceType": "github",
+      "skillPath": "skills/git/SKILL.md",
+      "computedHash": "e57e1b71e9c99e30b8b28b78367a0b2b35ceb89346d99b6badc6bb8ea95e3365"
+    },
+    "grafana": {
+      "source": "julianobarbosa/claude-code-skills",
+      "sourceType": "github",
+      "skillPath": "skills/grafana/SKILL.md",
+      "computedHash": "0107f5fcc377f49751f734c68e6243c665473604f1838c4e89b05387c36cff93"
+    },
     "nginx-configuration": {
       "source": "aj-geddes/useful-ai-prompts",
       "sourceType": "github",
@@ -60,6 +72,12 @@
       "sourceType": "github",
       "skillPath": "skills/ui-ux-pro-max/SKILL.md",
       "computedHash": "13887b516bebbd2e97885435ea022b2aec36cc77224f639d098a47f2723865cb"
+    },
+    "zabbix-api": {
+      "source": "julianobarbosa/claude-code-skills",
+      "sourceType": "github",
+      "skillPath": "skills/zabbix-api/SKILL.md",
+      "computedHash": "ed0f17e78f2a9b610c5cb3fb01553a135430d1c3b11d2abdd2f8a95553ad691d"
     }
   }
 }
