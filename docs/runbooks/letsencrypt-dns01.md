@@ -42,8 +42,25 @@ para expirar. Não faz nada até que um certificado tenha sido emitido.
 # 1. Validar em staging primeiro (não conta para rate limit de produção)
 scripts/issue_letsencrypt_dns01.sh --staging
 
-# 2. Se staging OK, emitir em produção
+# 2. Confirmar que o desafio DNS-01 funcionou e o Nginx recarregou.
+#    Em staging o certificado NÃO é confiável (issuer = "(STAGING) ..."),
+#    isso é esperado — só confirma que o fluxo TXT + API do PowerDNS + reload
+#    funciona de ponta a ponta.
+echo | openssl s_client -connect noc.grupogadens.com.br:443 \
+  -servername noc.grupogadens.com.br 2>/dev/null | openssl x509 -noout -issuer
+
+# 3. Se staging OK, emitir em produção
 scripts/issue_letsencrypt_dns01.sh
+
+# 4. Validar que agora o issuer é uma CA pública real (Let's Encrypt),
+#    não mais o self-signed nem o staging
+echo | openssl s_client -connect noc.grupogadens.com.br:443 \
+  -servername noc.grupogadens.com.br 2>/dev/null | openssl x509 -noout -issuer -dates
+
+# 5. Confirmar a cadeia completa (fullchain, não so o leaf cert)
+echo | openssl s_client -connect noc.grupogadens.com.br:443 \
+  -servername noc.grupogadens.com.br -showcerts 2>/dev/null | grep -c "BEGIN CERTIFICATE"
+# esperado: >= 2 (leaf + intermediate da Let's Encrypt)
 ```
 
 O script (`scripts/issue_letsencrypt_dns01.sh`):
@@ -70,3 +87,27 @@ Se o certificado emitido causar algum problema, os arquivos anteriores
 (self-signed) não são sobrescritos até `--install-cert` rodar com sucesso.
 Para reverter manualmente: restaurar backup de `docker/nginx/certs/itgov.crt`
 e `itgov.key`, depois `docker exec itgov-nginx nginx -s reload`.
+
+## Checklist — Fase 2 concluída
+
+Só considerar a Fase 2 encerrada quando todos os itens abaixo forem verdade:
+
+- [ ] `PDNS_Url`, `PDNS_ServerId`, `PDNS_Token`, `PDNS_Ttl` preenchidos em
+      `.env` (nunca commitados) com valores reais do time de DNS.
+- [ ] `scripts/issue_letsencrypt_dns01.sh --staging` rodou sem erro e o
+      `openssl s_client` mostrou um issuer de staging (`(STAGING) ...`).
+- [ ] `scripts/issue_letsencrypt_dns01.sh` (produção) rodou sem erro.
+- [ ] `openssl s_client ... | openssl x509 -noout -issuer` mostra uma CA
+      pública real (`C=US, O=Let's Encrypt, ...`), não mais self-signed
+      nem staging.
+- [ ] Cadeia completa confirmada (`-showcerts` mostra >= 2 certificados).
+- [ ] `docker/nginx/certs/itgov.crt` e `itgov.key` foram sobrescritos com
+      o novo material (timestamp do arquivo bate com o horário da emissão).
+- [ ] `docker exec itgov-nginx nginx -t` sem erro após o reload automático
+      do deploy hook.
+- [ ] Acesso real via navegador a `https://noc.grupogadens.com.br` sem
+      aviso de certificado não confiável.
+- [ ] `crontab -l` confirma o job de renovação do acme.sh ainda ativo (já
+      era esperado desde a instalação, só reconfirmar que não foi removido).
+- [ ] `docs/runbooks/letsencrypt-dns01.md` atualizado removendo o aviso
+      "NÃO EXECUTADO" da seção de emissão.
