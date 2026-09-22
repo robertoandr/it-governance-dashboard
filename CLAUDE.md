@@ -161,18 +161,28 @@ Localizacao: `docs/adr/`
 
 ## 10. Skills do Claude Code Recomendadas
 
-| Skill                | Quando usar                                               |
-|----------------------|-----------------------------------------------------------|
-| `/zabbix-api`        | Automacao de hosts, triggers e items no Zabbix            |
-| `/influxdb-cloud`    | Consultas e ingestao de metricas no InfluxDB              |
-| `/grafana-dashboards`| Criacao e manutencao de dashboards de observabilidade     |
-| `/postgresql-optimization` | Queries avancadas, JSONB, indices e performance    |
-| `/docker-expert`     | Otimizacao de imagens, compose e seguranca de containers  |
-| `/kubernetes-specialist` | Manifests, RBAC, NetworkPolicy e troubleshooting    |
-| `/code-review`       | Review de PRs com niveis de profundidade (low/ultra)      |
-| `/security-review`   | Auditoria de seguranca antes de merges em main            |
-| `/git-workflow`      | Padronizacao de branches, commits e estrategia de merge   |
-| `/python-executor`   | Scripts de analise de dados e automacao                   |
+> Auditado em 2026-09-22: a versao anterior desta tabela citava 6 skills
+> (`zabbix-api`, `influxdb-cloud`, `grafana-dashboards`, `postgresql-optimization`,
+> `docker-expert`, `kubernetes-specialist`) e `/python-executor` que nunca
+> existiram em nenhuma marketplace configurada — provavelmente nomes
+> aspiracionais nunca validados. `kubernetes-specialist`, `devops-engineer`,
+> `postgres-pro`, `database-optimizer` e `monitoring-expert` foram instaladas
+> em `~/.claude/skills/` (fonte: marketplace de terceiros `jeffallan/claude-skills`,
+> MIT) como os equivalentes reais mais proximos. Nao existe equivalente para
+> Zabbix, InfluxDB ou fluxo de git especifico — usar o Bash/Zabbix
+> JSON-RPC/InfluxDB Flux diretamente.
+
+| Skill                    | Quando usar                                               |
+|---------------------------|-----------------------------------------------------------|
+| `kubernetes-specialist`   | Manifests, Helm, RBAC, NetworkPolicy, GitOps               |
+| `devops-engineer`         | Dockerfiles, CI/CD, Terraform, deploy, runbooks de incidente |
+| `postgres-pro`            | EXPLAIN ANALYZE, JSONB, replicacao, VACUUM (Postgres do Zabbix) |
+| `database-optimizer`      | Queries lentas, indices, particionamento                   |
+| `monitoring-expert`       | Dashboards Prometheus/Grafana, alerting, tracing            |
+| `code-review`             | Review de PRs com niveis de profundidade (low/ultra)        |
+| `security-review`         | Auditoria de seguranca antes de merges em main              |
+| `python-testing-patterns` | pytest, fixtures, mocking, TDD                              |
+| `linux-backup-dr-rclone`  | Backup local + sync externo (usado em `scripts/backup_governanca.sh`) |
 
 ---
 
