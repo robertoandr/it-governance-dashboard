@@ -120,17 +120,22 @@ desenvolvimento, indicado por `PROJECT_DIR` no unit:
 
 | Papel                         | Caminho                                          |
 |-------------------------------|--------------------------------------------------|
-| Código da coleta/backup       | `/home/zabbix/ops/it-governance-dashboard`       |
+| Código da coleta/backup       | `/opt/itgov-backup`                              |
 | Instância (`PROJECT_DIR`)     | `/home/zabbix/projects/it-governance-dashboard`  |
 
 Motivo: o unit apontava direto para o checkout de desenvolvimento, e trocar de branch ali (uma
 branch sem `deploy/governanca-ti-coleta`) fazia o backup noturno falhar sem ninguém perceber.
 
+Não rode `docker compose` a partir de `/opt/itgov-backup`: o nome do projeto compose sairia
+`itgov-backup` e criaria containers/volumes paralelos (Conflict + volumes órfãos). O wrapper faz
+`cd "$PROJECT_DIR"` e o unit usa `WorkingDirectory` na instância pelo mesmo motivo.
+
 Instalação (uma vez):
 
 ```bash
-git clone https://github.com/robertoandr/it-governance-dashboard.git /home/zabbix/ops/it-governance-dashboard
-sudo cp /home/zabbix/ops/it-governance-dashboard/deploy/systemd/governanca-ti-coleta.{service,timer} /etc/systemd/system/
+sudo install -d -o zabbix -g zabbix /opt/itgov-backup
+git clone https://github.com/robertoandr/it-governance-dashboard.git /opt/itgov-backup
+sudo cp /opt/itgov-backup/deploy/systemd/governanca-ti-coleta.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl start governanca-ti-coleta.service   # teste manual; acompanhe com journalctl
 ```
@@ -138,5 +143,5 @@ sudo systemctl start governanca-ti-coleta.service   # teste manual; acompanhe co
 Atualizar o código em produção (depois do merge no `main`):
 
 ```bash
-git -C /home/zabbix/ops/it-governance-dashboard pull --ff-only
+git -C /opt/itgov-backup pull --ff-only
 ```

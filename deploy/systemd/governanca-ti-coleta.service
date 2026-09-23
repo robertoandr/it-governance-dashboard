@@ -12,11 +12,11 @@ WorkingDirectory=/home/zabbix/projects/it-governance-dashboard
 # rclone fica em ~/.local/bin, fora do PATH padrão do systemd (systemd não
 # lê .bashrc/.profile do usuário).
 Environment="PATH=/home/zabbix/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-# Código vem do checkout de operação (fixo no main, só muda via deploy);
+# Código vem da cópia fixa /opt/itgov-backup (fixa no main, só muda via deploy);
 # PROJECT_DIR aponta a instância (.env, backups/, stack Docker). Assim uma
 # troca de branch no checkout de desenvolvimento não quebra o backup.
 Environment="PROJECT_DIR=/home/zabbix/projects/it-governance-dashboard"
-ExecStart=/home/zabbix/ops/it-governance-dashboard/deploy/governanca-ti-coleta
+ExecStart=/opt/itgov-backup/deploy/governanca-ti-coleta
 
 # stdout/stderr também vão pro journald, além do log próprio em
 # /var/log/governanca-ti/coleta.log (ver: journalctl -u governanca-ti-coleta)
