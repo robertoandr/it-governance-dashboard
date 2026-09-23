@@ -9,7 +9,11 @@
 # fica refém do sync externo.
 set -uo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# PROJECT_ROOT = onde ficam .env, backups/ e logs/ (dados da instância). Por
+# padrão é o checkout que contém este script; o systemd sobrescreve para
+# rodar o código de um checkout de operação separado (ver deploy/README.md).
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BACKUP_DIR="$PROJECT_ROOT/backups"
 LOG_DIR="$PROJECT_ROOT/logs"
 LOG_FILE="$LOG_DIR/backup_external.log"
