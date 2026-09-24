@@ -1,0 +1,1718 @@
+[
+ {
+  "host": "cam-adm-hauer-ch01",
+  "name": "Câmera ADM HAUER - canal 1",
+  "ip": "10.41.100.71",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch02",
+  "name": "Câmera ADM HAUER - canal 2",
+  "ip": "10.41.102.251",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch03",
+  "name": "Câmera ADM HAUER - canal 3",
+  "ip": "10.41.103.250",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "3"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch04",
+  "name": "Câmera ADM HAUER - canal 4",
+  "ip": "10.41.100.137",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "4"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch05",
+  "name": "Câmera ADM HAUER - canal 5",
+  "ip": "10.41.100.139",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "5"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch06",
+  "name": "Câmera ADM HAUER - canal 6",
+  "ip": "10.41.100.133",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "6"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch07",
+  "name": "Câmera ADM HAUER - canal 7",
+  "ip": "10.41.100.178",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "7"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch08",
+  "name": "Câmera ADM HAUER - canal 8",
+  "ip": "10.41.103.40",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "8"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch09",
+  "name": "Câmera ADM HAUER - canal 9",
+  "ip": "10.41.100.250",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "9"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch10",
+  "name": "Câmera ADM HAUER - canal 10",
+  "ip": "10.41.103.42",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "10"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch11",
+  "name": "Câmera ADM HAUER - canal 11",
+  "ip": "10.41.100.141",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "11"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch12",
+  "name": "Câmera ADM HAUER - canal 12",
+  "ip": "10.41.100.138",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "12"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch13",
+  "name": "Câmera ADM HAUER - canal 13",
+  "ip": "10.41.103.34",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "13"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch14",
+  "name": "Câmera ADM HAUER - canal 14",
+  "ip": "10.41.100.154",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "14"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch15",
+  "name": "Câmera ADM HAUER - canal 15",
+  "ip": "10.41.102.252",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "15"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch16",
+  "name": "Câmera ADM HAUER - canal 16",
+  "ip": "10.41.100.150",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "16"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch17",
+  "name": "Câmera ADM HAUER - canal 17",
+  "ip": "10.41.100.153",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "17"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch18",
+  "name": "Câmera ADM HAUER - canal 18",
+  "ip": "10.41.100.155",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "18"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch19",
+  "name": "Câmera ADM HAUER - canal 19",
+  "ip": "10.41.100.152",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "19"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch20",
+  "name": "Câmera ADM HAUER - canal 20",
+  "ip": "10.41.100.164",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "20"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch21",
+  "name": "Câmera ADM HAUER - canal 21",
+  "ip": "10.41.100.161",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "21"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch22",
+  "name": "Câmera ADM HAUER - canal 22",
+  "ip": "10.41.100.156",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "22"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch23",
+  "name": "Câmera ADM HAUER - canal 23",
+  "ip": "10.41.100.159",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "23"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch24",
+  "name": "Câmera ADM HAUER - canal 24",
+  "ip": "10.41.100.158",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "24"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch25",
+  "name": "Câmera ADM HAUER - canal 25",
+  "ip": "10.41.100.163",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "25"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch26",
+  "name": "Câmera ADM HAUER - canal 26",
+  "ip": "10.41.100.134",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "26"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch27",
+  "name": "Câmera ADM HAUER - canal 27",
+  "ip": "10.41.100.221",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "27"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch28",
+  "name": "Câmera ADM HAUER - canal 28",
+  "ip": "10.41.103.240",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "28"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch30",
+  "name": "Câmera ADM HAUER - canal 30",
+  "ip": "10.41.100.223",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "30"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch31",
+  "name": "Câmera ADM HAUER - canal 31",
+  "ip": "10.41.100.220",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "31"
+  }
+ },
+ {
+  "host": "cam-adm-hauer-ch32",
+  "name": "Câmera ADM HAUER - canal 32",
+  "ip": "10.41.100.224",
+  "subcategory": "camera",
+  "andar": "ADM HAUER",
+  "tags": {
+   "gravador": "ADM HAUER",
+   "canal": "32"
+  }
+ },
+ {
+  "host": "cam-corredor-tecnico-ch01",
+  "name": "Câmera Corredor técnico - canal 1",
+  "ip": "10.41.100.177",
+  "subcategory": "camera",
+  "andar": "Corredor técnico",
+  "tags": {
+   "gravador": "Corredor técnico",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-corredor-tecnico-ch02",
+  "name": "Câmera Corredor técnico - canal 2",
+  "ip": "10.41.100.176",
+  "subcategory": "camera",
+  "andar": "Corredor técnico",
+  "tags": {
+   "gravador": "Corredor técnico",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch01",
+  "name": "Câmera Loja Útil - canal 1",
+  "ip": "10.41.100.210",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch02",
+  "name": "Câmera Loja Útil - canal 2",
+  "ip": "10.41.100.197",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch03",
+  "name": "Câmera Loja Útil - canal 3",
+  "ip": "10.41.100.222",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "3"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch04",
+  "name": "Câmera Loja Útil - canal 4",
+  "ip": "10.41.100.229",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "4"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch05",
+  "name": "Câmera Loja Útil - canal 5",
+  "ip": "10.41.100.232",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "5"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch06",
+  "name": "Câmera Loja Útil - canal 6",
+  "ip": "10.41.100.235",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "6"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch07",
+  "name": "Câmera Loja Útil - canal 7",
+  "ip": "10.41.100.236",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "7"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch08",
+  "name": "Câmera Loja Útil - canal 8",
+  "ip": "10.41.100.227",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "8"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch09",
+  "name": "Câmera Loja Útil - canal 9",
+  "ip": "10.41.100.238",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "9"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch10",
+  "name": "Câmera Loja Útil - canal 10",
+  "ip": "10.41.100.239",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "10"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch11",
+  "name": "Câmera Loja Útil - canal 11",
+  "ip": "10.41.100.240",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "11"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch12",
+  "name": "Câmera Loja Útil - canal 12",
+  "ip": "10.41.100.241",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "12"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch13",
+  "name": "Câmera Loja Útil - canal 13",
+  "ip": "10.41.102.25",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "13"
+  }
+ },
+ {
+  "host": "cam-loja-util-ch14",
+  "name": "Câmera Loja Útil - canal 14",
+  "ip": "10.41.102.26",
+  "subcategory": "camera",
+  "andar": "Loja Útil",
+  "tags": {
+   "gravador": "Loja Útil",
+   "canal": "14"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch01",
+  "name": "Câmera Shopping 1 - canal 1",
+  "ip": "10.41.10.112",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch02",
+  "name": "Câmera Shopping 1 - canal 2",
+  "ip": "10.41.101.148",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch03",
+  "name": "Câmera Shopping 1 - canal 3",
+  "ip": "10.41.103.19",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "3"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch04",
+  "name": "Câmera Shopping 1 - canal 4",
+  "ip": "10.41.101.124",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "4"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch05",
+  "name": "Câmera Shopping 1 - canal 5",
+  "ip": "10.41.101.140",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "5"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch06",
+  "name": "Câmera Shopping 1 - canal 6",
+  "ip": "10.41.102.83",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "6"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch07",
+  "name": "Câmera Shopping 1 - canal 7",
+  "ip": "10.41.101.137",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "7"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch08",
+  "name": "Câmera Shopping 1 - canal 8",
+  "ip": "10.41.103.21",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "8"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch09",
+  "name": "Câmera Shopping 1 - canal 9",
+  "ip": "10.41.103.20",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "9"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch10",
+  "name": "Câmera Shopping 1 - canal 10",
+  "ip": "10.41.101.135",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "10"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch11",
+  "name": "Câmera Shopping 1 - canal 11",
+  "ip": "10.41.101.152",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "11"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch12",
+  "name": "Câmera Shopping 1 - canal 12",
+  "ip": "10.41.103.11",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "12"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch13",
+  "name": "Câmera Shopping 1 - canal 13",
+  "ip": "10.41.103.145",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "13"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch14",
+  "name": "Câmera Shopping 1 - canal 14",
+  "ip": "10.41.101.144",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "14"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch15",
+  "name": "Câmera Shopping 1 - canal 15",
+  "ip": "10.41.101.147",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "15"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch16",
+  "name": "Câmera Shopping 1 - canal 16",
+  "ip": "10.41.101.146",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "16"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch17",
+  "name": "Câmera Shopping 1 - canal 17",
+  "ip": "10.41.103.22",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "17"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch18",
+  "name": "Câmera Shopping 1 - canal 18",
+  "ip": "10.41.101.142",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "18"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch19",
+  "name": "Câmera Shopping 1 - canal 19",
+  "ip": "10.41.101.143",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "19"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch20",
+  "name": "Câmera Shopping 1 - canal 20",
+  "ip": "10.41.103.23",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "20"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch21",
+  "name": "Câmera Shopping 1 - canal 21",
+  "ip": "10.41.103.37",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "21"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch22",
+  "name": "Câmera Shopping 1 - canal 22",
+  "ip": "10.41.103.29",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "22"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch23",
+  "name": "Câmera Shopping 1 - canal 23",
+  "ip": "10.41.100.74",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "23"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch24",
+  "name": "Câmera Shopping 1 - canal 24",
+  "ip": "10.41.103.33",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "24"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch25",
+  "name": "Câmera Shopping 1 - canal 25",
+  "ip": "10.41.103.248",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "25"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch26",
+  "name": "Câmera Shopping 1 - canal 26",
+  "ip": "10.41.103.36",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "26"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch27",
+  "name": "Câmera Shopping 1 - canal 27",
+  "ip": "10.41.103.38",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "27"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch28",
+  "name": "Câmera Shopping 1 - canal 28",
+  "ip": "10.41.103.43",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "28"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch29",
+  "name": "Câmera Shopping 1 - canal 29",
+  "ip": "10.41.103.44",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "29"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch30",
+  "name": "Câmera Shopping 1 - canal 30",
+  "ip": "10.41.100.130",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "30"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch31",
+  "name": "Câmera Shopping 1 - canal 31",
+  "ip": "10.41.103.251",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "31"
+  }
+ },
+ {
+  "host": "cam-shopping-1-ch32",
+  "name": "Câmera Shopping 1 - canal 32",
+  "ip": "10.41.100.27",
+  "subcategory": "camera",
+  "andar": "Shopping 1",
+  "tags": {
+   "gravador": "Shopping 1",
+   "canal": "32"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch01",
+  "name": "Câmera Shopping novo - canal 1",
+  "ip": "10.41.100.127",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch02",
+  "name": "Câmera Shopping novo - canal 2",
+  "ip": "10.41.100.147",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch03",
+  "name": "Câmera Shopping novo - canal 3",
+  "ip": "10.41.103.15",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "3"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch04",
+  "name": "Câmera Shopping novo - canal 4",
+  "ip": "10.41.100.148",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "4"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch05",
+  "name": "Câmera Shopping novo - canal 5",
+  "ip": "10.41.103.16",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "5"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch06",
+  "name": "Câmera Shopping novo - canal 6",
+  "ip": "10.41.100.145",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "6"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch07",
+  "name": "Câmera Shopping novo - canal 7",
+  "ip": "10.41.100.146",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "7"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch08",
+  "name": "Câmera Shopping novo - canal 8",
+  "ip": "10.41.100.170",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "8"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch09",
+  "name": "Câmera Shopping novo - canal 9",
+  "ip": "10.41.100.72",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "9"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch10",
+  "name": "Câmera Shopping novo - canal 10",
+  "ip": "10.41.100.89",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "10"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch11",
+  "name": "Câmera Shopping novo - canal 11",
+  "ip": "10.41.100.92",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "11"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch12",
+  "name": "Câmera Shopping novo - canal 12",
+  "ip": "10.41.100.73",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "12"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch13",
+  "name": "Câmera Shopping novo - canal 13",
+  "ip": "10.41.100.76",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "13"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch14",
+  "name": "Câmera Shopping novo - canal 14",
+  "ip": "10.41.100.58",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "14"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch15",
+  "name": "Câmera Shopping novo - canal 15",
+  "ip": "10.41.10.112",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "15"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch16",
+  "name": "Câmera Shopping novo - canal 16",
+  "ip": "10.41.100.104",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "16"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch17",
+  "name": "Câmera Shopping novo - canal 17",
+  "ip": "10.41.100.77",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "17"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch18",
+  "name": "Câmera Shopping novo - canal 18",
+  "ip": "10.41.100.45",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "18"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch19",
+  "name": "Câmera Shopping novo - canal 19",
+  "ip": "10.41.100.50",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "19"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch20",
+  "name": "Câmera Shopping novo - canal 20",
+  "ip": "10.41.100.176",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "20"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch21",
+  "name": "Câmera Shopping novo - canal 21",
+  "ip": "10.41.100.175",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "21"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch22",
+  "name": "Câmera Shopping novo - canal 22",
+  "ip": "10.41.100.49",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "22"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch23",
+  "name": "Câmera Shopping novo - canal 23",
+  "ip": "10.41.100.177",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "23"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch24",
+  "name": "Câmera Shopping novo - canal 24",
+  "ip": "10.41.103.12",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "24"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch25",
+  "name": "Câmera Shopping novo - canal 25",
+  "ip": "10.41.103.10",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "25"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch26",
+  "name": "Câmera Shopping novo - canal 26",
+  "ip": "10.41.103.14",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "26"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch27",
+  "name": "Câmera Shopping novo - canal 27",
+  "ip": "10.41.100.70",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "27"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch28",
+  "name": "Câmera Shopping novo - canal 28",
+  "ip": "10.41.103.17",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "28"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch29",
+  "name": "Câmera Shopping novo - canal 29",
+  "ip": "10.41.103.24",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "29"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch30",
+  "name": "Câmera Shopping novo - canal 30",
+  "ip": "10.41.103.25",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "30"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch31",
+  "name": "Câmera Shopping novo - canal 31",
+  "ip": "10.41.103.26",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "31"
+  }
+ },
+ {
+  "host": "cam-shopping-novo-ch32",
+  "name": "Câmera Shopping novo - canal 32",
+  "ip": "10.41.103.27",
+  "subcategory": "camera",
+  "andar": "Shopping novo",
+  "tags": {
+   "gravador": "Shopping novo",
+   "canal": "32"
+  }
+ },
+ {
+  "host": "cam-terreo-ch17",
+  "name": "Câmera Térreo - canal 17",
+  "ip": "10.41.103.50",
+  "subcategory": "camera",
+  "andar": "Térreo",
+  "tags": {
+   "gravador": "Térreo",
+   "canal": "17"
+  }
+ },
+ {
+  "host": "cam-terreo-ch18",
+  "name": "Câmera Térreo - canal 18",
+  "ip": "10.41.100.177",
+  "subcategory": "camera",
+  "andar": "Térreo",
+  "tags": {
+   "gravador": "Térreo",
+   "canal": "18"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch01",
+  "name": "Câmera Triunfo 2 - canal 1",
+  "ip": "172.17.1.207",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch02",
+  "name": "Câmera Triunfo 2 - canal 2",
+  "ip": "172.17.1.220",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch03",
+  "name": "Câmera Triunfo 2 - canal 3",
+  "ip": "172.17.1.221",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "3"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch04",
+  "name": "Câmera Triunfo 2 - canal 4",
+  "ip": "172.17.1.212",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "4"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch05",
+  "name": "Câmera Triunfo 2 - canal 5",
+  "ip": "172.17.1.224",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "5"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch06",
+  "name": "Câmera Triunfo 2 - canal 6",
+  "ip": "172.17.1.208",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "6"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch07",
+  "name": "Câmera Triunfo 2 - canal 7",
+  "ip": "172.17.1.209",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "7"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch08",
+  "name": "Câmera Triunfo 2 - canal 8",
+  "ip": "172.17.1.210",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "8"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch09",
+  "name": "Câmera Triunfo 2 - canal 9",
+  "ip": "172.17.1.211",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "9"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch10",
+  "name": "Câmera Triunfo 2 - canal 10",
+  "ip": "172.17.1.213",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "10"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch11",
+  "name": "Câmera Triunfo 2 - canal 11",
+  "ip": "172.17.1.214",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "11"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch12",
+  "name": "Câmera Triunfo 2 - canal 12",
+  "ip": "172.17.1.215",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "12"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch13",
+  "name": "Câmera Triunfo 2 - canal 13",
+  "ip": "172.17.1.216",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "13"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch14",
+  "name": "Câmera Triunfo 2 - canal 14",
+  "ip": "172.17.1.218",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "14"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch15",
+  "name": "Câmera Triunfo 2 - canal 15",
+  "ip": "172.17.1.219",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "15"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch16",
+  "name": "Câmera Triunfo 2 - canal 16",
+  "ip": "172.17.1.222",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "16"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch17",
+  "name": "Câmera Triunfo 2 - canal 17",
+  "ip": "172.17.1.225",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "17"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch18",
+  "name": "Câmera Triunfo 2 - canal 18",
+  "ip": "172.17.1.227",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "18"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch19",
+  "name": "Câmera Triunfo 2 - canal 19",
+  "ip": "172.17.1.242",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "19"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch20",
+  "name": "Câmera Triunfo 2 - canal 20",
+  "ip": "172.17.1.228",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "20"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch21",
+  "name": "Câmera Triunfo 2 - canal 21",
+  "ip": "172.17.1.230",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "21"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch22",
+  "name": "Câmera Triunfo 2 - canal 22",
+  "ip": "172.17.1.234",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "22"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch23",
+  "name": "Câmera Triunfo 2 - canal 23",
+  "ip": "172.17.1.233",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "23"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch24",
+  "name": "Câmera Triunfo 2 - canal 24",
+  "ip": "172.17.1.232",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "24"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch25",
+  "name": "Câmera Triunfo 2 - canal 25",
+  "ip": "172.17.1.231",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "25"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch26",
+  "name": "Câmera Triunfo 2 - canal 26",
+  "ip": "172.17.1.235",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "26"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch27",
+  "name": "Câmera Triunfo 2 - canal 27",
+  "ip": "172.17.1.236",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "27"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch28",
+  "name": "Câmera Triunfo 2 - canal 28",
+  "ip": "172.17.1.229",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "28"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch29",
+  "name": "Câmera Triunfo 2 - canal 29",
+  "ip": "172.17.1.238",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "29"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch30",
+  "name": "Câmera Triunfo 2 - canal 30",
+  "ip": "172.17.1.239",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "30"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch31",
+  "name": "Câmera Triunfo 2 - canal 31",
+  "ip": "172.17.1.240",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "31"
+  }
+ },
+ {
+  "host": "cam-triunfo-2-ch32",
+  "name": "Câmera Triunfo 2 - canal 32",
+  "ip": "172.17.1.241",
+  "subcategory": "camera",
+  "andar": "Triunfo 2",
+  "tags": {
+   "gravador": "Triunfo 2",
+   "canal": "32"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch01",
+  "name": "Câmera Triunfo 4 - canal 1",
+  "ip": "172.17.12.42",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "1"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch02",
+  "name": "Câmera Triunfo 4 - canal 2",
+  "ip": "172.17.12.43",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "2"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch03",
+  "name": "Câmera Triunfo 4 - canal 3",
+  "ip": "172.17.12.47",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "3"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch04",
+  "name": "Câmera Triunfo 4 - canal 4",
+  "ip": "172.17.12.48",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "4"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch05",
+  "name": "Câmera Triunfo 4 - canal 5",
+  "ip": "172.17.1.18",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "5"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch06",
+  "name": "Câmera Triunfo 4 - canal 6",
+  "ip": "172.17.1.251",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "6"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch07",
+  "name": "Câmera Triunfo 4 - canal 7",
+  "ip": "172.17.1.245",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "7"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch08",
+  "name": "Câmera Triunfo 4 - canal 8",
+  "ip": "172.17.1.246",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "8"
+  }
+ },
+ {
+  "host": "cam-triunfo-4-ch09",
+  "name": "Câmera Triunfo 4 - canal 9",
+  "ip": "172.17.1.244",
+  "subcategory": "camera",
+  "andar": "Triunfo 4",
+  "tags": {
+   "gravador": "Triunfo 4",
+   "canal": "9"
+  }
+ },
+ {
+  "host": "cam-r3-ch17",
+  "name": "Câmera R3 - canal 17",
+  "ip": "10.41.103.31",
+  "subcategory": "camera",
+  "andar": "R3",
+  "tags": {
+   "gravador": "R3",
+   "canal": "17"
+  }
+ },
+ {
+  "host": "cam-r3-ch18",
+  "name": "Câmera R3 - canal 18",
+  "ip": "10.41.103.32",
+  "subcategory": "camera",
+  "andar": "R3",
+  "tags": {
+   "gravador": "R3",
+   "canal": "18"
+  }
+ }
+]

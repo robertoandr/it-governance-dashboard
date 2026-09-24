@@ -8,20 +8,28 @@ existem mais após a perda da VM.
 
 Cria (idempotente, tudo resolvido por nome):
   - Hostgroups "CFTV/NVRs", "CFTV/Cameras" e "CFTV/DVRs"
-  - 1 NVR, 18 câmeras IP e 3 DVRs, todos com o template "ICMP Ping"
+  - Hikvision: 1 NVR, 18 câmeras IP e 3 DVRs com o template "ICMP Ping"
     (item icmpping + triggers nativas de indisponibilidade/perda/latência)
+  - Intelbras (lista em infra-setup/cftv_intelbras.json, se existir): câmeras
+    com "ICMP Ping"; NVRs/DVRs com interface SNMPv3, "ICMP Ping" e
+    "Intelbras NVR SNMP" (importado por 03_install_templates.py)
+  - Macros globais {$CFTV.SNMPV3.USER} e, como Secret, {$CFTV.SNMPV3.AUTHPASS} /
+    {$CFTV.SNMPV3.PRIVPASS}, lidas do .env (CFTV_SNMPV3_USER, CFTV_SNMPV3_AUTHPASS,
+    CFTV_SNMPV3_PRIVPASS). Secrets só são gravadas quando a variável está definida.
   - Tags category=cftv, subcategory=nvr|camera|dvr e andar, usadas pela página
     /cftv para agrupar os dispositivos
 
-Hosts que já existem têm grupos, template e tags atualizados; interface e
+Hosts que já existem têm grupos, templates e tags atualizados; interface e
 status não são alterados.
 
 Uso:
+    venv/bin/python infra-setup/03_install_templates.py   # template Intelbras
     venv/bin/python infra-setup/07_create_cftv_hosts.py
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -57,27 +65,54 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import zbx_lookup  # noqa: E402
 
-# ── Inventário (fonte: cftv-setup/03a_create_dvrs.py, 08a e 08b) ───────────
 TEMPLATE_ICMP = "ICMP Ping"
-GRP_NVR = "CFTV/NVRs"
-GRP_CAM = "CFTV/Cameras"
-GRP_DVR = "CFTV/DVRs"
+TEMPLATE_INTELBRAS = "Intelbras NVR SNMP"
+GRP_BY_SUBCAT = {"nvr": "CFTV/NVRs", "camera": "CFTV/Cameras", "dvr": "CFTV/DVRs"}
 NVR_HOST = "nvr-centro-01"
+INTELBRAS_FILE = Path(__file__).resolve().parent / "cftv_intelbras.json"
 
-# (host técnico, nome visível, IP, grupo, subcategory, andar, tags extras)
-HOSTS: list[tuple[str, str, str, str, str, str, dict[str, str]]] = [
-    (
-        NVR_HOST,
-        "NVR Centro - Hikvision DS-7632NXI-K2",
-        "172.29.11.20",
-        GRP_NVR,
-        "nvr",
-        "Loja Centro",
-        {"vendor": "Hikvision", "model": "DS-7632NXI-K2", "loja": "Centro", "criticidade": "alta"},
-    ),
-    ("DVR-1", "DVR-1 · 9º/8º/Elevadores/Faciais", "172.29.11.17", GRP_DVR, "dvr", "9º/8º", {}),
-    ("DVR-2", "DVR-2 · 7º/6º andar", "172.29.11.18", GRP_DVR, "dvr", "7º/6º", {}),
-    ("DVR-3", "DVR-3 · 5º/Térreo/Garagem", "172.29.11.19", GRP_DVR, "dvr", "5º/Térreo", {}),
+# SNMPv3 authPriv, MD5 + DES — mesma configuração cadastrada nos equipamentos Intelbras
+MACRO_USER = "{$CFTV.SNMPV3.USER}"
+MACRO_AUTH = "{$CFTV.SNMPV3.AUTHPASS}"
+MACRO_PRIV = "{$CFTV.SNMPV3.PRIVPASS}"
+SNMPV3_DETAILS = {
+    "version": 3,
+    "bulk": 1,
+    "securityname": MACRO_USER,
+    "securitylevel": 2,  # authPriv
+    "authprotocol": 0,  # MD5
+    "authpassphrase": MACRO_AUTH,
+    "privprotocol": 0,  # DES
+    "privpassphrase": MACRO_PRIV,
+    "contextname": "",
+}
+MACRO_TEXT, MACRO_SECRET = 0, 1
+
+# ── Inventário Hikvision (fonte: cftv-setup/03a_create_dvrs.py, 08a e 08b) ──
+HIKVISION: list[dict] = [
+    {
+        "host": NVR_HOST,
+        "name": "NVR Centro - Hikvision DS-7632NXI-K2",
+        "ip": "172.29.11.20",
+        "subcategory": "nvr",
+        "andar": "Loja Centro",
+        "tags": {"vendor": "Hikvision", "model": "DS-7632NXI-K2", "loja": "Centro", "criticidade": "alta"},
+    },
+    {
+        "host": "DVR-1",
+        "name": "DVR-1 · 9º/8º/Elevadores/Faciais",
+        "ip": "172.29.11.17",
+        "subcategory": "dvr",
+        "andar": "9º/8º",
+    },
+    {"host": "DVR-2", "name": "DVR-2 · 7º/6º andar", "ip": "172.29.11.18", "subcategory": "dvr", "andar": "7º/6º"},
+    {
+        "host": "DVR-3",
+        "name": "DVR-3 · 5º/Térreo/Garagem",
+        "ip": "172.29.11.19",
+        "subcategory": "dvr",
+        "andar": "5º/Térreo",
+    },
 ]
 
 CAMERAS = [
@@ -101,66 +136,122 @@ CAMERAS = [
     ("D18", "172.29.11.148"),
 ]
 for canal, ip in CAMERAS:
-    HOSTS.append(
-        (
-            f"cam-loja-d{canal[1:].zfill(2)}",
-            f"Câmera {canal} - Loja Centro (canal {canal})",
-            ip,
-            GRP_CAM,
-            "camera",
-            "Loja Centro",
-            {"vendor": "Hikvision", "canal_nvr": canal, "parent_nvr": NVR_HOST},
-        )
+    HIKVISION.append(
+        {
+            "host": f"cam-loja-d{canal[1:].zfill(2)}",
+            "name": f"Câmera {canal} - Loja Centro (canal {canal})",
+            "ip": ip,
+            "subcategory": "camera",
+            "andar": "Loja Centro",
+            "tags": {"vendor": "Hikvision", "canal_nvr": canal, "parent_nvr": NVR_HOST},
+        }
     )
+
+
+def _carregar_intelbras() -> list[dict]:
+    """Lê cftv_intelbras.json: lista de {host, name, ip, subcategory, andar, tags?}."""
+    if not INTELBRAS_FILE.exists():
+        print(f"  [--] {INTELBRAS_FILE.name} não encontrado — pulando Intelbras")
+        return []
+    hosts = json.loads(INTELBRAS_FILE.read_text())
+    for h in hosts:
+        h.setdefault("tags", {})["vendor"] = "Intelbras"
+        # Só gravadores têm o MIB do template Intelbras; câmeras ficam com ICMP
+        h["snmp"] = h["subcategory"] in ("nvr", "dvr")
+    return hosts
 
 
 def banner(text: str) -> None:
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")
 
 
+def _garantir_macros(api: ZabbixAPI) -> None:
+    """Cria/atualiza as macros globais SNMPv3. Senhas só são escritas se vierem do .env."""
+    desejadas = [
+        (MACRO_USER, os.environ.get("CFTV_SNMPV3_USER", "zbxro"), MACRO_TEXT),
+        (MACRO_AUTH, os.environ.get("CFTV_SNMPV3_AUTHPASS", ""), MACRO_SECRET),
+        (MACRO_PRIV, os.environ.get("CFTV_SNMPV3_PRIVPASS", ""), MACRO_SECRET),
+    ]
+    existentes = {
+        m["macro"]: m["globalmacroid"] for m in api.usermacro.get(globalmacro=True, output=["globalmacroid", "macro"])
+    }
+    for macro, valor, tipo in desejadas:
+        if not valor:
+            estado = "já existe" if macro in existentes else "AUSENTE — defina no .env e rode de novo"
+            print(f"  [--] {macro}: sem valor no .env ({estado})")
+            continue
+        if macro in existentes:
+            api.usermacro.updateglobal(globalmacroid=existentes[macro], value=valor, type=tipo)
+        else:
+            api.usermacro.createglobal(macro=macro, value=valor, type=tipo)
+        print(f"  [OK] {macro} gravada{' (Secret)' if tipo == MACRO_SECRET else ''}")
+
+
 def main() -> None:
-    banner("CFTV — NVR, câmeras IP e DVRs")
+    banner("CFTV — NVRs, câmeras IP e DVRs")
 
     api = ZabbixAPI(url=ZABBIX_URL, token=ZABBIX_TOKEN, skip_version_check=True)
     print(f"  Zabbix {api.api_version()} conectado")
 
-    grupos = {nome: zbx_lookup.grupo(api, nome) for nome in (GRP_NVR, GRP_CAM, GRP_DVR)}
-    template_id = zbx_lookup.template(api, TEMPLATE_ICMP)
+    intelbras = _carregar_intelbras()
+    hosts = HIKVISION + intelbras
+
+    grupos = {sub: zbx_lookup.grupo(api, nome) for sub, nome in GRP_BY_SUBCAT.items()}
+    tpl_icmp = zbx_lookup.template(api, TEMPLATE_ICMP)
+    # Template e macros SNMP só são exigidos quando há gravadores Intelbras na lista
+    tem_snmp = any(h["snmp"] for h in intelbras)
+    tpl_intelbras = zbx_lookup.template(api, TEMPLATE_INTELBRAS) if tem_snmp else None
+    if tem_snmp:
+        _garantir_macros(api)
 
     existentes = {
-        h["host"]: h["hostid"] for h in api.host.get(output=["hostid", "host"], filter={"host": [h[0] for h in HOSTS]})
+        h["host"]: h["hostid"]
+        for h in api.host.get(output=["hostid", "host"], filter={"host": [h["host"] for h in hosts]})
     }
 
     criados = atualizados = erros = 0
-    for host, nome, ip, grupo, subcat, andar, extras in HOSTS:
+    for h in hosts:
+        sub = h["subcategory"]
+        templates = [{"templateid": tpl_icmp}]
+        if h.get("snmp"):
+            templates.append({"templateid": tpl_intelbras})
         tags = [
             {"tag": "category", "value": "cftv"},
-            {"tag": "subcategory", "value": subcat},
-            {"tag": "andar", "value": andar},
-        ] + [{"tag": k, "value": v} for k, v in extras.items()]
-        comum = {
-            "name": nome,
-            "groups": [{"groupid": grupos[grupo]}],
-            "templates": [{"templateid": template_id}],
-            "tags": tags,
-        }
+            {"tag": "subcategory", "value": sub},
+            {"tag": "andar", "value": h["andar"]},
+        ] + [{"tag": k, "value": v} for k, v in h.get("tags", {}).items()]
+        comum = {"name": h["name"], "groups": [{"groupid": grupos[sub]}], "templates": templates, "tags": tags}
+
+        if h.get("snmp"):
+            interface = {
+                "type": 2,
+                "main": 1,
+                "useip": 1,
+                "ip": h["ip"],
+                "dns": "",
+                "port": "161",
+                "details": SNMPV3_DETAILS,
+            }
+        else:
+            interface = {"type": 1, "main": 1, "useip": 1, "ip": h["ip"], "dns": "", "port": "10050"}
+
         try:
-            if host in existentes:
-                api.host.update(hostid=existentes[host], **comum)
+            if h["host"] in existentes:
+                api.host.update(hostid=existentes[h["host"]], **comum)
                 atualizados += 1
-                print(f"  [--] {host:<16} {ip:<15} atualizado")
+                print(f"  [--] {h['host']:<24} {h['ip']:<15} atualizado")
             else:
                 api.host.create(
-                    host=host,
-                    interfaces=[{"type": 1, "main": 1, "useip": 1, "ip": ip, "dns": "", "port": "10050"}],
-                    description=f"CFTV ({subcat}). Monitorado via ICMP ping. IP: {ip}.",
+                    host=h["host"],
+                    interfaces=[interface],
+                    description=f"CFTV ({sub}). Monitorado via ICMP ping{' e SNMPv3' if h.get('snmp') else ''}. IP: {h['ip']}.",
                     **comum,
                 )
                 criados += 1
-                print(f"  [OK] {host:<16} {ip:<15} criado")
+                print(f"  [OK] {h['host']:<24} {h['ip']:<15} criado")
         except APIRequestError as exc:
             erros += 1
-            print(f"  [!!] {host}: {exc}")
+            print(f"  [!!] {h['host']}: {exc}")
 
     banner(f"Resumo: {criados} criados, {atualizados} atualizados, {erros} erros")
     if erros:
