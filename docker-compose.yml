@@ -129,6 +129,10 @@ services:
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - ./docker/nginx/certbot-webroot:/var/www/certbot:ro
+    # Mapa de Câmeras roda nativo no host (mapa-cameras.service) — proxy em /mapa-cameras/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       app:
         condition: service_healthy

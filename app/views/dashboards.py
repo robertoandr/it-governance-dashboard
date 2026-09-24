@@ -6,7 +6,7 @@ import asyncio
 
 import structlog
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app.auth.rbac import require_role
 from app.services.metrics_aggregator import MetricsAggregator
@@ -295,6 +295,40 @@ def cftv_monitoring() -> str:
 
     data = get_cached_cftv_summary()
     return render_template("dashboards/cftv_monitoring.html", data=data)
+
+
+# Mapa de Câmeras (serviço nativo mapa-cameras.service, porta 8080) é servido
+# pelo nginx em /mapa-cameras/, protegido por auth_request contra a rota abaixo.
+MAPA_CAMERAS_ROLES: tuple[str, ...] = ("admin", "gestor")
+MAPA_CAMERAS_PROXY_PATH = "/mapa-cameras/"
+
+
+@bp.route("/cameras")
+@login_required
+@require_role(*MAPA_CAMERAS_ROLES)
+def mapa_cameras() -> str:
+    """Render o Mapa de Câmeras embutido (iframe) na dashboard."""
+    return render_template("dashboards/mapa_cameras.html", mapa_url=MAPA_CAMERAS_PROXY_PATH)
+
+
+@bp.route("/cameras/auth")
+def mapa_cameras_auth() -> tuple[str, int]:
+    """Subrequest do nginx (auth_request) que libera o proxy do Mapa de Câmeras.
+
+    Não usa ``login_required``/``require_role``: o handler global de 401
+    responde 302 para /login, e auth_request só aceita 2xx/401/403 (o resto
+    vira 500 no nginx). Por isso o status é devolvido direto.
+
+    Returns:
+        204 quando o usuário logado tem perfil permitido, 401 sem sessão,
+        403 com perfil negado.
+    """
+    if not current_user.is_authenticated:
+        return "", 401
+    if current_user.role not in MAPA_CAMERAS_ROLES:
+        log.warning("mapa_cameras_access_denied", user_id=current_user.get_id(), role=current_user.role)
+        return "", 403
+    return "", 204
 
 
 @bp.route("/network")
