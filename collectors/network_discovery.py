@@ -77,22 +77,24 @@ SCAN_RANGES = os.getenv("INFRA_SCAN_RANGES", "172.29.0.0/22").split(",")
 SCAN_INTERVAL = int(os.getenv("INFRA_SCAN_INTERVAL", "3600"))
 NMAP_ARGS = os.getenv("INFRA_NMAP_ARGS", "-T4 --host-timeout 15s")
 
-# ── Zabbix group IDs ──────────────────────────────────────────────────────────
-GRP_LINUX = "2"
-GRP_SERVIDORES = "23"
-GRP_FIREWALL = "22"
-GRP_DATABASES = "20"
-GRP_VMS = "6"
-GRP_APPS = "19"
-GRP_DISCOVERED = "5"
+# ── Zabbix hostgroups (por NOME) ──────────────────────────────────────────────
+# IDs numéricos mudam a cada instalação: após a perda da VM o groupid 22 virou
+# "Certificados SSL" e o 23 deixou de existir. _ZbxIds resolve os nomes em runtime.
+GRP_LINUX = "Linux servers"
+GRP_SERVIDORES = "Servidores"
+GRP_FIREWALL = "Firewall"
+GRP_DATABASES = "Databases"
+GRP_VMS = "Virtual machines"
+GRP_APPS = "Applications"
+GRP_DISCOVERED = "Discovered hosts"
 
-# ── Zabbix template IDs ───────────────────────────────────────────────────────
-TMPL_LINUX_AGENT = "10001"  # Linux by Zabbix agent
-TMPL_NETWORK_SNMP = "10226"  # Network Generic Device by SNMP
-TMPL_WINDOWS_AGENT = "10081"  # Windows by Zabbix agent
-TMPL_ICMP_PING = "10687"  # Template_CFTV_Ping (ICMP disponível nesta instância)
-TMPL_MIKROTIK_SNMP = "10233"  # Mikrotik by SNMP
-TMPL_CISCO_SNMP = "10218"  # Cisco IOS by SNMP
+# ── Zabbix templates (por nome técnico) ───────────────────────────────────────
+TMPL_LINUX_AGENT = "Linux by Zabbix agent"
+TMPL_NETWORK_SNMP = "Network Generic Device by SNMP"
+TMPL_WINDOWS_AGENT = "Windows by Zabbix agent"
+TMPL_ICMP_PING = "ICMP Ping"
+TMPL_MIKROTIK_SNMP = "Mikrotik by SNMP"
+TMPL_CISCO_SNMP = "Cisco IOS by SNMP"
 
 # Portas que identificam tipos de host
 PORTS_ZABBIX_AGENT = {10050}
@@ -272,18 +274,54 @@ def _zbx_api() -> Any:
     return api
 
 
-def _existing_hosts(api: Any) -> dict[str, str]:
-    """Retorna dict {ip: hostid} de todos os hosts com interface IP."""
+class _ZbxIds:
+    """Resolve nomes de hostgroups/templates para IDs do Zabbix atual (com cache)."""
+
+    def __init__(self, api: Any) -> None:
+        self._api = api
+        self._grupos: dict[str, str] = {}
+        self._templates: dict[str, str | None] = {}
+
+    def grupo(self, nome: str) -> str:
+        """Retorna o groupid de ``nome``, criando o hostgroup se não existir."""
+        if nome not in self._grupos:
+            achados = self._api.hostgroup.get(output=["groupid"], filter={"name": nome})
+            if achados:
+                self._grupos[nome] = achados[0]["groupid"]
+            else:
+                self._grupos[nome] = self._api.hostgroup.create(name=nome)["groupids"][0]
+                log.info("network_discovery.grupo_criado", grupo=nome)
+        return self._grupos[nome]
+
+    def template(self, nome: str) -> str | None:
+        """Retorna o templateid de ``nome`` ou None (template ausente é ignorado com aviso)."""
+        if nome not in self._templates:
+            achados = self._api.template.get(output=["templateid"], filter={"host": nome})
+            self._templates[nome] = achados[0]["templateid"] if achados else None
+            if not achados:
+                log.warning("network_discovery.template_ausente", template=nome)
+        return self._templates[nome]
+
+
+def _existing_hosts(api: Any) -> dict[str, dict[str, Any]]:
+    """Retorna {ip: {hostid, groupids, templateids}} de todos os hosts com interface IP."""
     hosts = api.host.get(
         output=["hostid"],
         selectInterfaces=["ip", "interfaceid"],
+        selectHostGroups=["groupid"],
+        selectParentTemplates=["templateid"],
     )
-    result: dict[str, str] = {}
+    result: dict[str, dict[str, Any]] = {}
     for h in hosts:
+        info = {
+            "hostid": h["hostid"],
+            "groupids": {g["groupid"] for g in h.get("hostgroups", [])},
+            "templateids": {t["templateid"] for t in h.get("parentTemplates", [])},
+        }
         for iface in h.get("interfaces", []):
             ip = iface.get("ip", "")
             if ip:
-                result[ip] = h["hostid"]
+                result[ip] = info
     return result
 
 
@@ -310,8 +348,12 @@ def _skip_ips(api: Any) -> set[str]:
     return skip
 
 
-def _registrar_no_zabbix(host: DiscoveredHost, api: Any, existing: dict[str, str]) -> str:
-    """Cria ou atualiza host no Zabbix. Retorna 'created'|'updated'|'skipped'."""
+def _registrar_no_zabbix(host: DiscoveredHost, api: Any, existing: dict[str, dict[str, Any]], ids: _ZbxIds) -> str:
+    """Cria ou atualiza host no Zabbix. Retorna 'created'|'updated'|'skipped'.
+
+    Hosts existentes só GANHAM grupos/templates: os que já estavam vinculados
+    (inclusive os configurados à mão) são preservados.
+    """
     from zabbix_utils.exceptions import APIRequestError
 
     host_tech = f"infra-{host.ip.replace('.', '-')}"
@@ -319,8 +361,8 @@ def _registrar_no_zabbix(host: DiscoveredHost, api: Any, existing: dict[str, str
     iface_type = host.interface_type
     port = "10050" if iface_type == 1 else "161"
 
-    groups = [{"groupid": g} for g in host.groups]
-    templates = [{"templateid": t} for t in host.templates]
+    groupids = {ids.grupo(g) for g in host.groups}
+    templateids = {t for t in (ids.template(n) for n in host.templates) if t}
     # Zabbix rejeita DNS com chars inválidos (ex: "_gateway"); useip=1 então DNS fica vazio
     safe_dns = host.hostname if host.hostname and host.hostname[0].isalnum() else ""
     iface = {
@@ -332,23 +374,27 @@ def _registrar_no_zabbix(host: DiscoveredHost, api: Any, existing: dict[str, str
         "port": port,
     }
 
-    existing_id = existing.get(host.ip)
+    atual = existing.get(host.ip)
     try:
-        if existing_id:
-            # Atualizar apenas grupos e templates (não mexer na interface)
+        if atual:
+            novos_grupos = groupids - atual["groupids"]
+            novos_templates = templateids - atual["templateids"]
+            if not (novos_grupos or novos_templates):
+                return "skipped"
+            # Soma aos vínculos atuais; interface não é alterada
             api.host.update(
-                hostid=existing_id,
-                groups=groups,
-                templates=templates,
+                hostid=atual["hostid"],
+                groups=[{"groupid": g} for g in sorted(atual["groupids"] | groupids)],
+                templates=[{"templateid": t} for t in sorted(atual["templateids"] | templateids)],
             )
             return "updated"
         else:
             api.host.create(
                 host=host_tech,
                 name=host_name,
-                groups=groups,
+                groups=[{"groupid": g} for g in sorted(groupids)],
                 interfaces=[iface],
-                templates=templates,
+                templates=[{"templateid": t} for t in sorted(templateids)],
                 description=f"Descoberto por network_discovery em {datetime.now(UTC).strftime('%Y-%m-%d')}. OS: {host.os_guess}. Portas: {sorted(host.open_tcp)}",
                 inventory_mode=1,  # automático
                 inventory={"vendor": host.vendor, "os": host.os_guess},
@@ -434,6 +480,22 @@ def _write_influx(hosts: list[DiscoveredHost], scan_ts: datetime) -> None:
 # ── Pipeline principal ────────────────────────────────────────────────────────
 
 
+def _sync_zabbix(all_hosts: list[DiscoveredHost], stats: dict[str, int]) -> None:
+    """Registra no Zabbix os hosts descobertos, ignorando os de CFTV/M365."""
+    api = _zbx_api()
+    ids = _ZbxIds(api)
+    existing = _existing_hosts(api)
+    skip_ips = _skip_ips(api)
+    for host in all_hosts:
+        if host.ip in skip_ips:
+            log.debug("network_discovery.ip_ignorado", ip=host.ip, motivo="CFTV/M365")
+            stats["skipped"] += 1
+            continue
+        result = _registrar_no_zabbix(host, api, existing, ids)
+        stats[result] = stats.get(result, 0) + 1
+        log.info("network_discovery.zabbix_sync", ip=host.ip, resultado=result, categoria=host.category)
+
+
 def run_scan(dry_run: bool = False) -> dict[str, int]:
     """Executa varredura completa e retorna estatísticas."""
     scan_start = datetime.now(UTC)
@@ -453,18 +515,7 @@ def run_scan(dry_run: bool = False) -> dict[str, int]:
     if not dry_run and ZABBIX_TOKEN:
         # 2. Sincronizar com Zabbix
         try:
-            api = _zbx_api()
-            existing = _existing_hosts(api)
-            skip_ips = _skip_ips(api)
-
-            for host in all_hosts:
-                if host.ip in skip_ips:
-                    log.debug("network_discovery.ip_ignorado", ip=host.ip, motivo="CFTV/M365")
-                    stats["skipped"] += 1
-                    continue
-                result = _registrar_no_zabbix(host, api, existing)
-                stats[result] = stats.get(result, 0) + 1
-                log.info("network_discovery.zabbix_sync", ip=host.ip, resultado=result, categoria=host.category)
+            _sync_zabbix(all_hosts, stats)
         except Exception as exc:
             log.error("network_discovery.zabbix_falhou", erro=str(exc))
 
@@ -521,16 +572,7 @@ def main() -> None:
             stats: dict[str, int] = {"total": len(all_hosts), "created": 0, "updated": 0, "skipped": 0}
             if ZABBIX_TOKEN:
                 try:
-                    api = _zbx_api()
-                    existing = _existing_hosts(api)
-                    skip_ips = _skip_ips(api)
-                    for host in all_hosts:
-                        if host.ip in skip_ips:
-                            stats["skipped"] += 1
-                            continue
-                        result = _registrar_no_zabbix(host, api, existing)
-                        stats[result] = stats.get(result, 0) + 1
-                        log.info("network_discovery.zabbix_sync", ip=host.ip, resultado=result, categoria=host.category)
+                    _sync_zabbix(all_hosts, stats)
                 except Exception as exc:
                     log.error("network_discovery.zabbix_falhou", erro=str(exc))
             _write_influx(all_hosts, scan_start)
