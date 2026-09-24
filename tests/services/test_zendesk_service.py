@@ -106,6 +106,18 @@ class TestGetOpenTickets:
         open_ids = {t.id for t in open_tickets}
         assert open_ids == {1, 3, 5}  # open, new, pending
 
+    @respx.mock
+    def test_query_uses_implicit_or_for_status(self, svc: ZendeskService) -> None:
+        """Zendesk faz OR ao repetir a keyword; o operador OR explícito quebra o filtro."""
+        route = respx.get(f"{BASE_URL}/api/v2/search.json").mock(
+            return_value=httpx.Response(200, json=_search_page([]))
+        )
+        svc.get_open_tickets()
+        query = route.calls.last.request.url.params["query"]
+        assert " OR " not in query
+        for status in ("status:new", "status:open", "status:pending"):
+            assert status in query
+
 
 class TestSLAMetrics:
     @respx.mock
