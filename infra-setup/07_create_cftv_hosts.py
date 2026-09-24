@@ -16,6 +16,10 @@ Cria (idempotente, tudo resolvido por nome):
   - Macros globais {$CFTV.SNMPV3.USER} e, como Secret, {$CFTV.SNMPV3.AUTHPASS} /
     {$CFTV.SNMPV3.PRIVPASS}, lidas do .env (CFTV_SNMPV3_USER, CFTV_SNMPV3_AUTHPASS,
     CFTV_SNMPV3_PRIVPASS). Secrets só são gravadas quando a variável está definida.
+  - Sede Centro (infra-setup/cftv_sede_centro.json): câmeras dos DVRs 1-3,
+    faciais, telas e antenas (grupo "CFTV/Controle de acesso") com "ICMP Ping"
+  - DVR-1/2/3 com SNMPv3 + "Intelbras NVR SNMP"; se o host antigo só tiver
+    interface de agente, a interface SNMP é adicionada
   - Tags category=cftv, subcategory=nvr|camera|dvr e andar, usadas pela página
     /cftv para agrupar os dispositivos
 
@@ -67,9 +71,18 @@ import zbx_lookup  # noqa: E402
 
 TEMPLATE_ICMP = "ICMP Ping"
 TEMPLATE_INTELBRAS = "Intelbras NVR SNMP"
-GRP_BY_SUBCAT = {"nvr": "CFTV/NVRs", "camera": "CFTV/Cameras", "dvr": "CFTV/DVRs"}
+GRP_ACESSO = "CFTV/Controle de acesso"
+GRP_BY_SUBCAT = {
+    "nvr": "CFTV/NVRs",
+    "camera": "CFTV/Cameras",
+    "dvr": "CFTV/DVRs",
+    "facial": GRP_ACESSO,
+    "tela": GRP_ACESSO,
+    "antena": GRP_ACESSO,
+}
 NVR_HOST = "nvr-centro-01"
 INTELBRAS_FILE = Path(__file__).resolve().parent / "cftv_intelbras.json"
+SEDE_FILE = Path(__file__).resolve().parent / "cftv_sede_centro.json"
 
 # SNMPv3 authPriv, MD5 + DES — mesma configuração cadastrada nos equipamentos Intelbras
 MACRO_USER = "{$CFTV.SNMPV3.USER}"
@@ -98,21 +111,23 @@ HIKVISION: list[dict] = [
         "andar": "Loja Centro",
         "tags": {"vendor": "Hikvision", "model": "DS-7632NXI-K2", "loja": "Centro", "criticidade": "alta"},
     },
-    {
-        "host": "DVR-1",
-        "name": "DVR-1 · 9º/8º/Elevadores/Faciais",
-        "ip": "172.29.11.17",
-        "subcategory": "dvr",
-        "andar": "9º/8º",
-    },
-    {"host": "DVR-2", "name": "DVR-2 · 7º/6º andar", "ip": "172.29.11.18", "subcategory": "dvr", "andar": "7º/6º"},
-    {
-        "host": "DVR-3",
-        "name": "DVR-3 · 5º/Térreo/Garagem",
-        "ip": "172.29.11.19",
-        "subcategory": "dvr",
-        "andar": "5º/Térreo",
-    },
+    # DVRs Intelbras da Sede: SNMPv3 ativo (engine ID net-snmp, sondado em 2026-09-24)
+    *(
+        {
+            "host": f"DVR-{n}",
+            "name": nome,
+            "ip": f"172.29.11.{16 + n}",
+            "subcategory": "dvr",
+            "andar": andar,
+            "snmp": True,
+            "tags": {"vendor": "Intelbras", "loja": "Sede Centro"},
+        }
+        for n, nome, andar in (
+            (1, "DVR-1 · 9º/8º/Elevadores/Faciais", "9º/8º"),
+            (2, "DVR-2 · 7º/6º andar", "7º/6º"),
+            (3, "DVR-3 · 5º/Térreo/Garagem", "5º/Térreo"),
+        )
+    ),
 ]
 
 CAMERAS = [
@@ -148,16 +163,20 @@ for canal, ip in CAMERAS:
     )
 
 
-def _carregar_intelbras() -> list[dict]:
-    """Lê cftv_intelbras.json: lista de {host, name, ip, subcategory, andar, tags?}."""
-    if not INTELBRAS_FILE.exists():
-        print(f"  [--] {INTELBRAS_FILE.name} não encontrado — pulando Intelbras")
+def _carregar(arquivo: Path, vendor: str | None = None) -> list[dict]:
+    """Lê um inventário JSON: lista de {host, name, ip, subcategory, andar, tags?}.
+
+    Com ``vendor="Intelbras"``, NVRs/DVRs da lista recebem SNMPv3 + template
+    Intelbras (só gravadores têm esse MIB; câmeras ficam com ICMP).
+    """
+    if not arquivo.exists():
+        print(f"  [--] {arquivo.name} não encontrado — pulando")
         return []
-    hosts = json.loads(INTELBRAS_FILE.read_text())
+    hosts = json.loads(arquivo.read_text())
     for h in hosts:
-        h.setdefault("tags", {})["vendor"] = "Intelbras"
-        # Só gravadores têm o MIB do template Intelbras; câmeras ficam com ICMP
-        h["snmp"] = h["subcategory"] in ("nvr", "dvr")
+        if vendor:
+            h.setdefault("tags", {})["vendor"] = vendor
+        h["snmp"] = vendor == "Intelbras" and h["subcategory"] in ("nvr", "dvr")
     return hosts
 
 
@@ -188,26 +207,29 @@ def _garantir_macros(api: ZabbixAPI) -> None:
 
 
 def main() -> None:
-    banner("CFTV — NVRs, câmeras IP e DVRs")
+    banner("CFTV — NVRs, câmeras, DVRs e controle de acesso")
 
     api = ZabbixAPI(url=ZABBIX_URL, token=ZABBIX_TOKEN, skip_version_check=True)
     print(f"  Zabbix {api.api_version()} conectado")
 
-    intelbras = _carregar_intelbras()
-    hosts = HIKVISION + intelbras
+    hosts = HIKVISION + _carregar(INTELBRAS_FILE, vendor="Intelbras") + _carregar(SEDE_FILE)
 
     grupos = {sub: zbx_lookup.grupo(api, nome) for sub, nome in GRP_BY_SUBCAT.items()}
     tpl_icmp = zbx_lookup.template(api, TEMPLATE_ICMP)
     # Template e macros SNMP só são exigidos quando há gravadores Intelbras na lista
-    tem_snmp = any(h["snmp"] for h in intelbras)
+    tem_snmp = any(h.get("snmp") for h in hosts)
     tpl_intelbras = zbx_lookup.template(api, TEMPLATE_INTELBRAS) if tem_snmp else None
     if tem_snmp:
         _garantir_macros(api)
 
-    existentes = {
-        h["host"]: h["hostid"]
-        for h in api.host.get(output=["hostid", "host"], filter={"host": [h["host"] for h in hosts]})
-    }
+    existentes: dict[str, str] = {}
+    com_snmp: set[str] = set()  # hostids que já têm interface SNMP
+    for h in api.host.get(
+        output=["hostid", "host"], selectInterfaces=["type"], filter={"host": [h["host"] for h in hosts]}
+    ):
+        existentes[h["host"]] = h["hostid"]
+        if any(i["type"] == "2" for i in h["interfaces"]):
+            com_snmp.add(h["hostid"])
 
     criados = atualizados = erros = 0
     for h in hosts:
@@ -237,7 +259,12 @@ def main() -> None:
 
         try:
             if h["host"] in existentes:
-                api.host.update(hostid=existentes[h["host"]], **comum)
+                hostid = existentes[h["host"]]
+                if h.get("snmp") and hostid not in com_snmp:
+                    # Host antigo só com interface de agente: o template SNMP exige interface SNMP
+                    api.hostinterface.create(hostid=hostid, **interface)
+                    print(f"  [OK] {h['host']:<24} interface SNMPv3 adicionada")
+                api.host.update(hostid=hostid, **comum)
                 atualizados += 1
                 print(f"  [--] {h['host']:<24} {h['ip']:<15} atualizado")
             else:
