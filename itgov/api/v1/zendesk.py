@@ -258,7 +258,13 @@ def _svc() -> ZendeskService:
     Se ``ZENDESK_GROUP_ID`` estiver definido, filtra tickets server-side
     pelo grupo (ex: TI / Infra), reduzindo drasticamente o payload nas
     consultas de SLA e MTTR.
+
+    Raises:
+        HTTPException: 503 quando ``ZENDESK_SUBDOMAIN`` não está configurado —
+            sem isso o cliente montaria ``https://.zendesk.com`` e estouraria 500.
     """
+    if not config.ZENDESK_SUBDOMAIN:
+        ns.abort(503, "Integração Zendesk não configurada")
     group_id = config.ZENDESK_GROUP_ID or None
     return ZendeskService(
         subdomain=config.ZENDESK_SUBDOMAIN or "",

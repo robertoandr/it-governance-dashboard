@@ -16,4 +16,5 @@ exec gunicorn \
     --access-logfile - \
     --error-logfile - \
     --log-level info \
+    --no-control-socket \
     "app:create_app()"

@@ -247,12 +247,16 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     def inject_globals() -> dict[str, Any]:
         from flask_login import current_user as cu
 
+        from app.integrations import graph_configured, zendesk_configured
+
         return {
             "app_version": settings.app.version,
             "app_name": settings.app.name,
             "environment": settings.app.environment,
             "csp_nonce": lambda: getattr(g, "csp_nonce", ""),
             "current_user": cu,
+            "graph_on": graph_configured(),
+            "zendesk_on": zendesk_configured(),
         }
 
     # LIC-01: garantir que o arquivo de custos de licenças exista no volume persistente,
