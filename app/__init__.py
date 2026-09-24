@@ -50,6 +50,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         APP_ENVIRONMENT=settings.app.environment,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{_users_db}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Nomes próprios: o Mapa de Câmeras (proxy em /mapa-cameras/, mesmo
+        # domínio) também usa cookie de sessão, e "session" colidiria.
+        SESSION_COOKIE_NAME="itgov_session",
+        REMEMBER_COOKIE_NAME="itgov_remember",
     )
 
     # Flask-SQLAlchemy + Flask-Login + Flask-Bcrypt

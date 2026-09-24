@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Mapa de Câmeras — IT Governance{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-8rem)]">
+  <div class="mb-3 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Mapa de Câmeras</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        Acesso restrito a administradores e gestores. O Mapa mantém login próprio.
+      </p>
+    </div>
+    <a href="{{ mapa_url }}" target="_blank" rel="noopener"
+       class="text-sm text-blue-600 hover:underline dark:text-blue-400">Abrir em nova aba</a>
+  </div>
+  <iframe src="{{ mapa_url }}" title="Mapa de Câmeras"
+          class="flex-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white"></iframe>
+</div>
+{% endblock %}
