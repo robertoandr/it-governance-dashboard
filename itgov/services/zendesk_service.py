@@ -263,7 +263,10 @@ class ZendeskService(SyncAPIClient):
         para que a API retorne apenas tickets do grupo — reduz drasticamente
         o payload transferido em tenants grandes.
         """
-        query = "type:ticket status:new OR status:open OR status:pending"
+        # Repetir a mesma keyword faz OR implícito na search API do Zendesk.
+        # "status:new OR status:open ..." NÃO funciona: combinado com group_id
+        # retornava 2 tickets em vez de 65.
+        query = "type:ticket status:new status:open status:pending"
         if self._group_id:
             query += f" group_id:{self._group_id}"
 
