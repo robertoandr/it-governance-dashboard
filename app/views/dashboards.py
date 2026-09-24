@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 import structlog
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.rbac import require_role
+from app.integrations import graph_configured, zendesk_configured
 from app.services.metrics_aggregator import MetricsAggregator
 
 log = structlog.get_logger(__name__)
@@ -84,11 +86,9 @@ def pilares_redirect():
 @require_role("admin", "gestor")
 def sla_chamados() -> str:
     """Render painel SLA / Chamados (Zendesk)."""
-    import os
-
     from itgov.api.v1.zendesk import get_cached_sla_detail
 
-    if not os.getenv("ZENDESK_SUBDOMAIN"):
+    if not zendesk_configured():
         abort(404)
 
     data = get_cached_sla_detail()
@@ -100,11 +100,9 @@ def sla_chamados() -> str:
 @require_role("admin", "gestor")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""
-    import os
-
     from itgov.api.v1.zendesk import get_cached_mttr_summary, get_cached_volume_by_status
 
-    if not os.getenv("ZENDESK_SUBDOMAIN"):
+    if not zendesk_configured():
         abort(404)
 
     mttr = get_cached_mttr_summary()
@@ -122,12 +120,10 @@ def zendesk_mttr() -> str:
 @require_role("admin", "gestor")
 def governance_devices() -> str:
     """Render pilar Dispositivos (Governança M365)."""
-    import os
-
     from app.config import get_settings
     from itgov.api.v1.governance_devices import get_cached_device_summary
 
-    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+    if not graph_configured():
         abort(404)
 
     try:
@@ -144,11 +140,9 @@ def governance_devices() -> str:
 @require_role("admin", "gestor")
 def governance_apps() -> str:
     """Render pilar Aplicativos (Governança M365)."""
-    import os
-
     from itgov.api.v1.governance_apps import get_cached_app_summary
 
-    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+    if not graph_configured():
         abort(404)
 
     try:
@@ -164,12 +158,10 @@ def governance_apps() -> str:
 @require_role("admin", "gestor")
 def governance_compliance() -> str:
     """Render pilar Compliance (Secure Score) — Governança M365."""
-    import os
-
     from itgov.api.v1.governance_compliance import get_cached_compliance_summary
     from itgov.services.dns_check_service import _get_domain, get_email_security_summary
 
-    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+    if not graph_configured():
         abort(404)
 
     summary = get_cached_compliance_summary()
@@ -189,11 +181,9 @@ def governance_compliance() -> str:
 @require_role("admin", "gestor")
 def governance_data() -> str:
     """Render pilar Dados (Sensitivity Labels) — Governança M365."""
-    import os
-
     from itgov.api.v1.governance_data import get_cached_data_summary
 
-    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+    if not graph_configured():
         abort(404)
 
     summary = get_cached_data_summary()
@@ -205,11 +195,9 @@ def governance_data() -> str:
 @require_role("admin", "gestor")
 def governance_security_alerts() -> str:
     """Render pilar Endpoint — Alertas de Segurança (Defender, KPI-END-01)."""
-    import os
-
     from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
 
-    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+    if not graph_configured():
         abort(404)
 
     summary = get_cached_security_alerts_summary()
@@ -221,11 +209,9 @@ def governance_security_alerts() -> str:
 @require_role("admin", "gestor")
 def governance_service_health() -> str:
     """Render Service Health M365 — status dos serviços do tenant."""
-    import os
-
     from itgov.api.v1.governance_service_health import get_cached_service_health_summary
 
-    if not (os.getenv("AZURE_CLIENT_ID") or os.getenv("MSAL_CLIENT_ID")):
+    if not graph_configured():
         abort(404)
 
     summary = get_cached_service_health_summary()
@@ -237,8 +223,6 @@ def governance_service_health() -> str:
 @require_role("admin", "gestor")
 def acronis_backup() -> str:
     """Render painel de Backup/Proteção Acronis."""
-    import os
-
     from itgov.api.v1.acronis_backup import get_cached_acronis_summary
 
     if not os.getenv("ACRONIS_BASE_URL"):
@@ -253,8 +237,6 @@ def acronis_backup() -> str:
 @require_role("admin", "gestor", "operador")
 def zabbix_monitoring() -> str:
     """Render painel de monitoramento Zabbix."""
-    import os
-
     from itgov.api.v1.zabbix_monitoring import get_cached_problems, get_cached_zabbix_summary
 
     if not os.getenv("ZABBIX_URL"):
@@ -270,8 +252,6 @@ def zabbix_monitoring() -> str:
 @require_role("admin", "gestor", "operador")
 def infra_monitoring() -> str:
     """Render painel de Infraestrutura (servidores, VMs, firewall, etc.)."""
-    import os
-
     from itgov.api.v1.infra_monitoring import get_cached_infra_summary
 
     if not os.getenv("ZABBIX_URL"):
@@ -286,8 +266,6 @@ def infra_monitoring() -> str:
 @require_role("admin", "gestor", "operador")
 def cftv_monitoring() -> str:
     """Render painel de monitoramento CFTV (câmeras e NVRs)."""
-    import os
-
     from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
 
     if not os.getenv("ZABBIX_URL"):
@@ -342,8 +320,6 @@ def network_redirect():
 @require_role("admin", "gestor", "operador")
 def rede_monitoring() -> str:
     """Render painel de rede — discovery nmap + Zabbix drules."""
-    import os
-
     from itgov.api.v1.rede_monitoring import get_cached_rede_summary
 
     if not os.getenv("ZABBIX_URL"):
@@ -529,8 +505,6 @@ def m365_licenses_update():
 @require_role("admin", "gestor", "operador")
 def zabbix_triggers() -> str:
     """Render painel de Triggers Zabbix — problemas ativos."""
-    import os
-
     from itgov.api.v1.zabbix_triggers import get_cached_triggers
 
     if not os.getenv("ZABBIX_URL"):
@@ -545,8 +519,6 @@ def zabbix_triggers() -> str:
 @require_role("admin", "gestor")
 def m365_overview() -> str:
     """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
-    import os
-
     from app.services.influxdb_provider import InfluxDBMetricsProvider
     from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
     from itgov.api.v1.m365_licenses import get_licenses_summary

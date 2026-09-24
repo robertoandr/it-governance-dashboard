@@ -43,33 +43,37 @@ if __name__ == "__main__":
 
     scheduler = BlockingScheduler(timezone=settings.TZ)
 
-    scheduler.add_job(
-        collect_github_prs,
-        IntervalTrigger(minutes=15),
-        id="github_pr_collector",
-        name="GitHub PR Collector",
-        max_instances=1,
-        coalesce=True,
-        next_run_time=datetime.now(),
-    )
+    if settings.GITHUB_TOKEN:
+        scheduler.add_job(
+            collect_github_prs,
+            IntervalTrigger(minutes=15),
+            id="github_pr_collector",
+            name="GitHub PR Collector",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=datetime.now(),
+        )
 
-    scheduler.add_job(
-        collect_github_pats,
-        CronTrigger(hour="*/6"),
-        id="github_pats_inventory",
-        name="GitHub PATs Inventory",
-        max_instances=1,
-        coalesce=True,
-    )
+        scheduler.add_job(
+            collect_github_pats,
+            CronTrigger(hour="*/6"),
+            id="github_pats_inventory",
+            name="GitHub PATs Inventory",
+            max_instances=1,
+            coalesce=True,
+        )
 
-    scheduler.add_job(
-        run_gitleaks_scan,
-        CronTrigger(hour=2, minute=0),
-        id="gitleaks_scan",
-        name="Gitleaks Secret Scan",
-        max_instances=1,
-        coalesce=True,
-    )
+        scheduler.add_job(
+            run_gitleaks_scan,
+            CronTrigger(hour=2, minute=0),
+            id="gitleaks_scan",
+            name="Gitleaks Secret Scan",
+            max_instances=1,
+            coalesce=True,
+        )
+        log.info("github_jobs_registrados")
+    else:
+        log.warning("github_jobs_ignorados", motivo="GITHUB_TOKEN não configurado")
 
     if settings.ZABBIX_URL and settings.ZABBIX_TOKEN:
         scheduler.add_job(
