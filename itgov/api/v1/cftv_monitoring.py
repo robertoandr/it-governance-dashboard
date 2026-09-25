@@ -2,6 +2,10 @@
 
 Consulta os host groups que começam com "CFTV" no Zabbix usando Bearer token
 (sem user.login / sem ZABBIX_PASSWORD). Cache TTL 2min (dados real-time).
+
+A busca devolve só a lista de dispositivos com status; ``montar_visao`` agrupa
+por gravador (DVR/NVR), aplica o vínculo gravador → unidade e o filtro de
+unidade, e calcula os KPIs do recorte.
 """
 
 from __future__ import annotations
@@ -61,18 +65,7 @@ def _buscar_cftv() -> dict:
     gids = [g["groupid"] for g in groups if g["name"].startswith("CFTV")]
 
     if not gids:
-        return {
-            "enabled": False,
-            "total": 0,
-            "up": 0,
-            "down": 0,
-            "nodata": 0,
-            "maint": 0,
-            "up_pct": 0.0,
-            "by_subcat": {},
-            "down_list": [],
-            "maint_list": [],
-        }
+        return {"enabled": False, "devices": []}
 
     # ── 2. Hosts com tags e interfaces (sem itens inline — evita truncamento) ──
     hosts = _zbx(
@@ -131,93 +124,147 @@ def _buscar_cftv() -> dict:
                 hid = h["hostid"]
                 problems_by_host[hid] = problems_by_host.get(hid, 0) + 1
 
-    # ── 4. Processar hosts ────────────────────────────────────────────────────
-    by_subcat: dict[str, dict] = {}
-    by_andar: dict[str, dict] = {}
-    down_list: list[dict] = []
-    maint_list: list[dict] = []
-    maint_count = 0
-
-    _empty: dict = {"total": 0, "up": 0, "down": 0, "nodata": 0, "maint": 0}
-
+    # ── 4. Um registro por dispositivo, com status de ping ────────────────────
+    devices: list[dict] = []
     for h in hosts:
         tags = {tg["tag"]: tg["value"] for tg in h.get("tags", [])}
         subcat = tags.get("subcategory", "outros")
-        andar = tags.get("andar", "?")
-        dvr = tags.get("dvr", "")
-
-        by_subcat.setdefault(subcat, dict(_empty))["total"] += 1
-        by_andar.setdefault(andar, dict(_empty))["total"] += 1
-
-        ip = (h.get("interfaces") or [{}])[0].get("ip", "?")
-        in_maint = h.get("maintenance_status") == "1"
         hid = h.get("hostid", "")
-        n_problems = problems_by_host.get(hid, 0)
 
-        if in_maint:
-            by_subcat[subcat]["maint"] += 1
-            by_andar[andar]["maint"] += 1
-            maint_count += 1
-            maint_list.append(
-                {"host": h["host"], "name": h["name"], "ip": ip, "andar": andar, "subcat": subcat, "dvr": dvr}
-            )
-            continue
-
-        ping = ping_map.get(hid)
-        if not ping or not ping.get("lastclock") or ping["lastclock"] == "0":
-            st = "nodata"
-        elif ping["lastvalue"] == "1":
-            st = "up"
+        if h.get("maintenance_status") == "1":
+            status = "maint"
         else:
-            st = "down"
+            ping = ping_map.get(hid)
+            if not ping or not ping.get("lastclock") or ping["lastclock"] == "0":
+                status = "nodata"
+            elif ping["lastvalue"] == "1":
+                status = "up"
+            else:
+                status = "down"
 
-        by_subcat[subcat][st] += 1
-        by_andar[andar][st] += 1
+        devices.append(
+            {
+                "host": h["host"],
+                "name": h["name"],
+                "ip": (h.get("interfaces") or [{}])[0].get("ip", "?"),
+                "subcat": subcat,
+                "andar": tags.get("andar", "?"),
+                "gravador": gravador_do_dispositivo(h["host"], subcat, tags),
+                "is_gravador": subcat in SUBCATS_GRAVADOR,
+                "canal": tags.get("canal") or tags.get("canal_nvr") or "",
+                "loja": tags.get("loja", ""),
+                "vendor": tags.get("vendor", ""),
+                "model": tags.get("model", ""),
+                "status": status,
+                "problems": problems_by_host.get(hid, 0),
+            }
+        )
 
-        if st == "down":
-            down_list.append(
-                {
-                    "host": h["host"],
-                    "name": h["name"],
-                    "ip": ip,
-                    "subcat": subcat,
-                    "andar": andar,
-                    "dvr": dvr,
-                    "problems": n_problems,
-                }
-            )
+    return {"enabled": True, "devices": devices}
 
-    total = sum(s["total"] for s in by_subcat.values())
-    up = sum(s["up"] for s in by_subcat.values())
-    down = sum(s["down"] for s in by_subcat.values())
-    nodata = sum(s["nodata"] for s in by_subcat.values())
 
-    # Ordenar by_andar: andares numéricos primeiro, depois especiais, depois "?"
-    def _andar_key(k: str) -> tuple:
-        import re
+SUBCATS_GRAVADOR = frozenset({"dvr", "nvr"})
+SEM_UNIDADE = "sem"
 
-        m = re.match(r"(\d+)", k)
-        return (0, int(m.group(1)), k) if m else (1, 0, k)
 
-    by_andar_sorted = dict(sorted(by_andar.items(), key=lambda kv: _andar_key(kv[0])))
+def gravador_do_dispositivo(host: str, subcat: str, tags: dict[str, str]) -> str:
+    """Nome do gravador (DVR/NVR) ao qual o dispositivo pertence.
 
+    O próprio gravador usa o nome do host (ex.: ``DVR-1``), que é o mesmo valor
+    da tag ``dvr`` das suas câmeras. Câmeras Hikvision apontam para o NVR via
+    ``parent_nvr``. Dispositivos sem gravador (faciais, antenas) retornam "".
+
+    Args:
+        host: Nome técnico do host no Zabbix.
+        subcat: Tag ``subcategory`` do host.
+        tags: Todas as tags do host.
+
+    Returns:
+        Chave do gravador, ou string vazia.
+    """
+    if subcat in SUBCATS_GRAVADOR:
+        return host
+    return tags.get("dvr") or tags.get("parent_nvr") or ""
+
+
+def _contagem(devs: list[dict]) -> dict[str, Any]:
+    total = len(devs)
+    c = {st: sum(1 for d in devs if d["status"] == st) for st in ("up", "down", "nodata", "maint")}
+    return {"total": total, **c, "up_pct": round(c["up"] / total * 100, 1) if total else 0.0}
+
+
+def _canal_key(d: dict) -> tuple:
+    canal = d.get("canal", "")
+    return (0, int(canal), d["name"]) if canal.isdigit() else (1, 0, d["name"])
+
+
+def montar_visao(
+    dados: dict,
+    unidade_por_gravador: dict[str, int | None],
+    unidades: dict[int, str],
+    unidade_por_loja: dict[str, int],
+    filtro: set[int] | str | None = None,
+) -> dict:
+    """Agrupa dispositivos em cards por gravador e aplica o filtro de unidade.
+
+    A unidade de um dispositivo vem do vínculo do seu gravador; sem vínculo,
+    cai para a tag ``loja`` quando ela bate com o nome de uma unidade.
+
+    Args:
+        dados: Resultado de ``get_cached_cftv_summary``.
+        unidade_por_gravador: Gravador → id da unidade (ou None).
+        unidades: Id → nome completo da unidade, para exibição.
+        unidade_por_loja: Nome de unidade (minúsculo) → id, para a tag ``loja``.
+        filtro: Ids de unidade aceitos, ``SEM_UNIDADE`` para os sem unidade,
+            ou None para todos.
+
+    Returns:
+        Dicionário com KPIs do recorte, ``cards`` por gravador e listas de
+        offline/manutenção.
+    """
+    grupos: dict[tuple[str, int | None], list[dict]] = {}
+    for d in dados.get("devices", []):
+        uid = unidade_por_gravador.get(d["gravador"]) if d["gravador"] else None
+        if uid is None:
+            uid = unidade_por_loja.get(d["loja"].strip().lower())
+        if filtro == SEM_UNIDADE and uid is not None:
+            continue
+        if isinstance(filtro, set) and uid not in filtro:
+            continue
+        grupos.setdefault((d["gravador"], uid), []).append(d)
+
+    cards: list[dict] = []
+    for (gravador, uid), devs in grupos.items():
+        host_gravador = next((d for d in devs if d["is_gravador"]), None)
+        itens = sorted((d for d in devs if not d["is_gravador"]), key=_canal_key)
+        vendors = sorted({d["vendor"] for d in devs if d["vendor"]})
+        cards.append(
+            {
+                "gravador": gravador,
+                "titulo": host_gravador["name"] if host_gravador else (gravador or "Sem gravador"),
+                "gravador_host": host_gravador,
+                "unidade_id": uid,
+                "unidade": unidades.get(uid, "") if uid is not None else "",
+                "vendors": vendors,
+                "dispositivos": itens,
+                **_contagem(itens),
+            }
+        )
+    # Problemas primeiro, depois por unidade e nome
+    cards.sort(key=lambda c: (-c["down"], c["unidade"] or "~", c["titulo"]))
+
+    todos = [d for devs in grupos.values() for d in devs]
+    resumo = _contagem(todos)
     return {
-        "enabled": True,
-        "total": total,
-        "up": up,
-        "down": down,
-        "nodata": nodata,
-        "maint": maint_count,
-        "up_pct": round(up / total * 100, 1) if total else 0.0,
-        "by_subcat": by_subcat,
-        "by_andar": by_andar_sorted,
-        "down_list": sorted(down_list, key=lambda x: (x["andar"], x["subcat"], x["host"])),
-        "maint_list": sorted(maint_list, key=lambda x: (x["subcat"], x["host"])),
+        **resumo,
+        "cards": cards,
+        "down_list": sorted((d for d in todos if d["status"] == "down"), key=lambda d: (d["gravador"], d["name"])),
+        "maint_list": sorted((d for d in todos if d["status"] == "maint"), key=lambda d: d["name"]),
     }
 
 
 def get_cached_cftv_summary() -> dict:
-    """Retorna dados CFTV do Zabbix com cache TTL 2min."""
+    """Retorna dispositivos CFTV do Zabbix com cache TTL 2min."""
     global _cache_data, _cache_ts
     with _lock:
         if _cache_valido():
@@ -229,19 +276,7 @@ def get_cached_cftv_summary() -> dict:
         dados = _buscar_cftv()
     except Exception as exc:
         log.warning("cftv_monitoring.busca_falhou", erro=str(exc))
-        dados = {
-            "enabled": False,
-            "total": 0,
-            "up": 0,
-            "down": 0,
-            "nodata": 0,
-            "maint": 0,
-            "up_pct": 0.0,
-            "by_subcat": {},
-            "down_list": [],
-            "maint_list": [],
-            "_erro": str(exc),
-        }
+        dados = {"enabled": False, "devices": [], "_erro": str(exc)}
     with _lock:
         _cache_data = dados
         _cache_ts = time.monotonic()

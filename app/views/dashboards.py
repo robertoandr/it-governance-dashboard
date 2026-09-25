@@ -265,14 +265,150 @@ def infra_monitoring() -> str:
 @login_required
 @require_role("admin", "gestor", "operador")
 def cftv_monitoring() -> str:
-    """Render painel de monitoramento CFTV (câmeras e NVRs)."""
-    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
+    """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
+    from app.models.unidade import DvrUnidade, Unidade
+    from itgov.api.v1.cftv_monitoring import SEM_UNIDADE, get_cached_cftv_summary, montar_visao
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
 
+    todas = Unidade.query.all()
+    unidades = [u for u in todas if u.ativo]
+    nomes = {u.id: u.caminho for u in todas}
+    filtro_raw = request.args.get("unidade", "")
+    filtro: set[int] | str | None = None
+    if filtro_raw == SEM_UNIDADE:
+        filtro = SEM_UNIDADE
+    elif filtro_raw.isdigit():
+        selecionada = next((u for u in unidades if u.id == int(filtro_raw)), None)
+        filtro = selecionada.ids_subarvore() if selecionada else None
+
     data = get_cached_cftv_summary()
-    return render_template("dashboards/cftv_monitoring.html", data=data)
+    visao = montar_visao(
+        data,
+        unidade_por_gravador={v.dvr: v.unidade_id for v in DvrUnidade.query.all()},
+        unidades=nomes,
+        unidade_por_loja={u.nome.lower(): u.id for u in unidades},
+        filtro=filtro,
+    )
+    return render_template(
+        "dashboards/cftv_monitoring.html",
+        data=data,
+        visao=visao,
+        unidades=sorted(unidades, key=lambda u: u.caminho),
+        filtro=filtro_raw if filtro is not None else "",
+    )
+
+
+@bp.route("/cftv/gravador", methods=["POST"])
+@login_required
+@require_role("admin", "gestor")
+def cftv_gravador_unidade() -> object:
+    """Define a unidade de um gravador (DVR/NVR) a partir do card na página /cftv."""
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade, Unidade
+
+    gravador = request.form.get("gravador", "").strip()
+    unidade_raw = request.form.get("unidade_id", "").strip()
+    if not gravador:
+        abort(400)
+    unidade_id = int(unidade_raw) if unidade_raw.isdigit() else None
+    if unidade_id is not None and db.session.get(Unidade, unidade_id) is None:
+        abort(400)
+
+    vinculo = DvrUnidade.query.filter_by(dvr=gravador).first()
+    if vinculo is None:
+        vinculo = DvrUnidade(dvr=gravador)
+        db.session.add(vinculo)
+    vinculo.unidade_id = unidade_id
+    db.session.commit()
+    log.info("cftv.gravador_unidade", gravador=gravador, unidade_id=unidade_id, user=current_user.email)
+    flash(f"Unidade de {gravador} atualizada.", "success")
+    return redirect(url_for("dashboards.cftv_monitoring", unidade=request.form.get("filtro") or None))
+
+
+@bp.route("/unidades")
+@login_required
+@require_role("admin", "gestor", "operador")
+def unidades_list() -> str:
+    """Lista as unidades (sites) em árvore, com faixas de IP e gravadores vinculados."""
+    from app.models.unidade import DvrUnidade, Unidade
+
+    raizes = Unidade.query.filter_by(parent_id=None).order_by(Unidade.nome).all()
+    gravadores: dict[int, list[str]] = {}
+    for v in DvrUnidade.query.order_by(DvrUnidade.dvr).all():
+        if v.unidade_id is not None:
+            gravadores.setdefault(v.unidade_id, []).append(v.dvr)
+    return render_template("dashboards/unidades.html", raizes=raizes, gravadores=gravadores)
+
+
+@bp.route("/unidades/nova", methods=["GET", "POST"])
+@bp.route("/unidades/<int:unidade_id>/editar", methods=["GET", "POST"])
+@login_required
+@require_role("admin", "gestor")
+def unidade_form(unidade_id: int | None = None) -> object:
+    """Formulário de criação/edição de unidade (nome, unidade pai, faixas de IP)."""
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade, Unidade, parse_faixas
+
+    unidade = db.session.get(Unidade, unidade_id) if unidade_id else None
+    if unidade_id and unidade is None:
+        abort(404)
+    # Hierarquia de dois níveis: só raízes podem ser pai, e nunca a própria unidade
+    pais = [
+        u for u in Unidade.query.filter_by(parent_id=None).order_by(Unidade.nome) if not unidade or u.id != unidade.id
+    ]
+
+    def _render() -> str:
+        return render_template("dashboards/unidade_form.html", unidade=unidade, pais=pais)
+
+    if request.method == "GET":
+        return _render()
+
+    if request.form.get("action") == "delete" and unidade:
+        if unidade.filhas:
+            flash("Remova ou mova as unidades filhas antes de excluir.", "error")
+            return _render()
+        DvrUnidade.query.filter_by(unidade_id=unidade.id).update({"unidade_id": None})
+        db.session.delete(unidade)
+        db.session.commit()
+        log.info("unidade.removida", unidade=unidade.nome, user=current_user.email)
+        flash("Unidade removida.", "success")
+        return redirect(url_for("dashboards.unidades_list"))
+
+    nome = request.form.get("nome", "").strip()
+    parent_raw = request.form.get("parent_id", "").strip()
+    parent_id = int(parent_raw) if parent_raw.isdigit() else None
+    if not nome:
+        flash("Nome é obrigatório.", "error")
+        return _render()
+    if parent_id is not None and parent_id not in {p.id for p in pais}:
+        flash("Unidade pai inválida.", "error")
+        return _render()
+    if unidade and parent_id is not None and unidade.filhas:
+        flash("Uma unidade com filhas não pode virar filha de outra.", "error")
+        return _render()
+    try:
+        faixas = parse_faixas(request.form.get("faixas_ip", ""))
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return _render()
+    duplicada = Unidade.query.filter_by(nome=nome, parent_id=parent_id).first()
+    if duplicada and (not unidade or duplicada.id != unidade.id):
+        flash(f"Já existe a unidade {nome} neste nível.", "error")
+        return _render()
+
+    if unidade is None:
+        unidade = Unidade(nome=nome)
+        db.session.add(unidade)
+    unidade.nome = nome
+    unidade.parent_id = parent_id
+    unidade.faixas_ip = "\n".join(faixas)
+    unidade.ativo = "ativo" in request.form or unidade_id is None
+    db.session.commit()
+    log.info("unidade.salva", unidade=unidade.caminho, faixas=len(faixas), user=current_user.email)
+    flash("Unidade salva.", "success")
+    return redirect(url_for("dashboards.unidades_list"))
 
 
 # Mapa de Câmeras (serviço nativo mapa-cameras.service, porta 8080) é servido
