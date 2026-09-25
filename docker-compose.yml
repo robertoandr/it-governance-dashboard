@@ -227,7 +227,13 @@ services:
       INFRA_SCAN_RANGES: "${INFRA_SCAN_RANGES:-172.29.0.0/22}"
       INFRA_SCAN_INTERVAL: "${INFRA_SCAN_INTERVAL:-3600}"
       INFRA_NMAP_ARGS: "${INFRA_NMAP_ARGS:--T4 --host-timeout 10s}"
+      # Faixas das unidades cadastradas no dashboard (/gov/unidades)
+      INFRA_UNIDADES_DB: /app-data/app.db
+      # Cadastro automático no Zabbix desligado: ativos são revisados em /gov/rede
+      INFRA_ZABBIX_AUTOREGISTER: "${INFRA_ZABBIX_AUTOREGISTER:-false}"
       TZ: "${TZ:-America/Sao_Paulo}"
+    volumes:
+      - app_data:/app-data:ro
 
   # ─── Grafana (dashboards) ──────────────────────────────────────────────────
   grafana:

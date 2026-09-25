@@ -43,7 +43,22 @@ class TipoAtivo(str):
     """Tipo de ativo de TI — usado como Literal nos models."""
 
 
-TIPOS_VALIDOS: frozenset[str] = frozenset({"servidor", "switch", "app", "licenca", "endpoint"})
+# Rótulos exibidos na UI; as chaves são os tipos aceitos. Os de infraestrutura
+# (vm, impressora, camera, ap, firewall, outro) vêm da descoberta de rede.
+TIPO_LABELS: dict[str, str] = {
+    "servidor": "Servidor",
+    "vm": "Máquina virtual",
+    "switch": "Switch / roteador",
+    "firewall": "Firewall",
+    "ap": "Access point",
+    "impressora": "Impressora",
+    "camera": "Câmera / DVR",
+    "endpoint": "Estação de trabalho",
+    "app": "Aplicação",
+    "licenca": "Licença",
+    "outro": "Outro",
+}
+TIPOS_VALIDOS: frozenset[str] = frozenset(TIPO_LABELS)
 AMBIENTES_VALIDOS: frozenset[str] = frozenset({"prod", "hml", "dev"})
 CRITICIDADES_VALIDAS: frozenset[str] = frozenset({"alta", "media", "baixa"})
 
@@ -51,7 +66,7 @@ CRITICIDADES_VALIDAS: frozenset[str] = frozenset({"alta", "media", "baixa"})
 class AtivoBase(BaseModel):
     """Campos compartilhados entre criacao, atualizacao e leitura de Ativo."""
 
-    tipo: str = Field(description="Tipo do ativo: servidor | switch | app | licenca | endpoint")
+    tipo: str = Field(description=f"Tipo do ativo: {' | '.join(TIPO_LABELS)}")
     nome: str = Field(min_length=3, max_length=100, description="Nome do ativo (unico por tipo)")
     ambiente: str = Field(description="Ambiente: prod | hml | dev")
     criticidade: str = Field(description="Criticidade: alta | media | baixa")
