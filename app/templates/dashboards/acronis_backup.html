@@ -20,11 +20,12 @@
 
 <div class="mb-4">
   <h1 class="text-xl font-bold text-gray-800">Cyber Acronis</h1>
-  <p class="text-sm text-gray-500">Cobertura de proteção, máquinas em risco e incidentes ativos. Dados atualizados a cada 6 horas.</p>
+  <p class="text-sm text-gray-500">Proteção de endpoints, máquinas em risco e incidentes de segurança. Dados atualizados a cada hora.</p>
 </div>
 
-{# --- KPIs principais --- #}
-<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+{# --- Parque de agentes --- #}
+<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Parque de agentes</p>
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
   {{ stat_card('Total de agentes', data.total_agents, '', 'text-gray-800', none) }}
   {{ stat_card('Online', data.online, '',
       'text-green-600' if data.online == data.total_agents else 'text-yellow-600',
@@ -32,25 +33,40 @@
   {{ stat_card('Offline', data.offline, '',
       'text-red-600' if data.offline > 0 else 'text-green-600',
       none) }}
-  {{ stat_card('Com proteção', data.protected_pct | round(1), '%',
+  {{ stat_card('Com plano de proteção', data.protected_pct | round(1), '%',
       'text-green-600' if data.protected_pct >= 90 else 'text-yellow-600' if data.protected_pct >= 70 else 'text-red-600',
       (data.protected | string) ~ ' de ' ~ (data.total_agents | string)) }}
-  {{ stat_card('Offline > 20d', data.offline_gt_20d_count, '',
-      'text-red-600' if data.offline_gt_20d_count > 0 else 'text-green-600',
-      'risco de perda de backup') }}
-  {{ stat_card('Incidentes', data.incidents_total, '',
-      'text-red-600' if data.incidents_total > 0 else 'text-green-600',
-      'críticos ativos') }}
-  {{ stat_card('Ameacas detectadas', data.edr_total, '',
-      'text-red-600' if data.edr_total > 0 else 'text-green-600',
-      'EDR / antivirus') }}
-  {# Ultimo login #}
+  {{ stat_card('Offline > 30 dias', data.offline_gt_30d_count, '',
+      'text-red-600' if data.offline_gt_30d_count > 0 else 'text-green-600',
+      'sem proteção atualizada') }}
+  {{ stat_card('Agentes desatualizados', data.outdated, '',
+      'text-yellow-600' if data.outdated > 0 else 'text-green-600',
+      'versão abaixo da disponível') }}
+</div>
+
+{# --- Segurança --- #}
+<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Segurança</p>
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+  {{ stat_card('Incidentes mitigados', data.incidents_mitigated, '', 'text-green-600', 'EDR — alertas ativos') }}
+  {{ stat_card('Incidentes não mitigados', data.incidents_not_mitigated, '',
+      'text-red-600' if data.incidents_not_mitigated > 0 else 'text-green-600',
+      'exigem ação manual') }}
+  {{ stat_card('Tentativas de invasão', data.intrusion_attempts, '',
+      'text-red-600' if data.intrusion_attempts > 0 else 'text-green-600',
+      (data.intrusion_edr | string) ~ ' EDR · ' ~ (data.intrusion_url | string) ~ ' URLs · ' ~ (data.intrusion_login | string) ~ ' logins') }}
+  {{ stat_card('Patches — crítico', data.patches_critical, '',
+      'text-red-600' if data.patches_critical > 0 else 'text-green-600',
+      'máquinas') }}
+  {{ stat_card('Patches — cuidado', data.patches_warning, '',
+      'text-yellow-600' if data.patches_warning > 0 else 'text-green-600',
+      'máquinas') }}
+  {# Última atividade de conta (proxy: audit log indisponível neste tenant) #}
   <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-xs text-gray-500 mb-1">Ultimo login</p>
+    <p class="text-xs text-gray-500 mb-1" title="Aproximação: data da última alteração de conta no console Acronis">Última atividade de conta</p>
     {% if data.last_login_user %}
       <p class="text-sm font-bold text-gray-800 truncate" title="{{ data.last_login_user }}">{{ data.last_login_user }}</p>
       {% if data.last_login_fmt %}
-        <p class="text-xs text-gray-400 mt-1">{{ data.last_login_fmt }}</p>
+        <p class="text-xs text-gray-400 mt-1">{{ data.last_login_fmt }} (aprox.)</p>
       {% endif %}
     {% else %}
       <p class="text-3xl font-bold text-gray-300">—</p>
@@ -60,7 +76,7 @@
 </div>
 
 {# --- Alertas secundários --- #}
-{% if data.sem_plano_count > 0 or data.license_issues > 0 or data.outdated > 0 %}
+{% if data.sem_plano_count > 0 or data.license_issues > 0 %}
 <div class="flex flex-wrap gap-3 mb-6">
   {% if data.sem_plano_count > 0 %}
   <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
@@ -80,35 +96,26 @@
     <span class="text-sm text-red-700 font-medium">{{ data.license_issues }} problema(s) de licença (OfferingItemIsNotSufficient)</span>
   </div>
   {% endif %}
-  {% if data.outdated > 0 %}
-  <div class="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-    <svg class="w-4 h-4 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-    </svg>
-    <span class="text-sm text-yellow-700 font-medium">{{ data.outdated }} agente(s) desatualizado(s)</span>
-  </div>
-  {% endif %}
 </div>
 {% endif %}
 
 {# --- Tabelas --- #}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-  {# Máquinas offline > 20 dias #}
+  {# Máquinas offline > 30 dias #}
   <div class="bg-white rounded-xl shadow p-5">
     <p class="text-sm font-semibold text-gray-700 mb-3">
-      Offline há mais de 20 dias
-      {% if data.offline_gt20 %}
-      <span class="ml-1 text-xs font-normal text-red-500">({{ data.offline_gt20 | length }})</span>
+      Offline há mais de 30 dias
+      {% if data.offline_gt30 %}
+      <span class="ml-1 text-xs font-normal text-red-500">({{ data.offline_gt30 | length }})</span>
       {% endif %}
     </p>
-    {% if not data.offline_gt20 %}
+    {% if not data.offline_gt30 %}
       <div class="flex items-center gap-2 py-3">
         <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
         </svg>
-        <p class="text-sm text-green-600">Nenhuma máquina offline há mais de 20 dias</p>
+        <p class="text-sm text-green-600">Nenhuma máquina offline há mais de 30 dias</p>
       </div>
     {% else %}
       <div class="overflow-x-auto">
@@ -120,7 +127,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            {% for m in data.offline_gt20[:20] %}
+            {% for m in data.offline_gt30[:20] %}
             <tr class="hover:bg-gray-50">
               <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate" title="{{ m.name }}">
                 {{ m.name }}
@@ -135,8 +142,8 @@
             {% endfor %}
           </tbody>
         </table>
-        {% if data.offline_gt20 | length > 20 %}
-        <p class="mt-2 text-xs text-gray-400 text-right">Exibindo 20 de {{ data.offline_gt20 | length }}.</p>
+        {% if data.offline_gt30 | length > 20 %}
+        <p class="mt-2 text-xs text-gray-400 text-right">Exibindo 20 de {{ data.offline_gt30 | length }}.</p>
         {% endif %}
       </div>
     {% endif %}
@@ -215,6 +222,7 @@
             <th class="text-left py-1 pr-3 font-medium">Máquina</th>
             <th class="text-left py-1 pr-3 font-medium">Tipo</th>
             <th class="text-left py-1 pr-3 font-medium">Severidade</th>
+            <th class="text-left py-1 pr-3 font-medium">Mitigação</th>
             <th class="text-left py-1 font-medium">Quando</th>
           </tr>
         </thead>
@@ -234,6 +242,11 @@
                   {% else %}bg-gray-100 text-gray-600{% endif %}">
                 {{ inc.severity }}
               </span>
+            </td>
+            <td class="py-1.5 pr-3 text-xs">
+              {% if inc.mitigation == 'mitigado' %}<span class="text-green-600">mitigado</span>
+              {% elif inc.mitigation == 'nao_mitigado' %}<span class="text-red-600 font-medium">não mitigado</span>
+              {% else %}<span class="text-gray-300">—</span>{% endif %}
             </td>
             <td class="py-1.5 text-gray-400 text-xs whitespace-nowrap">
               {% if inc.time %}

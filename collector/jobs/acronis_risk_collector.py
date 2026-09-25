@@ -5,11 +5,19 @@ Measurement: gov_acronis_machines
   fields:
     offline_days     (int)  — 0 se online; proxy via meta.atp update_time se offline
     offline_gt_20d   (int)  — 0/1
-    has_active_plan  (int)  — 0/1 ("activeProtection" in components)
+    offline_gt_30d   (int)  — 0/1
+    has_active_plan  (int)  — 0/1 (plano policy.protection.total habilitado;
+                               fallback: "activeProtection" in components)
     pending_updates  (int)  — alertas AcroinstReboot* por maquina
     open_incidents   (int)  — alertas criticos (excluindo BackupFailed)
     edr_incidents    (int)  — EDRIncidentDetected
     backup_noise     (int)  — BackupFailed (ruido conhecido, orfao)
+
+Measurement: gov_acronis_risk_summary (agregado)
+  fields de seguranca: incidents_mitigated / incidents_not_mitigated (EDR,
+  por incidentId distinto), intrusion_attempts (= intrusion_edr + intrusion_url
+  + intrusion_login), patches_critical / patches_warning (maquinas distintas
+  com alerta de patch por severidade).
 
 JOIN alerta->agente: hostname (resourceId na API e hex curto, nao UUID).
 Fallback se sem match: KPIs agregados preservados, join_fallback logado.
@@ -45,6 +53,106 @@ _BACKUP_FAILED_TYPE = "BackupFailed"
 _EDR_TYPE = "EDRIncidentDetected"
 _OFFERING_INSUFFICIENT = "OfferingItemIsNotSufficient"
 _REBOOT_PREFIX = "AcroinstReboot"
+_MALICIOUS_URL_TYPE = "MaliciousUrlDetected"
+_PROTECTION_PLAN_TYPE = "policy.protection.total"
+_PATCH_ALERT_TYPES = frozenset({"MiMonitoringMissingPatches", "PMRebootRequired", "MiMonitoringWindowsUpdateDisabled"})
+# Ordem de gravidade do status de um plano aplicado (maior = pior)
+_PLAN_STATUS_RANK = {"ok": 0, "running": 1, "warning": 2, "error": 3, "critical": 4}
+
+
+def _achatar(items: list[Any]) -> list[dict[str, Any]]:
+    """Achata a lista de items do policy_management, que as vezes vem aninhada."""
+    out: list[dict[str, Any]] = []
+    for item in items:
+        if isinstance(item, list):
+            out.extend(_achatar(item))
+        elif isinstance(item, dict):
+            out.append(item)
+    return out
+
+
+def planos_por_agente(aplicacoes: list[dict[str, Any]]) -> dict[str, str]:
+    """Mapeia agent_id -> pior status dos planos de protecao habilitados.
+
+    Args:
+        aplicacoes: items de /api/policy_management/v4/applications.
+
+    Returns:
+        Dict agent_id -> status ("ok", "warning", "error", "critical", ...).
+        Agentes sem plano de protecao habilitado ficam de fora.
+    """
+    resultado: dict[str, str] = {}
+    for app in aplicacoes:
+        if (app.get("policy") or {}).get("type") != _PROTECTION_PLAN_TYPE or not app.get("enabled"):
+            continue
+        agent_id = app.get("agent_id")
+        if not agent_id:
+            continue
+        status = str(app.get("status") or "ok")
+        atual = resultado.get(agent_id)
+        if atual is None or _PLAN_STATUS_RANK.get(status, 0) > _PLAN_STATUS_RANK.get(atual, 0):
+            resultado[agent_id] = status
+    return resultado
+
+
+def resumo_seguranca(alertas: list[dict[str, Any]]) -> dict[str, int]:
+    """Calcula os KPIs de seguranca a partir dos alertas ativos.
+
+    - Incidentes EDR contados por incidentId distinto (um incidente pode gerar
+      mais de um alerta), separados em mitigados / nao mitigados.
+    - Tentativas de invasao = incidentes EDR + URLs maliciosas bloqueadas +
+      alertas de falha de login.
+    - Patches: maquinas distintas com alerta de patch, por severidade
+      (critical/error -> critico, warning -> cuidado).
+
+    Args:
+        alertas: items de /api/alert_manager/v1/alerts.
+
+    Returns:
+        Dict com os contadores agregados.
+    """
+    mitigados: set[str] = set()
+    nao_mitigados: set[str] = set()
+    url = 0
+    login = 0
+    patch_crit: set[str] = set()
+    patch_warn: set[str] = set()
+
+    for al in alertas:
+        atype = al.get("type", "")
+        details = al.get("details") or {}
+        if atype == _EDR_TYPE:
+            inc_id = details.get("incidentId") or al.get("id", "")
+            if str(details.get("isMitigated", "")).lower() == "true":
+                mitigados.add(inc_id)
+            else:
+                nao_mitigados.add(inc_id)
+        elif atype == _MALICIOUS_URL_TYPE:
+            url += 1
+        elif "failedlogin" in atype.lower():
+            login += 1
+        elif atype in _PATCH_ALERT_TYPES:
+            maquina = str(details.get("resourceName") or details.get("resourceId") or al.get("id", "")).lower()
+            if al.get("severity") in ("critical", "error"):
+                patch_crit.add(maquina)
+            else:
+                patch_warn.add(maquina)
+
+    # Um incidente pode ter alertas antigos (nao mitigado) e novos (mitigado)
+    nao_mitigados -= mitigados
+    edr = len(mitigados) + len(nao_mitigados)
+    # Maquina com patch critico nao conta de novo como cuidado
+    patch_warn -= patch_crit
+    return {
+        "incidents_mitigated": len(mitigados),
+        "incidents_not_mitigated": len(nao_mitigados),
+        "intrusion_edr": edr,
+        "intrusion_url": url,
+        "intrusion_login": login,
+        "intrusion_attempts": edr + url + login,
+        "patches_critical": len(patch_crit),
+        "patches_warning": len(patch_warn),
+    }
 
 
 class AcronisRiskCollector:
@@ -111,6 +219,24 @@ class AcronisRiskCollector:
 
     def _coletar_alertas(self) -> list[dict[str, Any]]:
         return self._paginar("/api/alert_manager/v1/alerts")
+
+    def _coletar_planos(self) -> dict[str, str] | None:
+        """Planos de protecao aplicados por agente; None se a API falhar."""
+        params: dict[str, Any] = {"limit": 500}
+        aplicacoes: list[dict[str, Any]] = []
+        try:
+            while True:
+                page = self._get("/api/policy_management/v4/applications", params)
+                batch = _achatar(page.get("items", []))
+                aplicacoes.extend(batch)
+                cursor = (page.get("paging") or {}).get("cursors", {}).get("after")
+                if not cursor or not batch:
+                    break
+                params = {"after": cursor, "limit": 500}
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            log.warning("acronis_planos_indisponivel", error=str(exc), fallback="components")
+            return None
+        return planos_por_agente(aplicacoes)
 
     def _tenant_id_from_token(self) -> str | None:
         """Extrai tenant_id do JWT (claim 'scope[0].tid' ou 'owner_tuid')."""
@@ -275,6 +401,7 @@ class AcronisRiskCollector:
             if atype == _BACKUP_FAILED_TYPE:
                 bucket["backup_noise"] += 1
             elif atype == _EDR_TYPE:
+                mitigado = str(details.get("isMitigated", "")).lower() == "true"
                 bucket["edr_incidents"] += 1
                 bucket["open_incidents"] += 1
                 incidentes.append(
@@ -284,6 +411,7 @@ class AcronisRiskCollector:
                         "alert_type": atype,
                         "severity": sev,
                         "created_at": created_raw,
+                        "mitigation": "mitigado" if mitigado else "nao_mitigado",
                     }
                 )
             elif atype.startswith(_REBOOT_PREFIX):
@@ -311,6 +439,8 @@ class AcronisRiskCollector:
         agentes = self._coletar_agentes()
         alertas = self._coletar_alertas()
         ultimo_login = self._coletar_ultimo_login()
+        planos = self._coletar_planos()
+        seguranca = resumo_seguranca(alertas)
         log.info(
             "acronis_risk_dados_coletados",
             agentes=len(agentes),
@@ -332,6 +462,7 @@ class AcronisRiskCollector:
         stats = {
             "total": 0,
             "offline_gt_20d": 0,
+            "offline_gt_30d": 0,
             "sem_plano": 0,
             "edr_total": 0,
             "backup_noise_total": 0,
@@ -345,9 +476,13 @@ class AcronisRiskCollector:
             comps: list[str] = ag.get("components", [])
 
             protection_status = "online" if online else "offline"
-            has_active_plan = 1 if "activeProtection" in comps else 0
+            if planos is not None:
+                has_active_plan = 1 if ag.get("id") in planos else 0
+            else:
+                has_active_plan = 1 if "activeProtection" in comps else 0
             offline_days = 0 if online else self._offline_days(ag)
             offline_gt_20d = 1 if offline_days > 20 else 0
+            offline_gt_30d = 1 if offline_days > 30 else 0
 
             hn_key = hostname.lower()
             short_key = hostname.split(".")[0].lower()
@@ -360,6 +495,7 @@ class AcronisRiskCollector:
 
             stats["total"] += 1
             stats["offline_gt_20d"] += offline_gt_20d
+            stats["offline_gt_30d"] += offline_gt_30d
             if not has_active_plan:
                 stats["sem_plano"] += 1
             stats["edr_total"] += edr_incidents
@@ -373,6 +509,7 @@ class AcronisRiskCollector:
                 .tag("protection_status", protection_status)
                 .field("offline_days", offline_days)
                 .field("offline_gt_20d", offline_gt_20d)
+                .field("offline_gt_30d", offline_gt_30d)
                 .field("has_active_plan", has_active_plan)
                 .field("pending_updates", pending_updates)
                 .field("open_incidents", open_incidents)
@@ -393,32 +530,36 @@ class AcronisRiskCollector:
                 .tag("tenant", inc["tenant"])
                 .tag("alert_type", inc["alert_type"])
                 .tag("severity", inc["severity"])
+                .tag("mitigation", inc.get("mitigation", ""))
                 .field("count", 1)
                 .time(inc_ts, WritePrecision.S)
             )
 
         # Ponto agregado para licenca insuficiente (nao e por maquina)
-        pontos.append(
+        resumo = (
             Point("gov_acronis_risk_summary")
             .field("license_issues", license_issues)
             .field("offline_gt_20d", stats["offline_gt_20d"])
+            .field("offline_gt_30d", stats["offline_gt_30d"])
             .field("sem_plano", stats["sem_plano"])
             .field("edr_total", stats["edr_total"])
             .field("backup_noise_total", stats["backup_noise_total"])
             .field("incidents_total", stats["incidents_total"])
             .time(ts, WritePrecision.S)
         )
+        for campo, valor in seguranca.items():
+            resumo = resumo.field(campo, valor)
+        pontos.append(resumo)
 
         # Último login do audit log
+        # Gravado com o horario da coleta (nao do evento): o evento pode ser
+        # mais antigo que a janela de leitura do app e sumiria da tela.
         if ultimo_login and ultimo_login.get("user"):
-            try:
-                login_ts = datetime.fromisoformat(ultimo_login["time"].replace("Z", "+00:00"))
-            except Exception:
-                login_ts = ts
             pontos.append(
                 Point("gov_acronis_last_login")
                 .field("user_email", ultimo_login["user"])
-                .time(login_ts, WritePrecision.S)
+                .field("event_time", ultimo_login.get("time", ""))
+                .time(ts, WritePrecision.S)
             )
 
         with InfluxDBClient(
@@ -435,6 +576,10 @@ class AcronisRiskCollector:
             "acronis_risk_escrito",
             maquinas=stats["total"],
             offline_gt_20d=stats["offline_gt_20d"],
+            offline_gt_30d=stats["offline_gt_30d"],
+            planos_fonte="policy_management" if planos is not None else "components",
+            sem_plano=stats["sem_plano"],
+            **seguranca,
             edr_total=stats["edr_total"],
             backup_noise=stats["backup_noise_total"],
             license_issues=license_issues,
