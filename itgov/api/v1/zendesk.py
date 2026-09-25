@@ -11,6 +11,8 @@ from flask_restx import Namespace, Resource, fields
 
 import config
 from app.auth.rbac import require_role
+from itgov.models.zendesk import Ticket
+from itgov.services.sla_evaluator import SLAStatus, evaluate_ticket, summarize
 from itgov.services.zendesk_service import ZendeskService
 
 log = structlog.get_logger(__name__)
@@ -32,13 +34,7 @@ _lock_sla = threading.Lock()
 _cache_sla: dict | None = None
 _cache_sla_ts: float = 0.0
 
-# SLA thresholds por prioridade (horas)
-_SLA_H: dict[str, float] = {
-    "urgent": 2.0,
-    "high": 8.0,
-    "normal": 48.0,
-    "low": 120.0,
-}
+_SLA_WINDOW_DAYS = 30
 
 
 def _cache_valido(ts: float, ttl: float = _CACHE_TTL) -> bool:
@@ -64,24 +60,27 @@ def get_cached_sla_detail() -> dict:
         # Duas queries rápidas em vez de uma lenta (todos os tickets)
         # 1) Tickets abertos do grupo — base para SLA/fila/buckets/volume
         open_tickets = svc.get_open_tickets()
-        # 2) Tickets resolvidos dos últimos 30 dias — base para resolved_7d/30d
-        solved_recent = svc.get_solved_tickets(days=30)
+        # 2) Tickets resolvidos na janela — base para resolved_7d/30d e SLA do período
+        solved_recent = svc.get_solved_tickets(days=_SLA_WINDOW_DAYS)
+        targets = svc.get_sla_targets()
 
     now = datetime.now(UTC)
     cutoff_7d = now - timedelta(days=7)
+    sla_by_id = {t.id: evaluate_ticket(t, targets, now) for t in open_tickets}
 
-    # ── SLA por prioridade ────────────────────────────────────────────────
+    # ── SLA da fila aberta por prioridade ─────────────────────────────────
     by_priority: dict[str, dict] = {}
-    for prio, threshold_h in _SLA_H.items():
+    for prio, target in targets.by_priority.items():
         bucket = [t for t in open_tickets if str(t.priority or "normal") == prio]
-        breached = [t for t in bucket if t.age_hours > threshold_h]
-        total = len(bucket)
+        backlog = summarize(bucket, targets, now)
         by_priority[prio] = {
-            "count": total,
-            "breached": len(breached),
-            "ok": total - len(breached),
-            "compliance_pct": round((1 - len(breached) / total) * 100, 1) if total else 100.0,
-            "threshold_h": threshold_h,
+            "count": backlog.total_tickets,
+            "breached": backlog.breached,
+            "unknown": backlog.unknown,
+            "ok": backlog.total_tickets - backlog.breached - backlog.unknown,
+            "compliance_pct": backlog.compliance_pct,
+            "first_reply_h": round(target.first_reply_minutes / 60, 1),
+            "resolution_h": round(target.resolution_minutes / 60, 1),
         }
 
     # ── Fila: tickets mais antigos (abertos) ─────────────────────────────
@@ -91,7 +90,6 @@ def get_cached_sla_detail() -> dict:
         age_h = t.age_hours
         age_str = f"{int(age_h // 24)}d {int(age_h % 24)}h" if age_h >= 24 else f"{int(age_h)}h"
         prio = str(t.priority or "normal")
-        threshold_h = _SLA_H.get(prio, 48.0)
         oldest_list.append(
             {
                 "id": t.id,
@@ -100,7 +98,7 @@ def get_cached_sla_detail() -> dict:
                 "priority": prio,
                 "age_hours": round(age_h, 1),
                 "age_str": age_str,
-                "breached": age_h > threshold_h,
+                "breached": sla_by_id[t.id].overall == SLAStatus.BREACHED,
                 "created_fmt": t.created_at.strftime("%d/%m/%Y"),
             }
         )
@@ -119,10 +117,11 @@ def get_cached_sla_detail() -> dict:
             age_buckets[">168h"] += 1
 
     # ── Resolvidos recentes (últimos 30 dias já filtrados na query) ────────
-    def _aware(dt: datetime) -> datetime:
+    def _solved_at(t: Ticket) -> datetime:
+        dt = t.metric_set.solved_at if t.metric_set and t.metric_set.solved_at else t.updated_at
         return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
 
-    resolved_7d = sum(1 for t in solved_recent if _aware(t.updated_at) >= cutoff_7d)
+    resolved_7d = sum(1 for t in solved_recent if _solved_at(t) >= cutoff_7d)
     resolved_30d = len(solved_recent)
 
     # ── Volume por status (a partir dos abertos + resolvidos recentes) ─────
@@ -140,7 +139,10 @@ def get_cached_sla_detail() -> dict:
         "resolved_7d": resolved_7d,
         "resolved_30d": resolved_30d,
         "volume": dict(vol_counter),
-        "sla_thresholds": _SLA_H,
+        "backlog_breached": sum(1 for r in sla_by_id.values() if r.overall == SLAStatus.BREACHED),
+        "period": summarize(solved_recent, targets, now, window_days=_SLA_WINDOW_DAYS).model_dump(),
+        "sla_source": targets.source,
+        "sla_policy": targets.policy_name,
     }
 
     with _lock_sla:
@@ -159,20 +161,31 @@ def get_cached_mttr_summary() -> dict:
 
     log.info("zendesk.mttr.cache.miss")
     with _svc() as svc:
-        open_tickets = svc.get_open_tickets()  # único fetch de tickets
+        open_tickets = svc.get_open_tickets()
+        targets = svc.get_sla_targets()
+        period = svc.get_sla_metrics(days=_SLA_WINDOW_DAYS)
         csat = svc.get_csat_summary()
 
     total_open = len(open_tickets)
-    _sla_threshold_hours = 8.0
-    breached = sum(1 for t in open_tickets if t.age_hours > _sla_threshold_hours)
-    compliance = round((1 - breached / total_open) * 100, 1) if total_open else 100.0
+    backlog = summarize(open_tickets, targets)
     avg_age = round(sum(t.age_hours for t in open_tickets) / total_open, 1) if total_open else 0.0
 
     dados = {
         "total_open": total_open,
-        "breached": breached,
-        "compliance_pct": compliance,
+        # Fila aberta: tickets cujo SLA já estourou (1ª resposta ou resolução)
+        "breached": backlog.breached,
+        # Período: SLA dos tickets resolvidos na janela — o KPI de mercado
+        "compliance_pct": period.compliance_pct,
+        "first_reply_compliance_pct": period.first_reply_compliance_pct,
+        "resolution_compliance_pct": period.resolution_compliance_pct,
+        "avg_first_reply_minutes": period.avg_first_reply_minutes,
+        "period_total": period.total_tickets,
+        "period_breached": period.breached,
+        "period_unknown": period.unknown,
+        "window_days": _SLA_WINDOW_DAYS,
         "avg_age_hours": avg_age,
+        "sla_source": targets.source,
+        "sla_policy": targets.policy_name,
         "csat_pct": csat.csat_pct,
         "csat_sample": csat.sample_size,
         "csat_good": csat.good,
@@ -223,10 +236,17 @@ ticket_model = ns.model(
 sla_model = ns.model(
     "ZendeskSLAMetric",
     {
-        "total_tickets": fields.Integer,
-        "breached": fields.Integer,
-        "compliance_pct": fields.Float(description="Percentual de tickets dentro do SLA"),
-        "avg_first_reply_minutes": fields.Float(allow_null=True),
+        "total_tickets": fields.Integer(description="Tickets resolvidos na janela"),
+        "breached": fields.Integer(description="Tickets da janela com SLA violado"),
+        "unknown": fields.Integer(description="Tickets sem dados de SLA (fora do denominador)"),
+        "compliance_pct": fields.Float(
+            allow_null=True, description="Percentual de tickets dentro do SLA, ou null se sem dados"
+        ),
+        "first_reply_compliance_pct": fields.Float(allow_null=True),
+        "resolution_compliance_pct": fields.Float(allow_null=True),
+        "avg_first_reply_minutes": fields.Float(allow_null=True, description="Minutos úteis"),
+        "window_days": fields.Integer,
+        "open_breached": fields.Integer(description="Tickets abertos com SLA já violado"),
     },
 )
 
@@ -342,16 +362,21 @@ class VolumeResource(Resource):
 @ns.route("/sla")
 class SLAResource(Resource):
     @ns.marshal_with(sla_model)
-    @ns.doc(description="Métricas de SLA — compliance e tickets em breach")
+    @ns.doc(description="Métricas de SLA — compliance dos resolvidos na janela e fila em breach")
     @require_role("admin", "gestor", "visualizador")
     def get(self) -> dict:
-        """Métricas de SLA dos tickets ativos."""
+        """SLA dos tickets resolvidos nos últimos 30 dias (horário comercial)."""
         summary = get_cached_mttr_summary()
         return {
-            "total_tickets": summary["total_open"],
-            "breached": summary["breached"],
+            "total_tickets": summary["period_total"],
+            "breached": summary["period_breached"],
+            "unknown": summary["period_unknown"],
             "compliance_pct": summary["compliance_pct"],
-            "avg_first_reply_minutes": None,
+            "first_reply_compliance_pct": summary["first_reply_compliance_pct"],
+            "resolution_compliance_pct": summary["resolution_compliance_pct"],
+            "avg_first_reply_minutes": summary["avg_first_reply_minutes"],
+            "window_days": summary["window_days"],
+            "open_breached": summary["breached"],
         }
 
 
