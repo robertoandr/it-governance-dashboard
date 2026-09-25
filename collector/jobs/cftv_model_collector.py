@@ -182,7 +182,10 @@ def modelo_hikvision(ip: str, usuario: str, senha: str) -> str:
 def _ws_security(usuario: str, senha: str) -> str:
     nonce = os.urandom(16)
     criado = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    digest = base64.b64encode(hashlib.sha1(nonce + criado.encode() + senha.encode()).digest()).decode()  # noqa: S324 — exigido pelo padrão WS-Security
+    # SHA1 é exigido pelo padrão WS-Security UsernameToken (ONVIF), não é escolha nossa
+    digest = base64.b64encode(
+        hashlib.sha1(nonce + criado.encode() + senha.encode(), usedforsecurity=False).digest()
+    ).decode()
     return (
         '<Security s:mustUnderstand="1" xmlns="http://docs.oasis-open.org/wss/2004/01/'
         'oasis-200401-wss-wssecurity-secext-1.0.xsd"><UsernameToken>'
