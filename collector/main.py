@@ -10,6 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from jobs.acronis_collector import run as collect_acronis
 from jobs.acronis_risk_collector import run as collect_acronis_risk
 from jobs.alert_job import run as run_alerts
+from jobs.cftv_model_collector import run as collect_cftv_models
 from jobs.datacenter_temp_collector import collect as collect_datacenter_temp
 from jobs.entra_id_collector import run as collect_entra_id
 from jobs.github_pats import collect_github_pats
@@ -97,6 +98,21 @@ if __name__ == "__main__":
             next_run_time=datetime.now(),
         )
         log.info("zabbix_risk_job_registrado")
+
+        if settings.CFTV_CAM_USER and settings.CFTV_CAM_PASS:
+            # Diário: só consulta equipamentos ainda sem modelo
+            scheduler.add_job(
+                collect_cftv_models,
+                CronTrigger(hour=3, minute=30),
+                id="cftv_model_collector",
+                name="CFTV Camera Model Collector",
+                max_instances=1,
+                coalesce=True,
+                next_run_time=datetime.now(),
+            )
+            log.info("cftv_model_job_registrado")
+        else:
+            log.warning("cftv_model_job_ignorado", motivo="CFTV_CAM_USER/CFTV_CAM_PASS não configurados")
     else:
         log.warning("zabbix_jobs_ignorados", motivo="ZABBIX_URL ou ZABBIX_TOKEN não configurados")
 
