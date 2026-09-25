@@ -26,12 +26,13 @@
 {# --- KPIs principais --- #}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
   {{ stat_card('Tickets abertos', mttr.total_open, '', 'text-gray-800', 'new + open + pending') }}
-  {{ stat_card('Em breach de SLA', mttr.breached,  '',
+  {{ stat_card('Abertos com SLA violado', mttr.breached,  '',
       'text-red-600' if mttr.breached > 0 else 'text-green-600',
-      'abertos há mais de 8h') }}
-  {{ stat_card('Compliance SLA',  mttr.compliance_pct | round(1), '%',
-      'text-green-600' if mttr.compliance_pct >= 80 else 'text-yellow-600' if mttr.compliance_pct >= 60 else 'text-red-600',
-      none) }}
+      '1ª resposta ou resolução fora da meta') }}
+  {{ stat_card('SLA cumprido (' ~ mttr.window_days ~ 'd)',
+      mttr.compliance_pct | round(1) if mttr.compliance_pct is not none else none, '%',
+      'text-green-600' if (mttr.compliance_pct or 0) >= 80 else 'text-yellow-600' if (mttr.compliance_pct or 0) >= 60 else 'text-red-600',
+      mttr.period_total ~ ' resolvidos · horário comercial') }}
   {{ stat_card('Tempo médio aberto', mttr.avg_age_hours, 'h',
       'text-red-600' if mttr.avg_age_hours > 24 else 'text-yellow-600' if mttr.avg_age_hours > 8 else 'text-green-600',
       'média dos tickets abertos') }}
