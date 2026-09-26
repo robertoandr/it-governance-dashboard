@@ -14,7 +14,12 @@ from __future__ import annotations
 import ipaddress
 from datetime import UTC, datetime
 
+import structlog
+from sqlalchemy.exc import IntegrityError
+
 from app.extensions import db
+
+log = structlog.get_logger(__name__)
 
 UNIDADES_PADRAO: tuple[str, ...] = ("Shopping", "Autoshop", "Sede Centro", "Triunfo Fábrica", "Obras")
 
@@ -35,7 +40,17 @@ class Unidade(db.Model):
     """Unidade (site) da empresa, opcionalmente filha de outra unidade."""
 
     __tablename__ = "unidades"
-    __table_args__ = (db.UniqueConstraint("parent_id", "nome", name="uq_unidade_parent_nome"),)
+    __table_args__ = (
+        db.UniqueConstraint("parent_id", "nome", name="uq_unidade_parent_nome"),
+        # NULLs não colidem no UNIQUE acima: raízes precisam de índice parcial próprio
+        db.Index(
+            "uq_unidade_raiz_nome",
+            "nome",
+            unique=True,
+            sqlite_where=db.text("parent_id IS NULL"),
+            postgresql_where=db.text("parent_id IS NULL"),
+        ),
+    )
 
     id: int = db.Column(db.Integer, primary_key=True)
     nome: str = db.Column(db.String(120), nullable=False)
@@ -109,14 +124,19 @@ def seed_unidades() -> None:
     """Cria as unidades e vínculos de DVR padrão quando a tabela está vazia.
 
     Idempotente: se já existe qualquer unidade, não faz nada — o cadastro
-    passa a ser do usuário.
+    passa a ser do usuário. Com vários workers subindo juntos, só o primeiro
+    grava; os demais batem nos índices únicos e desistem sem erro.
     """
     if Unidade.query.first() is not None:
         return
-    por_nome = {nome: Unidade(nome=nome) for nome in UNIDADES_PADRAO}
-    db.session.add_all(por_nome.values())
-    db.session.flush()
-    for dvr, unidade in DVRS_PADRAO.items():
-        if DvrUnidade.query.filter_by(dvr=dvr).first() is None:
-            db.session.add(DvrUnidade(dvr=dvr, unidade_id=por_nome[unidade].id))
-    db.session.commit()
+    try:
+        por_nome = {nome: Unidade(nome=nome) for nome in UNIDADES_PADRAO}
+        db.session.add_all(por_nome.values())
+        db.session.flush()
+        for dvr, unidade in DVRS_PADRAO.items():
+            if DvrUnidade.query.filter_by(dvr=dvr).first() is None:
+                db.session.add(DvrUnidade(dvr=dvr, unidade_id=por_nome[unidade].id))
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        log.info("unidades.seed_concorrente_ignorado")

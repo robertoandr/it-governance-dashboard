@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from collections import Counter
 from typing import Any
 
 import requests
@@ -222,11 +223,26 @@ def montar_visao(
         Dicionário com KPIs do recorte, ``cards`` por gravador e listas de
         offline/manutenção.
     """
+    devices = dados.get("devices", [])
+
+    def _uid_loja(d: dict) -> int | None:
+        return unidade_por_loja.get(d["loja"].strip().lower())
+
+    # Unidade decidida uma vez por gravador, para não partir o card quando as
+    # câmeras de um gravador sem vínculo têm tags ``loja`` diferentes.
+    votos: dict[str, Counter[int]] = {}
+    for d in devices:
+        if d["gravador"] and (uid_loja := _uid_loja(d)) is not None:
+            votos.setdefault(d["gravador"], Counter())[uid_loja] += 1
+    uid_gravador: dict[str, int | None] = {}
+    for g in {d["gravador"] for d in devices if d["gravador"]}:
+        uid_gravador[g] = unidade_por_gravador.get(g)
+        if uid_gravador[g] is None and g in votos:
+            uid_gravador[g] = votos[g].most_common(1)[0][0]
+
     grupos: dict[tuple[str, int | None], list[dict]] = {}
-    for d in dados.get("devices", []):
-        uid = unidade_por_gravador.get(d["gravador"]) if d["gravador"] else None
-        if uid is None:
-            uid = unidade_por_loja.get(d["loja"].strip().lower())
+    for d in devices:
+        uid = uid_gravador[d["gravador"]] if d["gravador"] else _uid_loja(d)
         if filtro == SEM_UNIDADE and uid is not None:
             continue
         if isinstance(filtro, set) and uid not in filtro:
@@ -247,7 +263,8 @@ def montar_visao(
                 "unidade": unidades.get(uid, "") if uid is not None else "",
                 "vendors": vendors,
                 "dispositivos": itens,
-                **_contagem(itens),
+                # Inclui o próprio gravador: bate com os KPIs e destaca gravador offline
+                **_contagem(devs),
             }
         )
     # Problemas primeiro, depois por unidade e nome
