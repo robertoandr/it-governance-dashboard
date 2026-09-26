@@ -261,6 +261,19 @@ def infra_monitoring() -> str:
     return render_template("dashboards/infra_monitoring.html", data=data)
 
 
+@bp.route("/infra/temperatura-diaria.json")
+@login_required
+@require_role("admin", "gestor", "operador")
+def infra_temperatura_diaria():
+    """Resumo diário da temperatura do datacenter (JSON, carregado pela página /infra)."""
+    from flask import jsonify
+
+    from itgov.api.v1.datacenter_temp_diario import get_cached_temp_diaria
+
+    dias = min(max(request.args.get("dias", 30, type=int), 1), 90)
+    return jsonify(get_cached_temp_diaria(dias))
+
+
 @bp.route("/cftv")
 @login_required
 @require_role("admin", "gestor", "operador")

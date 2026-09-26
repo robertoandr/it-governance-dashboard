@@ -90,6 +90,38 @@
   {% endif %}
 </div>
 
+{# --- Histórico diário da temperatura (ThingSpeak, carregado via JSON) --- #}
+<div class="bg-white rounded-xl shadow p-5 mb-4" id="tempDiariaCard"
+     data-url="{{ url_for('dashboards.infra_temperatura_diaria', dias=30) }}">
+  <div class="flex items-baseline justify-between mb-3">
+    <p class="text-sm font-semibold text-gray-700">🌡️ Datacenter — histórico diário (30 dias)</p>
+    <p class="text-xs text-gray-400" id="tempDiariaLimite"></p>
+  </div>
+  <p class="text-sm text-gray-400" id="tempDiariaStatus">Carregando histórico…</p>
+  <div class="hidden" id="tempDiariaConteudo">
+    <div class="relative h-56 mb-1"><canvas id="tempDiariaChart"></canvas></div>
+    <p class="text-xs text-gray-400 mb-3">* hoje, parcial. Dias com menos de 10% das leituras (sensor fora do ar) ficam fora do gráfico.</p>
+    <details>
+      <summary class="text-xs text-blue-600 cursor-pointer select-none">Ver tabela por dia</summary>
+      <div class="overflow-x-auto mt-2">
+        <table class="min-w-full text-xs">
+          <thead>
+            <tr class="text-left text-gray-500 border-b">
+              <th class="py-1 pr-3">Dia</th>
+              <th class="py-1 pr-3 text-right">Média</th>
+              <th class="py-1 pr-3 text-right">Mínima</th>
+              <th class="py-1 pr-3 text-right">Máxima</th>
+              <th class="py-1 pr-3 text-right">Acima do limite</th>
+              <th class="py-1 text-right">Cobertura</th>
+            </tr>
+          </thead>
+          <tbody id="tempDiariaTabela"></tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+</div>
+
 {# Problemas por severidade (InfluxDB) #}
 {% if influx.problems_total > 0 %}
 <div class="bg-white rounded-xl shadow p-5 mb-4">
@@ -323,4 +355,87 @@
 })();
 </script>
 {% endif %}
+<script nonce="{{ csp_nonce() }}">
+(function() {
+  const card = document.getElementById('tempDiariaCard');
+  if (!card) return;
+  const status = document.getElementById('tempDiariaStatus');
+  const fmt = function (v) { return v === null ? '—' : v.toFixed(1) + '°C'; };
+  const rotulo = function (iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); };
+
+  function celula(tr, texto, classe) {
+    const td = document.createElement('td');
+    td.className = 'py-1 pr-3 text-right ' + (classe || '');
+    td.textContent = texto;
+    tr.appendChild(td);
+  }
+
+  fetch(card.dataset.url, {credentials: 'same-origin'})
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      if (!d.disponivel) { status.textContent = d.erro || 'Sem leituras do sensor no período.'; return; }
+      const limite = d.limite;
+      document.getElementById('tempDiariaLimite').textContent = 'Limite do alerta: ' + limite.toFixed(0) + '°C';
+
+      const dias = d.dias;
+      // Dia com menos de 10% das leituras (sensor fora do ar) não representa o
+      // dia: fica fora do gráfico e aparece só na tabela, marcado.
+      const COBERTURA_MIN = 10;
+      const serie = function (campo) {
+        return dias.map(function (x) { return x.cobertura_pct < COBERTURA_MIN ? null : x[campo]; });
+      };
+      new Chart(document.getElementById('tempDiariaChart'), {
+        type: 'line',
+        data: {
+          labels: dias.map(function (x) { return rotulo(x.data) + (x.parcial ? '*' : ''); }),
+          datasets: [
+            {label: 'Máxima', data: serie('max'),
+             borderColor: '#dc2626', backgroundColor: '#dc262614', fill: '+1', pointRadius: 2, borderWidth: 1.5, spanGaps: false},
+            {label: 'Mínima', data: serie('min'),
+             borderColor: '#2563eb', pointRadius: 2, borderWidth: 1.5, spanGaps: false},
+            {label: 'Média', data: serie('media'),
+             borderColor: '#374151', pointRadius: 2, borderWidth: 2, spanGaps: false},
+            {label: 'Limite', data: dias.map(function () { return limite; }),
+             borderColor: '#f59e0b', borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5}
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {mode: 'index', intersect: false},
+          scales: {y: {ticks: {callback: function (v) { return v + '°C'; }}}},
+          plugins: {
+            legend: {position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}},
+            tooltip: {callbacks: {label: function (c) {
+              const x = dias[c.dataIndex];
+              const hora = c.dataset.label === 'Máxima' ? x.max_hora : c.dataset.label === 'Mínima' ? x.min_hora : null;
+              return c.dataset.label + ': ' + fmt(c.parsed.y) + (hora ? ' às ' + hora : '');
+            }}}
+          }
+        }
+      });
+
+      const tbody = document.getElementById('tempDiariaTabela');
+      dias.slice().reverse().forEach(function (x) {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-100' + (x.acima_limite ? ' bg-red-50' : '');
+        const td = document.createElement('td');
+        td.className = 'py-1 pr-3 text-gray-700';
+        td.textContent = rotulo(x.data) + (x.parcial ? ' (hoje)' : '');
+        tr.appendChild(td);
+        celula(tr, fmt(x.media), 'text-gray-700');
+        celula(tr, x.min === null ? '—' : fmt(x.min) + ' ' + x.min_hora, 'text-blue-700');
+        celula(tr, x.max === null ? '—' : fmt(x.max) + ' ' + x.max_hora, x.max > limite ? 'text-red-700 font-semibold' : 'text-red-600');
+        celula(tr, x.acima_limite ? x.acima_limite + ' leit.' : '—', x.acima_limite ? 'text-red-700 font-semibold' : 'text-gray-400');
+        celula(tr, Math.floor(x.cobertura_pct) + '%' + (x.cobertura_pct < COBERTURA_MIN ? ' (fora do gráfico)' : ''),
+               x.cobertura_pct < 90 ? 'text-yellow-600' : 'text-gray-400');
+        tbody.appendChild(tr);
+      });
+
+      status.classList.add('hidden');
+      document.getElementById('tempDiariaConteudo').classList.remove('hidden');
+    })
+    .catch(function () { status.textContent = 'Não foi possível carregar o histórico de temperatura.'; });
+})();
+</script>
 {% endblock %}
