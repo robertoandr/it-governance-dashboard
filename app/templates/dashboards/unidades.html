@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Unidades — IT Governance{% endblock %}
+
+{% block content %}
+{% set pode_editar = current_user.role in ('admin', 'gestor') %}
+
+{% macro linha(u, filha=false) %}
+<tr class="{{ 'opacity-50' if not u.ativo }}">
+  <td class="py-2.5 pr-4 {{ 'pl-6' if filha }}">
+    <span class="text-sm {{ 'text-slate-600 dark:text-slate-300' if filha else 'font-semibold text-slate-800 dark:text-slate-100' }}">
+      {% if filha %}<span class="text-slate-300 dark:text-slate-600 mr-1">└</span>{% endif %}{{ u.nome }}
+    </span>
+    {% if not u.ativo %}<span class="ml-1 text-[10px] text-slate-400">(inativa)</span>{% endif %}
+  </td>
+  <td class="py-2.5 pr-4 text-xs font-mono text-slate-500">
+    {{ u.faixas | join(', ') if u.faixas else '—' }}
+  </td>
+  <td class="py-2.5 pr-4 text-xs text-slate-500">
+    {{ gravadores.get(u.id, []) | join(', ') or '—' }}
+  </td>
+  <td class="py-2.5 text-right">
+    {% if pode_editar %}
+    <a href="{{ url_for('dashboards.unidade_form', unidade_id=u.id) }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Editar</a>
+    {% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Unidades</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        Sites da empresa. As faixas de IP definem a unidade dos ativos descobertos na rede; os gravadores são vinculados na página CFTV.
+      </p>
+    </div>
+    {% if pode_editar %}
+    <a href="{{ url_for('dashboards.unidade_form') }}"
+       class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Nova unidade
+    </a>
+    {% endif %}
+  </div>
+
+
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 uppercase">
+          <th class="text-left py-1 pr-4 font-medium">Unidade</th>
+          <th class="text-left py-1 pr-4 font-medium">Faixas de IP</th>
+          <th class="text-left py-1 pr-4 font-medium">Gravadores CFTV</th>
+          <th class="py-1"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+        {% for u in raizes %}
+          {{ linha(u) }}
+          {% for f in u.filhas | sort(attribute='nome') %}{{ linha(f, true) }}{% endfor %}
+        {% else %}
+        <tr><td colspan="4" class="py-6 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

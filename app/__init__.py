@@ -68,9 +68,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
         from app.models import link as _link_model  # noqa: F401
+        from app.models import unidade as _unidade_model
         from app.models import user as _user_model  # noqa: F401
 
         db.create_all()
+        _unidade_model.seed_unidades()
 
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
