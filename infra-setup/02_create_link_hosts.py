@@ -40,13 +40,14 @@ os.environ.pop("ZABBIX_PASSWORD", None)
 urllib3.disable_warnings()
 
 try:
+    import zbx_lookup
     from zabbix_utils import ZabbixAPI
     from zabbix_utils.exceptions import APIRequestError
 except ImportError:
     sys.exit("Instale: pip install zabbix-utils --break-system-packages")
 
 # ── Template e grupo ──────────────────────────────────────────────────────────
-TMPL_ICMP_PING = "10564"  # ICMP Ping (nativo Zabbix)
+TMPL_ICMP_PING = "ICMP Ping"  # nativo Zabbix; ID resolvido pelo nome
 GRP_LINKS_NAME = "Links WAN"
 
 # ── Links a registrar ─────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ def main() -> None:
 
     api = ZabbixAPI(url=ZABBIX_URL, token=ZABBIX_TOKEN, skip_version_check=True)
     print(f"  Zabbix {api.api_version()} conectado")
+    tmpl_icmp_id = zbx_lookup.template(api, TMPL_ICMP_PING)
 
     # ── 1. Garantir grupo Links WAN ───────────────────────────────────────────
     banner("1. Grupo 'Links WAN'")
@@ -124,7 +126,7 @@ def main() -> None:
                 api.host.update(
                     hostid=hostid,
                     groups=[{"groupid": grp_id}],
-                    templates=[{"templateid": TMPL_ICMP_PING}],
+                    templates=[{"templateid": tmpl_icmp_id}],
                     name=host_name,
                     status=0,
                 )
@@ -147,7 +149,7 @@ def main() -> None:
                             "port": "10050",
                         }
                     ],
-                    templates=[{"templateid": TMPL_ICMP_PING}],
+                    templates=[{"templateid": tmpl_icmp_id}],
                     description=f"Link WAN monitorado via ICMP. CIDR: {link['cidr']}",
                     status=0,
                 )

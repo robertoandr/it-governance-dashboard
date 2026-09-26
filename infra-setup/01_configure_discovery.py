@@ -3,8 +3,9 @@
 Configura Network Discovery de infraestrutura no Zabbix.
 
 O que faz:
-  1. Atualiza a discovery rule "Scan Rede Corporativa" com checks completos
+  1. Cria/atualiza a discovery rule "Scan Rede Corporativa" com checks completos
      (ICMP, Zabbix agent :10050, SSH :22, RDP :3389, SNMPv2 :161, HTTPS :443)
+     sobre INFRA_SCAN_RANGES (padrão 172.29.0.0/22, o mesmo do collector)
   2. Cria/atualiza actions de auto-classificação:
      - Zabbix agent detectado  → grupo Linux servers  + template Linux by Zabbix agent
      - SNMP detectado          → grupo Firewall        + template Network Generic Device by SNMP
@@ -18,7 +19,10 @@ Uso:
     python3 infra-setup/01_configure_discovery.py
 
 Requer: pip install zabbix-utils
-Variáveis: ZABBIX_URL, ZABBIX_TOKEN (lidas do .env ou ambiente)
+Variáveis: ZABBIX_URL, ZABBIX_TOKEN, INFRA_SCAN_RANGES (lidas do .env ou ambiente)
+
+Grupos, templates e a discovery rule são resolvidos pelo NOME (zbx_lookup.py):
+os IDs mudam a cada instalação do Zabbix.
 """
 
 from __future__ import annotations
@@ -61,13 +65,15 @@ os.environ.pop("ZABBIX_PASSWORD", None)
 urllib3.disable_warnings()
 
 try:
+    import zbx_lookup
     from zabbix_utils import ZabbixAPI
     from zabbix_utils.exceptions import APIRequestError
 except ImportError:
     sys.exit("Instale: pip install zabbix-utils --break-system-packages")
 
-# ── IDs das discovery rules existentes ────────────────────────────────────────
-DRULE_CORPORATIVA_ID = "3"  # "Scan Rede Corporativa"
+# ── Discovery rule ────────────────────────────────────────────────────────────
+DRULE_CORPORATIVA = "Scan Rede Corporativa"
+SCAN_RANGES = os.environ.get("INFRA_SCAN_RANGES", "172.29.0.0/22")
 
 # ── Zabbix check types ────────────────────────────────────────────────────────
 TYPE_SSH = 0  # TCP port check on SSH
@@ -79,20 +85,15 @@ TYPE_ICMP = 12  # ICMP ping
 TYPE_HTTPS = 14
 TYPE_TELNET = 15
 
-# ── Template IDs (verificados no Zabbix desta instância) ─────────────────────
-TMPL_LINUX_AGENT = "10001"  # Linux by Zabbix agent
-TMPL_LINUX_SNMP = "10248"  # Linux by SNMP
-TMPL_NETWORK_SNMP = "10226"  # Network Generic Device by SNMP
-TMPL_WINDOWS_AGENT = "10081"  # Windows by Zabbix agent
-TMPL_ICMP_PING = "10687"  # Template_CFTV_Ping (único template ICMP disponível)
+# ── Templates e grupos (por nome; IDs resolvidos em runtime) ─────────────────
+TMPL_LINUX_AGENT = "Linux by Zabbix agent"
+TMPL_NETWORK_SNMP = "Network Generic Device by SNMP"
+TMPL_ICMP_PING = "ICMP Ping"
 
-# ── Group IDs ─────────────────────────────────────────────────────────────────
-GRP_LINUX = "2"  # Linux servers
-GRP_SERVIDORES = "23"  # Servidores
-GRP_FIREWALL = "22"  # Firewall
-GRP_VMS = "6"  # Virtual machines
-GRP_DISCOVERED = "5"  # Discovered hosts
-GRP_APPS = "19"  # Applications
+GRP_LINUX = "Linux servers"
+GRP_SERVIDORES = "Servidores"
+GRP_FIREWALL = "Firewall"
+GRP_DISCOVERED = "Discovered hosts"
 
 
 def banner(text: str) -> None:
@@ -113,8 +114,11 @@ def main() -> None:
     api = ZabbixAPI(url=ZABBIX_URL, token=ZABBIX_TOKEN, skip_version_check=True)
     print(f"  Zabbix {api.api_version()} conectado")
 
-    # ── 1. Atualizar discovery rule com checks completos ───────────────────────
-    banner("1. Atualizando discovery checks em 'Scan Rede Corporativa'")
+    ids = {nome: zbx_lookup.grupo(api, nome) for nome in (GRP_LINUX, GRP_SERVIDORES, GRP_FIREWALL, GRP_DISCOVERED)}
+    ids |= {nome: zbx_lookup.template(api, nome) for nome in (TMPL_LINUX_AGENT, TMPL_NETWORK_SNMP, TMPL_ICMP_PING)}
+
+    # ── 1. Criar/atualizar discovery rule com checks completos ────────────────
+    banner(f"1. Discovery rule '{DRULE_CORPORATIVA}' ({SCAN_RANGES})")
 
     new_checks = [
         # ICMP ping — detecta qualquer host ativo
@@ -135,24 +139,31 @@ def main() -> None:
         {"type": str(TYPE_TCP), "ports": "5432", "key_": ""},
     ]
 
+    drule_def = {
+        "iprange": SCAN_RANGES,
+        "dchecks": new_checks,
+        "status": "0",  # enabled
+        "delay": "1h",  # escanear a cada hora
+    }
+    existentes = api.drule.get(output=["druleid"], filter={"name": DRULE_CORPORATIVA})
     try:
-        api.drule.update(
-            druleid=DRULE_CORPORATIVA_ID,
-            dchecks=new_checks,
-            status="0",  # enabled
-            delay="1h",  # escanear a cada hora
-        )
-        ok(f"Discovery rule {DRULE_CORPORATIVA_ID} atualizada com {len(new_checks)} checks")
+        if existentes:
+            ids[DRULE_CORPORATIVA] = existentes[0]["druleid"]
+            api.drule.update(druleid=ids[DRULE_CORPORATIVA], **drule_def)
+            ok(f"Discovery rule {ids[DRULE_CORPORATIVA]} atualizada com {len(new_checks)} checks")
+        else:
+            ids[DRULE_CORPORATIVA] = api.drule.create(name=DRULE_CORPORATIVA, **drule_def)["druleids"][0]
+            ok(f"Discovery rule criada: ID {ids[DRULE_CORPORATIVA]} com {len(new_checks)} checks")
     except APIRequestError as e:
-        print(f"  [ERRO] drule.update: {e}")
+        sys.exit(f"  [ERRO] drule: {e}")
 
     # ── 2. Criar/atualizar action: Zabbix Agent detectado → Linux servers ──────
     banner("2. Configurando actions de auto-classificação")
 
-    _configurar_action_linux(api)
-    _configurar_action_snmp(api)
-    _configurar_action_icmp_generic(api)
-    _configurar_autoreg_action(api)
+    _configurar_action_linux(api, ids)
+    _configurar_action_snmp(api, ids)
+    _configurar_action_icmp_generic(api, ids)
+    _configurar_autoreg_action(api, ids)
 
     # ── 3. Criar grupo de quarentena para hosts novos descobertos ─────────────
     banner("3. Garantindo grupo 'Infra/Descobertos'")
@@ -179,12 +190,15 @@ def _get_or_none(api: ZabbixAPI, name: str) -> str | None:
     return actions[0]["actionid"] if actions else None
 
 
-def _configurar_action_linux(api: ZabbixAPI) -> None:
+def _configurar_action_linux(api: ZabbixAPI, ids: dict[str, str]) -> None:
     """Action: drule 'Scan Rede Corporativa' detecta host UP → Linux servers.
 
     Filtra por druleid + status UP. A classificação precisa por tipo de serviço
     (agent/SNMP/SSH) é feita pelo collector Python nmap. Esta action serve de
     fallback para hosts que o Zabbix auto-descobrir antes do next scan.
+
+    Nasce DESATIVADA: cria um host para cada IP que responder na faixa. Revise
+    Monitoramento → Discovery e ative pela UI; re-execuções não mudam o status.
     """
     name = "Infra — Discovery: Adicionar servidores Linux"
     existing_id = _get_or_none(api, name)
@@ -192,21 +206,21 @@ def _configurar_action_linux(api: ZabbixAPI) -> None:
     action_def = {
         "name": name,
         "eventsource": "1",  # discovery
-        "status": "0",  # enabled
+        "status": "1",  # disabled na criação — ver docstring
         "filter": {
             "evaltype": "0",  # AND
             "conditions": [
                 # Discovery status = UP (conditiontype 12, value 0)
                 {"conditiontype": "12", "operator": "0", "value": "0"},
-                # Discovery rule = 'Scan Rede Corporativa' (conditiontype 18)
-                {"conditiontype": "18", "operator": "0", "value": DRULE_CORPORATIVA_ID},
+                # Discovery rule = DRULE_CORPORATIVA (conditiontype 18)
+                {"conditiontype": "18", "operator": "0", "value": ids[DRULE_CORPORATIVA]},
             ],
         },
         "operations": [
             # Adicionar ao grupo Discovered hosts (triagem inicial)
-            {"operationtype": "4", "opgroup": [{"groupid": GRP_LINUX}]},
-            {"operationtype": "4", "opgroup": [{"groupid": GRP_SERVIDORES}]},
-            {"operationtype": "6", "optemplate": [{"templateid": TMPL_ICMP_PING}]},
+            {"operationtype": "4", "opgroup": [{"groupid": ids[GRP_LINUX]}]},
+            {"operationtype": "4", "opgroup": [{"groupid": ids[GRP_SERVIDORES]}]},
+            {"operationtype": "6", "optemplate": [{"templateid": ids[TMPL_ICMP_PING]}]},
             # Habilitar host
             {"operationtype": "9"},
         ],
@@ -214,16 +228,17 @@ def _configurar_action_linux(api: ZabbixAPI) -> None:
 
     try:
         if existing_id:
+            action_def.pop("status")  # preserva ativação feita pela UI
             api.action.update(actionid=existing_id, **action_def)
-            ok(f"Action atualizada: {name}")
+            ok(f"Action atualizada (status mantido): {name}")
         else:
             api.action.create(**action_def)
-            ok(f"Action criada: {name}")
+            ok(f"Action criada (DESATIVADA — ativar pela UI após revisar): {name}")
     except APIRequestError as e:
         print(f"  [AVISO] action Linux: {e}")
 
 
-def _configurar_action_snmp(api: ZabbixAPI) -> None:
+def _configurar_action_snmp(api: ZabbixAPI, ids: dict[str, str]) -> None:
     """Action: drule detecta host via SNMP → Firewall group.
 
     Nota: sem condição por tipo de serviço (não suportado nesta versão do
@@ -241,12 +256,12 @@ def _configurar_action_snmp(api: ZabbixAPI) -> None:
             "evaltype": "0",
             "conditions": [
                 {"conditiontype": "12", "operator": "0", "value": "0"},
-                {"conditiontype": "18", "operator": "0", "value": DRULE_CORPORATIVA_ID},
+                {"conditiontype": "18", "operator": "0", "value": ids[DRULE_CORPORATIVA]},
             ],
         },
         "operations": [
-            {"operationtype": "4", "opgroup": [{"groupid": GRP_FIREWALL}]},
-            {"operationtype": "6", "optemplate": [{"templateid": TMPL_NETWORK_SNMP}]},
+            {"operationtype": "4", "opgroup": [{"groupid": ids[GRP_FIREWALL]}]},
+            {"operationtype": "6", "optemplate": [{"templateid": ids[TMPL_NETWORK_SNMP]}]},
             {"operationtype": "9"},
         ],
     }
@@ -262,15 +277,18 @@ def _configurar_action_snmp(api: ZabbixAPI) -> None:
         print(f"  [AVISO] action SNMP: {e}")
 
 
-def _configurar_action_icmp_generic(api: ZabbixAPI) -> None:
-    """Action: qualquer host ICMP UP → Discovered hosts (quarentena até classificação)."""
+def _configurar_action_icmp_generic(api: ZabbixAPI, ids: dict[str, str]) -> None:
+    """Action: qualquer host ICMP UP → Discovered hosts (quarentena até classificação).
+
+    Nasce DESATIVADA pelo mesmo motivo da action Linux; re-execuções não mudam o status.
+    """
     name = "Infra — ICMP UP: adicionar a Discovered hosts"
     existing_id = _get_or_none(api, name)
 
     action_def = {
         "name": name,
         "eventsource": "1",
-        "status": "0",
+        "status": "1",  # disabled na criação — ver docstring
         "filter": {
             "evaltype": "0",
             "conditions": [
@@ -278,23 +296,24 @@ def _configurar_action_icmp_generic(api: ZabbixAPI) -> None:
             ],
         },
         "operations": [
-            {"operationtype": "4", "opgroup": [{"groupid": GRP_DISCOVERED}]},
+            {"operationtype": "4", "opgroup": [{"groupid": ids[GRP_DISCOVERED]}]},
             {"operationtype": "9"},
         ],
     }
 
     try:
         if existing_id:
+            action_def.pop("status")  # preserva ativação feita pela UI
             api.action.update(actionid=existing_id, **action_def)
-            ok(f"Action atualizada: {name}")
+            ok(f"Action atualizada (status mantido): {name}")
         else:
             api.action.create(**action_def)
-            ok(f"Action criada: {name}")
+            ok(f"Action criada (DESATIVADA — ativar pela UI após revisar): {name}")
     except APIRequestError as e:
         print(f"  [AVISO] action ICMP: {e}")
 
 
-def _configurar_autoreg_action(api: ZabbixAPI) -> None:
+def _configurar_autoreg_action(api: ZabbixAPI, ids: dict[str, str]) -> None:
     """Action de auto-registration: agente se registra automaticamente."""
     name = "Infra — Auto-registro: Zabbix Agent"
     # eventsource=2 para auto-registration
@@ -311,9 +330,9 @@ def _configurar_autoreg_action(api: ZabbixAPI) -> None:
         "status": "0",
         "filter": {"evaltype": "0", "conditions": []},
         "operations": [
-            {"operationtype": "4", "opgroup": [{"groupid": GRP_LINUX}]},
-            {"operationtype": "4", "opgroup": [{"groupid": GRP_SERVIDORES}]},
-            {"operationtype": "6", "optemplate": [{"templateid": TMPL_LINUX_AGENT}]},
+            {"operationtype": "4", "opgroup": [{"groupid": ids[GRP_LINUX]}]},
+            {"operationtype": "4", "opgroup": [{"groupid": ids[GRP_SERVIDORES]}]},
+            {"operationtype": "6", "optemplate": [{"templateid": ids[TMPL_LINUX_AGENT]}]},
             {"operationtype": "9"},
         ],
     }
