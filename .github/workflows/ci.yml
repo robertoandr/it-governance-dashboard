@@ -167,7 +167,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master em 2026-08-14 (trivy v0.74.0)
         with:
           scan-type: fs
           scan-ref: .
