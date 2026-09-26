@@ -5,7 +5,8 @@ acronis_risk_collector). Nenhuma chamada direta à API Acronis é feita aqui.
 
 Measurements usados:
   gov_acronis_agents        — totais: online, offline, outdated
-  gov_acronis_risk_summary  — offline_gt_20d, sem_plano, incidents_total, license_issues
+  gov_acronis_risk_summary  — offline_gt_30d, sem_plano, incidents_total, license_issues,
+                              incidents_mitigated/not_mitigated, intrusion_*, patches_*
   gov_acronis_machines      — por máquina: offline_days, has_active_plan, open_incidents
   gov_acronis_incidents     — incidentes individuais com tipo e severidade
 """
@@ -73,7 +74,7 @@ from(bucket: "{bucket}")
   |> filter(fn: (r) => r._measurement == "gov_acronis_machines")
   |> filter(fn: (r) =>
       r._field == "offline_days" or
-      r._field == "offline_gt_20d" or
+      r._field == "offline_gt_30d" or
       r._field == "has_active_plan" or
       r._field == "open_incidents" or
       r._field == "edr_incidents")
@@ -98,15 +99,17 @@ from(bucket: "{bucket}")
 from(bucket: "{bucket}")
   |> range(start: -30d)
   |> filter(fn: (r) => r._measurement == "gov_acronis_last_login")
-  |> filter(fn: (r) => r._field == "user_email")
+  |> filter(fn: (r) => r._field == "user_email" or r._field == "event_time")
   |> last()
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 """)
     login_row = rows_login[-1] if rows_login else {}
-    last_login_user: str | None = login_row.get("_value") or None
-    last_login_time = login_row.get("_time") or None
+    last_login_user: str | None = login_row.get("user_email") or None
+    # event_time = quando a conta teve atividade; pontos antigos só têm _time
+    last_login_time = login_row.get("event_time") or login_row.get("_time") or None
 
     # ── Processar máquinas ─────────────────────────────────────────────────
-    offline_gt20: list[dict] = []
+    offline_gt30: list[dict] = []
     sem_plano: list[dict] = []
 
     for row in rows_machines:
@@ -115,17 +118,17 @@ from(bucket: "{bucket}")
         status = str(row.get("protection_status", "")).strip()
         offline_days = int(row.get("offline_days", 0) or 0)
         has_plan = int(row.get("has_active_plan", 0) or 0)
-        offline_f = int(row.get("offline_gt_20d", 0) or 0)
+        offline_f = int(row.get("offline_gt_30d", 0) or 0)
         incidents = int(row.get("open_incidents", 0) or 0)
 
         if offline_f:
-            offline_gt20.append(
+            offline_gt30.append(
                 {"name": name, "tenant": tenant, "offline_days": offline_days, "open_incidents": incidents}
             )
         if not has_plan:
             sem_plano.append({"name": name, "tenant": tenant, "status": status, "open_incidents": incidents})
 
-    offline_gt20.sort(key=lambda x: x["offline_days"], reverse=True)
+    offline_gt30.sort(key=lambda x: x["offline_days"], reverse=True)
     sem_plano.sort(key=lambda x: x["name"])
 
     # ── Processar incidentes ───────────────────────────────────────────────
@@ -137,6 +140,7 @@ from(bucket: "{bucket}")
                 "tenant": str(row.get("tenant", "—")),
                 "alert_type": str(row.get("alert_type", "—")),
                 "severity": str(row.get("severity", "—")),
+                "mitigation": str(row.get("mitigation", "") or ""),
                 "time": row.get("_time"),
             }
         )
@@ -171,14 +175,22 @@ from(bucket: "{bucket}")
         "protected": protected,
         "protected_pct": round(protected / total * 100, 1) if total else 0.0,
         "sem_plano_count": int(risk_row.get("sem_plano", 0) or 0),
-        "offline_gt_20d_count": int(risk_row.get("offline_gt_20d", 0) or 0),
+        "offline_gt_30d_count": int(risk_row.get("offline_gt_30d", 0) or 0),
         "incidents_total": int(risk_row.get("incidents_total", 0) or 0),
         "license_issues": int(risk_row.get("license_issues", 0) or 0),
         "edr_total": int(risk_row.get("edr_total", 0) or 0),
+        "incidents_mitigated": int(risk_row.get("incidents_mitigated", 0) or 0),
+        "incidents_not_mitigated": int(risk_row.get("incidents_not_mitigated", 0) or 0),
+        "intrusion_attempts": int(risk_row.get("intrusion_attempts", 0) or 0),
+        "intrusion_edr": int(risk_row.get("intrusion_edr", 0) or 0),
+        "intrusion_url": int(risk_row.get("intrusion_url", 0) or 0),
+        "intrusion_login": int(risk_row.get("intrusion_login", 0) or 0),
+        "patches_critical": int(risk_row.get("patches_critical", 0) or 0),
+        "patches_warning": int(risk_row.get("patches_warning", 0) or 0),
         "last_login_user": last_login_user,
         "last_login_fmt": last_login_fmt,
         # Listas
-        "offline_gt20": offline_gt20,
+        "offline_gt30": offline_gt30,
         "sem_plano": sem_plano,
         "incidentes": incidentes,
     }
