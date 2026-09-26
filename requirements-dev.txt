@@ -33,3 +33,4 @@ pre-commit>=3.7
 ipython>=8.20              # REPL melhorado
 ipdb>=0.13                 # debugger interativo
 types-PyYAML
+zabbix-utils>=2.0  # infra-setup/ (scripts de provisionamento do Zabbix)
