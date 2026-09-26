@@ -86,6 +86,12 @@ TEMPLATES_TO_IMPORT: list[tuple[str, str]] = [
         "Ricoh — SNMP Printers",
         f"{RAW_COMM}/Printers/Ricoh/template_ricoh_snmp_printers/6.0/template_ricoh_snmp_printers.yaml",
     ),
+    # ── CFTV ──────────────────────────────────────────────────────────────────
+    # NVR/DVR Intelbras e Dahua (OID enterprise 1004849); usado por 07_create_cftv_hosts.py
+    (
+        "Intelbras NVR SNMP",
+        f"{RAW_COMM}/Network_Devices/Intelbras/template_dvr_intelbras/6.4/template_Intelbras_NVR_template_v647.yaml",
+    ),
 ]
 
 # ── Media types a instalar (Slack, Telegram) ─────────────────────────────────

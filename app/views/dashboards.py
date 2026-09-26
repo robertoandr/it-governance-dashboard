@@ -309,8 +309,11 @@ def cftv_gravador_unidade() -> object:
     if not gravador:
         abort(400)
     unidade_id = int(unidade_raw) if unidade_raw.isdigit() else None
-    if unidade_id is not None and db.session.get(Unidade, unidade_id) is None:
-        abort(400)
+    if unidade_id is not None:
+        alvo = db.session.get(Unidade, unidade_id)
+        # Inativa não aparece no seletor do card: o próximo "Salvar" apagaria o vínculo
+        if alvo is None or not alvo.ativo:
+            abort(400)
 
     vinculo = DvrUnidade.query.filter_by(dvr=gravador).first()
     if vinculo is None:

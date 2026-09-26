@@ -150,7 +150,8 @@ def test_montar_visao_um_card_por_gravador() -> None:
     assert dvr1["unidade"] == "Sede Centro"
     # O próprio DVR não conta como câmera do card; canais em ordem numérica
     assert [d["canal"] for d in dvr1["dispositivos"]] == ["1", "2", "10"]
-    assert (dvr1["total"], dvr1["up"], dvr1["down"]) == (3, 2, 1)
+    # 3 câmeras + o próprio DVR-1 (online)
+    assert (dvr1["total"], dvr1["up"], dvr1["down"]) == (4, 3, 1)
     assert dvr1["vendors"] == ["Intelbras"]
 
     hauer = por_gravador["ADM HAUER"]
@@ -356,3 +357,72 @@ def test_remover_unidade_desvincula_gravadores(authed_client, factory_app) -> No
 def test_operador_nao_acessa_formulario(operador_client) -> None:
     assert operador_client.get("/gov/unidades").status_code == 200
     assert operador_client.get("/gov/unidades/nova").status_code == 403
+
+
+def test_seed_concorrente_nao_quebra_nem_duplica(factory_app) -> None:
+    """Outro worker já semeou entre o ``first()`` e o insert: o seed desiste sem erro."""
+    from app.models.unidade import seed_unidades
+
+    with factory_app.app_context():
+        antes = Unidade.query.count()
+        with patch("app.models.unidade.Unidade.query") as query:
+            query.first.return_value = None
+            seed_unidades()
+        assert Unidade.query.count() == antes
+
+
+def test_indice_impede_raiz_duplicada(factory_app) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    with factory_app.app_context():
+        db.session.add(Unidade(nome="Shopping"))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_montar_visao_gravador_sem_vinculo_fica_em_um_card() -> None:
+    dados = {
+        "devices": [
+            _dev("cam-a", "DVR-X", loja="Shopping"),
+            _dev("cam-b", "DVR-X", loja="Shopping"),
+            _dev("cam-c", "DVR-X", loja="Autoshop"),
+        ]
+    }
+    visao = montar_visao(
+        dados,
+        unidade_por_gravador={},
+        unidades={1: "Shopping", 2: "Autoshop"},
+        unidade_por_loja={"shopping": 1, "autoshop": 2},
+    )
+    assert len(visao["cards"]) == 1
+    assert visao["cards"][0]["unidade_id"] == 1
+    assert visao["cards"][0]["total"] == 3
+
+
+def test_montar_visao_gravador_offline_conta_no_card() -> None:
+    dados = {
+        "devices": [
+            _dev("NVR-9", "NVR-9", status="down", subcat="nvr", is_gravador=True),
+            _dev("cam-9", "NVR-9"),
+        ]
+    }
+    visao = montar_visao(dados, unidade_por_gravador={}, unidades={}, unidade_por_loja={})
+    card = visao["cards"][0]
+    assert (card["down"], card["total"]) == (visao["down"], visao["total"]) == (1, 2)
+    assert len(card["dispositivos"]) == 1
+
+
+def test_definir_unidade_inativa_400(authed_client, factory_app) -> None:
+    with factory_app.app_context():
+        inativa = Unidade(nome="Desativada Teste", ativo=False)
+        db.session.add(inativa)
+        db.session.commit()
+        uid = inativa.id
+    try:
+        resp = authed_client.post("/gov/cftv/gravador", data={"gravador": "X", "unidade_id": str(uid)})
+        assert resp.status_code == 400
+    finally:
+        with factory_app.app_context():
+            db.session.delete(db.session.get(Unidade, uid))
+            db.session.commit()

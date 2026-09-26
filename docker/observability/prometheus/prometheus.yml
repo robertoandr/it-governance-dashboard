@@ -7,7 +7,7 @@ scrape_configs:
     static_configs:
       - targets: ["otel-collector:8889"]
 
-  # app metrics via host network (Linux: bridge gateway IP, not host.docker.internal)
+  # app metrics via host network (host.docker.internal = host-gateway no compose)
   - job_name: itgov
     static_configs:
-      - targets: ["172.17.0.1:9464"]
+      - targets: ["host.docker.internal:9464"]
