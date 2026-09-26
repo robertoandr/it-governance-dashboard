@@ -89,3 +89,11 @@ class TestRegistrarNoZabbix:
         existing = {"172.29.0.10": {"hostid": "500", "groupids": {"27"}, "templateids": {"10564"}}}
         assert nd._registrar_no_zabbix(_host(), api, existing, nd._ZbxIds(api)) == "skipped"
         api.host.update.assert_not_called()
+
+    def test_erro_ao_resolver_grupo_fica_restrito_ao_host(self) -> None:
+        from zabbix_utils.exceptions import APIRequestError
+
+        api = _api({}, {"ICMP Ping": "10564"})
+        api.hostgroup.create.side_effect = APIRequestError("No permissions")
+        assert nd._registrar_no_zabbix(_host(), api, {}, nd._ZbxIds(api)) == "skipped"
+        api.host.create.assert_not_called()

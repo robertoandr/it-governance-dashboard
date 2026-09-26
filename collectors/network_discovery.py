@@ -361,8 +361,13 @@ def _registrar_no_zabbix(host: DiscoveredHost, api: Any, existing: dict[str, dic
     iface_type = host.interface_type
     port = "10050" if iface_type == 1 else "161"
 
-    groupids = {ids.grupo(g) for g in host.groups}
-    templateids = {t for t in (ids.template(n) for n in host.templates) if t}
+    try:
+        # Resolve (e pode criar) grupos via API: falha aqui fica restrita a este host
+        groupids = {ids.grupo(g) for g in host.groups}
+        templateids = {t for t in (ids.template(n) for n in host.templates) if t}
+    except APIRequestError as exc:
+        log.warning("network_discovery.zabbix_ids_erro", ip=host.ip, erro=str(exc))
+        return "skipped"
     # Zabbix rejeita DNS com chars inválidos (ex: "_gateway"); useip=1 então DNS fica vazio
     safe_dns = host.hostname if host.hostname and host.hostname[0].isalnum() else ""
     iface = {
