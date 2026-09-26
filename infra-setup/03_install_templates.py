@@ -46,13 +46,15 @@ os.environ.pop("ZABBIX_USER", None)
 os.environ.pop("ZABBIX_PASSWORD", None)
 
 try:
+    import zbx_lookup
     from zabbix_utils import ZabbixAPI
     from zabbix_utils.exceptions import APIRequestError
 except ImportError:
     sys.exit("Instale: pip install zabbix-utils --break-system-packages")
 
 # ── Constantes de URL ─────────────────────────────────────────────────────────
-RAW_OFFICIAL = "https://raw.githubusercontent.com/zabbix/zabbix/refs/heads/release/7.0/templates"
+# Branch release/X.Y é definida em runtime pela versão do servidor (ver main()).
+RAW_OFFICIAL = "https://raw.githubusercontent.com/zabbix/zabbix/refs/heads/release/{versao}/templates"
 RAW_COMMUNITY = "https://raw.githubusercontent.com/zabbix/community-templates/refs/heads/main"
 API_COMMUNITY = "https://api.github.com/repos/zabbix/community-templates/contents"
 
@@ -86,12 +88,10 @@ TEMPLATES_TO_IMPORT: list[tuple[str, str]] = [
     ),
 ]
 
-# ── Media types a instalar (Teams, Slack, Telegram) ──────────────────────────
+# ── Media types a instalar (Slack, Telegram) ─────────────────────────────────
+# Teams: o media type antigo (media/msteams, via conectores do Office 365) saiu
+# do Zabbix 7.4 — o substituto "MS Teams Workflow" já vem nativo.
 MEDIA_TYPES_TO_IMPORT: list[tuple[str, str]] = [
-    (
-        "Microsoft Teams",
-        f"{RAW_OFFICIAL}/media/msteams/media_msteams.yaml",
-    ),
     (
         "Slack",
         f"{RAW_OFFICIAL}/media/slack/media_slack.yaml",
@@ -155,6 +155,7 @@ def _import_yaml(api: ZabbixAPI, yaml_content: str, descr: str) -> bool:
             source=yaml_content,
             rules={
                 "templates": {"createMissing": True, "updateExisting": True},
+                "template_groups": {"createMissing": True},  # YAMLs da comunidade trazem grupos próprios
                 "items": {"createMissing": True, "updateExisting": True},
                 "triggers": {"createMissing": True, "updateExisting": True},
                 "graphs": {"createMissing": True, "updateExisting": True},
@@ -179,7 +180,7 @@ def _existing_media_types(api: ZabbixAPI) -> set[str]:
     return {m["name"] for m in api.mediatype.get(output=["name"])}
 
 
-def _create_service_template(api: ZabbixAPI, svc: dict, existing: set[str]) -> str:
+def _create_service_template(api: ZabbixAPI, svc: dict, existing: set[str], grupo_templates_id: str) -> str:
     """Cria template de simple check para serviço de rede."""
     tname = svc["name"]
     if tname in existing:
@@ -189,7 +190,7 @@ def _create_service_template(api: ZabbixAPI, svc: dict, existing: set[str]) -> s
         result = api.template.create(
             host=tname,
             name=tname,
-            groups=[{"groupid": "1"}],  # Templates group
+            groups=[{"groupid": grupo_templates_id}],
             description=svc["descr"],
         )
         tid = result["templateids"][0]
@@ -220,9 +221,11 @@ def _create_service_template(api: ZabbixAPI, svc: dict, existing: set[str]) -> s
 
 
 def main() -> None:
-    banner("Instalação de Templates Zabbix 7.0")
     api = ZabbixAPI(url=ZABBIX_URL, token=ZABBIX_TOKEN, skip_version_check=True)
+    versao = zbx_lookup.versao_major_minor(api)
+    banner(f"Instalação de Templates Zabbix {versao}")
     print(f"  Zabbix {api.api_version()} conectado")
+    grupo_templates_id = zbx_lookup.grupo_templates(api)
 
     existing_t = _existing_templates(api)
     existing_m = _existing_media_types(api)
@@ -244,12 +247,12 @@ def main() -> None:
     print(f"\n  Templates importados: {stats['ok']}  erros: {stats['error']}")
 
     # ── 2. Media Types (Teams, Slack, Telegram) ───────────────────────────────
-    banner("2. Media Types — Teams, Slack, Telegram")
+    banner("2. Media Types — Slack, Telegram")
     for descr, url in MEDIA_TYPES_TO_IMPORT:
         if descr in existing_m:
             info(f"{descr}: ja existe")
             continue
-        yaml_content = _fetch_yaml(url, descr)
+        yaml_content = _fetch_yaml(url.format(versao=versao), descr)
         if yaml_content and _import_yaml(api, yaml_content, descr):
             pass
         time.sleep(0.3)
@@ -259,7 +262,7 @@ def main() -> None:
     existing_t = _existing_templates(api)
     svc_stats = {"created": 0, "exists": 0, "error": 0}
     for svc in NETWORK_SERVICE_TEMPLATES:
-        result = _create_service_template(api, svc, existing_t)
+        result = _create_service_template(api, svc, existing_t, grupo_templates_id)
         svc_stats[result] = svc_stats.get(result, 0) + 1
         if result == "created":
             ok(f"{svc['name']} criado")
