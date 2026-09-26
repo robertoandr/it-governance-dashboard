@@ -6,10 +6,14 @@ Combina:
 - Zabbix API: discovery rules (drules) — configuração e status
 
 Cache TTL 5min (scan muda no máximo a cada hora).
+
+``montar_descobertos`` cruza cada host com a unidade (faixa de IP mais
+específica) e com o ativo já cadastrado no inventário (pelo IP em metadata).
 """
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import threading
 import time
@@ -179,6 +183,10 @@ from(bucket: "{bucket}")
                 "has_agent": _int(row.get("has_agent")) == 1,
                 "has_snmp": _int(row.get("has_snmp")) == 1,
                 "has_ssh": _int(row.get("has_ssh")) == 1,
+                "mac": str(row.get("mac") or ""),
+                "tipo_sugerido": str(row.get("tipo_sugerido") or "outro"),
+                "motivo": str(row.get("motivo") or ""),
+                "portas": str(row.get("open_ports") or ""),
                 "scan_time": str(row.get("_time", "")),
             }
         )
@@ -202,6 +210,99 @@ from(bucket: "{bucket}")
         "hosts": sorted(hosts, key=lambda x: (x["category"], x["ip"])),
         "history": hist,
     }
+
+
+# ── Revisão: unidade + ativo cadastrado ──────────────────────────────────────
+
+SEM_UNIDADE = "sem"
+STATUS_NOVO = "novos"
+STATUS_CADASTRADO = "cadastrados"
+
+
+def unidade_do_ip(ip: str, faixas: list[tuple[int, str]]) -> int | None:
+    """Unidade cuja faixa contém ``ip``; com sobreposição, vence a mais específica.
+
+    Args:
+        ip: Endereço descoberto.
+        faixas: Pares ``(unidade_id, cidr)``.
+
+    Returns:
+        Id da unidade, ou None se nenhuma faixa contém o IP.
+    """
+    try:
+        endereco = ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    melhor: tuple[int, int] | None = None  # (prefixlen, unidade_id)
+    for unidade_id, cidr in faixas:
+        try:
+            rede = ipaddress.ip_network(cidr, strict=False)
+        except ValueError:
+            continue
+        if endereco.version == rede.version and endereco in rede and (melhor is None or rede.prefixlen > melhor[0]):
+            melhor = (rede.prefixlen, unidade_id)
+    return melhor[1] if melhor else None
+
+
+def montar_descobertos(
+    hosts: list[dict],
+    faixas: list[tuple[int, str]],
+    ativos_por_ip: dict[str, dict],
+    unidades: dict[int, str],
+    filtro_unidade: set[int] | str | None = None,
+    filtro_status: str = "",
+) -> dict[str, Any]:
+    """Prepara a fila de revisão da página Rede.
+
+    Args:
+        hosts: Hosts de ``_ler_assets_influx``.
+        faixas: Pares ``(unidade_id, cidr)`` das unidades ativas.
+        ativos_por_ip: IP → ``{"id", "nome", "tipo"}`` dos ativos já cadastrados.
+        unidades: Id → nome completo da unidade.
+        filtro_unidade: Ids aceitos, ``SEM_UNIDADE`` ou None para todas.
+        filtro_status: ``STATUS_NOVO``, ``STATUS_CADASTRADO`` ou "" para todos.
+
+    Returns:
+        ``hosts`` enriquecidos e filtrados, mais contagens do recorte por unidade.
+    """
+    linhas: list[dict] = []
+    for h in hosts:
+        uid = unidade_do_ip(h["ip"], faixas)
+        if filtro_unidade == SEM_UNIDADE and uid is not None:
+            continue
+        if isinstance(filtro_unidade, set) and uid not in filtro_unidade:
+            continue
+        ativo = ativos_por_ip.get(h["ip"])
+        if filtro_status == STATUS_NOVO and ativo:
+            continue
+        if filtro_status == STATUS_CADASTRADO and not ativo:
+            continue
+        linhas.append({**h, "unidade_id": uid, "unidade": unidades.get(uid, "") if uid else "", "ativo": ativo})
+
+    novos = sum(1 for linha in linhas if not linha["ativo"])
+    por_tipo: dict[str, int] = {}
+    for linha in linhas:
+        por_tipo[linha["tipo_sugerido"]] = por_tipo.get(linha["tipo_sugerido"], 0) + 1
+    return {
+        "hosts": sorted(linhas, key=lambda x: (x["ativo"] is not None, x["unidade"] or "~", _ip_key(x["ip"]))),
+        "total": len(linhas),
+        "novos": novos,
+        "cadastrados": len(linhas) - novos,
+        "por_tipo": dict(sorted(por_tipo.items(), key=lambda kv: -kv[1])),
+    }
+
+
+def _ip_key(ip: str) -> tuple[int, int]:
+    try:
+        endereco = ipaddress.ip_address(ip)
+    except ValueError:
+        return (9, 0)
+    return (endereco.version, int(endereco))
+
+
+def host_descoberto(ip: str) -> dict | None:
+    """Último registro do host ``ip`` na varredura (via cache da página)."""
+    return next((h for h in get_cached_rede_summary()["influx"].get("hosts", []) if h["ip"] == ip), None)
 
 
 # ── Montagem final ─────────────────────────────────────────────────────────────

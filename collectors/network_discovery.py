@@ -3,10 +3,13 @@
 Collector de descoberta de ativos de infraestrutura de rede.
 
 Fluxo:
-  1. nmap varre os ranges configurados (INFRA_SCAN_RANGES)
-  2. Cada host descoberto é classificado por OS + portas abertas
-  3. Host inexistente no Zabbix → criado no grupo + template correto
-  4. Resultado escrito no InfluxDB (gov_infra_assets) para o dashboard
+  1. nmap varre INFRA_SCAN_RANGES + as faixas de IP das unidades cadastradas
+     no dashboard (tabela ``unidades`` do app.db, montado só leitura)
+  2. Cada host é classificado (categoria Zabbix) e recebe um tipo de ativo
+     sugerido (vm, impressora, camera, servidor, ...) para revisão na página Rede
+  3. Resultado escrito no InfluxDB (gov_infra_assets / gov_infra_asset_detail)
+  4. Opcional (INFRA_ZABBIX_AUTOREGISTER=true): host inexistente no Zabbix é
+     criado no grupo + template correto
   5. Pode rodar como cron/systemd ou via --scan-now
 
 Classificação automática:
@@ -34,12 +37,16 @@ Variáveis de ambiente:
                         (padrão: 172.29.0.0/22)
     INFRA_SCAN_INTERVAL Intervalo em segundos (padrão: 3600)
     INFRA_NMAP_ARGS     Args extras para nmap (padrão: -T4 --host-timeout 10s)
+    INFRA_UNIDADES_DB   SQLite do app com a tabela unidades (padrão: /app-data/app.db)
+    INFRA_ZABBIX_AUTOREGISTER  true para cadastrar hosts no Zabbix (padrão: false)
 """
 
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import os
+import sqlite3
 import sys
 import time
 from dataclasses import dataclass, field
@@ -73,7 +80,11 @@ INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "")
 INFLUX_ORG = os.getenv("INFLUX_ORG", "")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET_RAW", "governance_raw")
 
-SCAN_RANGES = os.getenv("INFRA_SCAN_RANGES", "172.29.0.0/22").split(",")
+SCAN_RANGES = [r.strip() for r in os.getenv("INFRA_SCAN_RANGES", "172.29.0.0/22").split(",") if r.strip()]
+UNIDADES_DB = os.getenv("INFRA_UNIDADES_DB", "/app-data/app.db")
+ZABBIX_AUTOREGISTER = os.getenv("INFRA_ZABBIX_AUTOREGISTER", "false").strip().lower() in ("1", "true", "yes")
+# Faixas maiores que isso são ignoradas: um /8 digitado por engano varreria 16M IPs
+MENOR_PREFIXO = 16
 SCAN_INTERVAL = int(os.getenv("INFRA_SCAN_INTERVAL", "3600"))
 NMAP_ARGS = os.getenv("INFRA_NMAP_ARGS", "-T4 --host-timeout 15s")
 
@@ -104,6 +115,58 @@ PORTS_SNMP = {161}  # UDP
 PORTS_DB = {3306, 5432, 1433, 27017, 6379}
 PORTS_WEB = {80, 443, 8080, 8443}
 PORTS_MGMT = {623, 664}  # IPMI
+PORTS_PRINTER = {9100, 515, 631}  # RAW/JetDirect, LPD, IPP
+PORTS_CAMERA = {554, 37777, 8000}  # RTSP, Intelbras/Dahua SDK, Hikvision SDK
+PORTS_WINDOWS = {135, 139, 445}
+PORTS_FORTINET = {541}
+
+# Portas TCP varridas (as de classificação acima + serviços comuns)
+SCAN_PORTS = sorted(
+    {22, 80, 443, 623, 3306, 3389, 5432, 1433, 8080, 8443, 10050}
+    | PORTS_PRINTER
+    | PORTS_CAMERA
+    | PORTS_WINDOWS
+    | PORTS_FORTINET
+)
+
+# Prefixos de MAC (OUI) de placas virtuais
+VM_OUIS = {
+    "00:50:56": "VMware",
+    "00:0C:29": "VMware",
+    "00:05:69": "VMware",
+    "00:15:5D": "Hyper-V",
+    "BC:24:11": "Proxmox",
+    "52:54:00": "QEMU/KVM",
+    "08:00:27": "VirtualBox",
+    "00:16:3E": "Xen",
+}
+_VENDORS_IMPRESSORA = (
+    "hewlett",
+    "hp inc",
+    "brother",
+    "epson",
+    "ricoh",
+    "kyocera",
+    "lexmark",
+    "xerox",
+    "canon",
+    "samsung electronics",
+    "oki",
+)
+_VENDORS_CAMERA = ("intelbras", "hikvision", "dahua", "axis", "hanwha")
+_VENDORS_AP = ("ubiquiti", "aruba", "ruckus", "cambium", "unifi")
+_VENDORS_SWITCH = ("cisco", "mikrotik", "huawei", "juniper", "tp-link", "d-link", "3com", "extreme")
+
+# Tipos de ativo sugeridos (espelham itgov.models.ativo.TIPOS_VALIDOS)
+TIPO_VM = "vm"
+TIPO_IMPRESSORA = "impressora"
+TIPO_CAMERA = "camera"
+TIPO_AP = "ap"
+TIPO_FIREWALL = "firewall"
+TIPO_SWITCH = "switch"
+TIPO_SERVIDOR = "servidor"
+TIPO_ENDPOINT = "endpoint"
+TIPO_OUTRO = "outro"
 
 
 @dataclass
@@ -119,6 +182,8 @@ class DiscoveredHost:
 
     # Classificação calculada
     category: str = "Outros"
+    tipo_sugerido: str = TIPO_OUTRO
+    motivo: str = ""
     groups: list[str] = field(default_factory=list)
     templates: list[str] = field(default_factory=list)
     interface_type: int = 1  # 1=agent, 2=SNMP, 3=IPMI
@@ -185,6 +250,89 @@ class DiscoveredHost:
             self.groups = [GRP_DISCOVERED]
             self.templates = [TMPL_ICMP_PING]
 
+        self.tipo_sugerido, self.motivo = sugerir_tipo(self)
+
+
+def sugerir_tipo(host: DiscoveredHost) -> tuple[str, str]:
+    """Sugere o tipo de ativo pelo MAC, fabricante, portas e SO detectado.
+
+    A ordem importa: sinais mais específicos (placa virtual, porta de
+    impressão, RTSP) vêm antes dos genéricos (SSH/RDP).
+
+    Returns:
+        ``(tipo, motivo)`` — o motivo é exibido na página Rede para o usuário
+        entender e corrigir a sugestão.
+    """
+    tcp = host.open_tcp
+    vendor = host.vendor.lower()
+    os_l = host.os_guess.lower()
+    has_snmp = bool(host.open_udp & PORTS_SNMP) or 161 in tcp
+
+    oui = host.mac.upper()[:8]
+    if oui in VM_OUIS:
+        return TIPO_VM, f"MAC {VM_OUIS[oui]}"
+    if any(v in vendor for v in ("vmware", "qemu", "xensource", "proxmox")):
+        return TIPO_VM, f"fabricante {host.vendor}"
+    marca_impressora = any(v in vendor for v in _VENDORS_IMPRESSORA)
+    if tcp & PORTS_PRINTER or (marca_impressora and not tcp & (PORTS_SSH | PORTS_RDP)):
+        portas = sorted(tcp & PORTS_PRINTER)
+        return TIPO_IMPRESSORA, f"portas {portas}" if portas else f"fabricante {host.vendor}"
+    if tcp & PORTS_CAMERA or any(v in vendor for v in _VENDORS_CAMERA):
+        portas = sorted(tcp & PORTS_CAMERA)
+        return TIPO_CAMERA, f"portas {portas}" if portas else f"fabricante {host.vendor}"
+    if tcp & PORTS_FORTINET or "fortinet" in vendor or "fortios" in os_l:
+        return TIPO_FIREWALL, "Fortinet"
+    if any(v in vendor for v in _VENDORS_AP):
+        return TIPO_AP, f"fabricante {host.vendor}"
+    if has_snmp and (
+        any(v in vendor for v in _VENDORS_SWITCH) or any(v in os_l for v in ("ios", "routeros", "switch"))
+    ):
+        return TIPO_SWITCH, "SNMP + fabricante de rede"
+    if "windows" in os_l and "server" not in os_l and not tcp & PORTS_RDP and tcp & PORTS_WINDOWS:
+        return TIPO_ENDPOINT, host.os_guess
+    if tcp & (PORTS_ZABBIX_AGENT | PORTS_SSH | PORTS_RDP | PORTS_DB):
+        return TIPO_SERVIDOR, "agente/SSH/RDP/banco"
+    if tcp & PORTS_WINDOWS:
+        return TIPO_ENDPOINT, "compartilhamento Windows"
+    if has_snmp:
+        return TIPO_SWITCH, "SNMP"
+    return TIPO_OUTRO, "sem assinatura conhecida"
+
+
+def faixas_das_unidades(db_path: str = UNIDADES_DB) -> list[str]:
+    """Lê as faixas de IP das unidades ativas do app.db do dashboard.
+
+    Ausência do arquivo/tabela não é erro: o scanner segue só com
+    INFRA_SCAN_RANGES (ex.: antes do primeiro deploy do cadastro de unidades).
+    """
+    if not Path(db_path).exists():
+        log.info("network_discovery.unidades_db_ausente", caminho=db_path)
+        return []
+    try:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+            linhas = conn.execute("SELECT faixas_ip FROM unidades WHERE ativo = 1").fetchall()
+    except sqlite3.Error as exc:
+        log.warning("network_discovery.unidades_db_erro", caminho=db_path, erro=str(exc))
+        return []
+    return [f for (texto,) in linhas for f in (texto or "").split()]
+
+
+def faixas_para_varrer(extras: list[str]) -> list[str]:
+    """Une INFRA_SCAN_RANGES e ``extras``, normaliza e descarta faixas inválidas ou grandes demais."""
+    resultado: list[str] = []
+    for bruto in [*SCAN_RANGES, *extras]:
+        try:
+            rede = ipaddress.ip_network(bruto.strip(), strict=False)
+        except ValueError:
+            log.warning("network_discovery.faixa_invalida", faixa=bruto)
+            continue
+        if rede.prefixlen < MENOR_PREFIXO:
+            log.warning("network_discovery.faixa_grande_demais", faixa=str(rede), minimo=f"/{MENOR_PREFIXO}")
+            continue
+        if str(rede) not in resultado:
+            resultado.append(str(rede))
+    return resultado
+
 
 # ── nmap scanner ──────────────────────────────────────────────────────────────
 
@@ -199,7 +347,7 @@ def _scan_range(ip_range: str) -> list[DiscoveredHost]:
 
     nm = nmap.PortScanner()
     # Scan: portas TCP chave + UDP 161 (SNMP) + OS detection
-    args = f"{NMAP_ARGS} -p 22,80,161,443,623,3306,3389,5432,1433,8080,8443,10050 --open"
+    args = f"{NMAP_ARGS} -p {','.join(str(p) for p in SCAN_PORTS)} --open"
 
     log.info("network_discovery.scan_inicio", range=ip_range, args=args)
     try:
@@ -465,6 +613,10 @@ def _write_influx(hosts: list[DiscoveredHost], scan_ts: datetime) -> None:
             .tag("os_guess", h.os_guess[:64] if h.os_guess else "unknown")
             .field("hostname", h.hostname or h.ip)
             .field("vendor", h.vendor or "")
+            .field("mac", h.mac or "")
+            .field("tipo_sugerido", h.tipo_sugerido)
+            .field("motivo", h.motivo)
+            .field("open_ports", ",".join(str(p) for p in sorted(h.open_tcp)))
             .field("open_ports_count", len(h.open_tcp))
             .field("has_agent", int(10050 in h.open_tcp))
             .field("has_snmp", int(bool(h.open_udp & PORTS_SNMP)))
@@ -504,11 +656,12 @@ def _sync_zabbix(all_hosts: list[DiscoveredHost], stats: dict[str, int]) -> None
 def run_scan(dry_run: bool = False) -> dict[str, int]:
     """Executa varredura completa e retorna estatísticas."""
     scan_start = datetime.now(UTC)
-    log.info("network_discovery.inicio", ranges=SCAN_RANGES, dry_run=dry_run)
+    ranges = faixas_para_varrer(faixas_das_unidades())
+    log.info("network_discovery.inicio", ranges=ranges, dry_run=dry_run, zabbix_autoregister=ZABBIX_AUTOREGISTER)
 
     # 1. nmap scan em todos os ranges
     all_hosts: list[DiscoveredHost] = []
-    for ip_range in SCAN_RANGES:
+    for ip_range in ranges:
         all_hosts.extend(_scan_range(ip_range))
 
     if not all_hosts:
@@ -517,15 +670,16 @@ def run_scan(dry_run: bool = False) -> dict[str, int]:
 
     stats = {"total": len(all_hosts), "created": 0, "updated": 0, "skipped": 0}
 
-    if not dry_run and ZABBIX_TOKEN:
-        # 2. Sincronizar com Zabbix
-        try:
-            _sync_zabbix(all_hosts, stats)
-        except Exception as exc:
-            log.error("network_discovery.zabbix_falhou", erro=str(exc))
-
-        # 3. Escrever no InfluxDB
+    if not dry_run:
+        # 2. Escrever no InfluxDB (fonte da página Rede)
         _write_influx(all_hosts, scan_start)
+
+        # 3. Cadastro automático no Zabbix — opt-in; o fluxo padrão é revisar na página Rede
+        if ZABBIX_AUTOREGISTER and ZABBIX_TOKEN:
+            try:
+                _sync_zabbix(all_hosts, stats)
+            except Exception as exc:
+                log.error("network_discovery.zabbix_falhou", erro=str(exc))
 
     log.info(
         "network_discovery.concluido", **stats, duração_s=round((datetime.now(UTC) - scan_start).total_seconds(), 1)
@@ -548,7 +702,7 @@ def _print_report(hosts: list[DiscoveredHost]) -> None:
     print("\n  Detalhes:")
     for h in sorted(hosts, key=lambda x: (x.category, x.ip)):
         ports = sorted(h.open_tcp)[:6]
-        print(f"    {h.ip:<18} {h.category:<30} portas={ports}")
+        print(f"    {h.ip:<18} {h.category:<30} {h.tipo_sugerido:<11} portas={ports}")
     print()
 
 
@@ -565,9 +719,10 @@ def main() -> None:
     if args.scan_now or args.dry_run:
         # Modo único: scan uma vez, relatório + gravação usam os mesmos hosts
         scan_start = datetime.now(UTC)
-        log.info("network_discovery.inicio", ranges=SCAN_RANGES, dry_run=args.dry_run)
+        ranges = faixas_para_varrer(faixas_das_unidades())
+        log.info("network_discovery.inicio", ranges=ranges, dry_run=args.dry_run)
         all_hosts: list[DiscoveredHost] = []
-        for ip_range in SCAN_RANGES:
+        for ip_range in ranges:
             all_hosts.extend(_scan_range(ip_range))
 
         if args.report or args.dry_run:
@@ -575,7 +730,7 @@ def main() -> None:
 
         if not args.dry_run and all_hosts:
             stats: dict[str, int] = {"total": len(all_hosts), "created": 0, "updated": 0, "skipped": 0}
-            if ZABBIX_TOKEN:
+            if ZABBIX_AUTOREGISTER and ZABBIX_TOKEN:
                 try:
                     _sync_zabbix(all_hosts, stats)
                 except Exception as exc:

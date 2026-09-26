@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Ativos de rede — IT Governance{% endblock %}
+
+{% block content %}
+{% set pode_editar = current_user.role in ('admin', 'gestor') %}
+{% set pill = 'text-xs font-medium px-3 py-1.5 rounded-full border transition-colors' %}
+{% set on = 'bg-blue-600 border-blue-600 text-white' %}
+{% set off = 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' %}
+<div class="space-y-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Ativos de rede</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ total }} ativo{{ 's' if total != 1 }} no inventário, por unidade. Novos ativos entram pela revisão da página Rede.</p>
+    </div>
+    <a href="{{ url_for('dashboards.rede_monitoring', status='novos') }}"
+       class="text-sm text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 flex-shrink-0">Revisar descobertos</a>
+  </div>
+
+  <nav class="flex flex-wrap gap-2" aria-label="Filtrar por unidade">
+    <a href="{{ url_for('dashboards.ativos_rede', tipo=tipo or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
+    {% for u in unidades %}
+    <a href="{{ url_for('dashboards.ativos_rede', unidade=u.id, tipo=tipo or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
+    {% endfor %}
+    <a href="{{ url_for('dashboards.ativos_rede', unidade='sem', tipo=tipo or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
+  </nav>
+  <nav class="flex flex-wrap gap-2" aria-label="Filtrar por tipo">
+    <a href="{{ url_for('dashboards.ativos_rede', unidade=filtro or None) }}" class="{{ pill }} {{ on if not tipo else off }}">Todos os tipos</a>
+    {% for chave, nome in tipo_labels.items() %}
+    <a href="{{ url_for('dashboards.ativos_rede', unidade=filtro or None, tipo=chave) }}" class="{{ pill }} {{ on if tipo == chave else off }}">{{ nome }}</a>
+    {% endfor %}
+  </nav>
+
+  {% for unidade, itens in secoes %}
+  <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+    <h2 class="text-sm font-semibold mb-3 {{ 'text-amber-600 dark:text-amber-400' if unidade == 'Sem unidade' else 'text-slate-700 dark:text-slate-200' }}">
+      {{ unidade }} <span class="text-slate-400 font-normal">({{ itens | length }})</span>
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
+            <th class="pb-2 pr-3 font-medium">Nome</th>
+            <th class="pb-2 pr-3 font-medium">Tipo</th>
+            <th class="pb-2 pr-3 font-medium">IP</th>
+            <th class="pb-2 pr-3 font-medium">Fabricante</th>
+            <th class="pb-2 pr-3 font-medium">Criticidade</th>
+            <th class="pb-2 pr-3 font-medium">Responsável</th>
+            <th class="pb-2"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {% for a in itens %}
+          <tr>
+            <td class="py-2 pr-3 text-slate-700 dark:text-slate-200 font-medium">
+              {{ a.nome }}
+              {% if a.metadata.descricao %}<span class="block text-[10px] text-slate-400 font-normal">{{ a.metadata.descricao }}</span>{% endif %}
+            </td>
+            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{{ tipo_labels.get(a.tipo, a.tipo) }}</td>
+            <td class="py-2 pr-3 font-mono text-slate-500">{{ a.metadata.ip or '—' }}</td>
+            <td class="py-2 pr-3 text-slate-500">{{ a.metadata.fabricante or '—' }}</td>
+            <td class="py-2 pr-3 text-slate-500">{{ a.criticidade }}</td>
+            <td class="py-2 pr-3 text-slate-500">{{ a.owner }}</td>
+            <td class="py-2 text-right">
+              {% if pode_editar %}
+              <form method="POST" action="{{ url_for('dashboards.ativo_rede_remover', ativo_id=a.id) }}">
+                <button type="submit" data-confirm="Remover {{ a.nome }} do inventário?" class="text-red-500 hover:text-red-700">Remover</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% else %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 text-center text-sm text-slate-500">
+    Nenhum ativo neste recorte. Cadastre a partir da <a href="{{ url_for('dashboards.rede_monitoring', status='novos') }}" class="text-blue-600 underline">revisão da página Rede</a>.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+  document.querySelectorAll('[data-confirm]').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      if (!window.confirm(btn.dataset.confirm)) ev.preventDefault();
+    });
+  });
+</script>
+{% endblock %}

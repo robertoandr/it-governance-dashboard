@@ -24,7 +24,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from itgov.models.db.base import Base
 
-_TIPOS_VALIDOS = ("servidor", "switch", "app", "licenca", "endpoint")
 _AMBIENTES_VALIDOS = ("prod", "hml", "dev")
 _CRITICIDADES_VALIDAS = ("alta", "media", "baixa")
 
@@ -39,7 +38,7 @@ class AtivoDB(Base):
     Attributes:
         id: Unique identifier (UUID v4), generated on insert.
         nome: Human-readable asset name (3-100 chars), indexed.
-        tipo: Asset type — servidor | switch | app | licenca | endpoint.
+        tipo: Asset type — see ``itgov.models.ativo.TIPO_LABELS``.
         ambiente: Deployment environment — prod | hml | dev.
         criticidade: Business criticality — alta | media | baixa.
         owner: Email of the responsible engineer.
