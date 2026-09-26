@@ -183,6 +183,8 @@ services:
       ZABBIX_TOKEN: "${ZABBIX_TOKEN:-}"
       ZABBIX_USER: "${ZABBIX_USER:-}"
       ZABBIX_PASSWORD: "${ZABBIX_PASSWORD:-}"
+      CFTV_CAM_USER: "${CFTV_CAM_USER:-}"
+      CFTV_CAM_PASS: "${CFTV_CAM_PASS:-}"
       # Acronis Cyber Cloud
       ACRONIS_BASE_URL: "${ACRONIS_BASE_URL:-}"
       ACRONIS_CLIENT_ID: "${ACRONIS_CLIENT_ID:-}"
