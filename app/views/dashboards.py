@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from uuid import UUID
 
 import structlog
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -668,26 +669,20 @@ def ativos_rede() -> str:
     )
 
 
-@bp.route("/ativos-rede/<string:ativo_id>/remover", methods=["POST"])
+@bp.route("/ativos-rede/<uuid:ativo_id>/remover", methods=["POST"])
 @login_required
 @require_role("admin", "gestor")
-def ativo_rede_remover(ativo_id: str) -> object:
+def ativo_rede_remover(ativo_id: UUID) -> object:
     """Remove (soft delete) um ativo do inventário."""
-    from uuid import UUID
-
     from itgov.db.session import get_session
     from itgov.services.ativo_service import AtivoNotFoundError, AtivoService
 
     try:
-        uuid = UUID(ativo_id)
-    except ValueError:
-        abort(404)
-    try:
         with get_session() as session:
-            AtivoService(session).delete(uuid)
+            AtivoService(session).delete(ativo_id)
     except AtivoNotFoundError:
         abort(404)
-    log.info("rede.ativo_removido", ativo_id=ativo_id, user=current_user.email)
+    log.info("rede.ativo_removido", ativo_id=str(ativo_id), user=current_user.email)
     flash("Ativo removido.", "success")
     return redirect(url_for("dashboards.ativos_rede"))
 
