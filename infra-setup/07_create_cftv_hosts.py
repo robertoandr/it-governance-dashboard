@@ -180,6 +180,26 @@ def _carregar(arquivo: Path, vendor: str | None = None) -> list[dict]:
     return hosts
 
 
+def _somar_vinculos(atual: dict, novo: dict) -> dict:
+    """Soma grupos, templates e tags do inventário aos que o host já tem.
+
+    ``host.update`` substitui as listas inteiras; sem isso, templates, grupos e
+    tags configurados à mão (ex.: ``loja``/``dvr``) seriam removidos.
+    """
+    grupos = {g["groupid"] for g in atual.get("hostgroups", [])} | {g["groupid"] for g in novo["groups"]}
+    templates = {t["templateid"] for t in atual.get("parentTemplates", [])} | {
+        t["templateid"] for t in novo["templates"]
+    }
+    novas = {t["tag"] for t in novo["tags"]}
+    tags = [t for t in atual.get("tags", []) if t["tag"] not in novas] + novo["tags"]
+    return {
+        **novo,
+        "groups": [{"groupid": g} for g in sorted(grupos)],
+        "templates": [{"templateid": t} for t in sorted(templates)],
+        "tags": tags,
+    }
+
+
 def banner(text: str) -> None:
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")
 
@@ -222,12 +242,17 @@ def main() -> None:
     if tem_snmp:
         _garantir_macros(api)
 
-    existentes: dict[str, str] = {}
+    existentes: dict[str, dict] = {}
     com_snmp: set[str] = set()  # hostids que já têm interface SNMP
     for h in api.host.get(
-        output=["hostid", "host"], selectInterfaces=["type"], filter={"host": [h["host"] for h in hosts]}
+        output=["hostid", "host"],
+        selectInterfaces=["type"],
+        selectHostGroups=["groupid"],
+        selectParentTemplates=["templateid"],
+        selectTags=["tag", "value"],
+        filter={"host": [h["host"] for h in hosts]},
     ):
-        existentes[h["host"]] = h["hostid"]
+        existentes[h["host"]] = h
         if any(i["type"] == "2" for i in h["interfaces"]):
             com_snmp.add(h["hostid"])
 
@@ -259,12 +284,13 @@ def main() -> None:
 
         try:
             if h["host"] in existentes:
-                hostid = existentes[h["host"]]
+                atual = existentes[h["host"]]
+                hostid = atual["hostid"]
                 if h.get("snmp") and hostid not in com_snmp:
                     # Host antigo só com interface de agente: o template SNMP exige interface SNMP
                     api.hostinterface.create(hostid=hostid, **interface)
                     print(f"  [OK] {h['host']:<24} interface SNMPv3 adicionada")
-                api.host.update(hostid=hostid, **comum)
+                api.host.update(hostid=hostid, **_somar_vinculos(atual, comum))
                 atualizados += 1
                 print(f"  [--] {h['host']:<24} {h['ip']:<15} atualizado")
             else:
