@@ -54,6 +54,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         # domínio) também usa cookie de sessão, e "session" colidiria.
         SESSION_COOKIE_NAME="itgov_session",
         REMEMBER_COOKIE_NAME="itgov_remember",
+        # Explícito em vez de depender do padrão do navegador: cookies de
+        # sessão não vão em POST/PATCH/DELETE vindos de outros sites.
+        SESSION_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_SAMESITE="Lax",
     )
 
     # Flask-SQLAlchemy + Flask-Login + Flask-Bcrypt
@@ -68,6 +72,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
         from app.models import link as _link_model  # noqa: F401
+        from app.models import tarefas as _tarefas_model  # noqa: F401
         from app.models import unidade as _unidade_model
         from app.models import user as _user_model  # noqa: F401
 
@@ -102,6 +107,12 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     api.add_namespace(health_ns, path="/health")
     api.add_namespace(pmo_ns, path="/pmo")
     api.add_namespace(intune_ns, path="/intune")
+
+    # Módulo Tarefas: só depende do app.db (sem integrações externas),
+    # por isso fica fora do try dos namespaces legados abaixo.
+    from itgov.api.v1.tarefas import ns as tarefas_ns
+
+    api.add_namespace(tarefas_ns, path="/v1/tarefas")
 
     # Legacy itgov namespaces (Sprint 10E) — preserved under /api/v1/ path
     try:
@@ -178,12 +189,14 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     from app.auth import bp as auth_bp
     from app.views.dashboards import bp as dashboards_bp
+    from app.views.tarefas import bp as tarefas_bp
     from app.views.users import bp as users_bp
 
     _gov_prefix = os.getenv("APP_ROOT_PATH", "/gov")
     app.register_blueprint(auth_bp, url_prefix=_gov_prefix)
     app.register_blueprint(dashboards_bp, url_prefix=_gov_prefix)
     app.register_blueprint(users_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(tarefas_bp, url_prefix=f"{_gov_prefix}/tarefas")
 
     # CLI commands
     from app.commands import register_commands

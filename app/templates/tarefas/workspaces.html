@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Tarefas — IT Governance{% endblock %}
+
+{% block head %}
+<script nonce="{{ csp_nonce() }}">
+var _tarefasApi = "{{ url_for('tarefas_workspace_collection') }}";
+
+document.addEventListener('alpine:init', function () {
+  Alpine.data('tarefasWorkspaces', function () {
+    return {
+      modal: '',          // '' | 'create' | 'rename' | 'delete'
+      wsId: null,
+      wsName: '',
+      name: '',
+      saving: false,
+      erro: '',
+
+      get aberto()      { return this.modal !== ''; },
+      get emExclusao()  { return this.modal === 'delete'; },
+      get comCampo()    { return this.modal === 'create' || this.modal === 'rename'; },
+      get titulo() {
+        if (this.modal === 'rename') return 'Renomear workspace';
+        if (this.modal === 'delete') return 'Excluir workspace';
+        return 'Novo workspace';
+      },
+      get rotuloAcao() {
+        if (this.saving) return 'Salvando…';
+        if (this.modal === 'rename') return 'Salvar';
+        if (this.modal === 'delete') return 'Excluir';
+        return 'Criar';
+      },
+      get classeAcao() {
+        return this.modal === 'delete'
+          ? 'bg-red-600 hover:bg-red-700'
+          : 'bg-blue-600 hover:bg-blue-700';
+      },
+
+      abrirCriar: function () { this._abrir('create', null, ''); },
+      abrirRenomear: function (e) {
+        var d = e.currentTarget.dataset;
+        this._abrir('rename', d.id, d.name);
+      },
+      abrirExcluir: function (e) {
+        var d = e.currentTarget.dataset;
+        this._abrir('delete', d.id, d.name);
+      },
+      _abrir: function (modo, id, nome) {
+        this.modal = modo;
+        this.wsId = id;
+        this.wsName = nome;
+        this.name = modo === 'rename' ? nome : '';
+        this.erro = '';
+        var self = this;
+        this.$nextTick(function () {
+          var campo = document.getElementById('tarefas-ws-nome');
+          if (campo && self.comCampo) campo.focus();
+        });
+      },
+      fechar: function () { if (!this.saving) this.modal = ''; },
+
+      enviar: async function () {
+        if (this.saving) return;
+        var url = _tarefasApi, metodo = 'POST', corpo = null;
+        if (this.modal === 'rename') { url += '/' + this.wsId; metodo = 'PATCH'; }
+        if (this.modal === 'delete') { url += '/' + this.wsId; metodo = 'DELETE'; }
+        if (this.comCampo) corpo = JSON.stringify({ name: this.name });
+
+        this.saving = true;
+        this.erro = '';
+        try {
+          var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+          if (corpo) headers['Content-Type'] = 'application/json';
+          var r = await fetch(url, { method: metodo, headers: headers, body: corpo, credentials: 'same-origin' });
+          if (r.ok) { location.reload(); return; }
+          if (r.status === 401) {
+            this.erro = 'Sua sessão expirou. Entre novamente para continuar.';
+            this.saving = false;
+            return;
+          }
+          var d = {};
+          try { d = await r.json(); } catch (_) { /* resposta sem JSON */ }
+          this.erro = d.error || ('Não foi possível concluir (HTTP ' + r.status + ').');
+        } catch (_) {
+          this.erro = 'Sem conexão com o servidor. Tente novamente.';
+        }
+        this.saving = false;
+      },
+    };
+  });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="tarefasWorkspaces" class="space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Tarefas</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        Workspaces por projeto ou frente. Cada card do Kanban terá a própria documentação e discussão.
+      </p>
+    </div>
+    {% if pode_gerenciar %}
+    <button type="button" @click="abrirCriar"
+            class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Novo workspace
+    </button>
+    {% endif %}
+  </div>
+
+  {% if workspaces %}
+  <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Workspaces">
+    {% for ws in workspaces %}
+    <li class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 flex flex-col gap-3">
+      <h2 class="font-semibold text-slate-800 dark:text-slate-100 break-words min-w-0">{{ ws.name }}</h2>
+      <div class="flex flex-wrap gap-2">
+        {% for b in ws.boards_ativos %}
+        <span class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2 py-1 text-xs text-slate-600 dark:text-slate-300">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m6 10V7M5 5h14v14H5z"/></svg>
+          {{ b.name }}
+        </span>
+        {% endfor %}
+      </div>
+      <div class="mt-auto flex flex-wrap items-center justify-between gap-2">
+        <p class="text-[11px] text-slate-400">Criado em {{ ws.criado_em_local.strftime('%d/%m/%Y') }}</p>
+        {% if pode_gerenciar %}
+        <div class="flex gap-3 text-xs">
+          <button type="button" @click="abrirRenomear" data-id="{{ ws.id }}" data-name="{{ ws.name }}"
+                  class="text-blue-600 dark:text-blue-400 hover:underline">Renomear</button>
+          <button type="button" @click="abrirExcluir" data-id="{{ ws.id }}" data-name="{{ ws.name }}"
+                  class="text-red-600 dark:text-red-400 hover:underline">Excluir</button>
+        </div>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-10 text-center">
+    <p class="font-medium text-slate-700 dark:text-slate-200">Nenhum workspace ainda</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+      {% if pode_gerenciar %}Crie o primeiro para organizar as tarefas de um projeto ou frente.
+      {% else %}Peça a um gestor ou admin para criar o primeiro workspace.{% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  {% if pode_gerenciar %}
+  <div x-show="aberto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       role="dialog" aria-modal="true" aria-labelledby="tarefas-modal-titulo" @keydown.escape.window="fechar">
+    <div class="absolute inset-0 bg-black/50 dark:bg-black/70" @click="fechar"></div>
+    <form @submit.prevent="enviar"
+          class="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-6 space-y-4">
+      <h3 id="tarefas-modal-titulo" class="text-lg font-semibold text-slate-800 dark:text-slate-100" x-text="titulo"></h3>
+
+      <div x-show="comCampo">
+        <label for="tarefas-ws-nome" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome</label>
+        <input id="tarefas-ws-nome" type="text" x-model="name" maxlength="60" autocomplete="off"
+               placeholder="Ex.: Infraestrutura"
+               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <p class="text-xs text-slate-400 mt-1">De 3 a 60 caracteres. Um board "Principal" é criado junto.</p>
+      </div>
+
+      <p x-show="emExclusao" class="text-sm text-slate-600 dark:text-slate-300">
+        Excluir <strong x-text="wsName"></strong>? Os boards e cards dele deixam de aparecer.
+      </p>
+
+      <p x-show="erro" x-text="erro" role="alert" class="text-sm text-red-600 dark:text-red-400"></p>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" @click="fechar"
+                class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">Cancelar</button>
+        <button type="submit" :disabled="saving" :class="classeAcao"
+                class="px-4 py-2 text-sm rounded-lg text-white font-medium disabled:opacity-50" x-text="rotuloAcao"></button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -12,7 +12,15 @@ from app.models.user import User
 
 @login_manager.user_loader
 def load_user(user_id: str) -> User | None:
-    return db.session.get(User, int(user_id))
+    """Carrega o usuário da sessão; desativado conta como deslogado.
+
+    Sem essa checagem, quem já tinha sessão aberta (ou cookie "lembrar-me")
+    continuava com acesso depois de ser desativado em /gov/users.
+    """
+    user = db.session.get(User, int(user_id))
+    if user is None or not user.is_active:
+        return None
+    return user
 
 
 def _safe_next(target: str | None) -> str | None:
