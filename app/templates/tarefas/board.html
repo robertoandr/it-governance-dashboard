@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ board.name }} · {{ board.workspace.name }} — Tarefas{% endblock %}
+
+{% set colunas = [
+  ('backlog', 'Backlog', 'border-t-slate-400'),
+  ('todo', 'To Do', 'border-t-blue-600'),
+  ('doing', 'Doing', 'border-t-amber-500'),
+  ('done', 'Done', 'border-t-emerald-500'),
+] %}
+
+{% block head %}
+<style nonce="{{ csp_nonce() }}">
+  /* classes de display do Tailwind (flex, block) venceriam o atributo hidden */
+  #tarefas-board [hidden] { display: none !important; }
+  .tarefas-card.sortable-ghost { opacity: .35; }
+  .tarefas-card.sortable-chosen { box-shadow: 0 0 0 2px #2563eb; }
+  .tarefas-lista.tarefas-alvo { outline: 2px dashed #2563eb; outline-offset: -2px; }
+  .tarefas-card.tarefas-destaque { animation: tarefas-pisca 1s ease-out; }
+  @keyframes tarefas-pisca { from { box-shadow: 0 0 0 3px #f59e0b; } to { box-shadow: 0 0 0 0 transparent; } }
+  /* "Mover para" só aparece com o card em foco (teclado); com mouse, arrasta-se. */
+  .tarefas-card .tarefas-mover-linha { display: none; }
+  .tarefas-card:focus-visible .tarefas-mover-linha,
+  .tarefas-card .tarefas-mover-linha:focus-within { display: flex; }
+  @media (prefers-reduced-motion: reduce) { .tarefas-card.tarefas-destaque { animation: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="tarefas-board" class="space-y-4"
+     data-url-cards="{{ url_for('tarefas_board_cards', board_id=board.id) }}"
+     data-url-revision="{{ url_for('tarefas_board_revision', board_id=board.id) }}"
+     data-url-move="{{ url_for('tarefas_card_move', card_id=0) }}"
+     data-pode-editar="{{ 'true' if pode_editar else 'false' }}">
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0">
+      <nav aria-label="Caminho" class="text-xs text-slate-500 dark:text-slate-400">
+        <a href="{{ url_for('tarefas.workspaces') }}" class="hover:underline">Tarefas</a>
+        <span aria-hidden="true"> › </span>{{ board.workspace.name }}
+      </nav>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100 break-words">{{ board.name }}</h1>
+    </div>
+    <div class="text-xs text-slate-500 dark:text-slate-400 flex flex-col items-end gap-0.5">
+      <span id="tarefas-sync" aria-live="off">Carregando…</span>
+      {% if pode_editar %}
+      <span class="hidden md:inline">Teclado: foque um card e use Alt + setas para mover</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <p id="tarefas-aviso" role="alert" hidden
+     class="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 text-sm"></p>
+
+  <div id="tarefas-anuncio" class="sr-only" aria-live="polite"></div>
+
+  <div class="overflow-x-auto pb-2">
+    <div class="grid grid-cols-4 gap-4 min-w-[1040px]">
+      {% for status, rotulo, cor in colunas %}
+      <section class="rounded-xl border border-slate-200 dark:border-slate-700 border-t-4 {{ cor }} bg-slate-50 dark:bg-slate-800/60 flex flex-col"
+               aria-labelledby="tarefas-col-{{ status }}">
+        <header class="flex items-center justify-between px-3 pt-3 pb-2">
+          <h2 id="tarefas-col-{{ status }}" class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ rotulo }}</h2>
+          <span class="text-xs tabular-nums text-slate-500 dark:text-slate-400" data-contagem="{{ status }}">0</span>
+        </header>
+
+        {% if pode_editar %}
+        <form class="px-3 pb-2" data-criar="{{ status }}" hidden>
+          <label for="tarefas-novo-{{ status }}" class="sr-only">Título do novo card em {{ rotulo }}</label>
+          <textarea id="tarefas-novo-{{ status }}" rows="2" maxlength="200" placeholder="Título do card"
+                    class="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <div class="mt-1 flex gap-2">
+            <button type="submit" class="px-3 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium">Adicionar</button>
+            <button type="button" data-cancelar class="px-3 py-1 text-xs rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">Cancelar</button>
+          </div>
+        </form>
+        {% endif %}
+
+        <ol class="tarefas-lista flex-1 min-h-[120px] px-3 pb-3 space-y-2" data-status="{{ status }}"
+            aria-labelledby="tarefas-col-{{ status }}"></ol>
+
+        {% if pode_editar %}
+        <button type="button" data-abrir-criar="{{ status }}"
+                class="mx-3 mb-3 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Adicionar card
+        </button>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/sortable.min.js') }}" nonce="{{ csp_nonce() }}"></script>
+<script src="{{ url_for('static', filename='tarefas/board.js') }}" nonce="{{ csp_nonce() }}"></script>
+{% endblock %}

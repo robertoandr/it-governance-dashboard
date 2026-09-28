@@ -100,3 +100,48 @@ def test_usuario_desativado_com_sessao_aberta_perde_acesso(cliente: Cliente) -> 
     r = cliente("admin", ativo=False).get(PAGINA)
     assert r.status_code == 302
     assert "/login" in r.headers["Location"]
+
+
+# ── Página do board (Sprint 2) ───────────────────────────────────────────────
+
+
+def _board_id(cliente: Cliente) -> int:
+    r = cliente("admin").post("/api/v1/tarefas/workspaces", json={"name": "Infraestrutura"}, headers=AJAX)
+    return r.get_json()["boards"][0]["id"]
+
+
+def test_workspaces_linkam_para_o_board(cliente: Cliente) -> None:
+    board_id = _board_id(cliente)
+    html = cliente("visualizador").get(PAGINA).get_data(as_text=True)
+    assert f'href="/gov/tarefas/b/{board_id}"' in html
+
+
+@pytest.mark.parametrize(("role", "edita"), [("admin", True), ("operador", True), ("visualizador", False)])
+def test_pagina_do_board(cliente: Cliente, role: str, edita: bool) -> None:
+    board_id = _board_id(cliente)
+    r = cliente(role).get(f"{PAGINA}/b/{board_id}")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Infraestrutura" in html and "Principal" in html
+    assert f'data-url-cards="/api/v1/tarefas/boards/{board_id}/cards"' in html
+    assert f'data-url-revision="/api/v1/tarefas/boards/{board_id}/revision"' in html
+    assert 'data-url-move="/api/v1/tarefas/cards/0/move"' in html
+    assert f'data-pode-editar="{"true" if edita else "false"}"' in html
+    assert ("Adicionar card" in html) is edita
+    assert "vendor/sortable.min.js" in html and "tarefas/board.js" in html
+    for coluna in ("Backlog", "To Do", "Doing", "Done"):
+        assert coluna in html
+
+
+def test_board_inexistente_ou_excluido_da_404(cliente: Cliente) -> None:
+    board_id = _board_id(cliente)
+    c = cliente("admin")
+    assert c.get(f"{PAGINA}/b/999999").status_code == 404
+    ws_id = c.get("/api/v1/tarefas/workspaces").get_json()["items"][0]["id"]
+    c.delete(f"/api/v1/tarefas/workspaces/{ws_id}", headers=AJAX)
+    assert c.get(f"{PAGINA}/b/{board_id}").status_code == 404
+
+
+def test_board_anonimo_vai_para_o_login(factory_app: Flask) -> None:
+    r = factory_app.test_client().get(f"{PAGINA}/b/1")
+    assert r.status_code == 302

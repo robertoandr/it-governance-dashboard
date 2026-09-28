@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from flask import Blueprint, render_template
 from flask_login import current_user
+from werkzeug.exceptions import NotFound
 
 from app.auth.rbac import require_role
+from app.services.tarefas import board_service as board_svc
 from app.services.tarefas import workspace_service as ws_svc
 from app.services.tarefas.permissions import Acao, perfis, pode
 
@@ -26,4 +28,20 @@ def workspaces() -> str:
         "tarefas/workspaces.html",
         workspaces=itens,
         pode_gerenciar=pode(current_user.role, Acao.GERENCIAR_WORKSPACE),
+    )
+
+
+@bp.route("/b/<int:board_id>")
+@require_role(*perfis(Acao.VER))
+def board(board_id: int) -> str:
+    """Kanban do board; os cards são carregados e movidos pela API JSON."""
+    try:
+        b = board_svc.obter_board(board_id)
+    except board_svc.BoardNaoEncontradoError as exc:
+        # raise explícito (e não abort): o CodeQL não sabe que abort() sempre levanta
+        raise NotFound() from exc
+    return render_template(
+        "tarefas/board.html",
+        board=b,
+        pode_editar=pode(current_user.role, Acao.EDITAR_CARD),
     )

@@ -142,6 +142,11 @@ class Card(db.Model):
     updated_at: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora, onupdate=_agora)
     deleted_at: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # Bloqueio otimista do SQLAlchemy: todo UPDATE leva "WHERE version = ?" e
+    # incrementa a versão; se outra transação alterou o card no meio do
+    # caminho, o commit falha com StaleDataError em vez de sobrescrever.
+    __mapper_args__ = {"version_id_col": version}  # noqa: RUF012
+
 
 class CardDocument(db.Model):
     """Documento Markdown do card (1:1), com controle otimista de versão."""
