@@ -22,7 +22,8 @@ from flask_restx import Namespace, Resource, fields
 from pydantic import ValidationError
 
 from app.auth.rbac import require_role
-from app.models.tarefas import Workspace, em_utc
+from app.models.tarefas import Card, Workspace, em_utc
+from app.services.tarefas import board_service as board_svc
 from app.services.tarefas import workspace_service as ws_svc
 from app.services.tarefas.permissions import Acao, perfis
 
@@ -61,6 +62,51 @@ workspace_list_model = ns.model(
 )
 
 error_model = ns.model("TarefasError", {"error": fields.String, "code": fields.String})
+
+responsavel_model = ns.model("TarefasResponsavel", {"id": fields.Integer, "name": fields.String})
+
+card_model = ns.model(
+    "TarefasCard",
+    {
+        "id": fields.Integer,
+        "title": fields.String,
+        "status": fields.String(description="backlog | todo | doing | done"),
+        "position": fields.Integer,
+        "version": fields.Integer,
+        "assignee": fields.Nested(responsavel_model, allow_null=True),
+        "has_document": fields.Boolean,
+        "comment_count": fields.Integer,
+    },
+)
+
+card_in_model = ns.model(
+    "TarefasCardIn",
+    {
+        "title": fields.String(required=True, max_length=200, example="Trocar switch do CPD"),
+        "status": fields.String(description="backlog | todo | doing | done (padrão: backlog)"),
+    },
+)
+
+mover_in_model = ns.model(
+    "TarefasMoverIn",
+    {
+        "status": fields.String(required=True, description="Coluna de destino"),
+        "before_id": fields.Integer(description="Card que fica logo acima (null = topo)"),
+        "after_id": fields.Integer(description="Card que fica logo abaixo (null = fim)"),
+        "version": fields.Integer(required=True, description="Versão do card que o cliente tem"),
+    },
+)
+
+mover_out_model = ns.model(
+    "TarefasMoverOut",
+    {
+        "id": fields.Integer,
+        "status": fields.String,
+        "position": fields.Integer,
+        "version": fields.Integer,
+        "board_revision": fields.Integer,
+    },
+)
 
 list_parser = ns.parser()
 list_parser.add_argument("limit", type=int, default=100, location="args")
@@ -103,6 +149,20 @@ def serialize_workspace(ws: Workspace) -> dict[str, Any]:
         "boards": [{"id": b.id, "name": b.name} for b in ws.boards_ativos],
         "created_at": _iso(ws.created_at),
         "updated_at": _iso(ws.updated_at),
+    }
+
+
+def serialize_card(card: Card) -> dict[str, Any]:
+    """Converte um Card recém-criado no formato da API (sem responsável nem contadores)."""
+    return {
+        "id": card.id,
+        "title": card.title,
+        "status": card.status,
+        "position": card.position,
+        "version": card.version,
+        "assignee": None,
+        "has_document": False,
+        "comment_count": 0,
     }
 
 
@@ -186,3 +246,97 @@ class WorkspaceResource(Resource):
         except ws_svc.WorkspaceNaoEncontradoError as exc:
             return {"error": str(exc), "code": "NOT_FOUND"}, 404
         return "", 204
+
+
+@ns.route("/boards/<int:board_id>/cards")
+@ns.param("board_id", "ID do board")
+class BoardCards(Resource):
+    """Cards do board — listar por coluna e criar."""
+
+    @ns.doc("tarefas_board_cards")
+    @ns.response(200, "Sucesso")
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.VER))
+    def get(self, board_id: int) -> tuple[dict[str, Any], int]:
+        """Board com os cards agrupados por coluna, na ordem de exibição."""
+        try:
+            board = board_svc.obter_board(board_id)
+            colunas = board_svc.listar_cards(board_id)
+        except board_svc.BoardNaoEncontradoError as exc:
+            return {"error": str(exc), "code": "NOT_FOUND"}, 404
+        return {
+            "board": {
+                "id": board.id,
+                "name": board.name,
+                "revision": board.revision,
+                "workspace": {"id": board.workspace.id, "name": board.workspace.name},
+            },
+            "columns": colunas,
+        }, 200
+
+    @ns.doc("tarefas_create_card")
+    @ns.expect(card_in_model)
+    @ns.response(201, "Criado", card_model)
+    @ns.response(400, "Payload inválido", error_model)
+    @ns.response(404, "Board não encontrado", error_model)
+    @require_role(*perfis(Acao.EDITAR_CARD))
+    @exige_ajax
+    def post(self, board_id: int) -> tuple[dict[str, Any], int]:
+        """Cria um card no topo da coluna."""
+        try:
+            dados = board_svc.CardIn.model_validate(request.get_json(silent=True) or {})
+            card = board_svc.criar_card(board_id, dados, user_id=current_user.id)
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        except board_svc.BoardNaoEncontradoError as exc:
+            return {"error": str(exc), "code": "NOT_FOUND"}, 404
+        return serialize_card(card), 201
+
+
+@ns.route("/boards/<int:board_id>/revision")
+@ns.param("board_id", "ID do board")
+class BoardRevision(Resource):
+    """Revisão do board — consultada a cada 15 s pelo front (ADR 0008)."""
+
+    @ns.doc("tarefas_board_revision")
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.VER))
+    def get(self, board_id: int) -> tuple[dict[str, Any], int]:
+        """Número que muda a cada escrita em qualquer card do board."""
+        try:
+            return {"revision": board_svc.revisao(board_id)}, 200
+        except board_svc.BoardNaoEncontradoError as exc:
+            return {"error": str(exc), "code": "NOT_FOUND"}, 404
+
+
+@ns.route("/cards/<int:card_id>/move")
+@ns.param("card_id", "ID do card")
+class CardMove(Resource):
+    """Mover card entre colunas e posições."""
+
+    @ns.doc("tarefas_move_card")
+    @ns.expect(mover_in_model)
+    @ns.response(200, "Movido", mover_out_model)
+    @ns.response(400, "Payload inválido", error_model)
+    @ns.response(404, "Não encontrado", error_model)
+    @ns.response(409, "Board mudou; recarregar", error_model)
+    @require_role(*perfis(Acao.EDITAR_CARD))
+    @exige_ajax
+    def patch(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Move o card; 409 se a versão ou os vizinhos não batem com o banco."""
+        try:
+            dados = board_svc.MoverIn.model_validate(request.get_json(silent=True) or {})
+            card, revisao = board_svc.mover_card(card_id, dados, user_id=current_user.id)
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        except board_svc.CardNaoEncontradoError as exc:
+            return {"error": str(exc), "code": "NOT_FOUND"}, 404
+        except board_svc.ConflitoError as exc:
+            return {"error": f"{exc} Recarregue o board.", "code": "CONFLICT"}, 409
+        return {
+            "id": card.id,
+            "status": card.status,
+            "position": card.position,
+            "version": card.version,
+            "board_revision": revisao,
+        }, 200
