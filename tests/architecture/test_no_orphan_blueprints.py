@@ -134,6 +134,7 @@ class TestNoOrphanBlueprintsInApp:
             "dashboards",  # added: Sprint 11 foundation-5-pillars (app/views/dashboards.py)
             "auth",  # added: Sprint 12 shell-v12 (app/auth/routes.py)
             "users",  # added: Sprint 12 shell-v12 (app/views/users.py)
+            "tarefas",  # added: módulo Tarefas, Sprint 1 (app/views/tarefas.py)
             "restx_doc",  # internal Flask-RESTX
         }
 
