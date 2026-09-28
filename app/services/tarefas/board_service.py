@@ -168,7 +168,7 @@ def listar_cards(board_id: int) -> tuple[Board, dict[str, list[dict[str, Any]]]]
         select(Card, User.name, comentarios.c.n, CardDocument.card_id)
         .outerjoin(User, Card.assignee_id == User.id)
         .outerjoin(comentarios, comentarios.c.card_id == Card.id)
-        .outerjoin(CardDocument, (CardDocument.card_id == Card.id) & (CardDocument.content_md != ""))
+        .outerjoin(CardDocument, (CardDocument.card_id == Card.id) & (func.trim(CardDocument.content_md) != ""))
         .where(Card.board_id == board_id, Card.deleted_at.is_(None))
         .order_by(Card.position, Card.id)
     ).all()

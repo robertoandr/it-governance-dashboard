@@ -330,6 +330,7 @@
         onStart: function () { estado.arrastando = true; },
         onEnd: function (evt) {
           estado.arrastando = false;
+          estado.fimArrasto = Date.now();
           if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
           var item = evt.item;
           enviarMovimento(item, evt.to.dataset.status, function desfazer() {
@@ -391,6 +392,14 @@
       });
     });
   }
+
+  // ── Interface para o painel do card (card.js) ─────────────────────────────
+
+  window.TarefasBoard = {
+    recarregar: function () { return carregar(false).catch(function () { /* a verificação automática tenta de novo */ }); },
+    // Um clique que encerra um arrasto não deve abrir o card.
+    arrastouAgora: function () { return estado.arrastando || Date.now() - (estado.fimArrasto || 0) < 400; },
+  };
 
   // ── Início ────────────────────────────────────────────────────────────────
 

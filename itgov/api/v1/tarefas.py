@@ -24,8 +24,12 @@ from pydantic import ValidationError
 from app.auth.rbac import require_role
 from app.models.tarefas import Workspace, em_utc
 from app.services.tarefas import board_service as board_svc
+from app.services.tarefas import card_service as card_svc
+from app.services.tarefas import comment_service as com_svc
+from app.services.tarefas import document_service as doc_svc
+from app.services.tarefas import markdown
 from app.services.tarefas import workspace_service as ws_svc
-from app.services.tarefas.permissions import Acao, perfis
+from app.services.tarefas.permissions import Acao, perfis, pode
 
 log = structlog.get_logger(__name__)
 
@@ -108,6 +112,29 @@ mover_out_model = ns.model(
         "reload": fields.Boolean(description="true = coluna renumerada; o cliente deve recarregar o board"),
     },
 )
+
+card_edit_model = ns.model(
+    "TarefasCardEditIn",
+    {
+        "version": fields.Integer(required=True),
+        "title": fields.String(max_length=200),
+        "assignee_id": fields.Integer(description="null remove o responsável"),
+    },
+)
+
+documento_in_model = ns.model(
+    "TarefasDocumentoIn",
+    {
+        "content_md": fields.String(required=True, description="Markdown (até 200 KB)"),
+        "version": fields.Integer(required=True, description="Versão que o cliente tinha (0 = documento novo)"),
+    },
+)
+
+comentario_in_model = ns.model(
+    "TarefasComentarioIn", {"body_md": fields.String(required=True, max_length=10000, description="Markdown")}
+)
+
+preview_in_model = ns.model("TarefasPreviewIn", {"content_md": fields.String(required=True)})
 
 list_parser = ns.parser()
 list_parser.add_argument("limit", type=int, default=100, location="args")
@@ -328,3 +355,202 @@ class CardMove(Resource):
             "board_revision": movimento.revisao,
             "reload": movimento.recarregar,
         }, 200
+
+
+# ── Card aberto no painel (Sprint 3) ─────────────────────────────────────────
+
+_CARD_404 = (board_svc.CardNaoEncontradoError,)
+
+
+def _nao_encontrado(exc: Exception) -> tuple[dict[str, str], int]:
+    return {"error": str(exc), "code": "NOT_FOUND"}, 404
+
+
+@ns.route("/users")
+class Usuarios(Resource):
+    """Usuários ativos, para escolher o responsável do card."""
+
+    @ns.doc("tarefas_users")
+    @require_role(*perfis(Acao.VER))
+    def get(self) -> tuple[dict[str, Any], int]:
+        """Id e nome dos usuários ativos."""
+        itens = card_svc.usuarios_ativos()
+        return {"items": itens, "total": len(itens), "limit": len(itens), "offset": 0}, 200
+
+
+@ns.route("/cards/<int:card_id>")
+@ns.param("card_id", "ID do card")
+class CardDetalhe(Resource):
+    """Card — detalhes e edição de título/responsável."""
+
+    @ns.doc("tarefas_card_detail")
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.VER))
+    def get(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Card com board, workspace e histórico recente."""
+        try:
+            return card_svc.detalhar(card_id), 200
+        except _CARD_404 as exc:
+            return _nao_encontrado(exc)
+
+    @ns.doc("tarefas_card_edit")
+    @ns.expect(card_edit_model)
+    @ns.response(400, "Payload inválido", error_model)
+    @ns.response(404, "Não encontrado", error_model)
+    @ns.response(409, "Versão desatualizada", error_model)
+    @require_role(*perfis(Acao.EDITAR_CARD))
+    @exige_ajax
+    def patch(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Altera título e/ou responsável (envie a versão do card)."""
+        try:
+            dados = card_svc.CardEditIn.model_validate(request.get_json(silent=True) or {})
+            card_svc.editar(card_id, dados, user_id=current_user.id)
+            return card_svc.detalhar(card_id), 200
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        except card_svc.ResponsavelInvalidoError as exc:
+            return {"error": str(exc), "code": "INVALID_PAYLOAD"}, 400
+        except _CARD_404 as exc:
+            return _nao_encontrado(exc)
+        except board_svc.ConflitoError as exc:
+            return {"error": f"{exc} Recarregue o card.", "code": "CONFLICT"}, 409
+
+
+@ns.route("/cards/<int:card_id>/document")
+@ns.param("card_id", "ID do card")
+class CardDocumento(Resource):
+    """Documento Markdown do card."""
+
+    @ns.doc("tarefas_card_document")
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.VER))
+    def get(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Documento atual (versão 0 se ainda não existe), com o HTML renderizado."""
+        try:
+            return doc_svc.obter(card_id), 200
+        except _CARD_404 as exc:
+            return _nao_encontrado(exc)
+
+    @ns.doc("tarefas_card_document_save")
+    @ns.expect(documento_in_model)
+    @ns.response(400, "Payload inválido", error_model)
+    @ns.response(404, "Não encontrado", error_model)
+    @ns.response(409, "Outra pessoa salvou antes; o corpo traz a versão atual")
+    @require_role(*perfis(Acao.EDITAR_CARD))
+    @exige_ajax
+    def put(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Salva o documento se a versão enviada ainda for a atual."""
+        try:
+            dados = doc_svc.DocumentoIn.model_validate(request.get_json(silent=True) or {})
+            return doc_svc.salvar(card_id, dados, user_id=current_user.id), 200
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        except _CARD_404 as exc:
+            return _nao_encontrado(exc)
+        except doc_svc.DocumentoConflitoError as exc:
+            return {"error": str(exc), "code": "CONFLICT", "current": exc.atual}, 409
+
+
+@ns.route("/markdown/preview")
+class MarkdownPreview(Resource):
+    """Pré-visualização do Markdown, renderizada e sanitizada no servidor."""
+
+    @ns.doc("tarefas_markdown_preview")
+    @ns.expect(preview_in_model)
+    @require_role(*perfis(Acao.EDITAR_CARD))
+    @exige_ajax
+    def post(self) -> tuple[dict[str, Any], int]:
+        """HTML seguro do Markdown enviado (mesmo limite de tamanho do documento)."""
+        corpo = request.get_json(silent=True) or {}
+        try:
+            dados = doc_svc.DocumentoIn.model_validate({"content_md": corpo.get("content_md", ""), "version": 0})
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        return {"html": markdown.renderizar(dados.content_md)}, 200
+
+
+def _com_permissoes(comentario: dict[str, Any]) -> dict[str, Any]:
+    autor = comentario["author"]["id"] == current_user.id
+    return {
+        **comentario,
+        "can_edit": autor,
+        "can_delete": autor or pode(current_user.role, Acao.MODERAR_COMENTARIO),
+    }
+
+
+@ns.route("/cards/<int:card_id>/comments")
+@ns.param("card_id", "ID do card")
+class CardComentarios(Resource):
+    """Comentários do card."""
+
+    @ns.doc("tarefas_card_comments")
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.VER))
+    def get(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Comentários do mais antigo para o mais novo, com o que o usuário pode fazer em cada um."""
+        try:
+            itens = [_com_permissoes(c) for c in com_svc.listar(card_id)]
+        except _CARD_404 as exc:
+            return _nao_encontrado(exc)
+        return {"items": itens, "total": len(itens), "limit": len(itens), "offset": 0}, 200
+
+    @ns.doc("tarefas_card_comment_create")
+    @ns.expect(comentario_in_model)
+    @ns.response(201, "Criado")
+    @ns.response(400, "Payload inválido", error_model)
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.COMENTAR))
+    @exige_ajax
+    def post(self, card_id: int) -> tuple[dict[str, Any], int]:
+        """Cria um comentário."""
+        try:
+            dados = com_svc.ComentarioIn.model_validate(request.get_json(silent=True) or {})
+            return _com_permissoes(com_svc.criar(card_id, dados, user_id=current_user.id)), 201
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        except _CARD_404 as exc:
+            return _nao_encontrado(exc)
+
+
+@ns.route("/comments/<int:comentario_id>")
+@ns.param("comentario_id", "ID do comentário")
+class Comentario(Resource):
+    """Comentário individual — editar (autor) e excluir (autor ou admin)."""
+
+    @ns.doc("tarefas_comment_edit")
+    @ns.expect(comentario_in_model)
+    @ns.response(403, "Não é o autor", error_model)
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.COMENTAR))
+    @exige_ajax
+    def patch(self, comentario_id: int) -> tuple[dict[str, Any], int]:
+        """Edita o próprio comentário."""
+        try:
+            dados = com_svc.ComentarioIn.model_validate(request.get_json(silent=True) or {})
+            return _com_permissoes(com_svc.editar(comentario_id, dados, user_id=current_user.id)), 200
+        except ValidationError as exc:
+            return _erro_validacao(exc)
+        except com_svc.ComentarioNaoEncontradoError as exc:
+            return _nao_encontrado(exc)
+        except com_svc.SemPermissaoError as exc:
+            return {"error": str(exc), "code": "FORBIDDEN"}, 403
+
+    @ns.doc("tarefas_comment_delete")
+    @ns.response(204, "Excluído")
+    @ns.response(403, "Sem permissão", error_model)
+    @ns.response(404, "Não encontrado", error_model)
+    @require_role(*perfis(Acao.COMENTAR))
+    @exige_ajax
+    def delete(self, comentario_id: int) -> tuple[Any, int]:
+        """Exclui o comentário (autor, ou admin moderando)."""
+        try:
+            com_svc.excluir(
+                comentario_id,
+                user_id=current_user.id,
+                pode_moderar=pode(current_user.role, Acao.MODERAR_COMENTARIO),
+            )
+        except com_svc.ComentarioNaoEncontradoError as exc:
+            return _nao_encontrado(exc)
+        except com_svc.SemPermissaoError as exc:
+            return {"error": str(exc), "code": "FORBIDDEN"}, 403
+        return "", 204

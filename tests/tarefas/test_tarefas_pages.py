@@ -145,3 +145,41 @@ def test_board_inexistente_ou_excluido_da_404(cliente: Cliente) -> None:
 def test_board_anonimo_vai_para_o_login(factory_app: Flask) -> None:
     r = factory_app.test_client().get(f"{PAGINA}/b/1")
     assert r.status_code == 302
+
+
+# ── Painel do card (Sprint 3) ────────────────────────────────────────────────
+
+
+def _card(cliente: Cliente) -> tuple[int, int]:
+    board_id = _board_id(cliente)
+    r = cliente("admin").post(f"/api/v1/tarefas/boards/{board_id}/cards", json={"title": "Card"}, headers=AJAX)
+    return board_id, r.get_json()["id"]
+
+
+@pytest.mark.parametrize(("role", "edita"), [("admin", True), ("visualizador", False)])
+def test_url_propria_do_card_abre_o_painel(cliente: Cliente, role: str, edita: bool) -> None:
+    board_id, card_id = _card(cliente)
+    r = cliente(role).get(f"{PAGINA}/b/{board_id}/c/{card_id}")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert f'data-card-aberto="{card_id}"' in html
+    assert f'data-url-card-page="/gov/tarefas/b/{board_id}/c/0"' in html
+    assert 'data-url-documento="/api/v1/tarefas/cards/0/document"' in html
+    assert 'data-url-comentario="/api/v1/tarefas/comments/0"' in html
+    assert "tarefas/card.js" in html
+    assert ('id="doc-texto"' in html) is edita
+    assert ('id="com-form"' in html) is edita
+    assert f'data-pode-comentar="{"true" if edita else "false"}"' in html
+
+
+def test_board_sem_card_aberto(cliente: Cliente) -> None:
+    board_id = _board_id(cliente)
+    assert 'data-card-aberto=""' in cliente("admin").get(f"{PAGINA}/b/{board_id}").get_data(as_text=True)
+
+
+def test_card_de_outro_board_ou_inexistente_da_404(cliente: Cliente) -> None:
+    board_id, card_id = _card(cliente)
+    c = cliente("admin")
+    outro = c.post("/api/v1/tarefas/workspaces", json={"name": "Redes"}, headers=AJAX).get_json()["boards"][0]["id"]
+    assert c.get(f"{PAGINA}/b/{outro}/c/{card_id}").status_code == 404
+    assert c.get(f"{PAGINA}/b/{board_id}/c/999999").status_code == 404
