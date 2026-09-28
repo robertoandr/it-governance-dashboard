@@ -6,8 +6,9 @@ As páginas só renderizam; escritas passam pela API JSON em
 
 from __future__ import annotations
 
-from flask import Blueprint, abort, render_template
+from flask import Blueprint, render_template
 from flask_login import current_user
+from werkzeug.exceptions import NotFound
 
 from app.auth.rbac import require_role
 from app.services.tarefas import board_service as board_svc
@@ -36,8 +37,9 @@ def board(board_id: int) -> str:
     """Kanban do board; os cards são carregados e movidos pela API JSON."""
     try:
         b = board_svc.obter_board(board_id)
-    except board_svc.BoardNaoEncontradoError:
-        abort(404)
+    except board_svc.BoardNaoEncontradoError as exc:
+        # raise explícito (e não abort): o CodeQL não sabe que abort() sempre levanta
+        raise NotFound() from exc
     return render_template(
         "tarefas/board.html",
         board=b,
