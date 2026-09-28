@@ -58,10 +58,16 @@
   // ── Abrir / fechar ────────────────────────────────────────────────────────
 
   async function abrir(id, empilhar) {
-    if (estado.id && estado.id !== id && !(await fechar(false))) return;
+    // O mesmo card já aberto: não recarrega (sobrescreveria texto não salvo).
+    if (estado.id === id && !painel.hidden) {
+      if (empilhar && idDaUrl() !== id) history.pushState({ card: id }, '', url(cfg.urlCardPage, id));
+      return;
+    }
+    if (estado.id && !(await fechar(false))) return;
     estado.id = id;
     estado.origemFoco = document.activeElement;
     aviso('');
+    limparPainel();
     painel.hidden = false;
     mostrarAba('documento');
     if (empilhar) history.pushState({ card: id }, '', url(cfg.urlCardPage, id));
@@ -94,6 +100,12 @@
       return false;
     }
     await salvarPendente();
+    if (sujo()) {
+      // O salvamento falhou (conflito, rede, tamanho): fechar perderia o texto.
+      aviso('Seu texto ainda não foi salvo. Resolva o aviso do documento antes de fechar.');
+      if (!empilhar && idDaUrl() !== estado.id) history.pushState({ card: estado.id }, '', url(cfg.urlCardPage, estado.id));
+      return false;
+    }
     painel.hidden = true;
     var id = estado.id;
     estado.id = null;
@@ -103,6 +115,26 @@
     if (noBoard) noBoard.focus();
     else if (estado.origemFoco && estado.origemFoco.isConnected) estado.origemFoco.focus();
     return true;
+  }
+
+  // Estado neutro enquanto o card novo carrega: nada do card anterior pode
+  // ficar editável (o salvamento automático gravaria no card errado).
+  function limparPainel() {
+    estado.card = null;
+    estado.doc = { versao: null, salvo: '', timer: null, salvando: null, conflito: null };
+    var titulo = el('card-titulo');
+    if (titulo.tagName === 'INPUT') { titulo.value = ''; titulo.disabled = true; } else { titulo.textContent = ''; }
+    el('card-status').textContent = '';
+    el('card-criado').textContent = 'Carregando…';
+    if (texto) {
+      texto.value = '';
+      texto.readOnly = true;
+      el('doc-conflito').hidden = true;
+      el('doc-descartado').hidden = true;
+      statusDoc('');
+    }
+    preview.textContent = '';
+    renderizarComentarios([]);
   }
 
   function idDaUrl() {
@@ -117,7 +149,12 @@
 
   el('card-fechar').addEventListener('click', function () { fechar(true); });
   painel.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { e.preventDefault(); fechar(true); }
+    if (e.key !== 'Escape') return;
+    var alvo = e.target;
+    // Esc num comentário com texto não fecha o painel (o texto seria perdido).
+    if (alvo.tagName === 'TEXTAREA' && alvo.id !== 'doc-texto' && alvo.value.trim()) return;
+    e.preventDefault();
+    fechar(true);
   });
 
   el('card-copiar-link').addEventListener('click', async function () {
@@ -173,7 +210,12 @@
     estado.card = card;
     el('card-local').textContent = card.workspace.name + ' › ' + card.board.name;
     var titulo = el('card-titulo');
-    if (titulo.tagName === 'INPUT') titulo.value = card.title; else titulo.textContent = card.title;
+    if (titulo.tagName === 'INPUT') {
+      if (document.activeElement !== titulo) titulo.value = card.title;
+      titulo.disabled = false;
+    } else {
+      titulo.textContent = card.title;
+    }
     el('card-status').textContent = ROTULO[card.status] || card.status;
     el('card-criado').textContent = 'Criado por ' + (card.created_by.name || '—') + ' em ' + dataHora(card.created_at);
     renderizarResponsavel(card);
@@ -219,13 +261,15 @@
   }
 
   async function editarCard(campos) {
+    if (!estado.card) return;
+    var cardId = estado.id;
     var corpo = Object.assign({ version: estado.card.version }, campos);
     try {
-      var r = await fetch(url(cfg.urlCard, estado.id), {
+      var r = await fetch(url(cfg.urlCard, cardId), {
         method: 'PATCH', credentials: 'same-origin', headers: ESCRITA, body: JSON.stringify(corpo),
       });
       var d = await tratarResposta(r);
-      if (d === null) return;
+      if (d === null || estado.id !== cardId) return; // o usuário já abriu outro card
       if (r.ok) {
         renderizarCard(d);
         aviso('');
@@ -233,9 +277,10 @@
         return;
       }
       aviso(d.error || ('Não foi possível salvar (HTTP ' + r.status + ').'));
-      var atual = await tratarResposta(await fetch(url(cfg.urlCard, estado.id), { credentials: 'same-origin' }));
-      if (atual && atual.id) renderizarCard(atual);
+      var atual = await tratarResposta(await fetch(url(cfg.urlCard, cardId), { credentials: 'same-origin' }));
+      if (atual && atual.id && estado.id === cardId) renderizarCard(atual);
     } catch (_) {
+      if (estado.id !== cardId) return;
       aviso('Sem conexão com o servidor. A alteração não foi salva.');
       renderizarCard(estado.card);
     }
@@ -258,6 +303,22 @@
     });
   }
 
+  // O card aberto pode ser movido no board ao lado: acompanha versão e coluna
+  // para a próxima edição não dar um 409 falso.
+  document.addEventListener('tarefas:cards', function (e) {
+    if (!estado.card) return;
+    var c = e.detail[estado.card.id];
+    if (!c || c.version <= estado.card.version) return;
+    estado.card.version = c.version;
+    estado.card.status = c.status;
+    el('card-status').textContent = ROTULO[c.status] || c.status;
+    var titulo = el('card-titulo');
+    if (c.title !== estado.card.title && document.activeElement !== titulo) {
+      estado.card.title = c.title;
+      if (titulo.tagName === 'INPUT') titulo.value = c.title; else titulo.textContent = c.title;
+    }
+  });
+
   // ── Documento ─────────────────────────────────────────────────────────────
 
   var texto = el('doc-texto');
@@ -266,10 +327,12 @@
   function carregarDocumento(doc) {
     estado.doc.versao = doc.version;
     estado.doc.salvo = doc.content_md;
+    estado.doc.tinhaConteudo = Boolean(doc.content_md);
     estado.doc.conflito = null;
     clearTimeout(estado.doc.timer);
     if (texto) {
       texto.value = doc.content_md;
+      texto.readOnly = false;
       el('doc-conflito').hidden = true;
       el('doc-descartado').hidden = true;
       modoEditar(true);
@@ -313,7 +376,9 @@
     }
   }
 
-  function sujo() { return texto && estado.id && texto.value !== estado.doc.salvo; }
+  function sujo() {
+    return Boolean(texto && estado.id && estado.doc.versao !== null && texto.value !== estado.doc.salvo);
+  }
 
   function agendarSalvar() {
     clearTimeout(estado.doc.timer);
@@ -342,7 +407,9 @@
           estado.doc.salvo = enviado;
           if (texto.value === enviado) statusDoc('Salvo às ' + new Date().toLocaleTimeString('pt-BR'));
           else agendarSalvar();
-          if (window.TarefasBoard) window.TarefasBoard.recarregar();
+          var temConteudo = Boolean(d.content_md);
+          if (temConteudo !== estado.doc.tinhaConteudo && window.TarefasBoard) window.TarefasBoard.recarregar();
+          estado.doc.tinhaConteudo = temConteudo;
           return;
         }
         if (r.status === 409 && d.current) { mostrarConflito(d.current); return; }
@@ -536,9 +603,10 @@
   }
 
   async function recarregarComentarios() {
-    var r = await fetch(url(cfg.urlComentarios, estado.id), { credentials: 'same-origin' });
+    var cardId = estado.id;
+    var r = await fetch(url(cfg.urlComentarios, cardId), { credentials: 'same-origin' });
     var d = await tratarResposta(r);
-    if (d && d.items) renderizarComentarios(d.items);
+    if (d && d.items && estado.id === cardId) renderizarComentarios(d.items);
     if (window.TarefasBoard) window.TarefasBoard.recarregar();
   }
 
@@ -553,12 +621,14 @@
       var corpo = campo.value.trim();
       if (!corpo) { campo.focus(); return; }
       campo.disabled = true;
+      var cardId = estado.id;
       try {
-        var r = await fetch(url(cfg.urlComentarios, estado.id), {
+        var r = await fetch(url(cfg.urlComentarios, cardId), {
           method: 'POST', credentials: 'same-origin', headers: ESCRITA, body: JSON.stringify({ body_md: corpo }),
         });
         var d = await tratarResposta(r);
         if (d === null) return;
+        if (estado.id !== cardId) { campo.value = ''; return; } // salvo no card certo; o painel já é outro
         if (!r.ok) { aviso(d.error || ('Não foi possível comentar (HTTP ' + r.status + ').')); return; }
         campo.value = '';
         aviso('');

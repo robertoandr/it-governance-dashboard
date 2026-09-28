@@ -58,7 +58,8 @@ _ESQUEMAS: set[str] = {"http", "https", "mailto"}
 
 # Checklist no estilo GitHub ("- [ ] item"). O commonmark não tem; trocamos o
 # marcador por um símbolo depois da sanitização (só texto, sem HTML novo).
-_CHECKLIST = re.compile(r"<li>(<p>)?\[( |x|X)\] ")
+# Listas "soltas" (linha em branco entre itens) saem como "<li>\n<p>[ ] ...".
+_CHECKLIST = re.compile(r"<li>(\s*<p>)?\[( |x|X)\] ")
 
 
 def _marcar_checklist(html: str) -> str:

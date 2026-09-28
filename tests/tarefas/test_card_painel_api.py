@@ -284,3 +284,27 @@ def test_escritas_exigem_header_ajax(cliente: Cliente, card: dict) -> None:
     assert c.put(f"{API}/cards/{card['id']}/document", json={"content_md": "x", "version": 0}).status_code == 403
     assert c.post(f"{API}/cards/{card['id']}/comments", json={"body_md": "x"}).status_code == 403
     assert c.patch(f"{API}/cards/{card['id']}", json={"version": 1, "title": "x"}).status_code == 403
+
+
+def test_documento_so_com_quebras_de_linha_vira_vazio(cliente: Cliente, card: dict) -> None:
+    c = cliente("admin")
+    _doc(c, card["id"], "texto", 0)
+    r = _doc(c, card["id"], "\n\n\t  \n", 1)
+    assert (r.get_json()["content_md"], r.get_json()["html"]) == ("", "")
+    cards = c.get(f"{API}/boards/{card['board_id']}/cards").get_json()["columns"]["backlog"]
+    assert cards[0]["has_document"] is False
+
+
+def test_historico_nao_enche_com_salvamentos_automaticos(cliente: Cliente, card: dict) -> None:
+    op, gestor = cliente("operador"), cliente("gestor")
+    for versao in range(4):  # quatro salvamentos seguidos da mesma pessoa
+        assert _doc(op, card["id"], f"versão {versao}", versao).status_code == 200
+    _doc(gestor, card["id"], "versão do gestor", 4)
+    _doc(op, card["id"], "de novo o operador", 5)
+    acoes = [(a["action"], a["actor"]) for a in op.get(f"{API}/cards/{card['id']}").get_json()["activity"]]
+    assert acoes == [
+        ("edited", "Pytest operador"),
+        ("edited", "Pytest gestor"),
+        ("edited", "Pytest operador"),
+        ("created", "Pytest admin"),
+    ]

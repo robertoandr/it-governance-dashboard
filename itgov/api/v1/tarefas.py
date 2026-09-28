@@ -22,7 +22,7 @@ from flask_restx import Namespace, Resource, fields
 from pydantic import ValidationError
 
 from app.auth.rbac import require_role
-from app.models.tarefas import Workspace, em_utc
+from app.models.tarefas import Workspace, iso_utc
 from app.services.tarefas import board_service as board_svc
 from app.services.tarefas import card_service as card_svc
 from app.services.tarefas import comment_service as com_svc
@@ -164,19 +164,14 @@ def _erro_validacao(exc: ValidationError) -> tuple[dict[str, str], int]:
     return {"error": f"{campo}: {primeiro.get('msg', 'inválido')}", "code": "INVALID_PAYLOAD"}, 400
 
 
-def _iso(valor: Any) -> str | None:
-    utc = em_utc(valor)
-    return utc.isoformat() if utc else None
-
-
 def serialize_workspace(ws: Workspace) -> dict[str, Any]:
     """Converte um Workspace no formato da API."""
     return {
         "id": ws.id,
         "name": ws.name,
         "boards": [{"id": b.id, "name": b.name} for b in ws.boards_ativos],
-        "created_at": _iso(ws.created_at),
-        "updated_at": _iso(ws.updated_at),
+        "created_at": iso_utc(ws.created_at),
+        "updated_at": iso_utc(ws.updated_at),
     }
 
 

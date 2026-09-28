@@ -10,17 +10,18 @@ from typing import Annotated, Any
 
 import structlog
 from pydantic import BaseModel, ConfigDict, StringConstraints
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.extensions import db
-from app.models.tarefas import Board, Card, CardActivity, Workspace, em_utc
+from app.models.tarefas import Board, Card, CardActivity, Workspace, iso_utc
 from app.models.user import User
 from app.services.tarefas.board_service import (
     BoardNaoEncontradoError,
     CardNaoEncontradoError,
     ConflitoError,
     obter_board,
+    subir_revisao,
 )
 
 log = structlog.get_logger(__name__)
@@ -87,7 +88,7 @@ def detalhar(card_id: int) -> dict[str, Any]:
         "version": card.version,
         "assignee": {"id": card.assignee_id, "name": _nome(card.assignee_id)} if card.assignee_id else None,
         "created_by": {"id": card.created_by, "name": _nome(card.created_by)},
-        "created_at": _iso(card.created_at),
+        "created_at": iso_utc(card.created_at),
         "board": {"id": board.id, "name": board.name},
         "workspace": {"id": workspace.id, "name": workspace.name},
         "activity": [
@@ -96,16 +97,11 @@ def detalhar(card_id: int) -> dict[str, Any]:
                 "from_status": a.from_status,
                 "to_status": a.to_status,
                 "actor": nome,
-                "at": _iso(a.at),
+                "at": iso_utc(a.at),
             }
             for a, nome in historico
         ],
     }
-
-
-def _iso(valor: Any) -> str | None:
-    utc = em_utc(valor)
-    return utc.isoformat() if utc else None
 
 
 def usuarios_ativos() -> list[dict[str, Any]]:
@@ -146,7 +142,7 @@ def editar(card_id: int, dados: CardEditIn, user_id: int) -> Card:
         db.session.add(CardActivity(card_id=card.id, actor_id=user_id, action="assigned"))
     try:
         db.session.flush()
-        db.session.execute(update(Board).where(Board.id == card.board_id).values(revision=Board.revision + 1))
+        subir_revisao(card.board_id)
         db.session.commit()
     except StaleDataError as exc:
         db.session.rollback()

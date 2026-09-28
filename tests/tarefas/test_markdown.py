@@ -118,3 +118,9 @@ def test_texto_vazio_ou_so_espacos() -> None:
 
 def test_checklist_no_texto_fora_de_lista_nao_e_trocado() -> None:
     assert "[ ]" in renderizar("texto [ ] no meio")
+
+
+def test_checklist_em_lista_solta() -> None:
+    html = renderizar("- [ ] a\n\n- [x] b")
+    assert "<p>☐ a</p>" in html and "<p>☑ b</p>" in html
+    assert "[ ]" not in html and "[x]" not in html

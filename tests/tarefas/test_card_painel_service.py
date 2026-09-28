@@ -70,3 +70,19 @@ def test_documento_criado_ao_mesmo_tempo_vira_conflito(
     with pytest.raises(document_service.DocumentoConflitoError) as erro:
         document_service.salvar(card.id, document_service.DocumentoIn(content_md="meu", version=0), user_id=admin_id)
     assert erro.value.atual["content_md"] == "da outra pessoa"
+
+
+def test_nova_entrada_de_historico_depois_da_janela(card: Card, admin_id: int) -> None:
+    from datetime import timedelta
+
+    from app.models.tarefas import CardActivity
+
+    salvar = document_service.salvar
+    salvar(card.id, document_service.DocumentoIn(content_md="um", version=0), user_id=admin_id)
+    salvar(card.id, document_service.DocumentoIn(content_md="dois", version=1), user_id=admin_id)
+    edicoes = CardActivity.query.filter_by(card_id=card.id, action="edited").all()
+    assert len(edicoes) == 1
+    edicoes[0].at = edicoes[0].at - document_service.JANELA_HISTORICO - timedelta(minutes=1)
+    db.session.commit()
+    salvar(card.id, document_service.DocumentoIn(content_md="três", version=2), user_id=admin_id)
+    assert CardActivity.query.filter_by(card_id=card.id, action="edited").count() == 2

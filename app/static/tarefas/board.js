@@ -132,6 +132,11 @@
     return li;
   }
 
+  // O painel do card (card.js) acompanha versão/coluna/título do card aberto.
+  function avisarPainel() {
+    document.dispatchEvent(new CustomEvent('tarefas:cards', { detail: estado.cards }));
+  }
+
   function renderizar(colunas, destacar) {
     var anterior = {};
     Object.keys(estado.cards).forEach(function (id) { anterior[id] = estado.cards[id].status; });
@@ -151,6 +156,7 @@
       });
     });
     atualizarContagens();
+    avisarPainel();
     if (idFocado) {
       var novo = raiz.querySelector('.tarefas-card[data-id="' + idFocado + '"]');
       if (novo) novo.focus();
@@ -257,6 +263,7 @@
         card.status = d.status;
         card.position = d.position;
         card.version = d.version;
+        avisarPainel();
         esconderAviso();
         anunciar('"' + card.title + '" movido para ' + ROTULO[card.status] + '.');
         if (d.reload) { await carregar(false); return; } // coluna renumerada: versões dos vizinhos mudaram
@@ -396,7 +403,12 @@
   // ── Interface para o painel do card (card.js) ─────────────────────────────
 
   window.TarefasBoard = {
-    recarregar: function () { return carregar(false).catch(function () { /* a verificação automática tenta de novo */ }); },
+    // Mesma guarda da recarga automática: não redesenha durante arrasto ou
+    // movimento em andamento (a próxima verificação resolve).
+    recarregar: function () {
+      if (estado.ocupado > 0 || estado.arrastando) return Promise.resolve();
+      return carregar(false, estado.geracao).catch(function () { /* a verificação automática tenta de novo */ });
+    },
     // Um clique que encerra um arrasto não deve abrir o card.
     arrastouAgora: function () { return estado.arrastando || Date.now() - (estado.fimArrasto || 0) < 400; },
   };

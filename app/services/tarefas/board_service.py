@@ -168,7 +168,7 @@ def listar_cards(board_id: int) -> tuple[Board, dict[str, list[dict[str, Any]]]]
         select(Card, User.name, comentarios.c.n, CardDocument.card_id)
         .outerjoin(User, Card.assignee_id == User.id)
         .outerjoin(comentarios, comentarios.c.card_id == Card.id)
-        .outerjoin(CardDocument, (CardDocument.card_id == Card.id) & (func.trim(CardDocument.content_md) != ""))
+        .outerjoin(CardDocument, (CardDocument.card_id == Card.id) & (CardDocument.content_md != ""))
         .where(Card.board_id == board_id, Card.deleted_at.is_(None))
         .order_by(Card.position, Card.id)
     ).all()
@@ -181,7 +181,7 @@ def listar_cards(board_id: int) -> tuple[Board, dict[str, list[dict[str, Any]]]]
 # ── Escritas ─────────────────────────────────────────────────────────────────
 
 
-def _subir_revisao(board_id: int) -> None:
+def subir_revisao(board_id: int) -> None:
     # Incremento no SQL, não em Python: duas escritas simultâneas não perdem
     # uma à outra.
     db.session.execute(update(Board).where(Board.id == board_id).values(revision=Board.revision + 1))
@@ -209,7 +209,7 @@ def criar_card(board_id: int, dados: CardIn, user_id: int) -> Card:
     db.session.add(card)
     db.session.flush()
     db.session.add(CardActivity(card_id=card.id, actor_id=user_id, action="created", to_status=dados.status))
-    _subir_revisao(board_id)
+    subir_revisao(board_id)
     db.session.commit()
     log.info("tarefas.card_criado", card_id=card.id, board_id=board_id, user_id=user_id)
     return card

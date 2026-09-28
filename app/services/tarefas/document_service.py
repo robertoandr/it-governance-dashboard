@@ -8,7 +8,7 @@ Versão 0 = documento ainda não existe.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import structlog
@@ -17,14 +17,18 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models.tarefas import Board, CardActivity, CardDocument, em_utc
+from app.models.tarefas import CardActivity, CardDocument, em_utc, iso_utc
 from app.models.user import User
 from app.services.tarefas import markdown
+from app.services.tarefas.board_service import subir_revisao
 from app.services.tarefas.card_service import obter_card
 
 log = structlog.get_logger(__name__)
 
 LIMITE_BYTES = 200 * 1024
+# Uma entrada "editou" no histórico por pessoa nesse intervalo; sem isso, cada
+# salvamento automático (a cada 2 s de pausa) viraria uma linha.
+JANELA_HISTORICO = timedelta(minutes=15)
 
 
 def _limite_bytes(texto: str) -> str:
@@ -50,11 +54,6 @@ class DocumentoConflitoError(Exception):
         self.atual = atual
 
 
-def _iso(valor: Any) -> str | None:
-    utc = em_utc(valor)
-    return utc.isoformat() if utc else None
-
-
 def _serializar(doc: CardDocument | None) -> dict[str, Any]:
     if doc is None:
         return {"content_md": "", "html": "", "version": 0, "updated_by": None, "updated_at": None}
@@ -64,7 +63,7 @@ def _serializar(doc: CardDocument | None) -> dict[str, Any]:
         "html": markdown.renderizar(doc.content_md),
         "version": doc.version,
         "updated_by": nome,
-        "updated_at": _iso(doc.updated_at),
+        "updated_at": iso_utc(doc.updated_at),
     }
 
 
@@ -72,6 +71,19 @@ def _buscar(card_id: int) -> CardDocument | None:
     return db.session.execute(
         select(CardDocument).where(CardDocument.card_id == card_id).execution_options(populate_existing=True)
     ).scalar_one_or_none()
+
+
+def _editou_ha_pouco(card_id: int, user_id: int, agora: datetime) -> bool:
+    ultima = db.session.execute(
+        select(CardActivity.action, CardActivity.actor_id, CardActivity.at)
+        .where(CardActivity.card_id == card_id)
+        .order_by(CardActivity.at.desc(), CardActivity.id.desc())
+        .limit(1)
+    ).first()
+    if ultima is None or ultima.action != "edited" or ultima.actor_id != user_id:
+        return False
+    quando = em_utc(ultima.at)
+    return quando is not None and agora - quando < JANELA_HISTORICO
 
 
 def obter(card_id: int) -> dict[str, Any]:
@@ -95,14 +107,17 @@ def salvar(card_id: int, dados: DocumentoIn, user_id: int) -> dict[str, Any]:
         DocumentoConflitoError: Outra pessoa salvou antes (traz o conteúdo atual).
     """
     card = obter_card(card_id)
+    # Só espaços/quebras de linha é gravado como vazio: assim "tem documento"
+    # é sempre content_md != "", no Python e no SQL (trim() do SQL só tira espaços).
+    conteudo = dados.content_md if dados.content_md.strip() else ""
     atual = _buscar(card_id)
-    tinha_conteudo = bool(atual and atual.content_md.strip())
+    tinha_conteudo = bool(atual and atual.content_md)
     agora = datetime.now(UTC)
 
     if atual is None:
         if dados.version != 0:
             raise DocumentoConflitoError(_serializar(None))
-        db.session.add(CardDocument(card_id=card_id, content_md=dados.content_md, version=1, updated_by=user_id))
+        db.session.add(CardDocument(card_id=card_id, content_md=conteudo, version=1, updated_by=user_id))
         try:
             db.session.flush()
         except IntegrityError as exc:  # outra pessoa criou o documento no mesmo instante
@@ -114,7 +129,7 @@ def salvar(card_id: int, dados: DocumentoIn, user_id: int) -> dict[str, Any]:
             update(CardDocument)
             .where(CardDocument.card_id == card_id, CardDocument.version == dados.version)
             .values(
-                content_md=dados.content_md,
+                content_md=conteudo,
                 version=CardDocument.version + 1,
                 updated_by=user_id,
                 updated_at=agora,
@@ -125,11 +140,12 @@ def salvar(card_id: int, dados: DocumentoIn, user_id: int) -> dict[str, Any]:
             db.session.rollback()
             raise DocumentoConflitoError(_serializar(_buscar(card_id)))
 
-    db.session.add(CardActivity(card_id=card_id, actor_id=user_id, action="edited"))
+    if not _editou_ha_pouco(card_id, user_id, agora):
+        db.session.add(CardActivity(card_id=card_id, actor_id=user_id, action="edited", at=agora))
     # O board só mostra "Documentado"; só recarrega os outros quando isso muda,
     # e não a cada salvamento automático.
-    if tinha_conteudo != bool(dados.content_md.strip()):
-        db.session.execute(update(Board).where(Board.id == card.board_id).values(revision=Board.revision + 1))
+    if tinha_conteudo != bool(conteudo):
+        subir_revisao(card.board_id)
     db.session.commit()
     log.info("tarefas.documento_salvo", card_id=card_id, user_id=user_id, bytes=len(dados.content_md.encode("utf-8")))
     return _serializar(_buscar(card_id))

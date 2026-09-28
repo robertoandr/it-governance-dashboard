@@ -52,7 +52,6 @@
      data-url-move="{{ url_for('tarefas_card_move', card_id=0) }}"
      data-pode-editar="{{ 'true' if pode_editar else 'false' }}"
      data-pode-comentar="{{ 'true' if pode_comentar else 'false' }}"
-     data-usuario-id="{{ current_user.id }}"
      data-card-aberto="{{ card_aberto or '' }}"
      data-url-board-page="{{ url_for('tarefas.board', board_id=board.id) }}"
      data-url-card-page="{{ url_for('tarefas.card', board_id=board.id, card_id=0) }}"

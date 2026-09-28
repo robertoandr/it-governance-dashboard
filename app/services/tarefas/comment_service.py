@@ -11,12 +11,13 @@ from typing import Annotated, Any
 
 import structlog
 from pydantic import BaseModel, ConfigDict, StringConstraints
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.extensions import db
-from app.models.tarefas import Board, CardComment, em_utc
+from app.models.tarefas import CardComment, iso_utc
 from app.models.user import User
 from app.services.tarefas import markdown
+from app.services.tarefas.board_service import subir_revisao
 from app.services.tarefas.card_service import obter_card
 
 log = structlog.get_logger(__name__)
@@ -40,11 +41,6 @@ class SemPermissaoError(PermissionError):
     """O usuário não pode alterar este comentário."""
 
 
-def _iso(valor: Any) -> str | None:
-    utc = em_utc(valor)
-    return utc.isoformat() if utc else None
-
-
 def serializar(comentario: CardComment, autor: str | None) -> dict[str, Any]:
     """Formato do comentário na API (sem as permissões, que dependem de quem pede)."""
     return {
@@ -52,13 +48,9 @@ def serializar(comentario: CardComment, autor: str | None) -> dict[str, Any]:
         "author": {"id": comentario.author_id, "name": autor},
         "body_md": comentario.body_md,
         "html": markdown.renderizar(comentario.body_md),
-        "created_at": _iso(comentario.created_at),
-        "edited_at": _iso(comentario.edited_at),
+        "created_at": iso_utc(comentario.created_at),
+        "edited_at": iso_utc(comentario.edited_at),
     }
-
-
-def _subir_revisao(board_id: int) -> None:
-    db.session.execute(update(Board).where(Board.id == board_id).values(revision=Board.revision + 1))
 
 
 def listar(card_id: int) -> list[dict[str, Any]]:
@@ -86,7 +78,7 @@ def criar(card_id: int, dados: ComentarioIn, user_id: int) -> dict[str, Any]:
     card = obter_card(card_id)
     comentario = CardComment(card_id=card.id, author_id=user_id, body_md=dados.body_md)
     db.session.add(comentario)
-    _subir_revisao(card.board_id)
+    subir_revisao(card.board_id)
     db.session.commit()
     log.info("tarefas.comentario_criado", card_id=card.id, comentario_id=comentario.id, user_id=user_id)
     autor = db.session.execute(select(User.name).where(User.id == user_id)).scalar_one_or_none()
@@ -139,6 +131,6 @@ def excluir(comentario_id: int, user_id: int, pode_moderar: bool) -> None:
         raise SemPermissaoError("Só o autor ou um admin pode excluir o comentário.")
     comentario.deleted_at = datetime.now(UTC)
     card = obter_card(comentario.card_id)
-    _subir_revisao(card.board_id)
+    subir_revisao(card.board_id)
     db.session.commit()
     log.info("tarefas.comentario_excluido", comentario_id=comentario.id, user_id=user_id, moderacao=pode_moderar)
