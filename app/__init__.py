@@ -54,6 +54,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         # domínio) também usa cookie de sessão, e "session" colidiria.
         SESSION_COOKIE_NAME="itgov_session",
         REMEMBER_COOKIE_NAME="itgov_remember",
+        # Explícito em vez de depender do padrão do navegador: cookies de
+        # sessão não vão em POST/PATCH/DELETE vindos de outros sites.
+        SESSION_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_SAMESITE="Lax",
     )
 
     # Flask-SQLAlchemy + Flask-Login + Flask-Bcrypt
