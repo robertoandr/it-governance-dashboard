@@ -25,7 +25,9 @@
   var ROTULO = { backlog: 'Backlog', todo: 'To Do', doing: 'Doing', done: 'Done' };
   var CABECALHOS_ESCRITA = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
 
-  var estado = { revisao: null, cards: {}, ocupado: 0, arrastando: false, sessaoExpirada: false };
+  // geracao: sobe a cada escrita local; recargas automáticas iniciadas antes
+  // de uma escrita são descartadas para não redesenhar por cima dela.
+  var estado = { revisao: null, cards: {}, ocupado: 0, arrastando: false, sessaoExpirada: false, geracao: 0 };
   var listas = {};
   STATUS.forEach(function (s) { listas[s] = raiz.querySelector('ol[data-status="' + s + '"]'); });
 
@@ -116,7 +118,12 @@
         opt.selected = s === card.status;
         sel.appendChild(opt);
       });
-      sel.addEventListener('change', function () { moverParaColuna(li, sel.value); });
+      // O card é localizado na hora do evento: este <select> pode ser
+      // transplantado para outro <li> por atualizarElemento.
+      sel.addEventListener('change', function () {
+        var alvo = sel.closest('.tarefas-card');
+        if (alvo) moverParaColuna(alvo, sel.value);
+      });
       linha.appendChild(sel);
       li.appendChild(linha);
     }
@@ -152,11 +159,14 @@
 
   // ── Carga e atualização automática ────────────────────────────────────────
 
-  async function carregar(destacar) {
+  async function carregar(destacar, geracaoEsperada) {
     var r = await fetch(URL_CARDS, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
     if (r.status === 401) { sessaoExpirou(); return; }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
+    if (geracaoEsperada !== undefined && (estado.geracao !== geracaoEsperada || estado.ocupado > 0 || estado.arrastando)) {
+      return; // houve escrita local durante a recarga automática; a próxima verificação resolve
+    }
     estado.revisao = d.board.revision;
     renderizar(d.columns, destacar);
     marcarAtualizado();
@@ -164,12 +174,13 @@
 
   async function verificar() {
     if (document.hidden || estado.ocupado > 0 || estado.arrastando || estado.sessaoExpirada) return;
+    var geracao = estado.geracao;
     try {
       var r = await fetch(URL_REVISAO, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
       if (r.status === 401) { sessaoExpirou(); return; }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var d = await r.json();
-      if (d.revision !== estado.revisao) await carregar(true);
+      if (d.revision !== estado.revisao) await carregar(true, geracao);
       else marcarAtualizado();
       if (elAviso.dataset.tipo === 'conexao') { esconderAviso(); delete elAviso.dataset.tipo; }
     } catch (_) {
@@ -196,8 +207,27 @@
   function enviarMovimento(li, status, desfazer) {
     atualizarContagens();
     estado.ocupado++;
-    fila = fila.then(function () { return enviarAgora(li, status, desfazer); })
+    estado.geracao++;
+    fila = fila
+      .then(function () { return enviarAgora(li, status, desfazer); })
+      .catch(function () {
+        // Nunca deixar a fila rejeitada: os próximos movimentos seriam ignorados.
+        mostrarAviso('Erro inesperado ao mover o card. O board foi recarregado.');
+        return carregar(false).catch(function () { /* aviso já exibido */ });
+      })
       .finally(function () { estado.ocupado--; });
+  }
+
+  // Desfaz o movimento otimista; se o DOM mudou demais para desfazer com
+  // segurança, recarrega o board inteiro.
+  async function reverter(li, card, desfazer) {
+    try {
+      desfazer();
+      atualizarElemento(li, card);
+      atualizarContagens();
+    } catch (_) {
+      await carregar(false);
+    }
   }
 
   function atualizarElemento(li, card) {
@@ -227,23 +257,22 @@
         card.status = d.status;
         card.position = d.position;
         card.version = d.version;
-        atualizarElemento(li, card);
         esconderAviso();
         anunciar('"' + card.title + '" movido para ' + ROTULO[card.status] + '.');
+        if (d.reload) { await carregar(false); return; } // coluna renumerada: versões dos vizinhos mudaram
+        atualizarElemento(li, card);
         return;
       }
-      if (r.status === 401) { desfazer(); atualizarContagens(); sessaoExpirou(); return; }
+      if (r.status === 401) { await reverter(li, card, desfazer); sessaoExpirou(); return; }
       if (r.status === 409) {
         mostrarAviso((d.error || 'O board mudou.') + ' O board foi atualizado.');
         await carregar(false);
         return;
       }
-      desfazer();
-      atualizarContagens();
+      await reverter(li, card, desfazer);
       mostrarAviso(d.error || ('Não foi possível mover o card (HTTP ' + r.status + ').'));
     } catch (_) {
-      desfazer();
-      atualizarContagens();
+      await reverter(li, card, desfazer);
       mostrarAviso('Sem conexão com o servidor. O card voltou para a posição anterior.');
     }
   }
@@ -263,8 +292,12 @@
     enviarMovimento(li, status, desfazer);
   }
 
+  var SETAS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+
   function aoTeclar(evento) {
-    if (!evento.altKey || evento.target !== evento.currentTarget) return;
+    if (!evento.altKey || evento.target !== evento.currentTarget || SETAS.indexOf(evento.key) < 0) return;
+    // Sempre: nas colunas das pontas, Alt+←/→ seria "Voltar/Avançar" do navegador.
+    evento.preventDefault();
     var li = evento.currentTarget;
     var status = li.parentNode.dataset.status;
     var i = STATUS.indexOf(status);
@@ -275,18 +308,13 @@
     } else if (evento.key === 'ArrowDown' && li.nextElementSibling) {
       desfazer = moverElemento(li, li.parentNode, li.nextElementSibling.nextElementSibling);
     } else if (evento.key === 'ArrowLeft' && i > 0) {
-      evento.preventDefault();
       moverParaColuna(li, STATUS[i - 1]);
       return;
     } else if (evento.key === 'ArrowRight' && i < STATUS.length - 1) {
-      evento.preventDefault();
       moverParaColuna(li, STATUS[i + 1]);
       return;
     }
-    if (desfazer) {
-      evento.preventDefault();
-      enviarMovimento(li, status, desfazer);
-    }
+    if (desfazer) enviarMovimento(li, status, desfazer);
   }
 
   function iniciarArrastar() {
@@ -335,6 +363,8 @@
         var titulo = campo.value.trim();
         if (!titulo) { campo.focus(); return; }
         campo.disabled = true;
+        estado.geracao++;
+        var criado = null;
         try {
           var r = await fetch(URL_CARDS, {
             method: 'POST',
@@ -345,12 +375,15 @@
           var d = await lerJson(r);
           if (r.status === 401) { sessaoExpirou(); return; }
           if (!r.ok) { mostrarAviso(d.error || ('Não foi possível criar o card (HTTP ' + r.status + ').')); return; }
+          criado = d;
           campo.value = '';
           esconderAviso();
-          await carregar(false);
           anunciar('Card "' + d.title + '" criado em ' + ROTULO[status] + '.');
+          await carregar(false);
         } catch (_) {
-          mostrarAviso('Sem conexão com o servidor. O card não foi criado.');
+          mostrarAviso(criado
+            ? 'O card foi criado, mas não foi possível atualizar o board. Ele aparece na próxima atualização.'
+            : 'Sem conexão com o servidor. O card não foi criado.');
         } finally {
           campo.disabled = false;
           campo.focus();

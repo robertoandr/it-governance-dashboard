@@ -8,11 +8,13 @@ transação, e o front só recarrega o board quando a revisão muda (ADR 0008).
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from dataclasses import dataclass
+from typing import Annotated, Any, Literal
 
 import structlog
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from sqlalchemy import Select, func, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.extensions import db
@@ -22,6 +24,7 @@ from app.models.user import User
 log = structlog.get_logger(__name__)
 
 INTERVALO = 1024
+TENTATIVAS_MOVER = 3
 
 StatusCard = Literal["backlog", "todo", "doing", "done"]
 TituloCard = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -61,6 +64,39 @@ class CardNaoEncontradoError(LookupError):
 
 class ConflitoError(Exception):
     """O board mudou desde que o cliente o carregou; é preciso recarregar."""
+
+
+class _CorridaNoBoardError(Exception):
+    """Outra escrita no board aconteceu durante o movimento; vale tentar de novo."""
+
+
+@dataclass(frozen=True)
+class Movimento:
+    """Resultado de ``mover_card``.
+
+    ``recarregar`` indica que a coluna foi renumerada: as versões dos
+    vizinhos mudaram e o cliente precisa recarregar o board.
+    """
+
+    card: Card
+    revisao: int
+    recarregar: bool
+
+
+def card_para_dict(
+    card: Card, responsavel: str | None = None, tem_documento: bool = False, comentarios: int = 0
+) -> dict[str, Any]:
+    """Formato único do card na API (listagem, criação e movimentação)."""
+    return {
+        "id": card.id,
+        "title": card.title,
+        "status": card.status,
+        "position": card.position,
+        "version": card.version,
+        "assignee": {"id": card.assignee_id, "name": responsavel} if card.assignee_id else None,
+        "has_document": tem_documento,
+        "comment_count": comentarios,
+    }
 
 
 # ── Consultas ────────────────────────────────────────────────────────────────
@@ -112,16 +148,16 @@ def _cards_da_coluna(board_id: int, status: str) -> list[Card]:
     )
 
 
-def listar_cards(board_id: int) -> dict[str, list[dict[str, object]]]:
-    """Cards ativos do board agrupados por coluna, na ordem de exibição.
+def listar_cards(board_id: int) -> tuple[Board, dict[str, list[dict[str, Any]]]]:
+    """Board e seus cards ativos agrupados por coluna, na ordem de exibição.
 
     Returns:
-        ``{status: [card, ...]}`` com as 4 colunas sempre presentes.
+        Tupla ``(board, {status: [card, ...]})`` com as 4 colunas sempre presentes.
 
     Raises:
         BoardNaoEncontradoError: Board inexistente ou excluído.
     """
-    obter_board(board_id)
+    board = obter_board(board_id)
     comentarios = (
         select(CardComment.card_id, func.count().label("n"))
         .where(CardComment.deleted_at.is_(None))
@@ -136,21 +172,10 @@ def listar_cards(board_id: int) -> dict[str, list[dict[str, object]]]:
         .where(Card.board_id == board_id, Card.deleted_at.is_(None))
         .order_by(Card.position, Card.id)
     ).all()
-    colunas: dict[str, list[dict[str, object]]] = {s: [] for s in CARD_STATUS}
+    colunas: dict[str, list[dict[str, Any]]] = {s: [] for s in CARD_STATUS}
     for card, responsavel, n_comentarios, doc in linhas:
-        colunas[card.status].append(
-            {
-                "id": card.id,
-                "title": card.title,
-                "status": card.status,
-                "position": card.position,
-                "version": card.version,
-                "assignee": {"id": card.assignee_id, "name": responsavel} if card.assignee_id else None,
-                "has_document": doc is not None,
-                "comment_count": n_comentarios or 0,
-            }
-        )
-    return colunas
+        colunas[card.status].append(card_para_dict(card, responsavel, doc is not None, n_comentarios or 0))
+    return board, colunas
 
 
 # ── Escritas ─────────────────────────────────────────────────────────────────
@@ -209,8 +234,12 @@ def _vizinhos_batem(indice: dict[int, int], total: int, before_id: int | None, a
     return indice[after_id] == indice[before_id] + 1
 
 
-def _nova_posicao(board_id: int, card: Card, dados: MoverIn) -> int:
-    """Posição entre os vizinhos informados, validando que o cliente não está defasado."""
+def _nova_posicao(board_id: int, card: Card, dados: MoverIn) -> tuple[int, bool]:
+    """Posição entre os vizinhos informados, validando que o cliente não está defasado.
+
+    Returns:
+        Tupla ``(posição, coluna_renumerada)``.
+    """
     coluna = [c for c in _cards_da_coluna(board_id, dados.status) if c.id != card.id]
     indice = {c.id: i for i, c in enumerate(coluna)}
 
@@ -221,33 +250,25 @@ def _nova_posicao(board_id: int, card: Card, dados: MoverIn) -> int:
         raise ConflitoError("A ordem da coluna mudou.")
 
     if not coluna:
-        return 0
+        return 0, False
     if dados.before_id is None:
-        return coluna[0].position - INTERVALO
+        return coluna[0].position - INTERVALO, False
     antes = coluna[indice[dados.before_id]]
     if dados.after_id is None:
-        return antes.position + INTERVALO
+        return antes.position + INTERVALO, False
     depois = coluna[indice[dados.after_id]]
-    if depois.position - antes.position < 2:
+    renumerou = depois.position - antes.position < 2
+    if renumerou:
         _renumerar(coluna)
-    return (antes.position + depois.position) // 2
+    return (antes.position + depois.position) // 2, renumerou
 
 
-def mover_card(card_id: int, dados: MoverIn, user_id: int) -> tuple[Card, int]:
-    """Move o card para a coluna e posição pedidas.
-
-    Returns:
-        Tupla ``(card atualizado, nova revisão do board)``.
-
-    Raises:
-        CardNaoEncontradoError: Card inexistente, excluído ou de board excluído.
-        ConflitoError: Versão do card ou vizinhos não batem com o banco.
-    """
+def _mover_uma_vez(card_id: int, dados: MoverIn, user_id: int) -> Movimento:
     card = db.session.get(Card, card_id)
     if card is None or card.deleted_at is not None:
         raise CardNaoEncontradoError(f"Card {card_id} não encontrado")
     try:
-        obter_board(card.board_id)
+        revisao_lida = revisao(card.board_id)
     except BoardNaoEncontradoError as exc:
         raise CardNaoEncontradoError(f"Card {card_id} não encontrado") from exc
     if card.version != dados.version:
@@ -256,19 +277,50 @@ def mover_card(card_id: int, dados: MoverIn, user_id: int) -> tuple[Card, int]:
         raise ConflitoError("Um card não pode ser vizinho de si mesmo.")
 
     de = card.status
-    card.position = _nova_posicao(card.board_id, card, dados)
+    card.position, renumerou = _nova_posicao(card.board_id, card, dados)
     card.status = dados.status
     db.session.add(
         CardActivity(card_id=card.id, actor_id=user_id, action="moved", from_status=de, to_status=card.status)
     )
     try:
-        # O flush envia o UPDATE do card com "WHERE version = ?"; precisa
-        # estar dentro do try porque o próximo execute também faria autoflush.
+        # O flush envia o UPDATE do card com "WHERE version = ?".
         db.session.flush()
-        _subir_revisao(card.board_id)
+        # A revisão funciona como trava do board: se outra escrita entrou
+        # depois da leitura dos vizinhos, nenhuma linha é atualizada.
+        resultado = db.session.execute(
+            update(Board)
+            .where(Board.id == card.board_id, Board.revision == revisao_lida)
+            .values(revision=revisao_lida + 1)
+        )
+        if resultado.rowcount != 1:
+            raise _CorridaNoBoardError
         db.session.commit()
     except StaleDataError as exc:
-        db.session.rollback()
-        raise ConflitoError("O card foi alterado por outra pessoa.") from exc
-    log.info("tarefas.card_movido", card_id=card.id, de=de, para=card.status, user_id=user_id)
-    return card, revisao(card.board_id)
+        raise _CorridaNoBoardError from exc
+    except OperationalError as exc:
+        # SQLite em WAL recusa escrever sobre uma leitura antiga ("database is locked").
+        if "locked" not in str(exc.orig):
+            raise
+        raise _CorridaNoBoardError from exc
+    log.info("tarefas.card_movido", card_id=card.id, de=de, para=card.status, user_id=user_id, renumerou=renumerou)
+    return Movimento(card=card, revisao=revisao_lida + 1, recarregar=renumerou)
+
+
+def mover_card(card_id: int, dados: MoverIn, user_id: int) -> Movimento:
+    """Move o card para a coluna e posição pedidas.
+
+    Se outra escrita no mesmo board acontecer no meio, repete a operação
+    (até ``TENTATIVAS_MOVER`` vezes); a nova tentativa revalida versão e
+    vizinhos, então um cliente defasado ainda recebe conflito.
+
+    Raises:
+        CardNaoEncontradoError: Card inexistente, excluído ou de board excluído.
+        ConflitoError: Versão do card ou vizinhos não batem com o banco.
+    """
+    for tentativa in range(1, TENTATIVAS_MOVER + 1):
+        try:
+            return _mover_uma_vez(card_id, dados, user_id)
+        except _CorridaNoBoardError:
+            db.session.rollback()
+            log.info("tarefas.card_mover_corrida", card_id=card_id, tentativa=tentativa)
+    raise ConflitoError("O board está sendo alterado por outras pessoas.")

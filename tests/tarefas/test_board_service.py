@@ -37,7 +37,7 @@ def _criar(board_id: int, user_id: int, titulo: str, status: str = "backlog") ->
 
 
 def _titulos(board_id: int, status: str) -> list[str]:
-    return [c["title"] for c in svc.listar_cards(board_id)[status]]
+    return [c["title"] for c in svc.listar_cards(board_id)[1][status]]
 
 
 def _mover(card: Card, status: str, user_id: int, before: Card | None = None, after: Card | None = None) -> Card:
@@ -48,8 +48,7 @@ def _mover(card: Card, status: str, user_id: int, before: Card | None = None, af
         after_id=after.id if after else None,
         version=card.version,
     )
-    movido, _ = svc.mover_card(card.id, dados, user_id=user_id)
-    return movido
+    return svc.mover_card(card.id, dados, user_id=user_id).card
 
 
 # ── Validação de entrada ─────────────────────────────────────────────────────
@@ -83,7 +82,7 @@ def test_criar_poe_card_no_topo_e_registra_historico(board_id: int, admin_id: in
 
 def test_criar_em_outra_coluna(board_id: int, admin_id: int) -> None:
     _criar(board_id, admin_id, "Em andamento", status="doing")
-    colunas = svc.listar_cards(board_id)
+    _, colunas = svc.listar_cards(board_id)
     assert list(colunas) == ["backlog", "todo", "doing", "done"]
     assert [c["title"] for c in colunas["doing"]] == ["Em andamento"]
 
@@ -101,7 +100,7 @@ def test_listar_traz_responsavel_documento_e_comentarios(board_id: int, admin_id
         ]
     )
     db.session.commit()
-    por_titulo = {c["title"]: c for c in svc.listar_cards(board_id)["backlog"]}
+    por_titulo = {c["title"]: c for c in svc.listar_cards(board_id)[1]["backlog"]}
     assert por_titulo["Com extras"]["assignee"] == {"id": admin_id, "name": "Pytest admin"}
     assert por_titulo["Com extras"]["has_document"] is True
     assert por_titulo["Com extras"]["comment_count"] == 2
@@ -168,9 +167,13 @@ def test_renumera_quando_acaba_o_espaco(board_id: int, admin_id: int) -> None:
     c = _criar(board_id, admin_id, "C", status="todo")
     a.position, b.position = 10, 11  # sem inteiro livre entre eles
     db.session.commit()
-    _mover(c, "backlog", admin_id, before=a, after=b)
+    db.session.refresh(c)
+    movimento = svc.mover_card(
+        c.id, svc.MoverIn(status="backlog", before_id=a.id, after_id=b.id, version=c.version), user_id=admin_id
+    )
+    assert movimento.recarregar is True  # vizinhos mudaram de versão: cliente recarrega
     assert _titulos(board_id, "backlog") == ["A", "C", "B"]
-    posicoes = [card["position"] for card in svc.listar_cards(board_id)["backlog"]]
+    posicoes = [card["position"] for card in svc.listar_cards(board_id)[1]["backlog"]]
     assert posicoes == sorted(set(posicoes))
 
 
@@ -245,5 +248,81 @@ def test_revisao_sobe_a_cada_escrita(board_id: int, admin_id: int) -> None:
     assert svc.revisao(board_id) == 0
     card = _criar(board_id, admin_id, "A")
     assert svc.revisao(board_id) == 1
-    _, nova = svc.mover_card(card.id, svc.MoverIn(status="done", version=card.version), user_id=admin_id)
-    assert nova == 2 == svc.revisao(board_id)
+    movimento = svc.mover_card(card.id, svc.MoverIn(status="done", version=card.version), user_id=admin_id)
+    assert movimento.revisao == 2 == svc.revisao(board_id)
+    assert movimento.recarregar is False
+
+
+def _bump_revisao_por_fora(board_id: int) -> None:
+    """Outra conexão grava no board (UPDATE direto na tabela, sem passar pelo ORM)."""
+    tabela = Board.__table__
+    db.session.execute(update(tabela).where(tabela.c.id == board_id).values(revision=tabela.c.revision + 1))
+
+
+def test_corrida_no_board_e_repetida_e_revalida(board_id: int, admin_id: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Outra escrita entre a leitura dos vizinhos e a gravação: repete e dá certo."""
+    card = _criar(board_id, admin_id, "A")
+    original = svc._nova_posicao
+    chamadas = {"n": 0}
+
+    def com_corrida(bid: int, c: Card, dados: svc.MoverIn) -> tuple[int, bool]:
+        chamadas["n"] += 1
+        resultado = original(bid, c, dados)
+        if chamadas["n"] == 1:
+            _bump_revisao_por_fora(bid)
+        return resultado
+
+    monkeypatch.setattr(svc, "_nova_posicao", com_corrida)
+    movido = _mover(card, "doing", admin_id)
+    assert chamadas["n"] == 2
+    assert movido.status == "doing"
+    assert _titulos(board_id, "doing") == ["A"]
+
+
+def test_corrida_persistente_vira_conflito(board_id: int, admin_id: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    card = _criar(board_id, admin_id, "A")
+    original = svc._nova_posicao
+
+    def sempre_corrida(bid: int, c: Card, dados: svc.MoverIn) -> tuple[int, bool]:
+        resultado = original(bid, c, dados)
+        _bump_revisao_por_fora(bid)
+        return resultado
+
+    monkeypatch.setattr(svc, "_nova_posicao", sempre_corrida)
+    with pytest.raises(svc.ConflitoError, match="outras pessoas"):
+        _mover(card, "doing", admin_id)
+    monkeypatch.undo()
+    assert _titulos(board_id, "backlog") == ["A"]
+
+
+def test_banco_travado_e_tratado_como_corrida(board_id: int, admin_id: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    card = _criar(board_id, admin_id, "A")
+    original = db.session.commit
+    falhas = {"n": 0}
+
+    def commit_travado() -> None:
+        if falhas["n"] == 0:
+            falhas["n"] += 1
+            raise OperationalError("COMMIT", {}, Exception("database is locked"))
+        original()
+
+    monkeypatch.setattr(db.session, "commit", commit_travado)
+    assert _mover(card, "done", admin_id).status == "done"
+    assert falhas["n"] == 1
+
+
+def test_outro_erro_operacional_sobe(board_id: int, admin_id: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    card = _criar(board_id, admin_id, "A")
+
+    def disco_cheio() -> None:
+        raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
+
+    monkeypatch.setattr(db.session, "commit", disco_cheio)
+    with pytest.raises(OperationalError):
+        _mover(card, "done", admin_id)
+    monkeypatch.undo()
+    db.session.rollback()

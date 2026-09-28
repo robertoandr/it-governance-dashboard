@@ -22,7 +22,7 @@ from flask_restx import Namespace, Resource, fields
 from pydantic import ValidationError
 
 from app.auth.rbac import require_role
-from app.models.tarefas import Card, Workspace, em_utc
+from app.models.tarefas import Workspace, em_utc
 from app.services.tarefas import board_service as board_svc
 from app.services.tarefas import workspace_service as ws_svc
 from app.services.tarefas.permissions import Acao, perfis
@@ -105,6 +105,7 @@ mover_out_model = ns.model(
         "position": fields.Integer,
         "version": fields.Integer,
         "board_revision": fields.Integer,
+        "reload": fields.Boolean(description="true = coluna renumerada; o cliente deve recarregar o board"),
     },
 )
 
@@ -149,20 +150,6 @@ def serialize_workspace(ws: Workspace) -> dict[str, Any]:
         "boards": [{"id": b.id, "name": b.name} for b in ws.boards_ativos],
         "created_at": _iso(ws.created_at),
         "updated_at": _iso(ws.updated_at),
-    }
-
-
-def serialize_card(card: Card) -> dict[str, Any]:
-    """Converte um Card recém-criado no formato da API (sem responsável nem contadores)."""
-    return {
-        "id": card.id,
-        "title": card.title,
-        "status": card.status,
-        "position": card.position,
-        "version": card.version,
-        "assignee": None,
-        "has_document": False,
-        "comment_count": 0,
     }
 
 
@@ -260,8 +247,7 @@ class BoardCards(Resource):
     def get(self, board_id: int) -> tuple[dict[str, Any], int]:
         """Board com os cards agrupados por coluna, na ordem de exibição."""
         try:
-            board = board_svc.obter_board(board_id)
-            colunas = board_svc.listar_cards(board_id)
+            board, colunas = board_svc.listar_cards(board_id)
         except board_svc.BoardNaoEncontradoError as exc:
             return {"error": str(exc), "code": "NOT_FOUND"}, 404
         return {
@@ -290,7 +276,7 @@ class BoardCards(Resource):
             return _erro_validacao(exc)
         except board_svc.BoardNaoEncontradoError as exc:
             return {"error": str(exc), "code": "NOT_FOUND"}, 404
-        return serialize_card(card), 201
+        return board_svc.card_para_dict(card), 201
 
 
 @ns.route("/boards/<int:board_id>/revision")
@@ -326,17 +312,19 @@ class CardMove(Resource):
         """Move o card; 409 se a versão ou os vizinhos não batem com o banco."""
         try:
             dados = board_svc.MoverIn.model_validate(request.get_json(silent=True) or {})
-            card, revisao = board_svc.mover_card(card_id, dados, user_id=current_user.id)
+            movimento = board_svc.mover_card(card_id, dados, user_id=current_user.id)
         except ValidationError as exc:
             return _erro_validacao(exc)
         except board_svc.CardNaoEncontradoError as exc:
             return {"error": str(exc), "code": "NOT_FOUND"}, 404
         except board_svc.ConflitoError as exc:
             return {"error": f"{exc} Recarregue o board.", "code": "CONFLICT"}, 409
+        card = movimento.card
         return {
             "id": card.id,
             "status": card.status,
             "position": card.position,
             "version": card.version,
-            "board_revision": revisao,
+            "board_revision": movimento.revisao,
+            "reload": movimento.recarregar,
         }, 200

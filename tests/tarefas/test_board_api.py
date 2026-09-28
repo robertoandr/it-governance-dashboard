@@ -95,6 +95,7 @@ def test_mover_persiste_ordem_apos_recarregar(cliente: Cliente, board_id: int) -
     assert body["status"] == "todo"
     assert body["version"] == novo["version"] + 1
     assert body["board_revision"] == 4
+    assert body["reload"] is False
 
     recarregado = c.get(_url(board_id)).get_json()["columns"]
     assert [x["title"] for x in recarregado["todo"]] == ["A", "Novo", "B"]
