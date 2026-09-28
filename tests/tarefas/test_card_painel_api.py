@@ -308,3 +308,20 @@ def test_historico_nao_enche_com_salvamentos_automaticos(cliente: Cliente, card:
         ("edited", "Pytest operador"),
         ("created", "Pytest admin"),
     ]
+
+
+def test_logs_nao_contem_conteudo_de_documento_nem_comentario(cliente: Cliente, card: dict) -> None:
+    """Critério da Sprint 3: só ids, ações e tamanho vão para o log, nunca o texto."""
+    from structlog.testing import capture_logs
+
+    segredo_doc = "SEGREDO-DOC-senha-do-switch"
+    segredo_com = "SEGREDO-COMENTARIO-ip-interno"
+    c = cliente("admin")
+    with capture_logs() as eventos:
+        _doc(c, card["id"], f"## Decisão\n{segredo_doc}", 0)
+        com = _comentar(c, card["id"], segredo_com)
+        c.patch(f"{API}/comments/{com['id']}", json={"body_md": segredo_com + " editado"}, headers=AJAX)
+    assert {e["event"] for e in eventos} >= {"tarefas.documento_salvo", "tarefas.comentario_criado"}
+    texto_dos_logs = repr(eventos)
+    assert segredo_doc not in texto_dos_logs
+    assert segredo_com not in texto_dos_logs
