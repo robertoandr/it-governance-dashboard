@@ -20,10 +20,10 @@ bp = Blueprint("tarefas", __name__)
 @require_role(*perfis(Acao.VER))
 def workspaces() -> str:
     """Lista de workspaces com criação, renomeação e exclusão (admin/gestor)."""
-    itens, total = ws_svc.listar(limit=1000)
+    # Público de ~10 pessoas: o limite máximo cobre todos os workspaces.
+    itens, _ = ws_svc.listar(limit=ws_svc.LIMITE_MAXIMO)
     return render_template(
         "tarefas/workspaces.html",
         workspaces=itens,
-        total=total,
         pode_gerenciar=pode(current_user.role, Acao.GERENCIAR_WORKSPACE),
     )

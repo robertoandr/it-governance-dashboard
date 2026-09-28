@@ -58,6 +58,25 @@ def test_botoes_de_gestao_so_para_admin_e_gestor(cliente: Cliente, role: str, ve
     assert ('@click="abrirExcluir"' in html) is ve_botao
 
 
+def test_pagina_usa_url_da_api_gerada_pelo_flask(cliente: Cliente) -> None:
+    html = cliente("admin").get(PAGINA).get_data(as_text=True)
+    assert 'var _tarefasApi = "/api/v1/tarefas/workspaces";' in html
+
+
+def test_data_de_criacao_no_horario_de_brasilia(factory_app: Flask, usuario_id: Callable[..., int]) -> None:
+    from datetime import UTC, datetime
+
+    from app.models.tarefas import Workspace
+
+    ws = Workspace(name="Infra", created_by=usuario_id("admin"))
+    ws.created_at = datetime(2026, 9, 29, 1, 30)  # 01:30 UTC ingênuo, como volta do SQLite
+    assert ws.criado_em_local.strftime("%d/%m/%Y %H:%M") == "28/09/2026 22:30"
+    ws.created_at = datetime(2026, 9, 29, 1, 30, tzinfo=UTC)
+    assert ws.criado_em_local.strftime("%d/%m/%Y") == "28/09/2026"
+    ws.created_at = None
+    assert ws.criado_em_local is None
+
+
 def test_estado_vazio_orienta_quem_nao_gerencia(cliente: Cliente) -> None:
     html = cliente("visualizador").get(PAGINA).get_data(as_text=True)
     assert "Peça a um gestor ou admin" in html

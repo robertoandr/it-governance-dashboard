@@ -7,6 +7,7 @@ from collections.abc import Callable
 import pytest
 from flask import Flask
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.tarefas import BOARD_PADRAO, Board, Workspace
@@ -51,6 +52,34 @@ def test_nome_duplicado_ignora_maiusculas(factory_app: Flask, admin_id: int) -> 
         svc.criar(_in("CFTV"), user_id=admin_id)
         with pytest.raises(svc.WorkspaceDuplicadoError):
             svc.criar(_in("cftv"), user_id=admin_id)
+
+
+@pytest.mark.parametrize(
+    ("primeiro", "segundo"), [("ÁREA TI", "área ti"), ("OPERAÇÕES", "operações"), ("Área TI", "Area TI")]
+)
+def test_nome_duplicado_com_acentos(factory_app: Flask, admin_id: int, primeiro: str, segundo: str) -> None:
+    with factory_app.app_context():
+        svc.criar(_in(primeiro), user_id=admin_id)
+        with pytest.raises(svc.WorkspaceDuplicadoError):
+            svc.criar(_in(segundo), user_id=admin_id)
+
+
+def test_listar_ordena_acentuados_no_lugar_certo(factory_app: Flask, admin_id: int) -> None:
+    with factory_app.app_context():
+        for nome in ("Zabbix", "Área TI", "Backup"):
+            svc.criar(_in(nome), user_id=admin_id)
+        assert [w.name for w in svc.listar()[0]] == ["Área TI", "Backup", "Zabbix"]
+
+
+def test_erro_de_integridade_que_nao_e_nome_sobe_como_esta(factory_app: Flask, admin_id: int) -> None:
+    with factory_app.app_context(), pytest.raises(IntegrityError):
+        # created_by nulo viola NOT NULL; não pode virar "nome duplicado"
+        svc.criar(_in("Sem autor"), user_id=None)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(("pedido", "aplicado"), [((0, -5), (1, 0)), ((5000, 3), (1000, 3)), ((20, 0), (20, 0))])
+def test_normalizar_paginacao(pedido: tuple[int, int], aplicado: tuple[int, int]) -> None:
+    assert svc.normalizar_paginacao(*pedido) == aplicado
 
 
 def test_indice_unico_cobre_corrida_entre_criacoes(

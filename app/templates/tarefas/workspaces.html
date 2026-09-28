@@ -3,7 +3,7 @@
 
 {% block head %}
 <script nonce="{{ csp_nonce() }}">
-var _tarefasApi = "/api/v1/tarefas/workspaces";
+var _tarefasApi = "{{ url_for('tarefas_workspace_collection') }}";
 
 document.addEventListener('alpine:init', function () {
   Alpine.data('tarefasWorkspaces', function () {
@@ -72,6 +72,11 @@ document.addEventListener('alpine:init', function () {
           if (corpo) headers['Content-Type'] = 'application/json';
           var r = await fetch(url, { method: metodo, headers: headers, body: corpo, credentials: 'same-origin' });
           if (r.ok) { location.reload(); return; }
+          if (r.status === 401) {
+            this.erro = 'Sua sessão expirou. Entre novamente para continuar.';
+            this.saving = false;
+            return;
+          }
           var d = {};
           try { d = await r.json(); } catch (_) { /* resposta sem JSON */ }
           this.erro = d.error || ('Não foi possível concluir (HTTP ' + r.status + ').');
@@ -119,7 +124,7 @@ document.addEventListener('alpine:init', function () {
         {% endfor %}
       </div>
       <div class="mt-auto flex flex-wrap items-center justify-between gap-2">
-        <p class="text-[11px] text-slate-400">Criado em {{ ws.created_at.strftime('%d/%m/%Y') }}</p>
+        <p class="text-[11px] text-slate-400">Criado em {{ ws.criado_em_local.strftime('%d/%m/%Y') }}</p>
         {% if pode_gerenciar %}
         <div class="flex gap-3 text-xs">
           <button type="button" @click="abrirRenomear" data-id="{{ ws.id }}" data-name="{{ ws.name }}"

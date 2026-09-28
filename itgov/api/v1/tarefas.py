@@ -22,7 +22,7 @@ from flask_restx import Namespace, Resource, fields
 from pydantic import ValidationError
 
 from app.auth.rbac import require_role
-from app.models.tarefas import Workspace
+from app.models.tarefas import Workspace, em_utc
 from app.services.tarefas import workspace_service as ws_svc
 from app.services.tarefas.permissions import Acao, perfis
 
@@ -91,7 +91,8 @@ def _erro_validacao(exc: ValidationError) -> tuple[dict[str, str], int]:
 
 
 def _iso(valor: Any) -> str | None:
-    return valor.isoformat() if valor else None
+    utc = em_utc(valor)
+    return utc.isoformat() if utc else None
 
 
 def serialize_workspace(ws: Workspace) -> dict[str, Any]:
@@ -119,12 +120,13 @@ class WorkspaceCollection(Resource):
     def get(self) -> dict[str, Any]:
         """Lista os workspaces ativos (todos os perfis veem todos)."""
         args = list_parser.parse_args()
-        itens, total = ws_svc.listar(limit=args["limit"], offset=args["offset"])
+        limit, offset = ws_svc.normalizar_paginacao(args["limit"], args["offset"])
+        itens, total = ws_svc.listar(limit=limit, offset=offset)
         return {
             "items": [serialize_workspace(w) for w in itens],
             "total": total,
-            "limit": args["limit"],
-            "offset": args["offset"],
+            "limit": limit,
+            "offset": offset,
         }
 
     @ns.doc("tarefas_create_workspace")

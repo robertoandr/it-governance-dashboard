@@ -11,11 +11,11 @@ from typing import Annotated
 
 import structlog
 from pydantic import BaseModel, ConfigDict, StringConstraints
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models.tarefas import BOARD_PADRAO, Board, Workspace
+from app.models.tarefas import BOARD_PADRAO, Board, Workspace, chave_nome
 
 log = structlog.get_logger(__name__)
 
@@ -38,7 +38,23 @@ class WorkspaceDuplicadoError(ValueError):
     """Já existe um workspace ativo com o mesmo nome."""
 
 
-def _ativos():
+LIMITE_MAXIMO = 1000
+
+
+def normalizar_paginacao(limit: int, offset: int) -> tuple[int, int]:
+    """Ajusta ``limit`` a 1–1000 e ``offset`` a ≥ 0 (ADR-003 do dashboard).
+
+    Args:
+        limit: Tamanho de página pedido.
+        offset: Deslocamento pedido.
+
+    Returns:
+        Tupla ``(limit, offset)`` efetivamente aplicada.
+    """
+    return max(1, min(limit, LIMITE_MAXIMO)), max(0, offset)
+
+
+def _ativos() -> Select[tuple[Workspace]]:
     return select(Workspace).where(Workspace.deleted_at.is_(None))
 
 
@@ -50,7 +66,7 @@ def _buscar(workspace_id: int) -> Workspace:
 
 
 def _nome_em_uso(nome: str, ignorar_id: int | None = None) -> bool:
-    stmt = _ativos().where(func.lower(Workspace.name) == nome.lower())
+    stmt = _ativos().where(Workspace.name_key == chave_nome(nome))
     if ignorar_id is not None:
         stmt = stmt.where(Workspace.id != ignorar_id)
     return db.session.execute(stmt).first() is not None
@@ -58,11 +74,15 @@ def _nome_em_uso(nome: str, ignorar_id: int | None = None) -> bool:
 
 def _commit_ou_duplicado(nome: str) -> None:
     # A checagem prévia cobre o caso comum; o índice único cobre a corrida
-    # entre duas criações simultâneas.
+    # entre duas criações simultâneas. Outras violações (FK, NOT NULL) não
+    # são "nome duplicado" e sobem como estão.
     try:
         db.session.commit()
     except IntegrityError as exc:
         db.session.rollback()
+        if "name_key" not in str(exc.orig) and "uq_tarefas_workspaces_nome_ativo" not in str(exc.orig):
+            log.error("tarefas.workspace_integridade", erro=str(exc.orig))
+            raise
         raise WorkspaceDuplicadoError(f"Já existe um workspace chamado '{nome}'") from exc
 
 
@@ -70,18 +90,15 @@ def listar(limit: int = 100, offset: int = 0) -> tuple[list[Workspace], int]:
     """Lista workspaces ativos em ordem alfabética.
 
     Args:
-        limit: Máximo de itens (1–1000).
-        offset: Deslocamento para paginação.
+        limit: Máximo de itens; ajustado por ``normalizar_paginacao``.
+        offset: Deslocamento; ajustado por ``normalizar_paginacao``.
 
     Returns:
         Tupla ``(itens, total)``.
     """
-    limit = max(1, min(limit, 1000))
-    offset = max(0, offset)
+    limit, offset = normalizar_paginacao(limit, offset)
     total = db.session.execute(select(func.count()).select_from(_ativos().subquery())).scalar_one()
-    itens = (
-        db.session.execute(_ativos().order_by(func.lower(Workspace.name)).limit(limit).offset(offset)).scalars().all()
-    )
+    itens = db.session.execute(_ativos().order_by(Workspace.name_key).limit(limit).offset(offset)).scalars().all()
     return list(itens), total
 
 

@@ -15,9 +15,11 @@ explícita.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import unicodedata
+from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import CheckConstraint, func
+from sqlalchemy import CheckConstraint
+from sqlalchemy.orm import validates
 
 from app.extensions import db
 
@@ -26,8 +28,35 @@ CARD_ACTIONS: tuple[str, ...] = ("created", "moved", "edited", "assigned")
 BOARD_PADRAO = "Principal"
 
 
+# Brasília sem horário de verão (extinto em 2019); evita depender de tzdata na imagem.
+FUSO_BRASILIA = timezone(timedelta(hours=-3), "BRT")
+
+
 def _agora() -> datetime:
     return datetime.now(UTC)
+
+
+def em_utc(valor: datetime | None) -> datetime | None:
+    """Devolve o datetime com fuso UTC.
+
+    O SQLite não guarda o fuso de ``DateTime(timezone=True)``: o valor volta
+    "ingênuo", mas foi gravado em UTC por ``_agora``.
+    """
+    if valor is None:
+        return None
+    return valor.replace(tzinfo=UTC) if valor.tzinfo is None else valor.astimezone(UTC)
+
+
+def chave_nome(nome: str) -> str:
+    """Chave de comparação e ordenação: ignora maiúsculas e acentos.
+
+    "ÁREA TI", "área ti" e "Area TI" viram a mesma chave, o que evita
+    workspaces quase iguais e ordena "Área" junto de "Area". ``lower()`` do
+    SQLite só trata ASCII, por isso a chave é calculada em Python e gravada
+    numa coluna própria.
+    """
+    decomposto = unicodedata.normalize("NFKD", nome)
+    return "".join(c for c in decomposto if not unicodedata.combining(c)).casefold()
 
 
 class Workspace(db.Model):
@@ -37,12 +66,25 @@ class Workspace(db.Model):
 
     id: int = db.Column(db.Integer, primary_key=True)
     name: str = db.Column(db.String(60), nullable=False)
+    # Preenchida por ``_sincronizar_chave``; usada na unicidade e na ordenação.
+    name_key: str = db.Column(db.String(60), nullable=False)
     created_by: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora)
     updated_at: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora, onupdate=_agora)
     deleted_at: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
     boards = db.relationship("Board", back_populates="workspace", lazy="selectin", order_by="Board.id")
+
+    @validates("name")
+    def _sincronizar_chave(self, _campo: str, valor: str) -> str:
+        self.name_key = chave_nome(valor)
+        return valor
+
+    @property
+    def criado_em_local(self) -> datetime | None:
+        """Data de criação no horário de Brasília, para exibição."""
+        utc = em_utc(self.created_at)
+        return utc.astimezone(FUSO_BRASILIA) if utc else None
 
     @property
     def boards_ativos(self) -> list[Board]:
@@ -54,7 +96,7 @@ class Workspace(db.Model):
 # workspace excluído não bloqueia a recriação com o mesmo nome.
 db.Index(
     "uq_tarefas_workspaces_nome_ativo",
-    func.lower(Workspace.name),
+    Workspace.name_key,
     unique=True,
     sqlite_where=Workspace.deleted_at.is_(None),
     postgresql_where=Workspace.deleted_at.is_(None),

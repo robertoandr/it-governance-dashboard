@@ -1,9 +1,10 @@
 """Fixtures do módulo Tarefas.
 
 O ``factory_app`` grava no ``data/app.db`` do checkout (caminho fixo em
-``create_app``), então cada teste começa e termina com as tabelas do
-módulo vazias. Em produção o app.db fica no volume ``app_data``, fora do
-alcance dos testes.
+``create_app``), o mesmo arquivo que um ``flask run`` local usaria. Por
+isso a limpeza apaga só o que foi criado pelos usuários de teste
+(``pytest-tarefas-*``), antes e depois de cada teste. Em produção o
+app.db fica no volume ``app_data``, fora do alcance dos testes.
 """
 
 from __future__ import annotations
@@ -21,9 +22,23 @@ from app.models.user import User
 AJAX = {"X-Requested-With": "XMLHttpRequest"}
 
 
+PREFIXO_EMAIL = "pytest-tarefas-"
+
+
 def _limpar() -> None:
-    for modelo in (CardActivity, CardComment, CardDocument, Card, Board, Workspace):
-        db.session.query(modelo).delete()
+    usuarios = db.session.query(User.id).filter(User.email.like(f"{PREFIXO_EMAIL}%"))
+    workspaces = db.session.query(Workspace.id).filter(Workspace.created_by.in_(usuarios))
+    boards = db.session.query(Board.id).filter(Board.workspace_id.in_(workspaces))
+    cards = db.session.query(Card.id).filter(Card.board_id.in_(boards))
+    for modelo, filtro in (
+        (CardActivity, CardActivity.card_id.in_(cards)),
+        (CardComment, CardComment.card_id.in_(cards)),
+        (CardDocument, CardDocument.card_id.in_(cards)),
+        (Card, Card.id.in_(cards)),
+        (Board, Board.id.in_(boards)),
+        (Workspace, Workspace.id.in_(workspaces)),
+    ):
+        db.session.query(modelo).filter(filtro).delete(synchronize_session=False)
     db.session.commit()
 
 
@@ -38,7 +53,7 @@ def tabelas_limpas(factory_app: Flask) -> Iterator[None]:
 
 
 def _usuario(factory_app: Flask, role: str, ativo: bool = True) -> int:
-    email = f"pytest-tarefas-{role}{'' if ativo else '-inativo'}@test.local"
+    email = f"{PREFIXO_EMAIL}{role}{'' if ativo else '-inativo'}@test.local"
     with factory_app.app_context():
         user = User.query.filter_by(email=email).first()
         if user is None:

@@ -79,6 +79,23 @@ def test_payload_invalido(cliente: Cliente, payload: dict) -> None:
     assert body["error"]
 
 
+def test_datas_saem_com_fuso_utc(cliente: Cliente) -> None:
+    body = _criar(cliente("admin"))
+    assert body["created_at"].endswith("+00:00")
+    listado = cliente("admin").get(URL).get_json()["items"][0]
+    assert listado["created_at"].endswith("+00:00")
+
+
+def test_envelope_reflete_paginacao_aplicada(cliente: Cliente) -> None:
+    c = cliente("admin")
+    _criar(c)
+    body = c.get(f"{URL}?limit=5000&offset=-5").get_json()
+    assert (body["limit"], body["offset"]) == (1000, 0)
+    body = c.get(f"{URL}?limit=0").get_json()
+    assert body["limit"] == 1
+    assert len(body["items"]) == 1
+
+
 def test_nome_duplicado_na_criacao(cliente: Cliente) -> None:
     c = cliente("admin")
     _criar(c, "CFTV")
