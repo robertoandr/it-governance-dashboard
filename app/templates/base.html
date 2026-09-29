@@ -60,6 +60,9 @@
   <div class="flex-1 flex flex-col overflow-hidden">
 
     <!-- Topbar -->
+    {# O bloco fica aqui (e não no topbar.html): bloco de template incluído
+       não é sobrescrito pela página filha. #}
+    {% set page_title_text %}{% block page_title %}Dashboard{% endblock %}{% endset %}
     {% include "partials/topbar.html" %}
 
     <!-- Page content -->

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Tarefas — IT Governance{% endblock %}
+{% block page_title %}Tarefas{% endblock %}
 
 {% block head %}
 <script nonce="{{ csp_nonce() }}">
@@ -97,7 +98,7 @@ document.addEventListener('alpine:init', function () {
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Tarefas</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
         Workspaces por projeto ou frente. Cada card do Kanban terá a própria documentação e discussão.
       </p>
     </div>
@@ -125,7 +126,7 @@ document.addEventListener('alpine:init', function () {
         {% endfor %}
       </div>
       <div class="mt-auto flex flex-wrap items-center justify-between gap-2">
-        <p class="text-[11px] text-slate-400">Criado em {{ ws.criado_em_local.strftime('%d/%m/%Y') }}</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">Criado em {{ ws.criado_em_local.strftime('%d/%m/%Y') }}</p>
         {% if pode_gerenciar %}
         <div class="flex gap-3 text-xs">
           <button type="button" @click="abrirRenomear" data-id="{{ ws.id }}" data-name="{{ ws.name }}"
@@ -141,7 +142,7 @@ document.addEventListener('alpine:init', function () {
   {% else %}
   <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-10 text-center">
     <p class="font-medium text-slate-700 dark:text-slate-200">Nenhum workspace ainda</p>
-    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+    <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
       {% if pode_gerenciar %}Crie o primeiro para organizar as tarefas de um projeto ou frente.
       {% else %}Peça a um gestor ou admin para criar o primeiro workspace.{% endif %}
     </p>
@@ -161,7 +162,7 @@ document.addEventListener('alpine:init', function () {
         <input id="tarefas-ws-nome" type="text" x-model="name" maxlength="60" autocomplete="off"
                placeholder="Ex.: Infraestrutura"
                class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <p class="text-xs text-slate-400 mt-1">De 3 a 60 caracteres. Um board "Principal" é criado junto.</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">De 3 a 60 caracteres. Um board "Principal" é criado junto.</p>
       </div>
 
       <p x-show="emExclusao" class="text-sm text-slate-600 dark:text-slate-300">

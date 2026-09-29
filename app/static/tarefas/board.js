@@ -62,6 +62,32 @@
       var el = raiz.querySelector('[data-contagem="' + s + '"]');
       if (el) el.textContent = String(listas[s].children.length);
     });
+    atualizarMetricas();
+  }
+
+  function percentual(parte, total) { return total ? Math.round((parte * 100) / total) + '%' : '—'; }
+
+  function escreverMetrica(nome, texto) {
+    var el = raiz.querySelector('[data-metrica="' + nome + '"]');
+    if (el) el.textContent = texto;
+  }
+
+  // Lê a coluna do DOM (e não de estado.cards) para acompanhar o movimento
+  // otimista, como as contagens das colunas.
+  function atualizarMetricas() {
+    var total = 0;
+    STATUS.forEach(function (s) { total += listas[s].children.length; });
+    var concluidos = Array.prototype.slice.call(listas.done.children);
+    var documentados = concluidos.filter(function (li) {
+      var card = estado.cards[li.dataset.id];
+      return card && card.has_document;
+    }).length;
+    escreverMetrica('total', String(total));
+    escreverMetrica('doing', String(listas.doing.children.length));
+    escreverMetrica('done', concluidos.length + ' (' + percentual(concluidos.length, total) + ')');
+    escreverMetrica('done-doc', concluidos.length
+      ? documentados + ' de ' + concluidos.length + ' (' + percentual(documentados, concluidos.length) + ')'
+      : '—');
   }
 
   function rotuloCard(card) {

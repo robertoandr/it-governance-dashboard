@@ -16,8 +16,8 @@ from flask import Flask
 from flask.testing import FlaskClient
 
 from app.extensions import db
-from app.models.tarefas import Board, Card, CardActivity, CardComment, CardDocument, Workspace
 from app.models.user import User
+from tests.tarefas.limpeza import limpar_dados_de
 
 AJAX = {"X-Requested-With": "XMLHttpRequest"}
 
@@ -26,20 +26,7 @@ PREFIXO_EMAIL = "pytest-tarefas-"
 
 
 def _limpar() -> None:
-    usuarios = db.session.query(User.id).filter(User.email.like(f"{PREFIXO_EMAIL}%"))
-    workspaces = db.session.query(Workspace.id).filter(Workspace.created_by.in_(usuarios))
-    boards = db.session.query(Board.id).filter(Board.workspace_id.in_(workspaces))
-    cards = db.session.query(Card.id).filter(Card.board_id.in_(boards))
-    for modelo, filtro in (
-        (CardActivity, CardActivity.card_id.in_(cards)),
-        (CardComment, CardComment.card_id.in_(cards)),
-        (CardDocument, CardDocument.card_id.in_(cards)),
-        (Card, Card.id.in_(cards)),
-        (Board, Board.id.in_(boards)),
-        (Workspace, Workspace.id.in_(workspaces)),
-    ):
-        db.session.query(modelo).filter(filtro).delete(synchronize_session=False)
-    db.session.commit()
+    limpar_dados_de(PREFIXO_EMAIL)
 
 
 @pytest.fixture(autouse=True)

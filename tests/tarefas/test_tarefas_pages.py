@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 
 import pytest
@@ -183,3 +184,30 @@ def test_card_de_outro_board_ou_inexistente_da_404(cliente: Cliente) -> None:
     outro = c.post("/api/v1/tarefas/workspaces", json={"name": "Redes"}, headers=AJAX).get_json()["boards"][0]["id"]
     assert c.get(f"{PAGINA}/b/{outro}/c/{card_id}").status_code == 404
     assert c.get(f"{PAGINA}/b/{board_id}/c/999999").status_code == 404
+
+
+# ── Sprint 4: métricas e acessibilidade ──────────────────────────────────────
+
+
+def test_board_tem_faixa_de_metricas(cliente: Cliente) -> None:
+    board_id = _board_id(cliente)
+    html = cliente("visualizador").get(f"/gov/tarefas/b/{board_id}").get_data(as_text=True)
+    assert '<dl id="tarefas-metricas" aria-label="Resumo do board"' in html
+    for metrica in ("total", "doing", "done", "done-doc"):
+        assert f'data-metrica="{metrica}"' in html
+
+
+def test_painel_do_card_e_dialog_em_div(cliente: Cliente) -> None:
+    # <aside> não aceita role="dialog" (axe: aria-allowed-role).
+    board_id = _board_id(cliente)
+    html = cliente("admin").get(f"/gov/tarefas/b/{board_id}").get_data(as_text=True)
+    assert '<div id="card-painel" hidden role="dialog"' in html
+    assert '<aside id="card-painel"' not in html
+
+
+@pytest.mark.parametrize("caminho", ["", "/b/{board_id}"])
+def test_topbar_identifica_o_modulo_e_botao_do_menu_tem_nome(cliente: Cliente, caminho: str) -> None:
+    board_id = _board_id(cliente)
+    html = cliente("operador").get(PAGINA + caminho.format(board_id=board_id)).get_data(as_text=True)
+    assert 'aria-label="Mostrar ou esconder o menu"' in html
+    assert re.search(r'<h1 class="text-base[^"]*">\s*Tarefas\s*</h1>', html)
