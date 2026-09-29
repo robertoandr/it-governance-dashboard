@@ -214,14 +214,12 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      # Piso real hoje: 55% sobre app/+itgov/ combinados (baseline honesta:
-      # 58.28% em 2026-09-22, ver pyproject.toml [tool.coverage.run]).
-      # ADR-001 formaliza o piso definitivo em 85% como meta — este gate
-      # ainda não chegou lá; o nome do step refletia 85% sem aplicar,
-      # mascarando a lacuna. Subir o --cov-fail-under em etapas (55 -> 70 ->
-      # 85), igual ao histórico já documentado (60 -> 80 -> 85), é rastreado
-      # como dívida técnica, não corrigido de uma vez nesta branch.
-      - name: 🧪 Run tests with coverage gate (≥55%, ADR-001 target 85%)
+      # Piso sobre app/+itgov/ combinados (ver pyproject.toml [tool.coverage.run]).
+      # Etapas até a meta da ADR-001 (85%): 55% (baseline de 58,28% em
+      # 2026-09-22) -> 70% (2026-09-29, com 72,02% medidos no CI; #194)
+      # -> 85%. Regra: o piso só sobe, nunca desce; subir de novo quando a
+      # cobertura tiver folga de ~2 pontos acima da próxima etapa (#187).
+      - name: 🧪 Run tests with coverage gate (≥70%, ADR-001 target 85%)
         env:
           INFLUX_URL: http://localhost:8086
           INFLUX_TOKEN: ci-fake-token-not-real
@@ -231,7 +229,7 @@ jobs:
           OPS_PIN: TEST_PIN_1234
           FLASK_ENV: testing
         run: |
-          pytest --cov-fail-under=55 --junitxml=junit.xml
+          pytest --cov-fail-under=70 --junitxml=junit.xml
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
