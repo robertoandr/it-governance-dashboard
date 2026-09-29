@@ -106,8 +106,11 @@ services:
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_config:/etc/influxdb2
+    # Só no loopback do host (#148): app, grafana e coleta usam influxdb:8086
+    # pela itgov-net; o network-discovery (network_mode: host) usa 127.0.0.1.
+    # Acesso à UI a partir de outra máquina: túnel SSH (ssh -L 8086:127.0.0.1:8086).
     ports:
-      - "${INFLUX_PORT:-8086}:8086"
+      - "127.0.0.1:${INFLUX_PORT:-8086}:8086"
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 15s
