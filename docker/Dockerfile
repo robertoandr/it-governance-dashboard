@@ -29,8 +29,11 @@ LABEL org.opencontainers.image.title="Governança de TI Dashboard" \
       org.opencontainers.image.source="https://github.com/robertoandr/it-governance-dashboard"
 
 # Runtime libs required by ldap3 + curl for healthcheck
-# apt-get upgrade patches fixable CVEs (e.g. libgnutls30 CVE-2026-33845)
-RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
+# apt-get upgrade patches fixable CVEs (e.g. libgnutls30 CVE-2026-33845).
+# APT_REFRESH (data do build, vinda do CI) invalida o cache desta camada uma vez
+# por dia; sem isso o cache do buildx congelava pacotes como o openssl.
+ARG APT_REFRESH=manual
+RUN echo "apt refresh: ${APT_REFRESH}" && apt-get update && apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends \
         libldap-2.5-0 \
         libsasl2-2 \

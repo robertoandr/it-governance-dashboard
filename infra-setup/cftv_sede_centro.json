@@ -1,0 +1,1067 @@
+[
+ {
+  "host": "cam-dvr-1-01",
+  "name": "Câmera DVR-1 #01 (9º/8º)",
+  "ip": "172.29.11.30",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-02",
+  "name": "Câmera DVR-1 #02 (9º/8º)",
+  "ip": "172.29.11.31",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-03",
+  "name": "Câmera DVR-1 #03 (9º/8º)",
+  "ip": "172.29.11.32",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-04",
+  "name": "Câmera DVR-1 #04 (9º/8º)",
+  "ip": "172.29.11.33",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-05",
+  "name": "Câmera DVR-1 #05 (9º/8º)",
+  "ip": "172.29.11.34",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-06",
+  "name": "Câmera DVR-1 #06 (9º/8º)",
+  "ip": "172.29.11.35",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-07",
+  "name": "Câmera DVR-1 #07 (9º/8º)",
+  "ip": "172.29.11.36",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-08",
+  "name": "Câmera DVR-1 #08 (9º/8º)",
+  "ip": "172.29.11.37",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-09",
+  "name": "Câmera DVR-1 #09 (9º/8º)",
+  "ip": "172.29.11.38",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-10",
+  "name": "Câmera DVR-1 #10 (9º/8º)",
+  "ip": "172.29.11.39",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-11",
+  "name": "Câmera DVR-1 #11 (9º/8º)",
+  "ip": "172.29.11.40",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-12",
+  "name": "Câmera DVR-1 #12 (9º/8º)",
+  "ip": "172.29.11.41",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-13",
+  "name": "Câmera DVR-1 #13 (9º/8º)",
+  "ip": "172.29.11.42",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-14",
+  "name": "Câmera DVR-1 #14 (9º/8º)",
+  "ip": "172.29.11.43",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-15",
+  "name": "Câmera DVR-1 #15 (9º/8º)",
+  "ip": "172.29.11.44",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-16",
+  "name": "Câmera DVR-1 #16 (9º/8º)",
+  "ip": "172.29.11.45",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-17",
+  "name": "Câmera DVR-1 #17 (9º/8º)",
+  "ip": "172.29.11.46",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-1-18",
+  "name": "Câmera DVR-1 #18 (9º/8º)",
+  "ip": "172.29.11.47",
+  "subcategory": "camera",
+  "andar": "9º/8º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-1"
+  }
+ },
+ {
+  "host": "cam-dvr-2-01",
+  "name": "Câmera DVR-2 #01 (7º/6º)",
+  "ip": "172.29.11.48",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-02",
+  "name": "Câmera DVR-2 #02 (7º/6º)",
+  "ip": "172.29.11.49",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-03",
+  "name": "Câmera DVR-2 #03 (7º/6º)",
+  "ip": "172.29.11.50",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-04",
+  "name": "Câmera DVR-2 #04 (7º/6º)",
+  "ip": "172.29.11.51",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-05",
+  "name": "Câmera DVR-2 #05 (7º/6º)",
+  "ip": "172.29.11.52",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-06",
+  "name": "Câmera DVR-2 #06 (7º/6º)",
+  "ip": "172.29.11.53",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-07",
+  "name": "Câmera DVR-2 #07 (7º/6º)",
+  "ip": "172.29.11.54",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-08",
+  "name": "Câmera DVR-2 #08 (7º/6º)",
+  "ip": "172.29.11.55",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-09",
+  "name": "Câmera DVR-2 #09 (7º/6º)",
+  "ip": "172.29.11.56",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-10",
+  "name": "Câmera DVR-2 #10 (7º/6º)",
+  "ip": "172.29.11.57",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-11",
+  "name": "Câmera DVR-2 #11 (7º/6º)",
+  "ip": "172.29.11.58",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-12",
+  "name": "Câmera DVR-2 #12 (7º/6º)",
+  "ip": "172.29.11.59",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-13",
+  "name": "Câmera DVR-2 #13 (7º/6º)",
+  "ip": "172.29.11.60",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-14",
+  "name": "Câmera DVR-2 #14 (7º/6º)",
+  "ip": "172.29.11.61",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-15",
+  "name": "Câmera DVR-2 #15 (7º/6º)",
+  "ip": "172.29.11.62",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-16",
+  "name": "Câmera DVR-2 #16 (7º/6º)",
+  "ip": "172.29.11.63",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-17",
+  "name": "Câmera DVR-2 #17 (7º/6º)",
+  "ip": "172.29.11.64",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-18",
+  "name": "Câmera DVR-2 #18 (7º/6º)",
+  "ip": "172.29.11.65",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-19",
+  "name": "Câmera DVR-2 #19 (7º/6º)",
+  "ip": "172.29.11.66",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-20",
+  "name": "Câmera DVR-2 #20 (7º/6º)",
+  "ip": "172.29.11.67",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-21",
+  "name": "Câmera DVR-2 #21 (7º/6º)",
+  "ip": "172.29.11.68",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-22",
+  "name": "Câmera DVR-2 #22 (7º/6º)",
+  "ip": "172.29.11.69",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-23",
+  "name": "Câmera DVR-2 #23 (7º/6º)",
+  "ip": "172.29.11.70",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-24",
+  "name": "Câmera DVR-2 #24 (7º/6º)",
+  "ip": "172.29.11.71",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-25",
+  "name": "Câmera DVR-2 #25 (7º/6º)",
+  "ip": "172.29.11.72",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-26",
+  "name": "Câmera DVR-2 #26 (7º/6º)",
+  "ip": "172.29.11.73",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-27",
+  "name": "Câmera DVR-2 #27 (7º/6º)",
+  "ip": "172.29.11.74",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-28",
+  "name": "Câmera DVR-2 #28 (7º/6º)",
+  "ip": "172.29.11.75",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-29",
+  "name": "Câmera DVR-2 #29 (7º/6º)",
+  "ip": "172.29.11.76",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-2-30",
+  "name": "Câmera DVR-2 #30 (7º/6º)",
+  "ip": "172.29.11.77",
+  "subcategory": "camera",
+  "andar": "7º/6º",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-2"
+  }
+ },
+ {
+  "host": "cam-dvr-3-01",
+  "name": "Câmera DVR-3 #01 (5º/Térreo)",
+  "ip": "172.29.11.78",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-02",
+  "name": "Câmera DVR-3 #02 (5º/Térreo)",
+  "ip": "172.29.11.79",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-03",
+  "name": "Câmera DVR-3 #03 (5º/Térreo)",
+  "ip": "172.29.11.80",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-04",
+  "name": "Câmera DVR-3 #04 (5º/Térreo)",
+  "ip": "172.29.11.81",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-05",
+  "name": "Câmera DVR-3 #05 (5º/Térreo)",
+  "ip": "172.29.11.82",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-06",
+  "name": "Câmera DVR-3 #06 (5º/Térreo)",
+  "ip": "172.29.11.83",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-07",
+  "name": "Câmera DVR-3 #07 (5º/Térreo)",
+  "ip": "172.29.11.84",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-08",
+  "name": "Câmera DVR-3 #08 (5º/Térreo)",
+  "ip": "172.29.11.85",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-09",
+  "name": "Câmera DVR-3 #09 (5º/Térreo)",
+  "ip": "172.29.11.86",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-10",
+  "name": "Câmera DVR-3 #10 (5º/Térreo)",
+  "ip": "172.29.11.87",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-11",
+  "name": "Câmera DVR-3 #11 (5º/Térreo)",
+  "ip": "172.29.11.88",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-12",
+  "name": "Câmera DVR-3 #12 (5º/Térreo)",
+  "ip": "172.29.11.89",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-13",
+  "name": "Câmera DVR-3 #13 (5º/Térreo)",
+  "ip": "172.29.11.90",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-14",
+  "name": "Câmera DVR-3 #14 (5º/Térreo)",
+  "ip": "172.29.11.91",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-15",
+  "name": "Câmera DVR-3 #15 (5º/Térreo)",
+  "ip": "172.29.11.92",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-16",
+  "name": "Câmera DVR-3 #16 (5º/Térreo)",
+  "ip": "172.29.11.93",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-17",
+  "name": "Câmera DVR-3 #17 (5º/Térreo)",
+  "ip": "172.29.11.94",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-18",
+  "name": "Câmera DVR-3 #18 (5º/Térreo)",
+  "ip": "172.29.11.95",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-19",
+  "name": "Câmera DVR-3 #19 (5º/Térreo)",
+  "ip": "172.29.11.96",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-20",
+  "name": "Câmera DVR-3 #20 (5º/Térreo)",
+  "ip": "172.29.11.97",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-21",
+  "name": "Câmera DVR-3 #21 (5º/Térreo)",
+  "ip": "172.29.11.98",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-22",
+  "name": "Câmera DVR-3 #22 (5º/Térreo)",
+  "ip": "172.29.11.99",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-23",
+  "name": "Câmera DVR-3 #23 (5º/Térreo)",
+  "ip": "172.29.11.100",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-24",
+  "name": "Câmera DVR-3 #24 (5º/Térreo)",
+  "ip": "172.29.11.101",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-25",
+  "name": "Câmera DVR-3 #25 (5º/Térreo)",
+  "ip": "172.29.11.102",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-26",
+  "name": "Câmera DVR-3 #26 (5º/Térreo)",
+  "ip": "172.29.11.103",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "cam-dvr-3-27",
+  "name": "Câmera DVR-3 #27 (5º/Térreo)",
+  "ip": "172.29.11.104",
+  "subcategory": "camera",
+  "andar": "5º/Térreo",
+  "tags": {
+   "loja": "Sede Centro",
+   "dvr": "DVR-3"
+  }
+ },
+ {
+  "host": "facial-121",
+  "name": "Facial entrada",
+  "ip": "172.29.11.121",
+  "subcategory": "facial",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-122",
+  "name": "Facial saída loja",
+  "ip": "172.29.11.122",
+  "subcategory": "facial",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-131",
+  "name": "Facial 9º andar",
+  "ip": "172.29.11.131",
+  "subcategory": "facial",
+  "andar": "9º",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-132",
+  "name": "Facial 8º andar",
+  "ip": "172.29.11.132",
+  "subcategory": "facial",
+  "andar": "8º",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-133",
+  "name": "Facial 7º andar",
+  "ip": "172.29.11.133",
+  "subcategory": "facial",
+  "andar": "7º",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-134",
+  "name": "Facial 6º andar",
+  "ip": "172.29.11.134",
+  "subcategory": "facial",
+  "andar": "6º",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-135",
+  "name": "Facial 5º andar",
+  "ip": "172.29.11.135",
+  "subcategory": "facial",
+  "andar": "5º",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-136",
+  "name": "Facial entrada catraca 1",
+  "ip": "172.29.11.136",
+  "subcategory": "facial",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-137",
+  "name": "Facial entrada catraca 2",
+  "ip": "172.29.11.137",
+  "subcategory": "facial",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-138",
+  "name": "Facial saída catraca 1",
+  "ip": "172.29.11.138",
+  "subcategory": "facial",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-139",
+  "name": "Facial saída catraca 2",
+  "ip": "172.29.11.139",
+  "subcategory": "facial",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-140",
+  "name": "Facial entrada subsolo",
+  "ip": "172.29.11.140",
+  "subcategory": "facial",
+  "andar": "Subsolo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-141",
+  "name": "Facial saída subsolo",
+  "ip": "172.29.11.141",
+  "subcategory": "facial",
+  "andar": "Subsolo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-142",
+  "name": "Facial rampa de carros",
+  "ip": "172.29.11.142",
+  "subcategory": "facial",
+  "andar": "Subsolo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "facial-123",
+  "name": "Facial saída carros",
+  "ip": "172.29.11.123",
+  "subcategory": "facial",
+  "andar": "Subsolo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "tela-143",
+  "name": "Tela portaria",
+  "ip": "172.29.11.143",
+  "subcategory": "tela",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "tela-120",
+  "name": "Tela loja",
+  "ip": "172.29.11.120",
+  "subcategory": "tela",
+  "andar": "Térreo",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-144",
+  "name": "Antena entrada portão de baixo",
+  "ip": "172.29.11.144",
+  "subcategory": "antena",
+  "andar": "Garagem",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-145",
+  "name": "Antena saída portão meio",
+  "ip": "172.29.11.145",
+  "subcategory": "antena",
+  "andar": "Garagem",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-146",
+  "name": "Antena entrada portão meio",
+  "ip": "172.29.11.146",
+  "subcategory": "antena",
+  "andar": "Garagem",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-127",
+  "name": "Antena TX elevador social",
+  "ip": "172.29.11.127",
+  "subcategory": "antena",
+  "andar": "Elevadores",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-128",
+  "name": "Antena RX elevador social",
+  "ip": "172.29.11.128",
+  "subcategory": "antena",
+  "andar": "Elevadores",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-129",
+  "name": "Antena TX elevador serviço",
+  "ip": "172.29.11.129",
+  "subcategory": "antena",
+  "andar": "Elevadores",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ },
+ {
+  "host": "antena-130",
+  "name": "Antena RX elevador serviço",
+  "ip": "172.29.11.130",
+  "subcategory": "antena",
+  "andar": "Elevadores",
+  "tags": {
+   "loja": "Sede Centro"
+  }
+ }
+]

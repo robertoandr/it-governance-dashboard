@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Cadastrar ativo — IT Governance{% endblock %}
+
+{% block content %}
+{% set campo = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500' %}
+{% set rotulo = 'block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5' %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <div>
+    <a href="{{ url_for('dashboards.rede_monitoring', status='novos') }}" class="text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1 mb-3">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      Voltar para Rede
+    </a>
+    <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Cadastrar ativo descoberto</h1>
+  </div>
+
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+    <div><span class="text-slate-400">IP</span><p class="font-mono text-slate-700 dark:text-slate-200">{{ host.ip }}</p></div>
+    <div><span class="text-slate-400">MAC</span><p class="font-mono text-slate-700 dark:text-slate-200">{{ host.mac or '—' }}</p></div>
+    <div><span class="text-slate-400">Fabricante / SO</span><p class="text-slate-700 dark:text-slate-200">{{ host.vendor or host.os_guess or '—' }}</p></div>
+    <div><span class="text-slate-400">Portas abertas</span><p class="font-mono text-slate-700 dark:text-slate-200">{{ host.portas or '—' }}</p></div>
+    <div class="col-span-2"><span class="text-slate-400">Sugestão da varredura</span>
+      <p class="text-slate-700 dark:text-slate-200">{{ tipo_labels.get(host.tipo_sugerido, host.tipo_sugerido) }}{% if host.motivo %} <span class="text-slate-400">({{ host.motivo }})</span>{% endif %}</p>
+    </div>
+  </div>
+
+  <form method="POST" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+    <input type="hidden" name="ip" value="{{ host.ip }}">
+
+    <div>
+      <label for="nome" class="{{ rotulo }}">Nome <span class="text-red-500">*</span></label>
+      <input id="nome" name="nome" type="text" required minlength="3" maxlength="100" value="{{ valores.nome }}" class="{{ campo }}">
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="tipo" class="{{ rotulo }}">Tipo <span class="text-red-500">*</span></label>
+        <select id="tipo" name="tipo" class="{{ campo }}">
+          {% for chave, nome in tipo_labels.items() %}
+          <option value="{{ chave }}" {{ 'selected' if valores.tipo == chave }}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="unidade_id" class="{{ rotulo }}">Unidade</label>
+        <select id="unidade_id" name="unidade_id" class="{{ campo }}">
+          <option value="">— sem unidade —</option>
+          {% for u in unidades %}
+          <option value="{{ u.id }}" {{ 'selected' if valores.unidade_id | string == u.id | string }}>{{ u.caminho }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="criticidade" class="{{ rotulo }}">Criticidade</label>
+        <select id="criticidade" name="criticidade" class="{{ campo }}">
+          {% for c in criticidades %}<option value="{{ c }}" {{ 'selected' if valores.criticidade == c }}>{{ c | capitalize }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="ambiente" class="{{ rotulo }}">Ambiente</label>
+        <select id="ambiente" name="ambiente" class="{{ campo }}">
+          {% for a in ambientes %}<option value="{{ a }}" {{ 'selected' if valores.ambiente == a }}>{{ a }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label for="descricao" class="{{ rotulo }}">Descrição</label>
+      <textarea id="descricao" name="descricao" rows="2" maxlength="500" placeholder="Ex.: impressora do RH, 2º andar" class="{{ campo }}">{{ valores.descricao }}</textarea>
+      <p class="text-xs text-slate-400 mt-1">Para o tipo "Outro", descreva o que é o equipamento.</p>
+    </div>
+
+    <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-700">
+      <a href="{{ url_for('dashboards.rede_monitoring', status='novos') }}"
+         class="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600">Cancelar</a>
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg">Cadastrar ativo</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

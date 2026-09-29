@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import httpx
 import pytest
 import respx
@@ -106,25 +104,43 @@ class TestGetOpenTickets:
         open_ids = {t.id for t in open_tickets}
         assert open_ids == {1, 3, 5}  # open, new, pending
 
-
-class TestSLAMetrics:
     @respx.mock
-    def test_no_breaches_when_all_recent(self, svc: ZendeskService) -> None:
-        """Tickets recentes não devem ter breach."""
-        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        raw = [_ticket(status="open", created_at=now, updated_at=now)]
-        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_search_page(raw)))
-        metric = svc.get_sla_metrics()
-        assert metric.total_tickets == 1
-        assert metric.breached == 0
-        assert metric.compliance_pct == 100.0
+    def test_query_uses_implicit_or_for_status(self, svc: ZendeskService) -> None:
+        """Zendesk faz OR ao repetir a keyword; o operador OR explícito quebra o filtro."""
+        route = respx.get(f"{BASE_URL}/api/v2/search.json").mock(
+            return_value=httpx.Response(200, json=_search_page([]))
+        )
+        svc.get_open_tickets()
+        query = route.calls.last.request.url.params["query"]
+        assert " OR " not in query
+        for status in ("status:new", "status:open", "status:pending"):
+            assert status in query
 
+
+class TestSearchSideloads:
     @respx.mock
-    def test_empty_returns_100_compliance(self, svc: ZendeskService) -> None:
-        respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=_search_page([])))
-        metric = svc.get_sla_metrics()
-        assert metric.compliance_pct == 100.0
-        assert metric.total_tickets == 0
+    def test_open_tickets_carry_sla_and_metric_set(self, svc: ZendeskService) -> None:
+        """A busca pede slas+metric_sets e anexa ambos ao ticket certo."""
+        raw = _ticket(1, status="open")
+        raw["slas"] = {"policy_metrics": [{"metric": "first_reply_time", "stage": "active", "breach_at": None}]}
+        page = _search_page([raw, _ticket(2, status="new")])
+        page["metric_sets"] = [
+            {
+                "ticket_id": 1,
+                "reply_time_in_minutes": {"calendar": 50, "business": 30},
+                "requester_wait_time_in_minutes": {"calendar": None, "business": None},
+            }
+        ]
+        route = respx.get(f"{BASE_URL}/api/v2/search.json").mock(return_value=httpx.Response(200, json=page))
+
+        tickets = {t.id: t for t in svc.get_open_tickets()}
+
+        assert route.calls.last.request.url.params["include"] == "tickets(slas,metric_sets)"
+        assert tickets[1].sla_metrics[0].metric == "first_reply_time"
+        assert tickets[1].metric_set is not None
+        assert tickets[1].metric_set.reply_business_minutes == 30
+        assert tickets[2].metric_set is None
+        assert tickets[2].sla_metrics == []
 
 
 class TestCSAT:

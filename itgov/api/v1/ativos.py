@@ -29,7 +29,9 @@ ns = Namespace("ativos", description="Inventário de Ativos de TI")
 _ativo_fields = {
     "id": fields.String(description="UUID do ativo"),
     "nome": fields.String(description="Nome único (com tipo)"),
-    "tipo": fields.String(description="servidor | switch | app | licenca | endpoint"),
+    "tipo": fields.String(
+        description="servidor | vm | switch | firewall | ap | impressora | camera | endpoint | app | licenca | outro"
+    ),
     "ambiente": fields.String(description="prod | hml | dev"),
     "criticidade": fields.String(description="alta | media | baixa"),
     "owner": fields.String(description="Email do responsável técnico"),
@@ -48,7 +50,7 @@ ativo_create_model = ns.model(
         "nome": fields.String(required=True, example="srv-prod-01"),
         "tipo": fields.String(
             required=True,
-            description="servidor | switch | app | licenca | endpoint",
+            description="servidor | vm | switch | firewall | ap | impressora | camera | endpoint | app | licenca | outro",
             example="servidor",
         ),
         "ambiente": fields.String(

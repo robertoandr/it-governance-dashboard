@@ -45,3 +45,7 @@ dnspython>=2.6
 
 # WinRM patch collector — multi-host (PR #190)
 pywinrm>=0.4.3
+
+# Módulo Tarefas — documento Markdown do card (render + sanitização no servidor)
+markdown-it-py>=3.0
+nh3>=0.3

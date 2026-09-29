@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if unidade else 'Nova' }} Unidade — IT Governance{% endblock %}
+
+{% block content %}
+{% set campo = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500' %}
+{% set f = request.form if request.method == 'POST' else {} %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <div>
+    <a href="{{ url_for('dashboards.unidades_list') }}" class="text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1 mb-3">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      Voltar para Unidades
+    </a>
+    <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ 'Editar ' ~ unidade.caminho if unidade else 'Nova unidade' }}</h1>
+  </div>
+
+
+  <form method="POST" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+    <div>
+      <label for="nome" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Nome <span class="text-red-500">*</span></label>
+      <input id="nome" type="text" name="nome" required maxlength="120"
+             value="{{ f.get('nome', unidade.nome if unidade else '') }}"
+             placeholder="Ex.: Residencial Jardins" class="{{ campo }}">
+    </div>
+
+    <div>
+      <label for="parent_id" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Pertence a</label>
+      {% set pai_atual = f.get('parent_id', (unidade.parent_id | string) if unidade and unidade.parent_id else '') %}
+      <select id="parent_id" name="parent_id" class="{{ campo }}">
+        <option value="">— unidade principal —</option>
+        {% for p in pais %}
+        <option value="{{ p.id }}" {{ 'selected' if pai_atual == p.id | string }}>{{ p.nome }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-slate-400 mt-1">Para cadastrar uma obra, escolha "Obras".</p>
+    </div>
+
+    <div>
+      <label for="faixas_ip" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Faixas de IP</label>
+      <textarea id="faixas_ip" name="faixas_ip" rows="3" placeholder="10.41.0.0/16&#10;172.29.0.0/22"
+                class="{{ campo }} font-mono">{{ f.get('faixas_ip', unidade.faixas_ip if unidade else '') }}</textarea>
+      <p class="text-xs text-slate-400 mt-1">Uma por linha (ou separadas por vírgula), em notação CIDR. Usadas para identificar a unidade de ativos descobertos na rede.</p>
+    </div>
+
+    {% if unidade %}
+    <div class="flex items-center gap-2">
+      <input type="checkbox" name="ativo" id="ativo" value="1" {{ 'checked' if unidade.ativo }} class="w-4 h-4 text-blue-600 rounded border-slate-300">
+      <label for="ativo" class="text-sm text-slate-700 dark:text-slate-200">Unidade ativa (aparece nos filtros)</label>
+    </div>
+    {% endif %}
+
+    <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
+      {% if unidade %}
+      <button type="submit" name="action" value="delete" formnovalidate
+              data-confirm="Remover esta unidade? Os gravadores vinculados ficarão sem unidade."
+              class="text-sm text-red-500 hover:text-red-700 transition-colors">Remover unidade</button>
+      {% else %}<span></span>{% endif %}
+      <div class="flex gap-3">
+        <a href="{{ url_for('dashboards.unidades_list') }}"
+           class="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 transition-colors">Cancelar</a>
+        <button type="submit" name="action" value="save"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+          {{ 'Salvar alterações' if unidade else 'Criar unidade' }}
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+  document.querySelectorAll('[data-confirm]').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      if (!window.confirm(btn.dataset.confirm)) ev.preventDefault();
+    });
+  });
+</script>
+{% endblock %}

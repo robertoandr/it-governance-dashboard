@@ -8,7 +8,7 @@ Cria (idempotente):
   - Host "DSB-WIFI-Datacenter" (IP 0.0.0.0 — sem agente, dados via HTTP agent item)
   - Item HTTP agent "Temperatura Datacenter (°C)" — GET direto no ThingSpeak,
     preprocessing JSONPath extrai $.feeds[0].field1
-  - Trigger High "Datacenter: temperatura acima de 20°C"
+  - Trigger High "Datacenter: temperatura acima de 22°C"
 
 Uso:
     python3 infra-setup/04_create_datacenter_temp_sensor.py
@@ -62,8 +62,8 @@ HOST_TECH = "DSB-WIFI-Datacenter"
 HOST_NAME = "DSB-WIFI-Datacenter"
 ITEM_KEY = "temperatura.datacenter"
 ITEM_NAME = "Temperatura Datacenter (°C)"
-TRIGGER_DESCR = "Datacenter: temperatura acima de 20°C"
-TEMP_LIMIT_C = 20
+TRIGGER_DESCR = "Datacenter: temperatura acima de 22°C"
+TEMP_LIMIT_C = 22
 SEVERITY_HIGH = 4
 
 # Tipos numéricos da API Zabbix 7.0

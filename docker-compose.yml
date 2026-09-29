@@ -106,8 +106,11 @@ services:
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_config:/etc/influxdb2
+    # Só no loopback do host (#148): app, grafana e coleta usam influxdb:8086
+    # pela itgov-net; o network-discovery (network_mode: host) usa 127.0.0.1.
+    # Acesso à UI a partir de outra máquina: túnel SSH (ssh -L 8086:127.0.0.1:8086).
     ports:
-      - "${INFLUX_PORT:-8086}:8086"
+      - "127.0.0.1:${INFLUX_PORT:-8086}:8086"
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 15s
@@ -183,6 +186,8 @@ services:
       ZABBIX_TOKEN: "${ZABBIX_TOKEN:-}"
       ZABBIX_USER: "${ZABBIX_USER:-}"
       ZABBIX_PASSWORD: "${ZABBIX_PASSWORD:-}"
+      CFTV_CAM_USER: "${CFTV_CAM_USER:-}"
+      CFTV_CAM_PASS: "${CFTV_CAM_PASS:-}"
       # Acronis Cyber Cloud
       ACRONIS_BASE_URL: "${ACRONIS_BASE_URL:-}"
       ACRONIS_CLIENT_ID: "${ACRONIS_CLIENT_ID:-}"
@@ -227,7 +232,13 @@ services:
       INFRA_SCAN_RANGES: "${INFRA_SCAN_RANGES:-172.29.0.0/22}"
       INFRA_SCAN_INTERVAL: "${INFRA_SCAN_INTERVAL:-3600}"
       INFRA_NMAP_ARGS: "${INFRA_NMAP_ARGS:--T4 --host-timeout 10s}"
+      # Faixas das unidades cadastradas no dashboard (/gov/unidades)
+      INFRA_UNIDADES_DB: /app-data/app.db
+      # Cadastro automático no Zabbix desligado: ativos são revisados em /gov/rede
+      INFRA_ZABBIX_AUTOREGISTER: "${INFRA_ZABBIX_AUTOREGISTER:-false}"
       TZ: "${TZ:-America/Sao_Paulo}"
+    volumes:
+      - app_data:/app-data:ro
 
   # ─── Grafana (dashboards) ──────────────────────────────────────────────────
   grafana:

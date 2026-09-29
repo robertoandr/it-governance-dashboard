@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Login — Governança de TI</title>
   <script nonce="{{ csp_nonce() }}">tailwind = { config: { darkMode: 'class' } }</script>
-  <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce() }}"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.x.x/dist/cdn.min.js" nonce="{{ csp_nonce() }}"></script>
+  <script src="{{ url_for('static', filename='vendor/tailwind.js') }}" nonce="{{ csp_nonce() }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/alpine-csp.min.js') }}" nonce="{{ csp_nonce() }}"></script>
   <script nonce="{{ csp_nonce() }}">
   document.addEventListener('alpine:init', function () {
     Alpine.data('loginPage', function () {

@@ -1,0 +1,9 @@
+# ============================================
+# Dependências do teste de ponta a ponta (e2e/)
+# Instalar: pip install -r requirements.txt -r requirements-e2e.txt
+#           python -m playwright install --with-deps chromium
+# Rodar:    pytest e2e -o addopts="" -p no:cacheprovider
+# ============================================
+pytest>=9.0.3,<10.0
+pytest-playwright==0.9.0
+playwright==1.63.0

@@ -293,7 +293,7 @@ class InfluxDBMetricsProvider:
             components.append(
                 {
                     "id": "backup_coverage",
-                    "label": "Cobertura de Backup (Acronis)",
+                    "label": "Cobertura de Proteção (Acronis)",
                     "value": backup_pct,
                     "raw_value": float(protected),
                     "unit": "máquinas protegidas",
@@ -312,7 +312,7 @@ class InfluxDBMetricsProvider:
             components.append(
                 {
                     "id": "backup_coverage",
-                    "label": "Cobertura de Backup (Acronis)",
+                    "label": "Cobertura de Proteção (Acronis)",
                     "value": 95.0,
                     "raw_value": None,
                     "unit": "%",
@@ -1245,7 +1245,7 @@ from(bucket: "{self._bucket_raw}")
             sla = svc.get_sla_metrics()
             csat_summary = svc.get_csat_summary()
             return {
-                "compliance_pct": float(sla.compliance_pct),
+                "compliance_pct": float(sla.compliance_pct) if sla.compliance_pct is not None else None,
                 "total_open": int(sla.total_tickets),
                 "breached": int(sla.breached),
                 "csat_pct": float(csat_summary.csat_pct) if csat_summary.csat_pct is not None else None,

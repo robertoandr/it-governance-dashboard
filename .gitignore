@@ -51,6 +51,7 @@ credentials/
 *.p12
 *.pfx
 nginx/certs/
+docker/nginx/letsencrypt/
 *.pem
 *.key
 *.crt

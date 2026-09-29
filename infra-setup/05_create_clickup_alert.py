@@ -8,7 +8,7 @@ Cria/reaproveita (idempotente):
   - Media type webhook "ClickUp" (reaproveitado se já existir — ver checagem
     no início do main())
   - Action "Datacenter — Alerta ClickUp (temperatura alta)" ligando a trigger
-    "Datacenter: temperatura acima de 20°C" ao webhook, notificando o usuário
+    "Datacenter: temperatura acima de 22°C" ao webhook, notificando o usuário
     Admin
 
 Uso:
@@ -61,7 +61,7 @@ except ImportError:
     sys.exit("Instale: pip install zabbix-utils --break-system-packages")
 
 # ── Constantes ─────────────────────────────────────────────────────────────
-TRIGGER_DESCR = "Datacenter: temperatura acima de 20°C"
+TRIGGER_DESCR = "Datacenter: temperatura acima de 22°C"
 MEDIATYPE_NAME = "ClickUp"
 ACTION_NAME = "Datacenter — Alerta ClickUp (temperatura alta)"
 ADMIN_ALIAS = "Admin"
@@ -113,13 +113,17 @@ def warn(msg: str) -> None:
     print(f"  [!!] {msg}")
 
 
-def _ensure_global_macro(api: ZabbixAPI, macro: str, value: str, description: str) -> None:
+def _ensure_global_macro(api: ZabbixAPI, macro: str, value: str, description: str, secret: bool = False) -> None:
+    # type 1 = Secret: valor não aparece na UI nem volta pela API
+    macro_type = "1" if secret else "0"
     existing = api.usermacro.get(globalmacro=True, output="extend", filter={"macro": macro})
     if existing:
-        api.usermacro.updateglobal(globalmacroid=existing[0]["globalmacroid"], value=value, description=description)
+        api.usermacro.updateglobal(
+            globalmacroid=existing[0]["globalmacroid"], value=value, description=description, type=macro_type
+        )
         info(f"Macro global atualizada: {macro}")
     else:
-        api.usermacro.createglobal(macro=macro, value=value, description=description)
+        api.usermacro.createglobal(macro=macro, value=value, description=description, type=macro_type)
         ok(f"Macro global criada: {macro}")
 
 
@@ -134,7 +138,9 @@ def main() -> None:
 
     # ── 1. Macros globais ────────────────────────────────────────────────────
     banner("1. Macros globais {$CLICKUP_TOKEN} / {$CLICKUP_LIST_ID}")
-    _ensure_global_macro(api, "{$CLICKUP_TOKEN}", CLICKUP_TOKEN, "Token de API do ClickUp (webhook de alertas)")
+    _ensure_global_macro(
+        api, "{$CLICKUP_TOKEN}", CLICKUP_TOKEN, "Token de API do ClickUp (webhook de alertas)", secret=True
+    )
     _ensure_global_macro(
         api, "{$CLICKUP_LIST_ID}", CLICKUP_LIST_ID, "Lista ClickUp onde os chamados de alerta são criados"
     )
@@ -234,7 +240,7 @@ def main() -> None:
                     "mediatypeid": mediatypeid,
                     "subject": "🌡️ Alerta: Temperatura Datacenter {ITEM.LASTVALUE}°C",
                     "message": (
-                        "🌡️ Temperatura do datacenter em {ITEM.LASTVALUE}°C — limite: 20°C\n"
+                        "🌡️ Temperatura do datacenter em {ITEM.LASTVALUE}°C — limite: 22°C\n"
                         "Horário: {EVENT.DATE} {EVENT.TIME}\n"
                         f"Dashboard: {DASHBOARD_URL}"
                     ),

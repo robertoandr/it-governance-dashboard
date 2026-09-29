@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}{{ board.name }} · {{ board.workspace.name }} — Tarefas{% endblock %}
+{% block page_title %}Tarefas{% endblock %}
+
+{% set colunas = [
+  ('backlog', 'Backlog', 'border-t-slate-400'),
+  ('todo', 'To Do', 'border-t-blue-600'),
+  ('doing', 'Doing', 'border-t-amber-500'),
+  ('done', 'Done', 'border-t-emerald-500'),
+] %}
+
+{% block head %}
+<style nonce="{{ csp_nonce() }}">
+  /* classes de display do Tailwind (flex, block) venceriam o atributo hidden */
+  #tarefas-board [hidden] { display: none !important; }
+  .tarefas-card.sortable-ghost { opacity: .35; }
+  .tarefas-card.sortable-chosen { box-shadow: 0 0 0 2px #2563eb; }
+  .tarefas-lista.tarefas-alvo { outline: 2px dashed #2563eb; outline-offset: -2px; }
+  .tarefas-card.tarefas-destaque { animation: tarefas-pisca 1s ease-out; }
+  @keyframes tarefas-pisca { from { box-shadow: 0 0 0 3px #f59e0b; } to { box-shadow: 0 0 0 0 transparent; } }
+  /* "Mover para" só aparece com o card em foco (teclado); com mouse, arrasta-se. */
+  .tarefas-card .tarefas-mover-linha { display: none; }
+  .tarefas-card:focus-visible .tarefas-mover-linha,
+  .tarefas-card .tarefas-mover-linha:focus-within { display: flex; }
+  @media (prefers-reduced-motion: reduce) { .tarefas-card.tarefas-destaque { animation: none; } }
+
+  /* Markdown renderizado (documento e comentários) */
+  .tarefas-md { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+  .tarefas-md > * + * { margin-top: .75em; }
+  .tarefas-md h1 { font-size: 1.35em; font-weight: 700; }
+  .tarefas-md h2 { font-size: 1.2em; font-weight: 700; }
+  .tarefas-md h3, .tarefas-md h4 { font-size: 1.05em; font-weight: 600; }
+  .tarefas-md ul { list-style: disc; padding-left: 1.4em; }
+  .tarefas-md ol { list-style: decimal; padding-left: 1.4em; }
+  .tarefas-md a { color: #2563eb; text-decoration: underline; }
+  .dark .tarefas-md a { color: #60a5fa; }
+  .tarefas-md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em;
+                     background: rgba(100,116,139,.15); padding: .1em .35em; border-radius: 4px; }
+  .tarefas-md pre { background: rgba(100,116,139,.12); padding: .8em 1em; border-radius: 6px; overflow-x: auto; }
+  .tarefas-md pre code { background: none; padding: 0; }
+  .tarefas-md blockquote { border-left: 3px solid rgba(100,116,139,.5); padding-left: .9em; color: inherit; opacity: .85; }
+  .tarefas-md table { border-collapse: collapse; display: block; overflow-x: auto; }
+  .tarefas-md th, .tarefas-md td { border: 1px solid rgba(100,116,139,.35); padding: .35em .6em; }
+  .tarefas-md hr { border-color: rgba(100,116,139,.35); }
+  .tarefas-card { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="tarefas-board" class="space-y-4"
+     data-url-cards="{{ url_for('tarefas_board_cards', board_id=board.id) }}"
+     data-url-revision="{{ url_for('tarefas_board_revision', board_id=board.id) }}"
+     data-url-move="{{ url_for('tarefas_card_move', card_id=0) }}"
+     data-pode-editar="{{ 'true' if pode_editar else 'false' }}"
+     data-pode-comentar="{{ 'true' if pode_comentar else 'false' }}"
+     data-card-aberto="{{ card_aberto or '' }}"
+     data-url-board-page="{{ url_for('tarefas.board', board_id=board.id) }}"
+     data-url-card-page="{{ url_for('tarefas.card', board_id=board.id, card_id=0) }}"
+     data-url-card="{{ url_for('tarefas_card_detalhe', card_id=0) }}"
+     data-url-documento="{{ url_for('tarefas_card_documento', card_id=0) }}"
+     data-url-comentarios="{{ url_for('tarefas_card_comentarios', card_id=0) }}"
+     data-url-comentario="{{ url_for('tarefas_comentario', comentario_id=0) }}"
+     data-url-preview="{{ url_for('tarefas_markdown_preview') }}"
+     data-url-usuarios="{{ url_for('tarefas_usuarios') }}">
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0">
+      <nav aria-label="Caminho" class="text-xs text-slate-600 dark:text-slate-400">
+        <a href="{{ url_for('tarefas.workspaces') }}" class="hover:underline">Tarefas</a>
+        <span aria-hidden="true"> › </span>{{ board.workspace.name }}
+      </nav>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100 break-words">{{ board.name }}</h1>
+    </div>
+    <div class="text-xs text-slate-600 dark:text-slate-400 flex flex-col items-end gap-0.5">
+      <span id="tarefas-sync" aria-live="off">Carregando…</span>
+      <span class="hidden md:inline">Enter abre o card{% if pode_editar %} · Alt + setas move{% endif %}</span>
+    </div>
+  </div>
+
+  <!-- Resumo do board (Sprint 4). Preenchido por tarefas/board.js a partir dos cards exibidos. -->
+  <dl id="tarefas-metricas" aria-label="Resumo do board"
+      class="flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-4 py-3 text-sm">
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-slate-600 dark:text-slate-300">Cards</dt>
+      <dd class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" data-metrica="total">—</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-slate-600 dark:text-slate-300">Em andamento</dt>
+      <dd class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" data-metrica="doing">—</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-slate-600 dark:text-slate-300">Concluídos</dt>
+      <dd class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" data-metrica="done">—</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-slate-600 dark:text-slate-300">Concluídos com documento</dt>
+      <dd class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" data-metrica="done-doc">—</dd>
+    </div>
+  </dl>
+
+  <p id="tarefas-aviso" role="alert" hidden
+     class="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 text-sm"></p>
+
+  <div id="tarefas-anuncio" class="sr-only" aria-live="polite"></div>
+
+  <div class="overflow-x-auto pb-2">
+    <div class="grid grid-cols-4 gap-4 min-w-[1040px]">
+      {% for status, rotulo, cor in colunas %}
+      <section class="rounded-xl border border-slate-200 dark:border-slate-700 border-t-4 {{ cor }} bg-slate-50 dark:bg-slate-800/60 flex flex-col"
+               aria-labelledby="tarefas-col-{{ status }}">
+        <header class="flex items-center justify-between px-3 pt-3 pb-2">
+          <h2 id="tarefas-col-{{ status }}" class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ rotulo }}</h2>
+          <span class="text-xs tabular-nums text-slate-500 dark:text-slate-400" data-contagem="{{ status }}">0</span>
+        </header>
+
+        {% if pode_editar %}
+        <form class="px-3 pb-2" data-criar="{{ status }}" hidden>
+          <label for="tarefas-novo-{{ status }}" class="sr-only">Título do novo card em {{ rotulo }}</label>
+          <textarea id="tarefas-novo-{{ status }}" rows="2" maxlength="200" placeholder="Título do card"
+                    class="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <div class="mt-1 flex gap-2">
+            <button type="submit" class="px-3 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium">Adicionar</button>
+            <button type="button" data-cancelar class="px-3 py-1 text-xs rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">Cancelar</button>
+          </div>
+        </form>
+        {% endif %}
+
+        <ol class="tarefas-lista flex-1 min-h-[120px] px-3 pb-3 space-y-2" data-status="{{ status }}"
+            aria-labelledby="tarefas-col-{{ status }}"></ol>
+
+        {% if pode_editar %}
+        <button type="button" data-abrir-criar="{{ status }}"
+                class="mx-3 mb-3 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Adicionar card
+        </button>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Painel do card (Sprint 3). Preenchido por tarefas/card.js. -->
+  <div id="card-painel" hidden role="dialog" aria-labelledby="card-titulo"
+         class="fixed inset-y-0 right-0 z-40 w-full md:w-[640px] max-w-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col">
+    <header class="px-5 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 space-y-2">
+      <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+        <span id="card-local"></span>
+        <div class="flex items-center gap-3">
+          <button type="button" id="card-copiar-link" class="hover:underline">Copiar link</button>
+          <button type="button" id="card-fechar" aria-label="Fechar card (Esc)"
+                  class="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      {% if pode_editar %}
+      <label for="card-titulo" class="sr-only">Título do card</label>
+      <input id="card-titulo" type="text" maxlength="200"
+             class="w-full bg-transparent text-xl font-semibold text-slate-800 dark:text-slate-100 rounded px-1 -mx-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      {% else %}
+      <h2 id="card-titulo" class="text-xl font-semibold text-slate-800 dark:text-slate-100 break-words"></h2>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+        <span id="card-status" class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium text-slate-600 dark:text-slate-300"></span>
+        <span class="flex items-center gap-1">
+          <label for="card-responsavel">Responsável:</label>
+          {% if pode_editar %}
+          <select id="card-responsavel" class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 py-0.5 text-xs text-slate-700 dark:text-slate-200"></select>
+          {% else %}
+          <span id="card-responsavel" class="text-slate-700 dark:text-slate-200"></span>
+          {% endif %}
+        </span>
+        <span id="card-criado"></span>
+      </div>
+      <p id="card-aviso" role="alert" hidden class="rounded border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-1 text-xs"></p>
+    </header>
+
+    <div class="flex border-b border-slate-200 dark:border-slate-700 px-5 text-sm" role="tablist" aria-label="Conteúdo do card">
+      <button type="button" role="tab" id="aba-documento" data-aba="documento" aria-selected="true" aria-controls="card-aba-documento"
+              class="px-3 py-2 -mb-px border-b-2 border-blue-600 font-medium text-slate-800 dark:text-slate-100">Documento</button>
+      <button type="button" role="tab" id="aba-comentarios" data-aba="comentarios" aria-selected="false" aria-controls="card-aba-comentarios"
+              class="px-3 py-2 -mb-px border-b-2 border-transparent text-slate-500 dark:text-slate-400">Comentários <span id="com-contagem" class="tabular-nums"></span></button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-4">
+      <section id="card-aba-documento" role="tabpanel" aria-labelledby="aba-documento" class="space-y-3">
+        {% if pode_editar %}
+        <div class="flex items-center justify-between gap-2">
+          <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs" role="group" aria-label="Modo do documento">
+            <button type="button" id="doc-modo-editar" aria-pressed="true" class="rounded-md px-3 py-1 bg-slate-100 dark:bg-slate-800 font-medium">Editar</button>
+            <button type="button" id="doc-modo-ver" aria-pressed="false" class="rounded-md px-3 py-1">Visualizar</button>
+          </div>
+          <span id="doc-status" class="text-xs text-slate-500 dark:text-slate-400" aria-live="polite"></span>
+        </div>
+
+        <div id="doc-conflito" hidden class="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-3 space-y-2 text-sm text-amber-900 dark:text-amber-100">
+          <p id="doc-conflito-texto"></p>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <button type="button" id="doc-ver-atual" class="rounded border border-amber-400 px-2 py-1 hover:bg-amber-100 dark:hover:bg-amber-800/40">Ver a versão salva</button>
+            <button type="button" id="doc-manter-meu" class="rounded bg-amber-600 hover:bg-amber-700 text-white px-2 py-1">Salvar o meu texto por cima</button>
+            <button type="button" id="doc-usar-atual" class="rounded border border-amber-400 px-2 py-1 hover:bg-amber-100 dark:hover:bg-amber-800/40">Usar a versão salva</button>
+          </div>
+          <div id="doc-atual" hidden class="tarefas-md rounded border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 p-3 text-slate-800 dark:text-slate-100 max-h-64 overflow-y-auto"></div>
+        </div>
+
+        <label for="doc-texto" class="sr-only">Documento do card em Markdown</label>
+        <textarea id="doc-texto" rows="18" spellcheck="true"
+                  placeholder="## Contexto&#10;&#10;## Decisão&#10;&#10;## Critérios de aceite&#10;- [ ] ..."
+                  class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-3 font-mono text-sm leading-relaxed text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <p id="doc-dica" class="text-[11px] text-slate-500 dark:text-slate-400">Markdown: ## título, **negrito**, - lista, - [ ] checklist, `código`, | tabela |. Salva sozinho 2 s depois que você para de digitar.</p>
+
+        <details id="doc-descartado" hidden class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
+          <summary class="cursor-pointer text-slate-600 dark:text-slate-300">Seu texto anterior (não foi salvo) — copie o que precisar</summary>
+          <label for="doc-descartado-texto" class="sr-only">Texto anterior não salvo</label>
+          <textarea id="doc-descartado-texto" readonly rows="8" class="mt-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-950 p-2 font-mono text-xs"></textarea>
+        </details>
+        {% endif %}
+        <div id="doc-preview" class="tarefas-md text-slate-800 dark:text-slate-100" {% if pode_editar %}hidden{% endif %}></div>
+      </section>
+
+      <section id="card-aba-comentarios" role="tabpanel" aria-labelledby="aba-comentarios" hidden class="space-y-4">
+        <ol id="com-lista" class="space-y-3"></ol>
+        {% if pode_comentar %}
+        <form id="com-form" class="space-y-2">
+          <label for="com-texto" class="sr-only">Novo comentário</label>
+          <textarea id="com-texto" rows="3" maxlength="10000" placeholder="Escreva um comentário (Markdown). Ctrl+Enter envia."
+                    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <button type="submit" class="rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5">Comentar</button>
+        </form>
+        {% endif %}
+      </section>
+
+      <details class="mt-6 text-xs text-slate-500 dark:text-slate-400">
+        <summary class="cursor-pointer">Histórico</summary>
+        <ul id="card-historico" class="mt-2 space-y-1"></ul>
+      </details>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/sortable.min.js') }}" nonce="{{ csp_nonce() }}"></script>
+<script src="{{ url_for('static', filename='tarefas/board.js') }}" nonce="{{ csp_nonce() }}"></script>
+<script src="{{ url_for('static', filename='tarefas/card.js') }}" nonce="{{ csp_nonce() }}"></script>
+{% endblock %}

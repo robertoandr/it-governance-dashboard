@@ -175,21 +175,22 @@ def test_tickets_volume(client):
 
 
 def test_sla_metrics(client):
-    """GET /zendesk/sla retorna métricas de SLA via get_cached_mttr_summary."""
+    """GET /zendesk/sla retorna o SLA do período via get_cached_mttr_summary."""
     summary_dict = {
         "total_open": 50,
         "breached": 3,
         "compliance_pct": 94.0,
+        "first_reply_compliance_pct": 90.0,
+        "resolution_compliance_pct": 96.0,
+        "avg_first_reply_minutes": 75.5,
+        "period_total": 120,
+        "period_breached": 7,
+        "period_unknown": 2,
+        "window_days": 30,
         "csat_pct": 90.0,
         "csat_good": 27,
         "csat_bad": 3,
         "csat_sample": 30,
-        "by_priority": {},
-        "oldest_tickets": [],
-        "age_buckets": {},
-        "resolved_7d": 0,
-        "resolved_30d": 0,
-        "volume_by_status": {},
     }
 
     with patch("itgov.api.v1.zendesk.get_cached_mttr_summary", return_value=summary_dict):
@@ -197,9 +198,13 @@ def test_sla_metrics(client):
 
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data["total_tickets"] == 50
-    assert data["breached"] == 3
+    assert data["total_tickets"] == 120
+    assert data["breached"] == 7
+    assert data["unknown"] == 2
     assert data["compliance_pct"] == 94.0
+    assert data["first_reply_compliance_pct"] == 90.0
+    assert data["avg_first_reply_minutes"] == 75.5
+    assert data["open_breached"] == 3
 
 
 def test_csat_summary(client):

@@ -58,6 +58,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Data para refresh dos pacotes do SO
+        id: apt
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - name: Build & push
         id: build
         uses: docker/build-push-action@v6
@@ -68,6 +72,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APT_REFRESH=${{ steps.apt.outputs.day }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -86,11 +92,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trivy — CRITICAL + HIGH (fail on findings)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master em 2026-08-14 (trivy v0.74.0)
         with:
           image-ref: ${{ needs.build-push.outputs.image }}@${{ needs.build-push.outputs.digest }}
           format: sarif
           output: trivy.sarif
+          # Sem isto, com format sarif a action varre todas as severidades e o
+          # exit-code reprova achados MEDIUM/LOW, ignorando o filtro abaixo
+          limit-severities-for-sarif: true
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true

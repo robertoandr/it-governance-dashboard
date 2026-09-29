@@ -22,7 +22,9 @@ Changing any of them WILL affect dashboard semantics. Read before
    (no SLA policy applies). Unknown tickets are NOT counted as compliant.
    Rationale: silent reclassification inflates compliance metrics and
    masks gaps in SLA policy configuration.
-   Reference: PR #56.
+   Reference: PR #56. Evaluation rules live in ``sla_evaluator``: targets
+   come from the tenant's Zendesk SLA policy (ITIL defaults otherwise) and
+   are measured in business hours, never ticket age.
 
 3. Pagination — cursor-based with safety cap
    ``_paginate`` traverses ``next_page`` cursors until exhausted OR
@@ -68,8 +70,11 @@ Conventions
 from __future__ import annotations
 
 import base64
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 import structlog
 
 import config
@@ -77,9 +82,12 @@ from itgov.models.zendesk import (
     CSATSummary,
     SatisfactionRating,
     SLAMetric,
+    SLATargets,
     Ticket,
+    TicketMetricSet,
     TicketStatus,
 )
+from itgov.services import sla_evaluator
 from itgov.utils.http_client import SyncAPIClient
 
 log = structlog.get_logger(__name__)
@@ -123,6 +131,7 @@ class ZendeskService(SyncAPIClient):
         )
         self._subdomain = subdomain
         self._group_id = group_id
+        self._sla_targets: SLATargets | None = None
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -131,16 +140,15 @@ class ZendeskService(SyncAPIClient):
         resp = self.get(path, params=params if params else None)
         return resp.json()
 
-    def _paginate(
+    def _iter_pages(
         self,
         path: str,
-        root_key: str,
         *,
         max_pages: int | None = None,
         cursor: bool = True,
         **params: Any,
-    ) -> list[dict[str, Any]]:
-        """Coleta todas as páginas de um endpoint paginado.
+    ) -> Iterator[dict[str, Any]]:
+        """Itera as páginas (JSON bruto) de um endpoint paginado.
 
         Suporta dois estilos de paginação do Zendesk:
 
@@ -151,16 +159,14 @@ class ZendeskService(SyncAPIClient):
 
         Args:
             path: Caminho do endpoint.
-            root_key: Chave raiz da resposta JSON com os registros.
             max_pages: Cap de páginas. Padrão: ZENDESK_MAX_PAGES (100).
             cursor: True para cursor-based, False para offset-based.
             **params: Query params adicionais para a primeira página.
 
-        Returns:
-            Lista acumulada de registros de todas as páginas percorridas.
+        Yields:
+            O JSON de cada página percorrida.
         """
         cap = max_pages if max_pages is not None else _DEFAULT_MAX_PAGES
-        results: list[dict[str, Any]] = []
 
         if cursor:
             query_params: dict[str, Any] = {"page[size]": _PAGE_SIZE, **params}
@@ -182,8 +188,8 @@ class ZendeskService(SyncAPIClient):
                 break
 
             data = self._get_json(url, **query_params) if url == path else self._get_json(url)
-            results.extend(data.get(root_key, []))
             page_count += 1
+            yield data
 
             # Cursor-based: meta.has_more + links.next
             # Offset-based: next_page como URL no topo da resposta
@@ -204,7 +210,57 @@ class ZendeskService(SyncAPIClient):
             capped=page_count >= cap,
             mode="cursor" if cursor else "offset",
         )
-        return results
+
+    def _paginate(
+        self,
+        path: str,
+        root_key: str,
+        *,
+        max_pages: int | None = None,
+        cursor: bool = True,
+        **params: Any,
+    ) -> list[dict[str, Any]]:
+        """Coleta os registros de ``root_key`` de todas as páginas (ver ``_iter_pages``).
+
+        Returns:
+            Lista acumulada de registros de todas as páginas percorridas.
+        """
+        return [
+            record
+            for page in self._iter_pages(path, max_pages=max_pages, cursor=cursor, **params)
+            for record in page.get(root_key, [])
+        ]
+
+    def _search_tickets(self, query: str, sort_by: str) -> list[Ticket]:
+        """Busca tickets via Search API com os sideloads de SLA.
+
+        Pede ``include=tickets(slas,metric_sets)`` para que cada ticket traga o
+        estado de SLA calculado pelo Zendesk e os tempos em horário comercial,
+        sem uma chamada extra por ticket.
+        """
+        raw: list[dict[str, Any]] = []
+        metric_sets: dict[int, dict[str, Any]] = {}
+        for page in self._iter_pages(
+            "/api/v2/search.json",
+            cursor=False,  # search API usa offset pagination (per_page), não cursor (page[size])
+            query=query,
+            sort_by=sort_by,
+            sort_order="desc",
+            include="tickets(slas,metric_sets)",
+        ):
+            raw.extend(page.get("results", []))
+            for ms in page.get("metric_sets", []):
+                metric_sets[ms["ticket_id"]] = ms
+
+        tickets = []
+        for t in raw:
+            if t.get("result_type") != "ticket" and "subject" not in t:
+                continue
+            ticket = Ticket.model_validate(t)
+            if ticket.id in metric_sets:
+                ticket.metric_set = TicketMetricSet.from_api(metric_sets[ticket.id])
+            tickets.append(ticket)
+        return tickets
 
     # ── Public Methods ────────────────────────────────────────────────────────
 
@@ -263,68 +319,75 @@ class ZendeskService(SyncAPIClient):
         para que a API retorne apenas tickets do grupo — reduz drasticamente
         o payload transferido em tenants grandes.
         """
-        query = "type:ticket status:new OR status:open OR status:pending"
+        # Repetir a mesma keyword faz OR implícito na search API do Zendesk.
+        # "status:new OR status:open ..." NÃO funciona: combinado com group_id
+        # retornava 2 tickets em vez de 65.
+        query = "type:ticket status:new status:open status:pending"
         if self._group_id:
             query += f" group_id:{self._group_id}"
 
-        raw = self._paginate(
-            "/api/v2/search.json",
-            "results",
-            cursor=False,  # search API usa offset pagination (per_page), não cursor (page[size])
-            query=query,
-            sort_by="created_at",
-            sort_order="desc",
-        )
-        tickets = [Ticket.model_validate(t) for t in raw if t.get("result_type") == "ticket" or "subject" in t]
+        tickets = self._search_tickets(query, sort_by="created_at")
         log.info("zendesk_open_tickets_fetched", count=len(tickets), group_id=self._group_id)
         return tickets
 
-    def get_sla_metrics(self) -> SLAMetric:
-        """Calcula métricas de SLA a partir dos tickets ativos.
+    def get_sla_targets(self) -> SLATargets:
+        """Retorna as metas de SLA do tenant (política do Zendesk ou padrão ITIL).
 
-        Nota: Zendesk SLA real requer plano Professional+. Esta implementação
-        calcula uma aproximação baseada em tickets abertos e idade.
+        Planos sem SLA (abaixo de Professional) respondem 403 em
+        ``/api/v2/slas/policies.json``; nesse caso usamos as metas ITIL.
+        O resultado é memorizado na instância.
+        """
+        if self._sla_targets is None:
+            try:
+                policies = self._get_json("/api/v2/slas/policies.json").get("sla_policies", [])
+            except httpx.HTTPStatusError as exc:
+                log.warning("zendesk.sla.policies_unavailable", status=exc.response.status_code)
+                policies = []
+            targets = sla_evaluator.targets_from_policies(policies) or sla_evaluator.default_targets()
+            log.info("zendesk.sla.targets_loaded", source=targets.source, policy=targets.policy_name)
+            self._sla_targets = targets
+        return self._sla_targets
+
+    def get_sla_metrics(self, days: int = 30) -> SLAMetric:
+        """Calcula o SLA dos tickets resolvidos nos últimos ``days`` dias.
+
+        É o KPI de mercado: percentual de tickets atendidos dentro da meta de
+        1ª resposta e de resolução, em horário comercial. Tickets ainda
+        abertos não entram — o SLA deles ainda não terminou.
+
+        Args:
+            days: Janela em dias (padrão 30).
 
         Returns:
-            SLAMetric com compliance estimado.
+            SLAMetric com compliance geral e por métrica.
         """
-        open_tickets = self.get_open_tickets()
-        total = len(open_tickets)
-
-        # SLA breach heurística: tickets abertos há mais de 8h sem resposta
-        _sla_threshold_hours = 8.0
-        breached = sum(1 for t in open_tickets if t.age_hours > _sla_threshold_hours)
-        compliance = round((1 - breached / total) * 100, 1) if total else 100.0
-
-        log.info("zendesk_sla_calculated", total=total, breached=breached, compliance=compliance)
-        return SLAMetric(
-            total_tickets=total,
-            breached=breached,
-            compliance_pct=compliance,
+        solved = self.get_solved_tickets(days=days)
+        metric = sla_evaluator.summarize(solved, self.get_sla_targets(), window_days=days)
+        log.info(
+            "zendesk_sla_calculated",
+            total=metric.total_tickets,
+            breached=metric.breached,
+            unknown=metric.unknown,
+            compliance=metric.compliance_pct,
+            days=days,
         )
+        return metric
 
     def get_solved_tickets(self, days: int = 30) -> list[Ticket]:
         """Retorna tickets resolvidos nos últimos ``days`` dias.
 
-        Usa Search API com filtro de data — muito mais rápido que buscar
-        todos os tickets e filtrar por ``updated_at`` em Python.
+        Usa Search API com filtro pela data de resolução — muito mais rápido
+        que buscar todos os tickets e filtrar em Python. Inclui ``closed``:
+        o Zendesk fecha tickets resolvidos automaticamente após alguns dias,
+        e eles continuam contando como resolvidos na janela.
         """
-        from datetime import UTC, datetime, timedelta
-
         cutoff_date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
-        query = f"type:ticket status:solved updated_at>{cutoff_date}"
+        # Repetir a keyword faz OR implícito (ver get_open_tickets).
+        query = f"type:ticket status:solved status:closed solved>{cutoff_date}"
         if self._group_id:
             query += f" group_id:{self._group_id}"
 
-        raw = self._paginate(
-            "/api/v2/search.json",
-            "results",
-            cursor=False,
-            query=query,
-            sort_by="updated_at",
-            sort_order="desc",
-        )
-        tickets = [Ticket.model_validate(t) for t in raw if "subject" in t]
+        tickets = self._search_tickets(query, sort_by="updated_at")
         log.info("zendesk_solved_tickets_fetched", count=len(tickets), days=days, group_id=self._group_id)
         return tickets
 
@@ -334,8 +397,6 @@ class ZendeskService(SyncAPIClient):
         Usa ``start_time`` para evitar varrer todos os ratings do tenant
         (pode ser dezenas de milhares) — limitado a 3 páginas (300 ratings).
         """
-        from datetime import UTC, datetime, timedelta
-
         start_time = int((datetime.now(UTC) - timedelta(days=90)).timestamp())
         raw = self._paginate(
             "/api/v2/satisfaction_ratings.json",

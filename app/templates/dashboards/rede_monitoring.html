@@ -146,84 +146,92 @@
 
   </div>{# /grid #}
 
-  {# ── Tabela de Hosts Descobertos ──────────────────────────────────────────── #}
-  {% if inf.has_data and inf.hosts %}
-  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-    <div class="flex items-center justify-between mb-4">
+  {# ── Revisão dos hosts descobertos ─────────────────────────────────────────── #}
+  {% if inf.has_data %}
+  {% set pode_editar = current_user.role in ('admin', 'gestor') %}
+  {% set pill = 'text-xs font-medium px-3 py-1.5 rounded-full border transition-colors' %}
+  {% set on = 'bg-blue-600 border-blue-600 text-white' %}
+  {% set off = 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' %}
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-        Hosts Descobertos
-        <span class="text-slate-400 font-normal ml-1">({{ inf.hosts|length }})</span>
+        Ativos descobertos
+        <span class="text-slate-400 font-normal ml-1">
+          {{ revisao.novos }} novo{{ 's' if revisao.novos != 1 }} · {{ revisao.cadastrados }} cadastrado{{ 's' if revisao.cadastrados != 1 }}
+        </span>
       </h2>
-      <div class="flex gap-2 text-[10px]">
-        <span class="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded px-1.5 py-0.5">agente</span>
-        <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-1.5 py-0.5">SSH</span>
-        <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded px-1.5 py-0.5">SNMP</span>
-      </div>
+      <a href="{{ url_for('dashboards.ativos_rede') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Ver ativos de rede →</a>
     </div>
+
+    {% if sem_faixas %}
+    <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
+      Nenhuma unidade tem faixa de IP cadastrada, então todos os hosts aparecem como "Sem unidade".
+      <a href="{{ url_for('dashboards.unidades_list') }}" class="underline font-medium">Cadastrar faixas nas unidades</a>.
+    </div>
+    {% endif %}
+
+    <nav class="flex flex-wrap gap-2" aria-label="Filtrar por unidade">
+      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
+      {% for u in unidades %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
+      {% endfor %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
+    </nav>
+    <nav class="flex flex-wrap items-center gap-2" aria-label="Filtrar por status">
+      {% for valor, rotulo in [('', 'Todos'), ('novos', 'Novos'), ('cadastrados', 'Cadastrados')] %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
+      {% endfor %}
+      {% for t, n in revisao.por_tipo.items() %}
+      <span class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded px-2 py-0.5">{{ tipo_labels.get(t, t) }}: {{ n }}</span>
+      {% endfor %}
+    </nav>
+
+    {% if revisao.hosts %}
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
         <thead>
-          <tr class="text-left text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700">
+          <tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
             <th class="pb-2 pr-3 font-medium">IP</th>
             <th class="pb-2 pr-3 font-medium">Hostname</th>
-            <th class="pb-2 pr-3 font-medium">Categoria</th>
-            <th class="pb-2 pr-3 font-medium">OS / Vendor</th>
-            <th class="pb-2 pr-3 font-medium text-center">Portas</th>
-            <th class="pb-2 font-medium text-center">Servicos</th>
+            <th class="pb-2 pr-3 font-medium">Fabricante / MAC</th>
+            <th class="pb-2 pr-3 font-medium">Portas</th>
+            <th class="pb-2 pr-3 font-medium">Tipo sugerido</th>
+            <th class="pb-2 pr-3 font-medium">Unidade</th>
+            <th class="pb-2 font-medium text-right">Inventário</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
-          {% for h in inf.hosts %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-            <td class="py-2 pr-3">
-              <code class="font-mono text-slate-700 dark:text-slate-200">{{ h.ip }}</code>
+          {% for h in revisao.hosts %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+            <td class="py-2 pr-3 font-mono text-slate-700 dark:text-slate-200">{{ h.ip }}</td>
+            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title="{{ h.hostname }}">{{ h.hostname if h.hostname and h.hostname != h.ip else '—' }}</td>
+            <td class="py-2 pr-3 text-slate-500 dark:text-slate-400 max-w-[200px]">
+              <span class="block truncate">{{ h.vendor or h.os_guess[:40] or '—' }}</span>
+              {% if h.mac %}<span class="block font-mono text-[10px] text-slate-400">{{ h.mac }}</span>{% endif %}
             </td>
-            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate">
-              {{ h.hostname or '—' }}
-            </td>
+            <td class="py-2 pr-3 font-mono text-slate-500 dark:text-slate-400 max-w-[140px] truncate" title="{{ h.portas }}">{{ h.portas or '—' }}</td>
             <td class="py-2 pr-3">
-              {% set cat = h.category %}
-              {% if 'Linux' in cat %}
-                <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-1.5 py-0.5">{{ cat }}</span>
-              {% elif 'Windows' in cat %}
-                <span class="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 rounded px-1.5 py-0.5">{{ cat }}</span>
-              {% elif 'Rede' in cat or 'Cisco' in cat or 'MikroTik' in cat %}
-                <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded px-1.5 py-0.5">{{ cat }}</span>
-              {% elif 'Banco' in cat %}
-                <span class="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded px-1.5 py-0.5">{{ cat }}</span>
-              {% elif 'Web' in cat %}
-                <span class="bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+              <span class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded px-1.5 py-0.5">{{ tipo_labels.get(h.tipo_sugerido, h.tipo_sugerido) }}</span>
+              {% if h.motivo %}<span class="block text-[10px] text-slate-400 mt-0.5">{{ h.motivo }}</span>{% endif %}
+            </td>
+            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{% if h.unidade %}{{ h.unidade }}{% else %}<span class="text-amber-600 dark:text-amber-400">Sem unidade</span>{% endif %}</td>
+            <td class="py-2 text-right whitespace-nowrap">
+              {% if h.ativo %}
+                <span class="text-green-700 dark:text-green-400" title="{{ tipo_labels.get(h.ativo.tipo, h.ativo.tipo) }}">✓ {{ h.ativo.nome }}</span>
+              {% elif pode_editar %}
+                <a href="{{ url_for('dashboards.rede_cadastrar_ativo', ip=h.ip) }}" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium rounded px-2.5 py-1">Cadastrar</a>
               {% else %}
-                <span class="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">{{ cat }}</span>
+                <span class="text-slate-400">novo</span>
               {% endif %}
-            </td>
-            <td class="py-2 pr-3 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">
-              {% if h.vendor %}{{ h.vendor }}{% elif h.os_guess %}{{ h.os_guess[:40] }}{% else %}—{% endif %}
-            </td>
-            <td class="py-2 pr-3 text-center text-slate-600 dark:text-slate-300 font-mono">
-              {{ h.open_ports if h.open_ports else '—' }}
-            </td>
-            <td class="py-2 text-center">
-              <span class="inline-flex gap-1 justify-center">
-                {% if h.has_agent %}
-                  <span title="Zabbix agent" class="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded px-1 py-0.5 text-[9px]">agente</span>
-                {% endif %}
-                {% if h.has_ssh %}
-                  <span title="SSH:22" class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded px-1 py-0.5 text-[9px]">SSH</span>
-                {% endif %}
-                {% if h.has_snmp %}
-                  <span title="SNMP:161" class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded px-1 py-0.5 text-[9px]">SNMP</span>
-                {% endif %}
-                {% if not h.has_agent and not h.has_ssh and not h.has_snmp %}
-                  <span class="text-slate-300 dark:text-slate-600">ICMP</span>
-                {% endif %}
-              </span>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% else %}
+    <p class="text-sm text-slate-500 text-center py-6">Nenhum host neste recorte.</p>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -245,8 +253,9 @@
       </div>
     </div>
     <p class="text-[10px] text-slate-400 mt-3">
-      Range padrao: <code class="bg-white dark:bg-slate-700 rounded px-1">172.29.0.0/22</code> &bull;
-      Configuravel via <code class="bg-white dark:bg-slate-700 rounded px-1">INFRA_SCAN_RANGES</code> no .env &bull;
+      Varre <code class="bg-white dark:bg-slate-700 rounded px-1">INFRA_SCAN_RANGES</code> (padrão 172.29.0.0/22) +
+      as faixas de IP de cada <a href="{{ url_for('dashboards.unidades_list') }}" class="underline">unidade</a> &bull;
+      Não cadastra no Zabbix (use <code class="bg-white dark:bg-slate-700 rounded px-1">INFRA_ZABBIX_AUTOREGISTER=true</code> para isso) &bull;
       Resultado gravado em InfluxDB bucket <code class="bg-white dark:bg-slate-700 rounded px-1">governance_raw</code>
     </p>
   </div>

@@ -91,6 +91,10 @@ paths = [
     '''htmlcov/.*''',
     '''coverage\.xml''',
     '''alembic/versions/.*''',
+    # Baseline do detect-secrets (removido do repo, mas segue no histórico):
+    # só guarda hashes SHA-1 ("hashed_secret") de achados já triados, não
+    # segredos. Aparece quando o scan varre o histórico todo (workflow_dispatch).
+    '''\.secrets\.baseline''',
     # Dependências
     '''\.venv/.*''',
     '''venv/.*''',

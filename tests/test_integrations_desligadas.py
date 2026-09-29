@@ -86,12 +86,12 @@ def test_menu_linka_quando_configuradas(authed_client, com_graph: None, com_zend
 # ── Views continuam 404 sem credenciais ───────────────────────────────────────
 
 
-@pytest.mark.parametrize("path", ["/governance/devices", "/governance/apps", "/governance/security-alerts"])
+@pytest.mark.parametrize("path", ["/gov/governance/devices", "/gov/governance/apps", "/gov/governance/security-alerts"])
 def test_views_graph_404_sem_credenciais(authed_client, sem_graph: None, path: str) -> None:
     assert authed_client.get(path).status_code == 404
 
 
-@pytest.mark.parametrize("path", ["/sla", "/zendesk"])
+@pytest.mark.parametrize("path", ["/gov/sla", "/gov/zendesk"])
 def test_views_zendesk_404_sem_credenciais(authed_client, sem_zendesk: None, path: str) -> None:
     assert authed_client.get(path).status_code == 404
 

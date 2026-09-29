@@ -56,6 +56,9 @@ services:
       - "9091:9090"
     dns:
       - "127.0.0.11"   # Docker internal resolver; prevents host systemd-resolved bleed
+    extra_hosts:
+      # gateway do docker0, qualquer que seja a faixa (bip em /etc/docker/daemon.json)
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
       interval: 5s

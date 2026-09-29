@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from uuid import UUID
 
 import structlog
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -278,14 +279,148 @@ def infra_temperatura_diaria():
 @login_required
 @require_role("admin", "gestor", "operador")
 def cftv_monitoring() -> str:
-    """Render painel de monitoramento CFTV (câmeras e NVRs)."""
-    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
+    """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
+    from app.models.unidade import DvrUnidade, Unidade
+    from itgov.api.v1.cftv_monitoring import SEM_UNIDADE, get_cached_cftv_summary, montar_visao
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
 
+    todas = Unidade.query.all()
+    unidades = [u for u in todas if u.ativo]
+    nomes = {u.id: u.caminho for u in todas}
+    filtro_raw = request.args.get("unidade", "")
+    filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
+
     data = get_cached_cftv_summary()
-    return render_template("dashboards/cftv_monitoring.html", data=data)
+    visao = montar_visao(
+        data,
+        unidade_por_gravador={v.dvr: v.unidade_id for v in DvrUnidade.query.all()},
+        unidades=nomes,
+        unidade_por_loja={u.nome.lower(): u.id for u in unidades},
+        filtro=filtro,
+    )
+    return render_template(
+        "dashboards/cftv_monitoring.html",
+        data=data,
+        visao=visao,
+        unidades=sorted(unidades, key=lambda u: u.caminho),
+        filtro=filtro_raw if filtro is not None else "",
+    )
+
+
+@bp.route("/cftv/gravador", methods=["POST"])
+@login_required
+@require_role("admin", "gestor")
+def cftv_gravador_unidade() -> object:
+    """Define a unidade de um gravador (DVR/NVR) a partir do card na página /cftv."""
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade, Unidade
+
+    gravador = request.form.get("gravador", "").strip()
+    unidade_raw = request.form.get("unidade_id", "").strip()
+    if not gravador:
+        abort(400)
+    unidade_id = int(unidade_raw) if unidade_raw.isdigit() else None
+    if unidade_id is not None:
+        alvo = db.session.get(Unidade, unidade_id)
+        # Inativa não aparece no seletor do card: o próximo "Salvar" apagaria o vínculo
+        if alvo is None or not alvo.ativo:
+            abort(400)
+
+    vinculo = DvrUnidade.query.filter_by(dvr=gravador).first()
+    if vinculo is None:
+        vinculo = DvrUnidade(dvr=gravador)
+        db.session.add(vinculo)
+    vinculo.unidade_id = unidade_id
+    db.session.commit()
+    log.info("cftv.gravador_unidade", gravador=gravador, unidade_id=unidade_id, user=current_user.email)
+    flash(f"Unidade de {gravador} atualizada.", "success")
+    return redirect(url_for("dashboards.cftv_monitoring", unidade=request.form.get("filtro") or None))
+
+
+@bp.route("/unidades")
+@login_required
+@require_role("admin", "gestor", "operador")
+def unidades_list() -> str:
+    """Lista as unidades (sites) em árvore, com faixas de IP e gravadores vinculados."""
+    from app.models.unidade import DvrUnidade, Unidade
+
+    raizes = Unidade.query.filter_by(parent_id=None).order_by(Unidade.nome).all()
+    gravadores: dict[int, list[str]] = {}
+    for v in DvrUnidade.query.order_by(DvrUnidade.dvr).all():
+        if v.unidade_id is not None:
+            gravadores.setdefault(v.unidade_id, []).append(v.dvr)
+    return render_template("dashboards/unidades.html", raizes=raizes, gravadores=gravadores)
+
+
+@bp.route("/unidades/nova", methods=["GET", "POST"])
+@bp.route("/unidades/<int:unidade_id>/editar", methods=["GET", "POST"])
+@login_required
+@require_role("admin", "gestor")
+def unidade_form(unidade_id: int | None = None) -> object:
+    """Formulário de criação/edição de unidade (nome, unidade pai, faixas de IP)."""
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade, Unidade, parse_faixas
+
+    unidade = db.session.get(Unidade, unidade_id) if unidade_id else None
+    if unidade_id and unidade is None:
+        abort(404)
+    # Hierarquia de dois níveis: só raízes podem ser pai, e nunca a própria unidade
+    pais = [
+        u for u in Unidade.query.filter_by(parent_id=None).order_by(Unidade.nome) if not unidade or u.id != unidade.id
+    ]
+
+    def _render() -> str:
+        return render_template("dashboards/unidade_form.html", unidade=unidade, pais=pais)
+
+    if request.method == "GET":
+        return _render()
+
+    if request.form.get("action") == "delete" and unidade:
+        if unidade.filhas:
+            flash("Remova ou mova as unidades filhas antes de excluir.", "error")
+            return _render()
+        DvrUnidade.query.filter_by(unidade_id=unidade.id).update({"unidade_id": None})
+        db.session.delete(unidade)
+        db.session.commit()
+        log.info("unidade.removida", unidade=unidade.nome, user=current_user.email)
+        flash("Unidade removida.", "success")
+        return redirect(url_for("dashboards.unidades_list"))
+
+    nome = request.form.get("nome", "").strip()
+    parent_raw = request.form.get("parent_id", "").strip()
+    parent_id = int(parent_raw) if parent_raw.isdigit() else None
+    if not nome:
+        flash("Nome é obrigatório.", "error")
+        return _render()
+    if parent_id is not None and parent_id not in {p.id for p in pais}:
+        flash("Unidade pai inválida.", "error")
+        return _render()
+    if unidade and parent_id is not None and unidade.filhas:
+        flash("Uma unidade com filhas não pode virar filha de outra.", "error")
+        return _render()
+    try:
+        faixas = parse_faixas(request.form.get("faixas_ip", ""))
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return _render()
+    duplicada = Unidade.query.filter_by(nome=nome, parent_id=parent_id).first()
+    if duplicada and (not unidade or duplicada.id != unidade.id):
+        flash(f"Já existe a unidade {nome} neste nível.", "error")
+        return _render()
+
+    if unidade is None:
+        unidade = Unidade(nome=nome)
+        db.session.add(unidade)
+    unidade.nome = nome
+    unidade.parent_id = parent_id
+    unidade.faixas_ip = "\n".join(faixas)
+    unidade.ativo = "ativo" in request.form or unidade_id is None
+    db.session.commit()
+    log.info("unidade.salva", unidade=unidade.caminho, faixas=len(faixas), user=current_user.email)
+    flash("Unidade salva.", "success")
+    return redirect(url_for("dashboards.unidades_list"))
 
 
 # Mapa de Câmeras (serviço nativo mapa-cameras.service, porta 8080) é servido
@@ -328,18 +463,244 @@ def network_redirect():
     return redirect(url_for("dashboards.rede_monitoring"))
 
 
+def _filtro_unidade(raw: str, unidades: list, sem_unidade: str) -> set[int] | str | None:
+    """Converte ``?unidade=`` em ids aceitos (unidade + filhas), ``sem_unidade`` ou None."""
+    if raw == sem_unidade:
+        return sem_unidade
+    if raw.isdigit():
+        selecionada = next((u for u in unidades if u.id == int(raw)), None)
+        return selecionada.ids_subarvore() if selecionada else None
+    return None
+
+
+def _listar_ativos() -> list[dict]:
+    """Ativos vivos do inventário como dicts (sessão fechada ao retornar).
+
+    Falha no banco de ativos não derruba as páginas de rede: devolve lista vazia.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from itgov.db.session import get_session
+    from itgov.services.ativo_service import AtivoService
+
+    try:
+        with get_session() as session:
+            return [
+                {
+                    "id": str(a.id),
+                    "nome": a.nome,
+                    "tipo": a.tipo,
+                    "criticidade": a.criticidade,
+                    "ambiente": a.ambiente,
+                    "owner": a.owner,
+                    "metadata": a.metadata_ or {},
+                    "created_at": a.created_at,
+                }
+                for a in AtivoService(session).list(limit=10000)
+            ]
+    except SQLAlchemyError as exc:
+        log.warning("ativos.listagem_falhou", erro=str(exc))
+        return []
+
+
 @bp.route("/rede")
 @login_required
 @require_role("admin", "gestor", "operador")
 def rede_monitoring() -> str:
-    """Render painel de rede — discovery nmap + Zabbix drules."""
-    from itgov.api.v1.rede_monitoring import get_cached_rede_summary
+    """Render painel de rede: fila de revisão dos hosts descobertos pelo nmap."""
+    from app.models.unidade import Unidade
+    from itgov.api.v1.rede_monitoring import (
+        SEM_UNIDADE,
+        STATUS_CADASTRADO,
+        STATUS_NOVO,
+        get_cached_rede_summary,
+        montar_descobertos,
+    )
+    from itgov.models.ativo import TIPO_LABELS
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
 
+    todas = Unidade.query.all()
+    unidades = [u for u in todas if u.ativo]
+    filtro_raw = request.args.get("unidade", "")
+    filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
+    status = request.args.get("status", "")
+    if status not in (STATUS_NOVO, STATUS_CADASTRADO):
+        status = ""
+
     data = get_cached_rede_summary()
-    return render_template("dashboards/rede_monitoring.html", data=data)
+    ativos_por_ip = {a["metadata"]["ip"]: a for a in _listar_ativos() if a["metadata"].get("ip")}
+    revisao = montar_descobertos(
+        data["influx"].get("hosts", []),
+        faixas=[(u.id, f) for u in unidades for f in u.faixas],
+        ativos_por_ip=ativos_por_ip,
+        unidades={u.id: u.caminho for u in todas},
+        filtro_unidade=filtro,
+        filtro_status=status,
+    )
+    return render_template(
+        "dashboards/rede_monitoring.html",
+        data=data,
+        revisao=revisao,
+        unidades=sorted(unidades, key=lambda u: u.caminho),
+        filtro=filtro_raw if filtro is not None else "",
+        status=status,
+        tipo_labels=TIPO_LABELS,
+        sem_faixas=not any(u.faixas for u in unidades),
+    )
+
+
+@bp.route("/rede/cadastrar", methods=["GET", "POST"])
+@login_required
+@require_role("admin", "gestor")
+def rede_cadastrar_ativo() -> object:
+    """Cadastra um host descoberto como ativo de rede, já com tipo e unidade sugeridos."""
+    from sqlalchemy import select
+
+    from app.models.unidade import Unidade
+    from itgov.api.v1.rede_monitoring import host_descoberto, unidade_do_ip
+    from itgov.db.session import get_session
+    from itgov.models.ativo import AMBIENTES_VALIDOS, CRITICIDADES_VALIDAS, TIPO_LABELS
+    from itgov.models.db.ativo import AtivoDB
+    from itgov.services.ativo_service import AtivoDuplicateError, AtivoService
+
+    ip = (request.values.get("ip") or "").strip()
+    host = host_descoberto(ip) if ip else None
+    if host is None:
+        abort(404)
+    if any(a["metadata"].get("ip") == ip for a in _listar_ativos()):
+        flash(f"{ip} já está cadastrado como ativo.", "error")
+        return redirect(url_for("dashboards.ativos_rede"))
+
+    unidades = sorted((u for u in Unidade.query.all() if u.ativo), key=lambda u: u.caminho)
+    sugestao = {
+        "nome": host["hostname"] if host["hostname"] and host["hostname"] != ip else f"{host['tipo_sugerido']}-{ip}",
+        "tipo": host["tipo_sugerido"] if host["tipo_sugerido"] in TIPO_LABELS else "outro",
+        "unidade_id": unidade_do_ip(ip, [(u.id, f) for u in unidades for f in u.faixas]),
+        "criticidade": "media",
+        "ambiente": "prod",
+        "descricao": "",
+    }
+
+    def _render(valores: dict) -> str:
+        return render_template(
+            "dashboards/ativo_rede_form.html",
+            host=host,
+            valores=valores,
+            unidades=unidades,
+            tipo_labels=TIPO_LABELS,
+            criticidades=sorted(CRITICIDADES_VALIDAS),
+            ambientes=sorted(AMBIENTES_VALIDOS),
+        )
+
+    if request.method == "GET":
+        return _render(sugestao)
+
+    valores = {k: (request.form.get(k) or "").strip() for k in sugestao}
+    unidade = next((u for u in unidades if str(u.id) == valores["unidade_id"]), None)
+    metadata: dict[str, object] = {
+        "ip": ip,
+        "mac": host["mac"],
+        "fabricante": host["vendor"],
+        "portas": host["portas"],
+        "origem": "descoberta_rede",
+        "tipo_sugerido": host["tipo_sugerido"],
+        "unidade_id": unidade.id if unidade else None,
+        "unidade": unidade.caminho if unidade else "",
+    }
+    if valores["descricao"]:
+        metadata["descricao"] = valores["descricao"]
+    payload = {
+        "nome": valores["nome"],
+        "tipo": valores["tipo"],
+        "ambiente": valores["ambiente"],
+        "criticidade": valores["criticidade"],
+        "owner": current_user.email,
+        "tags": ["descoberta-rede", valores["tipo"]],
+        "metadata": metadata,
+    }
+    try:
+        with get_session() as session:
+            svc = AtivoService(session)
+            try:
+                svc.create(payload)
+            except AtivoDuplicateError:
+                # (nome, tipo) é único mesmo após soft delete: recadastro reativa o removido
+                existente = session.execute(
+                    select(AtivoDB).where(AtivoDB.nome == valores["nome"], AtivoDB.tipo == valores["tipo"])
+                ).scalar_one()
+                if existente.deleted_at is None:
+                    raise
+                svc.upsert(payload)
+    except AtivoDuplicateError:
+        flash(f"Já existe um ativo {valores['nome']} do tipo {valores['tipo']}.", "error")
+        return _render(valores)
+    except ValueError as exc:  # ValidationError do Pydantic herda de ValueError
+        flash(f"Dados inválidos: {exc}", "error")
+        return _render(valores)
+
+    log.info("rede.ativo_cadastrado", ip=ip, tipo=valores["tipo"], unidade=metadata["unidade"], user=current_user.email)
+    flash(f"{valores['nome']} cadastrado como ativo.", "success")
+    return redirect(url_for("dashboards.rede_monitoring", status="novos"))
+
+
+@bp.route("/ativos-rede")
+@login_required
+@require_role("admin", "gestor", "operador")
+def ativos_rede() -> str:
+    """Ativos do inventário separados por unidade, com filtro por unidade e tipo."""
+    from app.models.unidade import Unidade
+    from itgov.api.v1.rede_monitoring import SEM_UNIDADE
+    from itgov.models.ativo import TIPO_LABELS
+
+    todas = Unidade.query.all()
+    unidades = [u for u in todas if u.ativo]
+    nomes = {u.id: u.caminho for u in todas}
+    filtro_raw = request.args.get("unidade", "")
+    filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
+    tipo = request.args.get("tipo", "")
+
+    grupos: dict[str, list[dict]] = {}
+    for a in _listar_ativos():
+        uid = a["metadata"].get("unidade_id")
+        if filtro == SEM_UNIDADE and uid is not None:
+            continue
+        if isinstance(filtro, set) and uid not in filtro:
+            continue
+        if tipo and a["tipo"] != tipo:
+            continue
+        grupos.setdefault(nomes.get(uid, "") if uid else "", []).append(a)
+
+    secoes = [(nome or "Sem unidade", sorted(itens, key=lambda a: a["nome"].lower())) for nome, itens in grupos.items()]
+    secoes.sort(key=lambda s: (s[0] == "Sem unidade", s[0]))
+    return render_template(
+        "dashboards/ativos_rede.html",
+        secoes=secoes,
+        total=sum(len(i) for _, i in secoes),
+        unidades=sorted(unidades, key=lambda u: u.caminho),
+        filtro=filtro_raw if filtro is not None else "",
+        tipo=tipo,
+        tipo_labels=TIPO_LABELS,
+    )
+
+
+@bp.route("/ativos-rede/<uuid:ativo_id>/remover", methods=["POST"])
+@login_required
+@require_role("admin", "gestor")
+def ativo_rede_remover(ativo_id: UUID) -> object:
+    """Remove (soft delete) um ativo do inventário."""
+    from itgov.db.session import get_session
+    from itgov.services.ativo_service import AtivoNotFoundError, AtivoService
+
+    try:
+        with get_session() as session:
+            AtivoService(session).delete(ativo_id)
+    except AtivoNotFoundError:
+        abort(404)
+    log.info("rede.ativo_removido", ativo_id=str(ativo_id), user=current_user.email)
+    flash("Ativo removido.", "success")
+    return redirect(url_for("dashboards.ativos_rede"))
 
 
 @bp.route("/links")
