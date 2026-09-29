@@ -12,6 +12,7 @@ from werkzeug.exceptions import NotFound
 
 from app.auth.rbac import require_role
 from app.services.tarefas import board_service as board_svc
+from app.services.tarefas import card_service as card_svc
 from app.services.tarefas import workspace_service as ws_svc
 from app.services.tarefas.permissions import Acao, perfis, pode
 
@@ -35,6 +36,23 @@ def workspaces() -> str:
 @require_role(*perfis(Acao.VER))
 def board(board_id: int) -> str:
     """Kanban do board; os cards são carregados e movidos pela API JSON."""
+    return _pagina_board(board_id, card_aberto=None)
+
+
+@bp.route("/b/<int:board_id>/c/<int:card_id>")
+@require_role(*perfis(Acao.VER))
+def card(board_id: int, card_id: int) -> str:
+    """Board com o painel do card aberto — URL própria para compartilhar a decisão técnica."""
+    try:
+        c = card_svc.obter_card(card_id)
+    except board_svc.CardNaoEncontradoError as exc:
+        raise NotFound() from exc
+    if c.board_id != board_id:
+        raise NotFound()
+    return _pagina_board(board_id, card_aberto=card_id)
+
+
+def _pagina_board(board_id: int, card_aberto: int | None) -> str:
     try:
         b = board_svc.obter_board(board_id)
     except board_svc.BoardNaoEncontradoError as exc:
@@ -43,5 +61,7 @@ def board(board_id: int) -> str:
     return render_template(
         "tarefas/board.html",
         board=b,
+        card_aberto=card_aberto,
         pode_editar=pode(current_user.role, Acao.EDITAR_CARD),
+        pode_comentar=pode(current_user.role, Acao.COMENTAR),
     )

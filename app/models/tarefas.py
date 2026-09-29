@@ -47,6 +47,12 @@ def em_utc(valor: datetime | None) -> datetime | None:
     return valor.replace(tzinfo=UTC) if valor.tzinfo is None else valor.astimezone(UTC)
 
 
+def iso_utc(valor: datetime | None) -> str | None:
+    """ISO 8601 com fuso UTC explícito, para a API (``None`` fica ``None``)."""
+    utc = em_utc(valor)
+    return utc.isoformat() if utc else None
+
+
 def chave_nome(nome: str) -> str:
     """Chave de comparação e ordenação: ignora maiúsculas e acentos.
 

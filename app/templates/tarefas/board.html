@@ -22,6 +22,26 @@
   .tarefas-card:focus-visible .tarefas-mover-linha,
   .tarefas-card .tarefas-mover-linha:focus-within { display: flex; }
   @media (prefers-reduced-motion: reduce) { .tarefas-card.tarefas-destaque { animation: none; } }
+
+  /* Markdown renderizado (documento e comentários) */
+  .tarefas-md { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+  .tarefas-md > * + * { margin-top: .75em; }
+  .tarefas-md h1 { font-size: 1.35em; font-weight: 700; }
+  .tarefas-md h2 { font-size: 1.2em; font-weight: 700; }
+  .tarefas-md h3, .tarefas-md h4 { font-size: 1.05em; font-weight: 600; }
+  .tarefas-md ul { list-style: disc; padding-left: 1.4em; }
+  .tarefas-md ol { list-style: decimal; padding-left: 1.4em; }
+  .tarefas-md a { color: #2563eb; text-decoration: underline; }
+  .dark .tarefas-md a { color: #60a5fa; }
+  .tarefas-md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em;
+                     background: rgba(100,116,139,.15); padding: .1em .35em; border-radius: 4px; }
+  .tarefas-md pre { background: rgba(100,116,139,.12); padding: .8em 1em; border-radius: 6px; overflow-x: auto; }
+  .tarefas-md pre code { background: none; padding: 0; }
+  .tarefas-md blockquote { border-left: 3px solid rgba(100,116,139,.5); padding-left: .9em; color: inherit; opacity: .85; }
+  .tarefas-md table { border-collapse: collapse; display: block; overflow-x: auto; }
+  .tarefas-md th, .tarefas-md td { border: 1px solid rgba(100,116,139,.35); padding: .35em .6em; }
+  .tarefas-md hr { border-color: rgba(100,116,139,.35); }
+  .tarefas-card { cursor: pointer; }
 </style>
 {% endblock %}
 
@@ -30,7 +50,17 @@
      data-url-cards="{{ url_for('tarefas_board_cards', board_id=board.id) }}"
      data-url-revision="{{ url_for('tarefas_board_revision', board_id=board.id) }}"
      data-url-move="{{ url_for('tarefas_card_move', card_id=0) }}"
-     data-pode-editar="{{ 'true' if pode_editar else 'false' }}">
+     data-pode-editar="{{ 'true' if pode_editar else 'false' }}"
+     data-pode-comentar="{{ 'true' if pode_comentar else 'false' }}"
+     data-card-aberto="{{ card_aberto or '' }}"
+     data-url-board-page="{{ url_for('tarefas.board', board_id=board.id) }}"
+     data-url-card-page="{{ url_for('tarefas.card', board_id=board.id, card_id=0) }}"
+     data-url-card="{{ url_for('tarefas_card_detalhe', card_id=0) }}"
+     data-url-documento="{{ url_for('tarefas_card_documento', card_id=0) }}"
+     data-url-comentarios="{{ url_for('tarefas_card_comentarios', card_id=0) }}"
+     data-url-comentario="{{ url_for('tarefas_comentario', comentario_id=0) }}"
+     data-url-preview="{{ url_for('tarefas_markdown_preview') }}"
+     data-url-usuarios="{{ url_for('tarefas_usuarios') }}">
 
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div class="min-w-0">
@@ -42,9 +72,7 @@
     </div>
     <div class="text-xs text-slate-500 dark:text-slate-400 flex flex-col items-end gap-0.5">
       <span id="tarefas-sync" aria-live="off">Carregando…</span>
-      {% if pode_editar %}
-      <span class="hidden md:inline">Teclado: foque um card e use Alt + setas para mover</span>
-      {% endif %}
+      <span class="hidden md:inline">Enter abre o card{% if pode_editar %} · Alt + setas move{% endif %}</span>
     </div>
   </div>
 
@@ -89,10 +117,109 @@
       {% endfor %}
     </div>
   </div>
+
+  <!-- Painel do card (Sprint 3). Preenchido por tarefas/card.js. -->
+  <aside id="card-painel" hidden role="dialog" aria-labelledby="card-titulo"
+         class="fixed inset-y-0 right-0 z-40 w-full md:w-[640px] max-w-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col">
+    <header class="px-5 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 space-y-2">
+      <div class="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+        <span id="card-local"></span>
+        <div class="flex items-center gap-3">
+          <button type="button" id="card-copiar-link" class="hover:underline">Copiar link</button>
+          <button type="button" id="card-fechar" aria-label="Fechar card (Esc)"
+                  class="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      {% if pode_editar %}
+      <label for="card-titulo" class="sr-only">Título do card</label>
+      <input id="card-titulo" type="text" maxlength="200"
+             class="w-full bg-transparent text-xl font-semibold text-slate-800 dark:text-slate-100 rounded px-1 -mx-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      {% else %}
+      <h2 id="card-titulo" class="text-xl font-semibold text-slate-800 dark:text-slate-100 break-words"></h2>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+        <span id="card-status" class="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium text-slate-600 dark:text-slate-300"></span>
+        <span class="flex items-center gap-1">
+          <label for="card-responsavel">Responsável:</label>
+          {% if pode_editar %}
+          <select id="card-responsavel" class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 py-0.5 text-xs text-slate-700 dark:text-slate-200"></select>
+          {% else %}
+          <span id="card-responsavel" class="text-slate-700 dark:text-slate-200"></span>
+          {% endif %}
+        </span>
+        <span id="card-criado"></span>
+      </div>
+      <p id="card-aviso" role="alert" hidden class="rounded border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-1 text-xs"></p>
+    </header>
+
+    <div class="flex border-b border-slate-200 dark:border-slate-700 px-5 text-sm" role="tablist" aria-label="Conteúdo do card">
+      <button type="button" role="tab" id="aba-documento" data-aba="documento" aria-selected="true" aria-controls="card-aba-documento"
+              class="px-3 py-2 -mb-px border-b-2 border-blue-600 font-medium text-slate-800 dark:text-slate-100">Documento</button>
+      <button type="button" role="tab" id="aba-comentarios" data-aba="comentarios" aria-selected="false" aria-controls="card-aba-comentarios"
+              class="px-3 py-2 -mb-px border-b-2 border-transparent text-slate-500 dark:text-slate-400">Comentários <span id="com-contagem" class="tabular-nums"></span></button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-4">
+      <section id="card-aba-documento" role="tabpanel" aria-labelledby="aba-documento" class="space-y-3">
+        {% if pode_editar %}
+        <div class="flex items-center justify-between gap-2">
+          <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs" role="group" aria-label="Modo do documento">
+            <button type="button" id="doc-modo-editar" aria-pressed="true" class="rounded-md px-3 py-1 bg-slate-100 dark:bg-slate-800 font-medium">Editar</button>
+            <button type="button" id="doc-modo-ver" aria-pressed="false" class="rounded-md px-3 py-1">Visualizar</button>
+          </div>
+          <span id="doc-status" class="text-xs text-slate-500 dark:text-slate-400" aria-live="polite"></span>
+        </div>
+
+        <div id="doc-conflito" hidden class="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-3 space-y-2 text-sm text-amber-900 dark:text-amber-100">
+          <p id="doc-conflito-texto"></p>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <button type="button" id="doc-ver-atual" class="rounded border border-amber-400 px-2 py-1 hover:bg-amber-100 dark:hover:bg-amber-800/40">Ver a versão salva</button>
+            <button type="button" id="doc-manter-meu" class="rounded bg-amber-600 hover:bg-amber-700 text-white px-2 py-1">Salvar o meu texto por cima</button>
+            <button type="button" id="doc-usar-atual" class="rounded border border-amber-400 px-2 py-1 hover:bg-amber-100 dark:hover:bg-amber-800/40">Usar a versão salva</button>
+          </div>
+          <div id="doc-atual" hidden class="tarefas-md rounded border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 p-3 text-slate-800 dark:text-slate-100 max-h-64 overflow-y-auto"></div>
+        </div>
+
+        <label for="doc-texto" class="sr-only">Documento do card em Markdown</label>
+        <textarea id="doc-texto" rows="18" spellcheck="true"
+                  placeholder="## Contexto&#10;&#10;## Decisão&#10;&#10;## Critérios de aceite&#10;- [ ] ..."
+                  class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-3 font-mono text-sm leading-relaxed text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <p id="doc-dica" class="text-[11px] text-slate-400">Markdown: ## título, **negrito**, - lista, - [ ] checklist, `código`, | tabela |. Salva sozinho 2 s depois que você para de digitar.</p>
+
+        <details id="doc-descartado" hidden class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
+          <summary class="cursor-pointer text-slate-600 dark:text-slate-300">Seu texto anterior (não foi salvo) — copie o que precisar</summary>
+          <label for="doc-descartado-texto" class="sr-only">Texto anterior não salvo</label>
+          <textarea id="doc-descartado-texto" readonly rows="8" class="mt-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-950 p-2 font-mono text-xs"></textarea>
+        </details>
+        {% endif %}
+        <div id="doc-preview" class="tarefas-md text-slate-800 dark:text-slate-100" {% if pode_editar %}hidden{% endif %}></div>
+      </section>
+
+      <section id="card-aba-comentarios" role="tabpanel" aria-labelledby="aba-comentarios" hidden class="space-y-4">
+        <ol id="com-lista" class="space-y-3"></ol>
+        {% if pode_comentar %}
+        <form id="com-form" class="space-y-2">
+          <label for="com-texto" class="sr-only">Novo comentário</label>
+          <textarea id="com-texto" rows="3" maxlength="10000" placeholder="Escreva um comentário (Markdown). Ctrl+Enter envia."
+                    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <button type="submit" class="rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5">Comentar</button>
+        </form>
+        {% endif %}
+      </section>
+
+      <details class="mt-6 text-xs text-slate-500 dark:text-slate-400">
+        <summary class="cursor-pointer">Histórico</summary>
+        <ul id="card-historico" class="mt-2 space-y-1"></ul>
+      </details>
+    </div>
+  </aside>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='vendor/sortable.min.js') }}" nonce="{{ csp_nonce() }}"></script>
 <script src="{{ url_for('static', filename='tarefas/board.js') }}" nonce="{{ csp_nonce() }}"></script>
+<script src="{{ url_for('static', filename='tarefas/card.js') }}" nonce="{{ csp_nonce() }}"></script>
 {% endblock %}
