@@ -219,7 +219,7 @@ jobs:
       # 2026-09-22) -> 70% (2026-09-29, com 72,02% medidos no CI; #194)
       # -> 85%. Regra: o piso só sobe, nunca desce; subir de novo quando a
       # cobertura tiver folga de ~2 pontos acima da próxima etapa (#187).
-      - name: 🧪 Run tests with coverage gate (≥75%, ADR-001 target 85%)
+      - name: 🧪 Run tests with coverage gate (≥80%, ADR-001 target 85%)
         env:
           INFLUX_URL: http://localhost:8086
           INFLUX_TOKEN: ci-fake-token-not-real
@@ -229,7 +229,7 @@ jobs:
           OPS_PIN: TEST_PIN_1234
           FLASK_ENV: testing
         run: |
-          pytest --cov-fail-under=75 --junitxml=junit.xml
+          pytest --cov-fail-under=80 --junitxml=junit.xml
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
