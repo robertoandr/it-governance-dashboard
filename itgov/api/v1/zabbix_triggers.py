@@ -34,7 +34,7 @@ _SEV_MAP = {
 
 def _zbx_url() -> str:
     url = os.getenv("ZABBIX_URL", "")
-    if not url.endswith("/api_jsonrpc.php"):
+    if url and not url.endswith("/api_jsonrpc.php"):
         url = url.rstrip("/") + "/api_jsonrpc.php"
     return url
 
