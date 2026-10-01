@@ -81,7 +81,7 @@ def test_fetch_problems_enriquece_ordena_e_monta_link() -> None:
     assert desastre["host"] == "fw-borda"
     assert desastre["severity_label"] == "Desastre"
     assert desastre["acknowledged"] is True
-    assert desastre["zabbix_url"] == "https://zbx.local/zabbix/tr_events.php?triggerid=0&eventid=11"
+    assert desastre["zabbix_url"] == "https://zbx.local/zabbix/tr_events.php?triggerid=t2&eventid=11"
     sem_trigger = result[0]
     assert sem_trigger["host"] == "—"
     assert sem_trigger["severity_label"] == "Não classificado"
@@ -97,7 +97,7 @@ def test_fetch_problems_vazio_nao_consulta_triggers() -> None:
 
 def test_build_event_url_prefere_front_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ZABBIX_FRONT_URL", "https://noc.local/")
-    assert zt._build_event_url("7") == "https://noc.local/tr_events.php?triggerid=0&eventid=7"
+    assert zt._build_event_url("7", "70") == "https://noc.local/tr_events.php?triggerid=70&eventid=7"
 
 
 def test_get_cached_triggers_sem_configuracao(monkeypatch: pytest.MonkeyPatch) -> None:
