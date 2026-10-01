@@ -79,6 +79,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         from app.models import user as _user_model  # noqa: F401
 
         db.create_all()
+        _unidade_model.garantir_colunas()
         _unidade_model.seed_unidades()
 
     # Existing raw-SQLite governance DB (unchanged)

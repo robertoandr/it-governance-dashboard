@@ -15,7 +15,7 @@
   </div>
 
 
-  <form method="POST" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+  <form method="POST" enctype="multipart/form-data" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-5">
     <div>
       <label for="nome" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Nome <span class="text-red-500">*</span></label>
       <input id="nome" type="text" name="nome" required maxlength="120"
@@ -40,6 +40,54 @@
       <textarea id="faixas_ip" name="faixas_ip" rows="3" placeholder="10.41.0.0/16&#10;172.29.0.0/22"
                 class="{{ campo }} font-mono">{{ f.get('faixas_ip', unidade.faixas_ip if unidade else '') }}</textarea>
       <p class="text-xs text-slate-400 mt-1">Uma por linha (ou separadas por vírgula), em notação CIDR. Usadas para identificar a unidade de ativos descobertos na rede.</p>
+    </div>
+
+    <div>
+      <label for="endereco" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Endereço</label>
+      <input id="endereco" type="text" name="endereco" maxlength="200" autocomplete="street-address"
+             value="{{ f.get('endereco', unidade.endereco if unidade else '') }}"
+             placeholder="Rua, número, bairro" class="{{ campo }}">
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-[9rem_1fr_6rem] gap-4">
+      <div>
+        <label for="cep" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">CEP</label>
+        <input id="cep" type="text" name="cep" maxlength="9" inputmode="numeric" autocomplete="postal-code"
+               value="{{ f.get('cep', unidade.cep if unidade else '') }}"
+               placeholder="00000-000" class="{{ campo }} font-mono">
+      </div>
+      <div>
+        <label for="cidade" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Cidade</label>
+        <input id="cidade" type="text" name="cidade" maxlength="120" autocomplete="address-level2"
+               value="{{ f.get('cidade', unidade.cidade if unidade else '') }}" class="{{ campo }}">
+      </div>
+      <div>
+        <label for="uf" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">UF</label>
+        {% set uf_atual = f.get('uf', unidade.uf if unidade else '') %}
+        <select id="uf" name="uf" class="{{ campo }}">
+          <option value="">—</option>
+          {% for uf in ufs %}<option value="{{ uf }}" {{ 'selected' if uf_atual == uf }}>{{ uf }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label for="logo" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Logo</label>
+      <div class="flex items-center gap-4">
+        {% if unidade and unidade.logo_mime %}
+        <img src="{{ url_for('dashboards.unidade_logo', unidade_id=unidade.id, v=unidade.updated_at.timestamp() | int) }}"
+             alt="Logo atual de {{ unidade.nome }}" class="h-14 w-14 object-contain rounded-lg border border-slate-200 dark:border-slate-600 bg-white p-1">
+        {% endif %}
+        <input id="logo" type="file" name="logo" accept="image/png,image/jpeg,image/webp"
+               class="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 dark:file:bg-slate-700 file:px-3 file:py-2 file:text-sm file:text-slate-700 dark:file:text-slate-200">
+      </div>
+      <p class="text-xs text-slate-400 mt-1">PNG, JPEG ou WebP, até 512 KB.</p>
+      {% if unidade and unidade.logo_mime %}
+      <div class="flex items-center gap-2 mt-2">
+        <input type="checkbox" name="remover_logo" id="remover_logo" value="1" class="w-4 h-4 text-blue-600 rounded border-slate-300">
+        <label for="remover_logo" class="text-sm text-slate-700 dark:text-slate-200">Remover logo atual</label>
+      </div>
+      {% endif %}
     </div>
 
     {% if unidade %}
