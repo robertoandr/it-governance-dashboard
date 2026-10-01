@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import threading
-import time
-
 import structlog
 from flask import request
 from flask_restx import Namespace, Resource, fields
@@ -14,31 +11,22 @@ from app.auth.rbac import require_role
 from itgov.models.zendesk import Ticket
 from itgov.services.sla_evaluator import SLAStatus, evaluate_ticket, summarize
 from itgov.services.zendesk_service import ZendeskService
+from itgov.utils.cache_swr import CacheSWR
 
 log = structlog.get_logger(__name__)
 
 # ── Cache em memória ─────────────────────────────────────────────────────────
+# Stale-while-revalidate: após a 1ª carga a página nunca espera o Zendesk
+# (7–15 s); o valor anterior é servido enquanto uma thread busca o novo.
 
 _CACHE_TTL = 300  # 5min — para MTTR e volume (fetches leves)
 _CACHE_TTL_SLA = 600  # 10min — para SLA detail (fetch completo de todos os tickets)
 
-_lock_mttr = threading.Lock()
-_cache_mttr: dict | None = None
-_cache_mttr_ts: float = 0.0
-
-_lock_vol = threading.Lock()
-_cache_vol: dict | None = None
-_cache_vol_ts: float = 0.0
-
-_lock_sla = threading.Lock()
-_cache_sla: dict | None = None
-_cache_sla_ts: float = 0.0
+_cache_mttr: CacheSWR[dict] = CacheSWR("zendesk.mttr", _CACHE_TTL)
+_cache_vol: CacheSWR[dict] = CacheSWR("zendesk.volume", _CACHE_TTL)
+_cache_sla: CacheSWR[dict] = CacheSWR("zendesk.sla_detail", _CACHE_TTL_SLA)
 
 _SLA_WINDOW_DAYS = 30
-
-
-def _cache_valido(ts: float, ttl: float = _CACHE_TTL) -> bool:
-    return (time.monotonic() - ts) < ttl
 
 
 def get_cached_sla_detail() -> dict:
@@ -46,14 +34,11 @@ def get_cached_sla_detail() -> dict:
 
     TTL 10min — faz fetch completo de todos os tickets (1800+), pesado.
     """
-    global _cache_sla, _cache_sla_ts
-    with _lock_sla:
-        if _cache_sla is not None and _cache_valido(_cache_sla_ts, _CACHE_TTL_SLA):
-            log.debug("zendesk.sla_detail.cache.hit")
-            return _cache_sla
+    return _cache_sla.get(_carregar_sla_detail)
 
-    log.info("zendesk.sla_detail.cache.miss")
 
+def _carregar_sla_detail() -> dict:
+    """Busca no Zendesk e monta a análise de SLA (sem cache)."""
     from datetime import UTC, datetime, timedelta
 
     with _svc() as svc:
@@ -145,21 +130,16 @@ def get_cached_sla_detail() -> dict:
         "sla_policy": targets.policy_name,
     }
 
-    with _lock_sla:
-        _cache_sla = dados
-        _cache_sla_ts = time.monotonic()
     return dados
 
 
 def get_cached_mttr_summary() -> dict:
     """Retorna resumo MTTR/SLA + CSAT do Zendesk com cache de 5min."""
-    global _cache_mttr, _cache_mttr_ts
-    with _lock_mttr:
-        if _cache_mttr is not None and _cache_valido(_cache_mttr_ts):
-            log.debug("zendesk.mttr.cache.hit")
-            return _cache_mttr
+    return _cache_mttr.get(_carregar_mttr_summary)
 
-    log.info("zendesk.mttr.cache.miss")
+
+def _carregar_mttr_summary() -> dict:
+    """Busca no Zendesk o resumo MTTR/SLA + CSAT (sem cache)."""
     with _svc() as svc:
         open_tickets = svc.get_open_tickets()
         targets = svc.get_sla_targets()
@@ -191,27 +171,25 @@ def get_cached_mttr_summary() -> dict:
         "csat_good": csat.good,
         "csat_bad": csat.bad,
     }
-    with _lock_mttr:
-        _cache_mttr = dados
-        _cache_mttr_ts = time.monotonic()
     return dados
 
 
 def get_cached_volume_by_status() -> dict:
     """Retorna volume de tickets por status com cache de 5min."""
-    global _cache_vol, _cache_vol_ts
-    with _lock_vol:
-        if _cache_vol is not None and _cache_valido(_cache_vol_ts):
-            log.debug("zendesk.volume.cache.hit")
-            return _cache_vol
+    return _cache_vol.get(_carregar_volume)
 
-    log.info("zendesk.volume.cache.miss")
+
+def _carregar_volume() -> dict:
+    """Busca no Zendesk o volume de tickets por status (sem cache)."""
     with _svc() as svc:
-        dados = svc.get_ticket_volume_by_status()
-    with _lock_vol:
-        _cache_vol = dados
-        _cache_vol_ts = time.monotonic()
-    return dados
+        return svc.get_ticket_volume_by_status()
+
+
+def aquecer_caches() -> None:
+    """Carrega os caches do Zendesk em segundo plano (subida do worker)."""
+    _cache_mttr.aquecer(_carregar_mttr_summary)
+    _cache_vol.aquecer(_carregar_volume)
+    _cache_sla.aquecer(_carregar_sla_detail)
 
 
 ns = Namespace("zendesk", description="Zendesk support integration")

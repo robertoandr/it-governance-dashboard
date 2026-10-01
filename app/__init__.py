@@ -201,6 +201,17 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     app.register_blueprint(users_bp, url_prefix=_gov_prefix)
     app.register_blueprint(tarefas_bp, url_prefix=f"{_gov_prefix}/tarefas")
 
+    # Zendesk leva 7–15 s por consulta: os caches são carregados em segundo
+    # plano na subida do worker, para o primeiro acesso não esperar.
+    from app.integrations import zendesk_configured
+
+    if not settings.app.testing and zendesk_configured():
+        from app.services.influxdb_provider import aquecer_zendesk_sla
+        from itgov.api.v1.zendesk import aquecer_caches
+
+        aquecer_caches()
+        aquecer_zendesk_sla()
+
     # CLI commands
     from app.commands import register_commands
 

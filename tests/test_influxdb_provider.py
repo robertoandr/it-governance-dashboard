@@ -192,6 +192,26 @@ class TestZendeskSlaStats:
         assert result == {}
 
 
+class TestZendeskSlaCache:
+    """A Visão Geral não pode consultar o Zendesk (~7 s) a cada carregamento."""
+
+    def test_value_metrics_consulta_zendesk_uma_vez(self, provider: InfluxDBMetricsProvider) -> None:
+        from app.services import influxdb_provider as mod
+
+        mod._cache_zendesk_sla.limpar()
+        stats = {"compliance_pct": 91.4, "total_open": 50, "breached": 4, "csat_pct": 88.0, "csat_sample": 12}
+        try:
+            with (
+                _patch_query(provider, []),
+                patch.object(InfluxDBMetricsProvider, "_zendesk_sla_stats", return_value=stats) as busca,
+            ):
+                provider.get_value_metrics()
+                provider.get_value_metrics()
+            assert busca.call_count == 1
+        finally:
+            mod._cache_zendesk_sla.limpar()
+
+
 class TestPassThroughPillars:
     """Non-value pillars delegate to MockMetricsProvider."""
 
