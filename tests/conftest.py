@@ -82,6 +82,20 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-pytest-only")
 os.environ.setdefault("FLASK_ENV", "testing")
 
 
+@pytest.fixture(autouse=True)
+def _sem_checagem_real_de_fontes(monkeypatch):
+    """A Visão Geral confere as fontes (Zendesk, M365...) — nos testes, nunca na rede."""
+    from app.services import fontes_status
+
+    async def _nada() -> list:
+        return []
+
+    monkeypatch.setattr(fontes_status, "checar_fontes", _nada)
+    fontes_status._cache.limpar()
+    yield
+    fontes_status._cache.limpar()
+
+
 @pytest.fixture
 def ops_pin():
     """Retorna o PIN configurado pra testes."""

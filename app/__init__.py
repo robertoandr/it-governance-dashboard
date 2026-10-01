@@ -201,6 +201,12 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     app.register_blueprint(users_bp, url_prefix=_gov_prefix)
     app.register_blueprint(tarefas_bp, url_prefix=f"{_gov_prefix}/tarefas")
 
+    # Situação das fontes (Visão Geral): primeira checagem em segundo plano.
+    if not settings.app.testing:
+        from app.services.fontes_status import aquecer as aquecer_fontes
+
+        aquecer_fontes()
+
     # Zendesk leva 7–15 s por consulta: os caches são carregados em segundo
     # plano na subida do worker, para o primeiro acesso não esperar.
     from app.integrations import zendesk_configured
