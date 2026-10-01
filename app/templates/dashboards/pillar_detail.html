@@ -40,6 +40,58 @@
   </div>
 </div>
 
+<!-- Plano de melhoria: o que fazer para subir o score, do maior ganho ao menor -->
+<section id="plano" class="bg-white rounded-xl shadow p-6 mb-6 dark:bg-slate-800">
+  <div class="flex items-baseline justify-between gap-3 mb-4">
+    <h3 class="text-sm font-semibold text-gray-600 dark:text-slate-300">Plano de melhoria</h3>
+    {% if plano %}
+    <p class="text-xs text-gray-400 dark:text-slate-500">
+      Atingindo todas as metas, o pilar sobe até +{{ plano | sum(attribute='ganho') | round(1) }} pts
+    </p>
+    {% endif %}
+  </div>
+  {% if not plano %}
+  <p class="text-sm text-green-700 dark:text-green-400">Todos os componentes com dados reais estão na meta. Nada a fazer agora.</p>
+  {% else %}
+  <ol class="space-y-4">
+    {% for a in plano %}
+    <li class="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-gray-800 dark:text-slate-100">{{ loop.index }}. {{ a.componente }}</p>
+          <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">hoje {{ a.valor }} · meta {{ a.meta | int }}</p>
+        </div>
+        <span class="text-xs font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+              title="Pontos que o pilar ganha se este componente chegar à meta">+{{ a.ganho }} pts no pilar</span>
+      </div>
+      <p class="text-sm text-gray-700 dark:text-slate-200 mt-2">{{ a.o_que_fazer }}</p>
+      {% if a.itens %}
+      <ul class="mt-2 space-y-1">
+        {% for i in a.itens %}
+        <li class="text-xs text-gray-600 dark:text-slate-300 flex gap-1.5">
+          <span class="text-gray-300 dark:text-slate-600">•</span>
+          <span class="min-w-0">
+            {% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener" class="font-medium text-blue-600 dark:text-blue-400 hover:underline">{{ i.titulo }}</a>
+            {% else %}<span class="font-medium">{{ i.titulo }}</span>{% endif %}
+            {% if i.detalhe %}<span class="text-gray-400 dark:text-slate-500"> — {{ i.detalhe }}</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <p class="mt-2 text-xs">
+        {% if a.onde_endpoint %}
+        <a href="{{ url_for(a.onde_endpoint) }}" class="text-blue-600 dark:text-blue-400 hover:underline">Onde agir: {{ a.onde_label }} →</a>
+        {% elif a.onde_url %}
+        <a href="{{ a.onde_url }}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Onde agir: {{ a.onde_label }} ↗</a>
+        {% endif %}
+      </p>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+
 <!-- Components -->
 <div class="bg-white rounded-xl shadow p-6 mb-6 dark:bg-slate-800">
   <h3 class="text-sm font-semibold text-gray-600 mb-5 dark:text-slate-300">Componentes</h3>

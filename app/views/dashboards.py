@@ -106,8 +106,12 @@ def overview() -> str:
 @require_role("admin", "gestor", "visualizador")
 def pillars() -> str:
     """Render all pillars detail page."""
+    from app.services.plano_melhoria import montar_plano
+
     data = _get_governance()
-    return render_template("dashboards/pillars.html", governance=data)
+    # Só a ação que mais rende por pilar; os itens concretos ficam no detalhe.
+    proxima = {p["id"]: next(iter(montar_plano(p, com_itens=False)), None) for p in data["pillars"]}
+    return render_template("dashboards/pillars.html", governance=data, proxima=proxima)
 
 
 @bp.route("/pilares")
@@ -888,7 +892,9 @@ def pillar_detail(pillar_id: str) -> str:
     if pillar is None:
         abort(404)
 
-    return render_template("dashboards/pillar_detail.html", pillar=pillar, governance=data)
+    from app.services.plano_melhoria import montar_plano
+
+    return render_template("dashboards/pillar_detail.html", pillar=pillar, governance=data, plano=montar_plano(pillar))
 
 
 @bp.route("/pmo")
