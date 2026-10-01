@@ -12,10 +12,13 @@ pela própria página /cftv.
 from __future__ import annotations
 
 import ipaddress
+import re
 from datetime import UTC, datetime
 
 import structlog
+from sqlalchemy import Engine, inspect, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.extensions import db
 
@@ -34,6 +37,48 @@ DVRS_PADRAO: dict[str, str] = {
     "DVR-2": "Sede Centro",
     "DVR-3": "Sede Centro",
 }
+
+
+UFS: frozenset[str] = frozenset(
+    [
+        "AC",
+        "AL",
+        "AP",
+        "AM",
+        "BA",
+        "CE",
+        "DF",
+        "ES",
+        "GO",
+        "MA",
+        "MT",
+        "MS",
+        "MG",
+        "PA",
+        "PB",
+        "PR",
+        "PE",
+        "PI",
+        "RJ",
+        "RN",
+        "RS",
+        "RO",
+        "RR",
+        "SC",
+        "SP",
+        "SE",
+        "TO",
+    ]
+)
+
+LOGO_MAX_BYTES = 512 * 1024
+
+# Só formatos raster, reconhecidos pelos bytes iniciais. SVG fica de fora:
+# pode carregar script e seria servido do nosso domínio.
+_LOGO_ASSINATURAS: tuple[tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+)
 
 
 class Unidade(db.Model):
@@ -57,6 +102,13 @@ class Unidade(db.Model):
     parent_id: int | None = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=True)
     faixas_ip: str = db.Column(db.Text, nullable=False, default="")
     ativo: bool = db.Column(db.Boolean, nullable=False, default=True)
+    endereco: str = db.Column(db.String(200), nullable=False, default="", server_default="")
+    cep: str = db.Column(db.String(9), nullable=False, default="", server_default="")
+    cidade: str = db.Column(db.String(120), nullable=False, default="", server_default="")
+    uf: str = db.Column(db.String(2), nullable=False, default="", server_default="")
+    # deferred: a listagem não precisa carregar os bytes de todos os logos
+    logo: Mapped[bytes | None] = mapped_column(db.LargeBinary, nullable=True, deferred=True)
+    logo_mime: str | None = db.Column(db.String(32), nullable=True)
     created_at: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     updated_at: datetime = db.Column(
         db.DateTime(timezone=True),
@@ -71,6 +123,13 @@ class Unidade(db.Model):
     def caminho(self) -> str:
         """Nome completo na hierarquia, ex.: ``"Obras / Residencial X"``."""
         return f"{self.parent.nome} / {self.nome}" if self.parent else self.nome
+
+    @property
+    def local(self) -> str:
+        """Cidade e UF para exibição, ex.: ``"Joinville/SC"`` (vazio sem cidade)."""
+        if not self.cidade:
+            return self.uf
+        return f"{self.cidade}/{self.uf}" if self.uf else self.cidade
 
     @property
     def faixas(self) -> list[str]:
@@ -118,6 +177,100 @@ def parse_faixas(texto: str) -> list[str]:
         if str(rede) not in faixas:
             faixas.append(str(rede))
     return faixas
+
+
+def normalizar_cep(texto: str) -> str:
+    """Valida um CEP e devolve no formato ``00000-000``.
+
+    Args:
+        texto: CEP digitado, com ou sem hífen/ponto.
+
+    Returns:
+        CEP formatado, ou string vazia quando nada foi informado.
+
+    Raises:
+        ValueError: Se não houver exatamente 8 dígitos.
+    """
+    digitos = re.sub(r"[\s.\-]", "", texto)
+    if not digitos:
+        return ""
+    if not re.fullmatch(r"\d{8}", digitos):
+        raise ValueError(f"CEP inválido: {texto.strip()}")
+    return f"{digitos[:5]}-{digitos[5:]}"
+
+
+def normalizar_uf(texto: str) -> str:
+    """Valida a sigla do estado (``sc`` → ``SC``); vazio é aceito.
+
+    Raises:
+        ValueError: Se a sigla não for uma UF brasileira.
+    """
+    uf = texto.strip().upper()
+    if uf and uf not in UFS:
+        raise ValueError(f"UF inválida: {texto.strip()}")
+    return uf
+
+
+def tipo_logo(dados: bytes) -> str:
+    """Identifica o tipo do logo pelos bytes iniciais e confere o tamanho.
+
+    Args:
+        dados: Conteúdo do arquivo enviado.
+
+    Returns:
+        MIME type (``image/png``, ``image/jpeg`` ou ``image/webp``).
+
+    Raises:
+        ValueError: Arquivo vazio, maior que ``LOGO_MAX_BYTES`` ou de outro formato.
+    """
+    if not dados:
+        raise ValueError("Arquivo de logo vazio.")
+    if len(dados) > LOGO_MAX_BYTES:
+        raise ValueError(f"Logo maior que {LOGO_MAX_BYTES // 1024} KB.")
+    for assinatura, mime in _LOGO_ASSINATURAS:
+        if dados.startswith(assinatura):
+            return mime
+    if dados[:4] == b"RIFF" and dados[8:12] == b"WEBP":
+        return "image/webp"
+    raise ValueError("Logo deve ser PNG, JPEG ou WebP.")
+
+
+# Colunas criadas depois da tabela existir em produção: create_all() não
+# altera tabelas existentes, então são adicionadas aqui (idempotente).
+_COLUNAS_NOVAS: tuple[tuple[str, str], ...] = (
+    ("endereco", "VARCHAR(200) NOT NULL DEFAULT ''"),
+    ("cep", "VARCHAR(9) NOT NULL DEFAULT ''"),
+    ("cidade", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    ("uf", "VARCHAR(2) NOT NULL DEFAULT ''"),
+    ("logo", "BLOB"),
+    ("logo_mime", "VARCHAR(32)"),
+)
+
+
+def garantir_colunas(engine: Engine | None = None) -> None:
+    """Adiciona à tabela ``unidades`` as colunas que ainda faltam.
+
+    Com vários workers subindo juntos, outro pode ter criado a coluna entre a
+    inspeção e o ALTER; o erro de coluna duplicada é ignorado.
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    engine = engine or db.engine
+    existentes = {c["name"] for c in inspect(engine).get_columns(Unidade.__tablename__)}
+    for nome, ddl in _COLUNAS_NOVAS:
+        if nome in existentes:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {Unidade.__tablename__} ADD COLUMN {nome} {ddl}"))
+            log.info("unidades.coluna_adicionada", coluna=nome)
+        except OperationalError as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
+            log.info("unidades.coluna_concorrente_ignorada", coluna=nome)
 
 
 def seed_unidades() -> None:

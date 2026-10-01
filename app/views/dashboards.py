@@ -398,9 +398,18 @@ def unidades_list() -> str:
 @login_required
 @require_role("admin", "gestor")
 def unidade_form(unidade_id: int | None = None) -> object:
-    """Formulário de criação/edição de unidade (nome, unidade pai, faixas de IP)."""
+    """Formulário de criação/edição de unidade (nome, pai, faixas de IP, endereço e logo)."""
     from app.extensions import db
-    from app.models.unidade import DvrUnidade, Unidade, parse_faixas
+    from app.models.unidade import (
+        LOGO_MAX_BYTES,
+        UFS,
+        DvrUnidade,
+        Unidade,
+        normalizar_cep,
+        normalizar_uf,
+        parse_faixas,
+        tipo_logo,
+    )
 
     unidade = db.session.get(Unidade, unidade_id) if unidade_id else None
     if unidade_id and unidade is None:
@@ -411,7 +420,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
     ]
 
     def _render() -> str:
-        return render_template("dashboards/unidade_form.html", unidade=unidade, pais=pais)
+        return render_template("dashboards/unidade_form.html", unidade=unidade, pais=pais, ufs=sorted(UFS))
 
     if request.method == "GET":
         return _render()
@@ -439,8 +448,14 @@ def unidade_form(unidade_id: int | None = None) -> object:
     if unidade and parent_id is not None and unidade.filhas:
         flash("Uma unidade com filhas não pode virar filha de outra.", "error")
         return _render()
+    arquivo = request.files.get("logo")
     try:
         faixas = parse_faixas(request.form.get("faixas_ip", ""))
+        cep = normalizar_cep(request.form.get("cep", ""))
+        uf = normalizar_uf(request.form.get("uf", ""))
+        # Um byte além do limite basta para tipo_logo() recusar o arquivo.
+        logo = arquivo.read(LOGO_MAX_BYTES + 1) if arquivo and arquivo.filename else None
+        logo_mime = tipo_logo(logo) if logo is not None else None
     except ValueError as exc:
         flash(str(exc), "error")
         return _render()
@@ -455,11 +470,36 @@ def unidade_form(unidade_id: int | None = None) -> object:
     unidade.nome = nome
     unidade.parent_id = parent_id
     unidade.faixas_ip = "\n".join(faixas)
+    unidade.endereco = request.form.get("endereco", "").strip()[:200]
+    unidade.cep = cep
+    unidade.cidade = request.form.get("cidade", "").strip()[:120]
+    unidade.uf = uf
+    if logo is not None:
+        unidade.logo, unidade.logo_mime = logo, logo_mime
+    elif "remover_logo" in request.form:
+        unidade.logo, unidade.logo_mime = None, None
     unidade.ativo = "ativo" in request.form or unidade_id is None
     db.session.commit()
     log.info("unidade.salva", unidade=unidade.caminho, faixas=len(faixas), user=current_user.email)
     flash("Unidade salva.", "success")
     return redirect(url_for("dashboards.unidades_list"))
+
+
+@bp.route("/unidades/<int:unidade_id>/logo")
+@login_required
+@require_role("admin", "gestor", "operador")
+def unidade_logo(unidade_id: int) -> Response:
+    """Serve o logo da unidade guardado no banco (404 quando não há)."""
+    from app.extensions import db
+    from app.models.unidade import Unidade
+
+    unidade = db.session.get(Unidade, unidade_id)
+    if unidade is None or not unidade.logo or not unidade.logo_mime:
+        abort(404)
+    resp = Response(unidade.logo, mimetype=unidade.logo_mime)
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Cache-Control"] = "private, max-age=86400"
+    return resp
 
 
 # Mapa de Câmeras (serviço nativo mapa-cameras.service, porta 8080) é servido
