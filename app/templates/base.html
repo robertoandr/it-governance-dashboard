@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{% block title %}Governança de TI Dashboard{% endblock %}</title>
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <!-- Tailwind dark mode via class strategy -->
-  <script nonce="{{ csp_nonce() }}">tailwind = { config: { darkMode: 'class' } }</script>
   <!-- Empacotado localmente em app/static/vendor/ — sem dependência de CDN externo -->
   <script src="{{ url_for('static', filename='vendor/tailwind.js') }}" nonce="{{ csp_nonce() }}"></script>
+  <!-- A config só vale depois do script: definida antes, ela é
+       sobrescrita no carregamento e o dark mode caía no padrão "media" (tema do SO). -->
+  <script nonce="{{ csp_nonce() }}">
+    tailwind.config = { darkMode: 'class' };
+    if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
+  </script>
   <!-- Alpine CSP build — sem eval() -->
   <script defer src="{{ url_for('static', filename='vendor/alpine-csp.min.js') }}" nonce="{{ csp_nonce() }}"></script>
   <!-- Chart.js -->
@@ -90,7 +95,7 @@
     <!-- Footer -->
     <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700
                    px-6 py-2 text-xs text-slate-400 flex justify-between items-center">
-      <span>Governança de TI Dashboard &mdash; v{{ app_version }}</span>
+      <span>{{ app_name }} &mdash; v{{ app_version }}</span>
       <span id="footer-last-update" class="text-slate-300 dark:text-slate-600"></span>
       <span>{{ environment | upper }}</span>
     </footer>

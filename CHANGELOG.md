@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Início da V2.0 "Governança de TI 360" (revisão página por página de 30/09/2026).
+
+### Changed
+- Nome do sistema passa a ser **Governança de TI 360** (títulos, menu, rodapé, login)
+- Versão com fonte única no `pyproject.toml` (`2.0.0.dev0`); `APP__VERSION`/`APP__NAME` não precisam mais estar no `.env`
+- Home: "Calculado em" (sempre o horário do acesso) trocado por **Última atualização em**, com a coleta real mais recente do InfluxDB em horário de Brasília, e botão **Atualizar**
+- Página `/gov/backup` renomeada para **Cibersegurança** em `/gov/ciberseguranca` (o endereço antigo redireciona com 301)
+
+### Fixed
+- Alternância de tema claro/escuro não funcionava: a config do Tailwind era definida antes do script e sobrescrita, ficando no modo `media` (tema do SO)
+- Páginas sem variantes `dark:` (M365, Licenças, Compliance, Infra, Acronis, Zabbix, SLA etc.) ficavam ilegíveis no tema escuro
+
 ## [1.1.0] - 2026-06-06
 
 ### Added

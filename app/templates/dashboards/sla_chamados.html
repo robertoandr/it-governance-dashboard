@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}SLA / Chamados — IT Governance{% endblock %}
+{% block title %}SLA / Chamados — Governança de TI 360{% endblock %}
 
 {% block page_title %}Suporte — SLA & Chamados{% endblock %}
 
 {% block content %}
 {% macro stat_card(label, value, unit, color, sub) %}
-<div class="bg-white rounded-xl shadow p-5">
-  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+  <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">{{ label }}</p>
   <p class="text-3xl font-bold {{ color }}">{{ value }}<span class="text-base text-gray-400 ml-1">{{ unit }}</span></p>
   {% if sub %}<p class="text-xs text-gray-400 mt-1">{{ sub }}</p>{% endif %}
 </div>
@@ -18,8 +18,8 @@
 {% macro pct(v) -%}{{ '—' if v is none else v | round(1) }}{%- endmacro %}
 
 <div class="mb-4">
-  <h1 class="text-xl font-bold text-gray-800">SLA / Chamados — Zendesk</h1>
-  <p class="text-sm text-gray-500">
+  <h1 class="text-xl font-bold text-gray-800 dark:text-slate-100">SLA / Chamados — Zendesk</h1>
+  <p class="text-sm text-gray-500 dark:text-slate-400">
     SLA em horário comercial:
     {% if data.sla_source == 'zendesk_policy' %}metas da política <strong>{{ data.sla_policy }}</strong> do Zendesk.
     {% else %}metas padrão ITIL (nenhuma política de SLA configurada no Zendesk).{% endif %}
@@ -45,7 +45,7 @@
 
 {# --- KPIs principais --- #}
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-  {{ stat_card('Tickets abertos', data.total_open, '', 'text-gray-800', 'new + open + pending') }}
+  {{ stat_card('Tickets abertos', data.total_open, '', 'text-gray-800 dark:text-slate-100', 'new + open + pending') }}
   {{ stat_card('Resolvidos (7d)', data.resolved_7d, '', 'text-green-600', 'últimos 7 dias') }}
   {{ stat_card('Resolvidos (30d)', data.resolved_30d, '', 'text-blue-600', 'últimos 30 dias') }}
   {{ stat_card('Total histórico', data.total_all, '', 'text-gray-500', 'todos os status') }}
@@ -55,8 +55,8 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
   {# SLA por prioridade #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-sm font-semibold text-gray-700 mb-1">SLA da fila aberta por prioridade</p>
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-1 dark:text-slate-200">SLA da fila aberta por prioridade</p>
     <p class="text-xs text-gray-400 mb-4">Tickets abertos ainda dentro da meta</p>
     {% set prio_order = ['urgent', 'high', 'normal', 'low'] %}
     {% set prio_labels = {'urgent': 'Urgente', 'high': 'Alta', 'normal': 'Normal', 'low': 'Baixa'} %}
@@ -74,18 +74,18 @@
       {% set compliance = p.get('compliance_pct') %}
       <div class="flex items-center gap-3">
         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-16 justify-center
-            {{ prio_badge.get(prio, 'bg-gray-100 text-gray-500') }}">
+            {{ prio_badge.get(prio, 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400') }}">
           {{ prio_labels.get(prio, prio) }}
         </span>
         <div class="flex-1">
           {% if count == 0 or compliance is none %}
             <div class="flex items-center gap-1.5">
-              <div class="flex-1 h-2 bg-gray-100 rounded-full"></div>
+              <div class="flex-1 h-2 bg-gray-100 rounded-full dark:bg-slate-700"></div>
               <span class="text-xs text-gray-400 w-10 text-right">—</span>
             </div>
           {% else %}
             <div class="flex items-center gap-1.5">
-              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
                 <div class="h-full rounded-full
                     {% if compliance >= 80 %}bg-green-500
                     {% elif compliance >= 50 %}bg-yellow-400
@@ -102,7 +102,7 @@
           {% endif %}
         </div>
         <div class="text-right w-24 flex-shrink-0">
-          <span class="text-xs text-gray-600">
+          <span class="text-xs text-gray-600 dark:text-slate-300">
             {{ count }} ticket{{ 's' if count != 1 }}
             {% if breached > 0 %}
             <span class="text-red-500 font-medium">({{ breached }} violado{{ 's' if breached != 1 }})</span>
@@ -118,8 +118,8 @@
   </div>
 
   {# Baldes de idade #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-sm font-semibold text-gray-700 mb-4">Tickets abertos por tempo de espera</p>
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-4 dark:text-slate-200">Tickets abertos por tempo de espera</p>
     {% set total_open = data.total_open %}
     {% set buckets = [
       ('<8h',     data.age_buckets.get('<8h', 0),     'bg-green-500',  'text-green-600'),
@@ -131,7 +131,7 @@
       {% for label, count, bar_cls, text_cls in buckets %}
       <div>
         <div class="flex justify-between items-baseline mb-1">
-          <span class="text-xs text-gray-600">{{ label }}</span>
+          <span class="text-xs text-gray-600 dark:text-slate-300">{{ label }}</span>
           <span class="text-sm font-semibold {{ text_cls }}">
             {{ count }}
             {% if total_open > 0 %}
@@ -141,7 +141,7 @@
             {% endif %}
           </span>
         </div>
-        <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
           {% if total_open > 0 %}
           <div class="h-full {{ bar_cls }} rounded-full"
             style="width: {{ (count / total_open * 100) | round(0) }}%"></div>
@@ -153,7 +153,7 @@
 
     {# Volume por status #}
     <div class="mt-5 pt-4 border-t">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Volume por status</p>
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-slate-400">Volume por status</p>
       {% set status_info = [
         ('new',     'Novo',      'bg-blue-100 text-blue-700'),
         ('open',    'Aberto',    'bg-yellow-100 text-yellow-700'),
@@ -168,7 +168,7 @@
         {% if n > 0 %}
         <div class="flex items-center justify-between">
           <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ cls }}">{{ label }}</span>
-          <span class="text-sm font-semibold text-gray-700">{{ n }}</span>
+          <span class="text-sm font-semibold text-gray-700 dark:text-slate-200">{{ n }}</span>
         </div>
         {% endif %}
         {% endfor %}
@@ -179,8 +179,8 @@
 </div>
 
 {# --- Fila de tickets mais antigos --- #}
-<div class="bg-white rounded-xl shadow p-5">
-  <p class="text-sm font-semibold text-gray-700 mb-3">
+<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+  <p class="text-sm font-semibold text-gray-700 mb-3 dark:text-slate-200">
     Tickets abertos mais antigos
     <span class="ml-1 text-xs font-normal text-gray-400">(top 25 por tempo de espera)</span>
   </p>
@@ -212,12 +212,12 @@
             'open':    'bg-yellow-100 text-yellow-700',
             'pending': 'bg-orange-100 text-orange-700',
           }.get(t.status, 'bg-gray-100 text-gray-600') %}
-          <tr class="hover:bg-gray-50 {% if t.breached %}bg-red-50 hover:bg-red-50{% endif %}">
+          <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50 {% if t.breached %}bg-red-50 hover:bg-red-50 dark:bg-red-900/20{% endif %}">
             <td class="py-1.5 pr-3 text-gray-400 text-xs">{{ t.id }}</td>
-            <td class="py-1.5 pr-3 text-gray-700 max-w-[280px] truncate text-xs" title="{{ t.subject }}">
+            <td class="py-1.5 pr-3 text-gray-700 max-w-[280px] truncate text-xs dark:text-slate-200" title="{{ t.subject }}">
               {{ t.subject }}
               {% if t.breached %}
-              <span class="ml-1 text-[9px] bg-red-100 text-red-600 rounded px-1">SLA</span>
+              <span class="ml-1 text-[9px] bg-red-100 text-red-600 rounded px-1 dark:bg-red-900/20">SLA</span>
               {% endif %}
             </td>
             <td class="py-1.5 pr-3">

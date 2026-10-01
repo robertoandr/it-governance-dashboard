@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Governanca M365 — Grupo Gadens{% endblock %}
+{% block title %}Governanca M365 — Governança de TI 360{% endblock %}
 {% block page_title %}Governanca Microsoft 365{% endblock %}
 
 {% block content %}
@@ -63,9 +63,9 @@
 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
 
   <a href="{{ url_for('dashboards.governance_compliance') }}"
-     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">MFA Habilitado</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">MFA Habilitado</p>
       <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ mfa_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
@@ -77,15 +77,15 @@
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Sem dados</p>
     {% endif %}
-    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full rounded-full bg-{{ mfa_c }}-500 transition-all" style="width: {{ [mfa_pct, 100] | min }}%"></div>
     </div>
   </a>
 
   <a href="{{ url_for('dashboards.governance_compliance') }}"
-     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Secure Score</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Secure Score</p>
       <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ ss_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
@@ -97,15 +97,15 @@
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Sem dados</p>
     {% endif %}
-    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full rounded-full bg-{{ ss_c }}-500 transition-all" style="width: {{ [ss_pct, 100] | min }}%"></div>
     </div>
   </a>
 
   <a href="{{ url_for('dashboards.m365_licenses') }}"
-     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Licencas</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Licencas</p>
       <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ lic_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
@@ -117,15 +117,15 @@
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
     {% endif %}
-    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full rounded-full bg-{{ lic_c }}-500 transition-all" style="width: {{ [uso, 100] | min }}%"></div>
     </div>
   </a>
 
   <a href="{{ url_for('dashboards.zabbix_triggers') }}"
-     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Alertas Ativos</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Alertas Ativos</p>
       <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ trig_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
@@ -135,18 +135,18 @@
       {% if trig_disaster > 0 %}<span class="text-red-600 font-semibold">{{ trig_disaster }} desastre</span> · {% endif %}
       {{ trig_high }} alto · {{ trig_medio }} medio
     </p>
-    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full rounded-full bg-{{ trig_c }}-500" style="width: 100%"></div>
     </div>
   </a>
 
 
   <!-- Card: Caixas soft-deleted (BAI09) -->
-  <div class="bg-white rounded-xl shadow p-4">
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Lixeira Exchange</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Lixeira Exchange</p>
       {% if mb_pending > 0 %}
-      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">!</span>
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300">!</span>
       {% endif %}
     </div>
     {% if mailbox %}
@@ -160,7 +160,7 @@
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
     {% endif %}
-    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full rounded-full bg-{{ mb_c }}-500" style="width: 100%"></div>
     </div>
     <p class="text-xs text-gray-300 mt-1.5">COBIT BAI09</p>
@@ -172,13 +172,13 @@
 <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
 
   <!-- SSPR -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">SSPR</p>
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">SSPR</p>
     {% if sspr_pct is not none %}
       {% if sspr_pct >= 80 %}{% set sspr_c = "green" %}{% elif sspr_pct >= 50 %}{% set sspr_c = "yellow" %}{% else %}{% set sspr_c = "red" %}{% endif %}
       <p class="text-3xl font-bold text-{{ sspr_c }}-600">{{ sspr_pct | round(1) }}%</p>
       <p class="text-xs text-gray-400 mt-1">usuarios com reset proprio</p>
-      <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
         <div class="h-full rounded-full bg-{{ sspr_c }}-500" style="width: {{ [sspr_pct, 100] | min }}%"></div>
       </div>
     {% else %}
@@ -189,8 +189,8 @@
   </div>
 
   <!-- CA Policies -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Acesso Condicional</p>
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Acesso Condicional</p>
     {% if ca_total is not none %}
       {% set ca_int = ca_total | int %}
       {% if ca_int >= 5 %}{% set ca_c = "green" %}{% elif ca_int >= 2 %}{% set ca_c = "yellow" %}{% else %}{% set ca_c = "red" %}{% endif %}
@@ -204,8 +204,8 @@
   </div>
 
   <!-- Admins sem MFA -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Admins sem MFA</p>
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Admins sem MFA</p>
     {% if admin_sem_mfa is not none %}
       {% set asem = admin_sem_mfa | int %}
       {% if asem == 0 %}{% set asem_c = "green" %}{% elif asem <= 2 %}{% set asem_c = "yellow" %}{% else %}{% set asem_c = "red" %}{% endif %}
@@ -219,8 +219,8 @@
   </div>
 
   <!-- Licencas ociosas -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Licencas Ociosas</p>
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Licencas Ociosas</p>
     {% if licenses.has_data %}
       {% if lic_ociosas == 0 %}{% set loc_c = "green" %}{% elif lic_ociosas <= 10 %}{% set loc_c = "yellow" %}{% else %}{% set loc_c = "red" %}{% endif %}
       <p class="text-3xl font-bold text-{{ loc_c }}-600">{{ lic_ociosas }}</p>
@@ -234,8 +234,8 @@
 
   <!-- Alertas Defender -->
   <a href="{{ url_for('dashboards.governance_security_alerts') }}"
-     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Alertas Defender</p>
+     class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Alertas Defender</p>
     {% if sa_enabled %}
       {% if sa_gt24h == 0 %}{% set sa_c = "green" %}{% elif sa_gt24h <= 3 %}{% set sa_c = "yellow" %}{% else %}{% set sa_c = "red" %}{% endif %}
       <p class="text-3xl font-bold text-{{ sa_c }}-600">{{ sa_gt24h }}</p>
@@ -248,8 +248,8 @@
   </a>
 
   <!-- DMARC / SPF / DKIM -->
-  <div class="bg-white rounded-xl shadow p-4">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Email Auth</p>
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Email Auth</p>
     {% if dns_check %}
       <div class="flex flex-col gap-1 mt-1">
         <span class="text-xs font-semibold {% if spf_found %}text-green-600{% else %}text-red-500{% endif %}">
@@ -274,7 +274,7 @@
 <!-- BLOCO 5 — 6 Pilares expansíveis -->
 {% set intune_total = licenses.licenses | selectattr('sku_name', 'in', ['O365_BUSINESS_PREMIUM','O365_BUSINESS_ESSENTIALS']) | list | length %}
 <div class="mb-6">
-  <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3 px-1">6 Pilares de Seguranca — Business Premium</h3>
+  <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3 px-1 dark:text-slate-300">6 Pilares de Seguranca — Business Premium</h3>
   <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
     {% set pilares = [
@@ -335,9 +335,9 @@
     ] %}
 
     {% for num, titulo, produto, cor, icon, status, bullets, fonte, link in pilares %}
-    <div x-data="{open: false}" class="bg-white rounded-xl shadow overflow-hidden">
+    <div x-data="{open: false}" class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
       <button @click="open = !open"
-              class="w-full flex items-start gap-3 p-4 hover:bg-gray-50 transition text-left">
+              class="w-full flex items-start gap-3 p-4 hover:bg-gray-50 transition text-left dark:hover:bg-slate-700/50">
         <div class="w-9 h-9 rounded-lg bg-{{ cor }}-100 flex items-center justify-center flex-shrink-0 mt-0.5">
           <svg class="w-5 h-5 text-{{ cor }}-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon }}"/>
@@ -348,11 +348,11 @@
             <p class="text-xs text-gray-400 font-semibold uppercase">{{ num }} · {{ titulo }}</p>
             <div class="flex items-center gap-1.5 flex-shrink-0">
               {% if status == 'ativo' %}
-              <span class="text-[10px] font-bold bg-green-100 text-green-700 rounded-full px-2 py-0.5">Ativo</span>
+              <span class="text-[10px] font-bold bg-green-100 text-green-700 rounded-full px-2 py-0.5 dark:bg-green-900/20 dark:text-green-300">Ativo</span>
               {% elif status == 'parcial' %}
-              <span class="text-[10px] font-bold bg-yellow-100 text-yellow-700 rounded-full px-2 py-0.5">Parcial</span>
+              <span class="text-[10px] font-bold bg-yellow-100 text-yellow-700 rounded-full px-2 py-0.5 dark:bg-yellow-900/20 dark:text-yellow-300">Parcial</span>
               {% else %}
-              <span class="text-[10px] font-bold bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Verificar</span>
+              <span class="text-[10px] font-bold bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 dark:bg-slate-700 dark:text-slate-400">Verificar</span>
               {% endif %}
               <svg class="w-4 h-4 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''"
                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,14 +360,14 @@
               </svg>
             </div>
           </div>
-          <p class="text-sm font-semibold text-gray-800 mt-0.5">{{ produto }}</p>
+          <p class="text-sm font-semibold text-gray-800 mt-0.5 dark:text-slate-100">{{ produto }}</p>
           <p class="text-xs text-gray-400 mt-0.5">{{ fonte }}</p>
         </div>
       </button>
-      <div x-show="open" x-collapse class="border-t border-gray-100">
+      <div x-show="open" x-collapse class="border-t border-gray-100 dark:border-slate-700">
         <ul class="px-4 py-3 space-y-1.5">
           {% for b in bullets %}
-          <li class="flex items-start gap-2 text-xs text-gray-600">
+          <li class="flex items-start gap-2 text-xs text-gray-600 dark:text-slate-300">
             <span class="text-{{ cor }}-400 font-bold mt-0.5 flex-shrink-0">&#8226;</span>
             {{ b }}
           </li>
@@ -391,7 +391,7 @@
 </div>
 
 <!-- BLOCO 6 — Checklist interativo com filtro e descrição -->
-<div class="bg-white rounded-xl shadow mb-6 overflow-hidden"
+<div class="bg-white rounded-xl shadow mb-6 overflow-hidden dark:bg-slate-800"
      x-data="{
        filtro: 'TODOS',
        checks: [
@@ -413,8 +413,8 @@
        get pct() { return Math.round(this.concluidos / this.checks.length * 100); }
      }">
 
-  <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
-    <h3 class="text-sm font-semibold text-gray-700">Checklist de Implementacao</h3>
+  <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 dark:border-slate-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Checklist de Implementacao</h3>
     <div class="flex items-center gap-2">
       <span class="text-xs text-gray-400" x-text="concluidos + '/' + checks.length + ' concluidas'"></span>
       <div class="flex gap-1">
@@ -432,7 +432,7 @@
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
-        <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold">
+        <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-400">
           <th class="px-4 py-2 w-8"></th>
           <th class="px-4 py-2 text-left w-20">Prioridade</th>
           <th class="px-4 py-2 text-left">Tarefa</th>
@@ -441,7 +441,7 @@
       </thead>
       <tbody class="divide-y divide-gray-50">
         <template x-for="c in filtrados" :key="c.id">
-          <tr class="hover:bg-gray-50 cursor-pointer" @click="c.done = !c.done"
+          <tr class="hover:bg-gray-50 cursor-pointer dark:hover:bg-slate-700/50" @click="c.done = !c.done"
               :class="c.done ? 'opacity-60' : ''">
             <td class="px-4 py-3">
               <div class="w-4 h-4 rounded border-2 flex items-center justify-center transition"
@@ -454,12 +454,12 @@
             <td class="px-4 py-3">
               <span class="text-[10px] font-bold px-1.5 py-0.5 rounded"
                     :class="{
-                      'bg-red-100 text-red-700':    c.pri === 'ALTA',
-                      'bg-yellow-100 text-yellow-700': c.pri === 'MEDIA',
-                      'bg-blue-100 text-blue-700':  c.pri === 'BAIXA'
+                      'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300':    c.pri === 'ALTA',
+                      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300': c.pri === 'MEDIA',
+                      'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300':  c.pri === 'BAIXA'
                     }" x-text="c.pri"></span>
             </td>
-            <td class="px-4 py-3 text-gray-700 text-xs font-medium"
+            <td class="px-4 py-3 text-gray-700 text-xs font-medium dark:text-slate-200"
                 :class="c.done ? 'line-through text-gray-400' : ''" x-text="c.task"></td>
             <td class="px-4 py-3 text-gray-400 text-xs hidden md:table-cell" x-text="c.desc"></td>
           </tr>
@@ -468,24 +468,24 @@
     </table>
   </div>
 
-  <div class="px-5 py-3 border-t border-gray-100">
+  <div class="px-5 py-3 border-t border-gray-100 dark:border-slate-700">
     <div class="flex items-center justify-between mb-1">
-      <span class="text-xs text-gray-500">Progresso geral</span>
-      <span class="text-xs font-bold text-gray-700" x-text="pct + '%'"></span>
+      <span class="text-xs text-gray-500 dark:text-slate-400">Progresso geral</span>
+      <span class="text-xs font-bold text-gray-700 dark:text-slate-200" x-text="pct + '%'"></span>
     </div>
-    <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full bg-green-500 rounded-full transition-all" :style="'width:' + pct + '%'"></div>
     </div>
   </div>
 </div>
 
 <!-- BLOCO 7 — Links Rápidos (consoles M365) -->
-<div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
-  <div class="px-5 py-3 border-b border-gray-100">
-    <h3 class="text-sm font-semibold text-gray-700">Links Rapidos — Consoles M365</h3>
+<div class="bg-white rounded-xl shadow mb-6 overflow-hidden dark:bg-slate-800">
+  <div class="px-5 py-3 border-b border-gray-100 dark:border-slate-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Links Rapidos — Consoles M365</h3>
     <p class="text-xs text-gray-400">Todos abrem em nova aba</p>
   </div>
-  <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-gray-100">
+  <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-gray-100 dark:divide-slate-700">
     {% set consoles = [
       ("M365 Admin Center", "https://admin.microsoft.com",                              "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z", "blue"),
       ("Defender Portal",   "https://security.microsoft.com",                           "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", "red"),
@@ -498,13 +498,13 @@
     ] %}
     {% for nome, url, icon, color in consoles %}
     <a href="{{ url }}" target="_blank" rel="noopener"
-       class="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 transition group">
+       class="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 transition group dark:hover:bg-slate-700/50">
       <div class="w-8 h-8 rounded-lg bg-{{ color }}-100 flex items-center justify-center flex-shrink-0 group-hover:bg-{{ color }}-200 transition">
         <svg class="w-4 h-4 text-{{ color }}-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon }}"/>
         </svg>
       </div>
-      <span class="text-sm text-gray-700 font-medium flex-1 group-hover:text-{{ color }}-700 transition truncate">{{ nome }}</span>
+      <span class="text-sm text-gray-700 font-medium flex-1 dark:text-slate-200 group-hover:text-{{ color }}-700 transition truncate">{{ nome }}</span>
       <svg class="w-3 h-3 text-gray-300 group-hover:text-{{ color }}-400 flex-shrink-0 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
@@ -539,13 +539,13 @@
   ] %}
 
   {% for freq, cor, itens in cadencias %}
-  <div class="bg-white rounded-xl shadow p-4">
+  <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
     <div class="flex items-center gap-2 mb-3">
       <span class="text-xs font-bold bg-{{ cor }}-100 text-{{ cor }}-700 rounded-full px-3 py-1">{{ freq }}</span>
     </div>
     <ul class="space-y-2">
       {% for item in itens %}
-      <li class="flex items-start gap-2 text-xs text-gray-600">
+      <li class="flex items-start gap-2 text-xs text-gray-600 dark:text-slate-300">
         <span class="text-{{ cor }}-400 font-bold mt-0.5 flex-shrink-0">&#8226;</span>
         {{ item }}
       </li>
@@ -557,14 +557,14 @@
 </div>
 
 <!-- BLOCO 9 — Permissionamento -->
-<div class="bg-white rounded-xl shadow overflow-hidden">
-  <div class="px-5 py-3 border-b border-gray-100">
-    <h3 class="text-sm font-semibold text-gray-700">Permissionamento — SharePoint / M365 Groups</h3>
+<div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+  <div class="px-5 py-3 border-b border-gray-100 dark:border-slate-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Permissionamento — SharePoint / M365 Groups</h3>
     <p class="text-xs text-gray-400">Estrutura de acesso ao ambiente M365 Grupo Gadens</p>
   </div>
   <table class="w-full text-sm">
     <thead>
-      <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold">
+      <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-400">
         <th class="px-5 py-3 text-left">Grupo</th>
         <th class="px-5 py-3 text-left">Nivel de acesso</th>
         <th class="px-5 py-3 text-left">Quem pertence</th>
@@ -573,36 +573,36 @@
     <tbody class="divide-y divide-gray-50">
       <tr class="hover:bg-red-50 transition">
         <td class="px-5 py-3">
-          <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
+          <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800 dark:text-slate-100">
             <span class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>Owners
           </span>
         </td>
         <td class="px-5 py-3">
-          <span class="text-xs bg-red-100 text-red-700 font-semibold rounded px-2 py-0.5">Controle total</span>
+          <span class="text-xs bg-red-100 text-red-700 font-semibold rounded px-2 py-0.5 dark:bg-red-900/20 dark:text-red-300">Controle total</span>
         </td>
-        <td class="px-5 py-3 text-xs text-gray-600">Gerente de TI · Arquiteto de infraestrutura</td>
+        <td class="px-5 py-3 text-xs text-gray-600 dark:text-slate-300">Gerente de TI · Arquiteto de infraestrutura</td>
       </tr>
       <tr class="hover:bg-blue-50 transition">
         <td class="px-5 py-3">
-          <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
+          <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800 dark:text-slate-100">
             <span class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>Members
           </span>
         </td>
         <td class="px-5 py-3">
-          <span class="text-xs bg-blue-100 text-blue-700 font-semibold rounded px-2 py-0.5">Editar conteudo</span>
+          <span class="text-xs bg-blue-100 text-blue-700 font-semibold rounded px-2 py-0.5 dark:bg-blue-900/20 dark:text-blue-300">Editar conteudo</span>
         </td>
-        <td class="px-5 py-3 text-xs text-gray-600">Analistas de TI · Suporte N2 e N3</td>
+        <td class="px-5 py-3 text-xs text-gray-600 dark:text-slate-300">Analistas de TI · Suporte N2 e N3</td>
       </tr>
       <tr class="hover:bg-green-50 transition">
         <td class="px-5 py-3">
-          <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
+          <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800 dark:text-slate-100">
             <span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>Visitors
           </span>
         </td>
         <td class="px-5 py-3">
-          <span class="text-xs bg-green-100 text-green-700 font-semibold rounded px-2 py-0.5">Somente leitura</span>
+          <span class="text-xs bg-green-100 text-green-700 font-semibold rounded px-2 py-0.5 dark:bg-green-900/20 dark:text-green-300">Somente leitura</span>
         </td>
-        <td class="px-5 py-3 text-xs text-gray-600">Suporte N1 · Estagiarios · Auditores externos</td>
+        <td class="px-5 py-3 text-xs text-gray-600 dark:text-slate-300">Suporte N1 · Estagiarios · Auditores externos</td>
       </tr>
     </tbody>
   </table>

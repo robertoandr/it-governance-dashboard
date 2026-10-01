@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Pilares — Governança de TI{% endblock %}
+{% block title %}Pilares — Governança de TI 360{% endblock %}
 {% block page_title %}5 Pilares de Governança{% endblock %}
 
 {# Mapa source -> (label, rota) para drill-down #}
@@ -25,8 +25,8 @@
      class="bg-white dark:bg-slate-800 rounded-xl border
             {% if p.data_source == 'coming_soon' %}border-slate-200 dark:border-slate-700 opacity-70
             {% elif p.status == 'OPERACIONAL' %}border-green-200 dark:border-green-800
-            {% elif p.status == 'DEGRADADO' %}border-yellow-200 dark:border-yellow-800
-            {% else %}border-red-200 dark:border-red-800{% endif %}
+ dark:border-green-800 {% elif p.status == 'DEGRADADO' %}border-yellow-200 dark:border-yellow-800
+ dark:border-yellow-800 {% else %}border-red-200 dark:border-red-800{% endif %}
             p-3 text-center hover:shadow-md transition group">
     {% if p.data_source == 'coming_soon' %}
     <p class="text-2xl font-bold text-slate-300 dark:text-slate-600">–</p>
@@ -68,8 +68,8 @@
             <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">{{ p.score | round(1) }}</span>
             <span class="text-xs font-semibold px-2 py-0.5 rounded-full
               {% if p.status == 'OPERACIONAL' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
-              {% elif p.status == 'DEGRADADO' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400
-              {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% endif %}">
+ dark:bg-green-900/20 dark:text-green-300 {% elif p.status == 'DEGRADADO' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400
+ dark:bg-yellow-900/20 dark:text-yellow-300 {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 dark:bg-red-900/20 dark:text-red-300{% endif %}">
               {{ p.status }}
             </span>
           {% endif %}
@@ -106,8 +106,8 @@
       <div class="rounded-lg border
                   {% if not is_live %}border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/20
                   {% elif c.value < 60 %}border-red-100 dark:border-red-900/30 bg-red-50/40 dark:bg-red-900/10
-                  {% elif c.value < 85 %}border-yellow-100 dark:border-yellow-900/30 bg-yellow-50/40 dark:bg-yellow-900/10
-                  {% else %}border-green-100 dark:border-green-900/30 bg-green-50/40 dark:bg-green-900/10{% endif %}
+ dark:border-red-800 {% elif c.value < 85 %}border-yellow-100 dark:border-yellow-900/30 bg-yellow-50/40 dark:bg-yellow-900/10
+ dark:border-yellow-800 {% else %}border-green-100 dark:border-green-900/30 bg-green-50/40 dark:bg-green-900/10 dark:border-green-800{% endif %}
                   px-3 py-2">
 
         <div class="flex items-center justify-between gap-2">

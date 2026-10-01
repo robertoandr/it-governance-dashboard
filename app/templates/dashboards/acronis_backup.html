@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Cyber Acronis — IT Governance{% endblock %}
+{% block title %}Cibersegurança — Governança de TI 360{% endblock %}
 
-{% block page_title %}Cyber Acronis{% endblock %}
+{% block page_title %}Cibersegurança{% endblock %}
 
 {% block content %}
 {% macro stat_card(label, value, unit, color, sub) %}
-<div class="bg-white rounded-xl shadow p-5">
-  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+  <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">{{ label }}</p>
   {% if value is none %}
     <p class="text-3xl font-bold text-gray-300">—</p>
     <p class="text-xs text-gray-400 mt-1">sem dados</p>
@@ -19,14 +19,14 @@
 {% endmacro %}
 
 <div class="mb-4">
-  <h1 class="text-xl font-bold text-gray-800">Cyber Acronis</h1>
-  <p class="text-sm text-gray-500">Proteção de endpoints, máquinas em risco e incidentes de segurança. Dados atualizados a cada hora.</p>
+  <h1 class="text-xl font-bold text-gray-800 dark:text-slate-100">Cibersegurança</h1>
+  <p class="text-sm text-gray-500 dark:text-slate-400">Proteção de endpoints, máquinas em risco e incidentes de segurança. Dados atualizados a cada hora.</p>
 </div>
 
 {# --- Parque de agentes --- #}
-<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Parque de agentes</p>
+<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-slate-400">Parque de agentes</p>
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-  {{ stat_card('Total de agentes', data.total_agents, '', 'text-gray-800', none) }}
+  {{ stat_card('Total de agentes', data.total_agents, '', 'text-gray-800 dark:text-slate-100', none) }}
   {{ stat_card('Online', data.online, '',
       'text-green-600' if data.online == data.total_agents else 'text-yellow-600',
       none) }}
@@ -45,7 +45,7 @@
 </div>
 
 {# --- Segurança --- #}
-<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Segurança</p>
+<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-slate-400">Segurança</p>
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
   {{ stat_card('Incidentes mitigados', data.incidents_mitigated, '', 'text-green-600', 'EDR — alertas ativos') }}
   {{ stat_card('Incidentes não mitigados', data.incidents_not_mitigated, '',
@@ -61,10 +61,10 @@
       'text-yellow-600' if data.patches_warning > 0 else 'text-green-600',
       'máquinas') }}
   {# Última atividade de conta (proxy: audit log indisponível neste tenant) #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-xs text-gray-500 mb-1" title="Aproximação: data da última alteração de conta no console Acronis">Última atividade de conta</p>
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400" title="Aproximação: data da última alteração de conta no console Acronis">Última atividade de conta</p>
     {% if data.last_login_user %}
-      <p class="text-sm font-bold text-gray-800 truncate" title="{{ data.last_login_user }}">{{ data.last_login_user }}</p>
+      <p class="text-sm font-bold text-gray-800 truncate dark:text-slate-100" title="{{ data.last_login_user }}">{{ data.last_login_user }}</p>
       {% if data.last_login_fmt %}
         <p class="text-xs text-gray-400 mt-1">{{ data.last_login_fmt }} (aprox.)</p>
       {% endif %}
@@ -79,21 +79,21 @@
 {% if data.sem_plano_count > 0 or data.license_issues > 0 %}
 <div class="flex flex-wrap gap-3 mb-6">
   {% if data.sem_plano_count > 0 %}
-  <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+  <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 dark:bg-orange-900/20 dark:border-orange-800">
     <svg class="w-4 h-4 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
     </svg>
-    <span class="text-sm text-orange-700 font-medium">{{ data.sem_plano_count }} máquina(s) sem plano de proteção</span>
+    <span class="text-sm text-orange-700 font-medium dark:text-orange-300">{{ data.sem_plano_count }} máquina(s) sem plano de proteção</span>
   </div>
   {% endif %}
   {% if data.license_issues > 0 %}
-  <div class="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+  <div class="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 dark:bg-red-900/20 dark:border-red-800">
     <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
     </svg>
-    <span class="text-sm text-red-700 font-medium">{{ data.license_issues }} problema(s) de licença (OfferingItemIsNotSufficient)</span>
+    <span class="text-sm text-red-700 font-medium dark:text-red-300">{{ data.license_issues }} problema(s) de licença (OfferingItemIsNotSufficient)</span>
   </div>
   {% endif %}
 </div>
@@ -103,8 +103,8 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
   {# Máquinas offline > 30 dias #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-sm font-semibold text-gray-700 mb-3">
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-3 dark:text-slate-200">
       Offline há mais de 30 dias
       {% if data.offline_gt30 %}
       <span class="ml-1 text-xs font-normal text-red-500">({{ data.offline_gt30 | length }})</span>
@@ -128,8 +128,8 @@
           </thead>
           <tbody class="divide-y divide-gray-50">
             {% for m in data.offline_gt30[:20] %}
-            <tr class="hover:bg-gray-50">
-              <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate" title="{{ m.name }}">
+            <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+              <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate dark:text-slate-200" title="{{ m.name }}">
                 {{ m.name }}
               </td>
               <td class="py-1.5 text-right font-bold
@@ -150,8 +150,8 @@
   </div>
 
   {# Máquinas sem plano de proteção #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-sm font-semibold text-gray-700 mb-3">
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-3 dark:text-slate-200">
       Sem plano de proteção
       {% if data.sem_plano %}
       <span class="ml-1 text-xs font-normal text-orange-500">({{ data.sem_plano | length }})</span>
@@ -175,14 +175,14 @@
           </thead>
           <tbody class="divide-y divide-gray-50">
             {% for m in data.sem_plano[:20] %}
-            <tr class="hover:bg-gray-50">
-              <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate" title="{{ m.name }}">
+            <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+              <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[150px] truncate dark:text-slate-200" title="{{ m.name }}">
                 {{ m.name }}
               </td>
               <td class="py-1.5">
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium
                     {% if m.status == 'online' %}bg-green-100 text-green-700
-                    {% else %}bg-red-100 text-red-700{% endif %}">
+ dark:text-green-300 dark:bg-green-900/20 {% else %}bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300{% endif %}">
                   {{ m.status }}
                 </span>
               </td>
@@ -200,8 +200,8 @@
 </div>
 
 {# --- Incidentes --- #}
-<div class="bg-white rounded-xl shadow p-5">
-  <p class="text-sm font-semibold text-gray-700 mb-3">
+<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+  <p class="text-sm font-semibold text-gray-700 mb-3 dark:text-slate-200">
     Incidentes críticos (últimas 48h)
     {% if data.incidentes %}
     <span class="ml-1 text-xs font-normal text-red-500">({{ data.incidentes | length }})</span>
@@ -228,18 +228,18 @@
         </thead>
         <tbody class="divide-y divide-gray-50">
           {% for inc in data.incidentes[:30] %}
-          <tr class="hover:bg-gray-50">
-            <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[140px] truncate" title="{{ inc.resource_name }}">
+          <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+            <td class="py-1.5 pr-3 text-gray-700 font-medium text-xs max-w-[140px] truncate dark:text-slate-200" title="{{ inc.resource_name }}">
               {{ inc.resource_name }}
             </td>
-            <td class="py-1.5 pr-3 text-xs text-gray-600 max-w-[160px] truncate" title="{{ inc.alert_type }}">
+            <td class="py-1.5 pr-3 text-xs text-gray-600 max-w-[160px] truncate dark:text-slate-300" title="{{ inc.alert_type }}">
               {{ inc.alert_type }}
             </td>
             <td class="py-1.5 pr-3">
               <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium
                   {% if inc.severity == 'critical' %}bg-red-100 text-red-700
-                  {% elif inc.severity == 'warning' %}bg-yellow-100 text-yellow-700
-                  {% else %}bg-gray-100 text-gray-600{% endif %}">
+ dark:text-red-300 dark:bg-red-900/20 {% elif inc.severity == 'warning' %}bg-yellow-100 text-yellow-700
+ dark:text-yellow-300 dark:bg-yellow-900/20 {% else %}bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300{% endif %}">
                 {{ inc.severity }}
               </span>
             </td>

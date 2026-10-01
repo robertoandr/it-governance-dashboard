@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.auth.rbac import require_role
@@ -15,6 +17,8 @@ from app.integrations import graph_configured, zendesk_configured
 from app.services.metrics_aggregator import MetricsAggregator
 
 log = structlog.get_logger(__name__)
+
+_TZ_LOCAL = ZoneInfo("America/Sao_Paulo")
 
 bp = Blueprint("dashboards", __name__, template_folder="../templates")
 
@@ -25,8 +29,8 @@ def _inject_globals() -> dict:
     from flask import current_app
 
     return {
-        "app_version": current_app.config.get("APP_VERSION", "1.1.0"),
-        "app_name": current_app.config.get("APP_NAME", "Governança de TI Dashboard"),
+        "app_version": current_app.config.get("APP_VERSION", "0.0.0"),
+        "app_name": current_app.config.get("APP_NAME", "Governança de TI 360"),
         "environment": current_app.config.get("APP_ENVIRONMENT", "production"),
     }
 
@@ -40,11 +44,40 @@ _VALID_PILLAR_IDS = {
 }
 
 
+def _last_data_update(pillars: list[dict]) -> str | None:
+    """Return the newest real collection time among pillars, in local time.
+
+    ``computed_at`` is always "now" (the score is recomputed per request), so it
+    says nothing about data freshness; ``last_collected`` is the ``_time`` of
+    the newest InfluxDB point feeding each pillar.
+
+    Args:
+        pillars: Serialized ``PillarScore`` dicts.
+
+    Returns:
+        ``"dd/mm/aaaa hh:mm"`` in America/Sao_Paulo, or ``None`` when no pillar
+        has live data.
+    """
+    stamps: list[datetime] = []
+    for p in pillars:
+        raw = p.get("last_collected")
+        if not raw:
+            continue
+        try:
+            stamps.append(datetime.fromisoformat(str(raw).replace("Z", "+00:00")))
+        except ValueError:
+            log.warning("last_collected_invalido", pillar=p.get("id"), value=raw)
+    if not stamps:
+        return None
+    return max(stamps).astimezone(_TZ_LOCAL).strftime("%d/%m/%Y %H:%M")
+
+
 def _get_governance() -> dict:
     aggregator = MetricsAggregator()
     governance = asyncio.run(aggregator.calculate_full_score())
     data = governance.model_dump(mode="json")
     data["provider_name"] = aggregator.provider_name
+    data["last_data_update"] = _last_data_update(data["pillars"])
     return data
 
 
@@ -220,10 +253,16 @@ def governance_service_health() -> str:
 
 
 @bp.route("/backup")
+def backup_redirect() -> Response:
+    """Endereço antigo: a página passou a se chamar Cibersegurança."""
+    return redirect(url_for("dashboards.acronis_backup"), code=301)
+
+
+@bp.route("/ciberseguranca")
 @login_required
 @require_role("admin", "gestor")
 def acronis_backup() -> str:
-    """Render painel de Backup/Proteção Acronis."""
+    """Render painel de Cibersegurança (proteção/backup Acronis)."""
     from itgov.api.v1.acronis_backup import get_cached_acronis_summary
 
     if not os.getenv("ACRONIS_BASE_URL"):
