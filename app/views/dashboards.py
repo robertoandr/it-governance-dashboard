@@ -95,8 +95,10 @@ def dashboard_redirect():
 @require_role("admin", "gestor", "visualizador")
 def overview() -> str:
     """Render governance overview dashboard."""
+    from app.services.fontes_status import status_fontes
+
     data = _get_governance()
-    return render_template("dashboards/overview.html", governance=data)
+    return render_template("dashboards/overview.html", governance=data, fontes=status_fontes())
 
 
 @bp.route("/pillars")
