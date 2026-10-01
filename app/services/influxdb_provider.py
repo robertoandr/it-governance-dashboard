@@ -12,11 +12,17 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from app.services.mock_data import MockMetricsProvider
+from itgov.utils.cache_swr import CacheSWR
 
 if TYPE_CHECKING:
     from influxdb_client import InfluxDBClient
 
 log = structlog.get_logger(__name__)
+
+# SLA/CSAT do Zendesk na Visão Geral, Pilares e Relatórios: 6 chamadas à API
+# (~7 s) a cada página sem cache. Servido do cache com atualização em fundo;
+# ``{}`` (Zendesk desligado ou erro) não substitui um valor bom.
+_cache_zendesk_sla: CacheSWR[dict[str, Any]] = CacheSWR("provider.zendesk_sla", 300, valido=bool)
 
 # Scoring constants — tunable via env or ADR when baselines are established
 _IDEAL_PR_MONTH = 40  # PRs/month considered 100% delivery pace
@@ -374,7 +380,7 @@ class InfluxDBMetricsProvider:
         """Value Delivery: GitHub PR velocity + Zabbix SLA + Zendesk SLA/CSAT."""
         zabbix = self._zabbix_stats()
         pr_count, avg_hours = self._github_pr_stats()
-        zendesk = self._zendesk_sla_stats()
+        zendesk = _cache_zendesk_sla.get(self._zendesk_sla_stats)
 
         components: list[dict[str, Any]] = []
         last_collected: datetime | None = None
@@ -1226,7 +1232,8 @@ from(bucket: "{self._bucket_raw}")
         avg_hours = sum(values) / len(values) / 3600
         return len(values), avg_hours
 
-    def _zendesk_sla_stats(self) -> dict[str, Any]:
+    @staticmethod
+    def _zendesk_sla_stats() -> dict[str, Any]:
         """Return Zendesk SLA compliance and CSAT via live API call (no InfluxDB measurement)."""
         import config as legacy_config
 
@@ -1254,3 +1261,8 @@ from(bucket: "{self._bucket_raw}")
         except Exception as exc:
             log.warning("zendesk_sla_stats_failed", error=str(exc))
             return {}
+
+
+def aquecer_zendesk_sla() -> None:
+    """Carrega o SLA/CSAT do Zendesk em segundo plano (subida do worker)."""
+    _cache_zendesk_sla.aquecer(InfluxDBMetricsProvider._zendesk_sla_stats)

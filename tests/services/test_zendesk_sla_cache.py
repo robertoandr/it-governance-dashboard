@@ -76,8 +76,8 @@ def fake_svc() -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def _sem_cache() -> None:
-    zendesk_api._cache_sla = None
-    zendesk_api._cache_mttr = None
+    zendesk_api._cache_sla.limpar()
+    zendesk_api._cache_mttr.limpar()
 
 
 def test_sla_detail_usa_estado_real_do_sla(fake_svc: MagicMock) -> None:

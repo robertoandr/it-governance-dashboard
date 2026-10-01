@@ -6,7 +6,7 @@ As páginas só renderizam; escritas passam pela API JSON em
 
 from __future__ import annotations
 
-from flask import Blueprint, render_template
+from flask import Blueprint, Response, redirect, render_template, url_for
 from flask_login import current_user
 from werkzeug.exceptions import NotFound
 
@@ -30,6 +30,12 @@ def workspaces() -> str:
         workspaces=itens,
         pode_gerenciar=pode(current_user.role, Acao.GERENCIAR_WORKSPACE),
     )
+
+
+@bp.route("/")
+def workspaces_barra() -> Response:
+    """``/gov/tarefas/`` (com barra, comum em link colado) leva à URL canônica."""
+    return redirect(url_for("tarefas.workspaces"), code=308)
 
 
 @bp.route("/b/<int:board_id>")

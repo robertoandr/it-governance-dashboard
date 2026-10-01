@@ -96,6 +96,14 @@ def test_anonimo_vai_para_o_login(factory_app: Flask) -> None:
     assert "/login" in r.headers["Location"]
 
 
+def test_url_com_barra_final_leva_a_pagina(cliente: Cliente) -> None:
+    # Antes dava 404: link colado como /gov/tarefas/ (V2.0).
+    r = cliente("operador").get(PAGINA + "/")
+    assert r.status_code == 308
+    assert r.headers["Location"].endswith(PAGINA)
+    assert cliente("operador").get(PAGINA + "/", follow_redirects=True).status_code == 200
+
+
 def test_usuario_desativado_com_sessao_aberta_perde_acesso(cliente: Cliente) -> None:
     """Cobre o user_loader: sessão de usuário desativado conta como deslogada."""
     r = cliente("admin", ativo=False).get(PAGINA)
