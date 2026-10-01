@@ -26,8 +26,8 @@ _RESOLVED_DAYS = 7
 # antigo que só agora normalizou.
 _RESOLVED_LOOKBACK_DAYS = 30
 _RESOLVED_LIMIT = 5000
-_resolved_dados: dict | None = None
-_resolved_ts: float = 0.0
+# {"dados": dict | None, "ts": float} — dict em vez de duas globais
+_resolved_cache: dict[str, Any] = {"dados": None, "ts": 0.0}
 _TZ_LOCAL = ZoneInfo("America/Sao_Paulo")
 _cache_lock = threading.Lock()
 _cache_dados: dict | None = None
@@ -255,10 +255,10 @@ def get_cached_resolved() -> dict:
     Separado de :func:`get_cached_triggers` para uma falha aqui não esconder
     os problemas ativos (nem pesar na página /m365, que só usa os ativos).
     """
-    global _resolved_dados, _resolved_ts
     with _cache_lock:
-        if _resolved_dados is not None and (time.monotonic() - _resolved_ts) < _CACHE_TTL:
-            return _resolved_dados
+        cached = _resolved_cache["dados"]
+        if cached is not None and (time.monotonic() - _resolved_cache["ts"]) < _CACHE_TTL:
+            return cached
 
     vazio = {"items": [], "truncated": False, "days": _RESOLVED_DAYS}
     if not _zbx_url() or not _zbx_token():
@@ -271,17 +271,17 @@ def get_cached_resolved() -> dict:
 
     result = {"items": items, "truncated": truncated, "days": _RESOLVED_DAYS, "error": None}
     with _cache_lock:
-        _resolved_dados = result
-        _resolved_ts = time.monotonic()
+        _resolved_cache["dados"] = result
+        _resolved_cache["ts"] = time.monotonic()
     return result
 
 
 def invalidate_cache() -> None:
     """Descarta os caches para a próxima leitura refletir o Zabbix."""
-    global _cache_dados, _resolved_dados
+    global _cache_dados
     with _cache_lock:
         _cache_dados = None
-        _resolved_dados = None
+        _resolved_cache["dados"] = None
 
 
 def resolve_problem(eventid: str, *, close: bool, acknowledged: bool, message: str) -> bool:

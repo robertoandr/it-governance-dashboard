@@ -273,8 +273,7 @@ class TestApiZabbix:
     def _cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
         zt._cache_dados = None
         zt._cache_ts = 0.0
-        zt._resolved_dados = None
-        zt._resolved_ts = 0.0
+        zt._resolved_cache.update(dados=None, ts=0.0)
         monkeypatch.setenv("ZABBIX_TOKEN", "tok")
         monkeypatch.setattr(zt.time, "time", lambda: 1759310000.0)  # 01/10/2025 09:13 UTC
 
@@ -412,7 +411,7 @@ class TestApiZabbix:
             result = _get_cached_resolved()
         assert result["items"] == []
         assert "lento" in result["error"]
-        assert zt._resolved_dados is None  # erro não fica em cache
+        assert zt._resolved_cache["dados"] is None  # erro não fica em cache
 
     def test_get_cached_resolved_sem_configuracao(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ZABBIX_TOKEN", "")
