@@ -21,7 +21,13 @@ log = structlog.get_logger(__name__)
 
 _CACHE_TTL = 60
 _RESOLVED_DAYS = 7
-_RESOLVED_LIMIT = 500
+# Busca problemas abertos até 30 dias atrás para achar os que normalizaram
+# nos últimos _RESOLVED_DAYS — filtrar pela abertura perderia o problema
+# antigo que só agora normalizou.
+_RESOLVED_LOOKBACK_DAYS = 30
+_RESOLVED_LIMIT = 5000
+_resolved_dados: dict | None = None
+_resolved_ts: float = 0.0
 _TZ_LOCAL = ZoneInfo("America/Sao_Paulo")
 _cache_lock = threading.Lock()
 _cache_dados: dict | None = None
@@ -134,12 +140,14 @@ def _problem_item(p: dict, host_name: str) -> dict:
     }
 
 
-def _fetch_resolved(days: int = _RESOLVED_DAYS) -> list[dict]:
-    """Busca os eventos de problema dos últimos ``days`` dias que já normalizaram.
+def _fetch_resolved(days: int = _RESOLVED_DAYS) -> tuple[list[dict], bool]:
+    """Busca os problemas que normalizaram nos últimos ``days`` dias.
 
     Returns:
-        Lista do mais recente para o mais antigo, com ``resolved_at``.
+        (lista da normalização mais recente para a mais antiga, com
+        ``resolved_at``; ``True`` se o ``limit`` cortou a busca).
     """
+    now = int(time.time())
     events = _zbx(
         "event.get",
         {
@@ -147,27 +155,34 @@ def _fetch_resolved(days: int = _RESOLVED_DAYS) -> list[dict]:
             "source": 0,  # eventos de trigger
             "object": 0,
             "value": 1,  # PROBLEM
-            "time_from": int(time.time()) - days * 86400,
+            "time_from": now - _RESOLVED_LOOKBACK_DAYS * 86400,
             "selectHosts": ["name"],
             "sortfield": ["clock"],
             "sortorder": "DESC",
             "limit": _RESOLVED_LIMIT,
         },
     )
+    truncated = len(events) >= _RESOLVED_LIMIT
     events = [e for e in events if e.get("r_eventid", "0") != "0"]
     if not events:
-        return []
+        return [], truncated
 
     recovery = _zbx("event.get", {"output": ["eventid", "clock"], "eventids": [e["r_eventid"] for e in events]})
     recovery_clock = {r["eventid"]: int(r.get("clock", 0)) for r in recovery}
 
+    desde = now - days * 86400
     result = []
     for e in events:
+        r_clock = recovery_clock.get(e["r_eventid"], 0)
+        if r_clock < desde:
+            continue
         hosts = e.get("hosts", [])
         item = _problem_item(e, hosts[0]["name"] if hosts else "—")
-        item["resolved_at"], item["resolved_iso"] = _fmt_ts(recovery_clock.get(e["r_eventid"], 0))
+        item["resolved_at"], item["resolved_iso"] = _fmt_ts(r_clock)
+        item["_r_clock"] = r_clock
         result.append(item)
-    return result
+    result.sort(key=lambda x: -x.pop("_r_clock"))
+    return result, truncated
 
 
 def _build_event_url(eventid: str, triggerid: str) -> str:
@@ -192,7 +207,6 @@ def get_cached_triggers() -> dict:
 
     try:
         problems = _fetch_problems()
-        resolved = _fetch_resolved()
     except Exception as exc:
         log.warning("zabbix_triggers.fetch_failed", error=str(exc))
         return {"enabled": False, "reason": str(exc), "problems": [], "counts": {}}
@@ -206,8 +220,6 @@ def get_cached_triggers() -> dict:
         "enabled": True,
         "total": len(problems),
         "problems": problems,
-        "resolved": resolved,
-        "resolved_days": _RESOLVED_DAYS,
         "counts": counts,
         "updated_at": datetime.now(_TZ_LOCAL).strftime("%d/%m %H:%M"),
     }
@@ -237,11 +249,39 @@ def ack_problem(eventid: str, message: str = "") -> bool:
         return False
 
 
+def get_cached_resolved() -> dict:
+    """Problemas normalizados nos últimos ``_RESOLVED_DAYS`` dias (cache 60s).
+
+    Separado de :func:`get_cached_triggers` para uma falha aqui não esconder
+    os problemas ativos (nem pesar na página /m365, que só usa os ativos).
+    """
+    global _resolved_dados, _resolved_ts
+    with _cache_lock:
+        if _resolved_dados is not None and (time.monotonic() - _resolved_ts) < _CACHE_TTL:
+            return _resolved_dados
+
+    vazio = {"items": [], "truncated": False, "days": _RESOLVED_DAYS}
+    if not _zbx_url() or not _zbx_token():
+        return {**vazio, "error": "zabbix_not_configured"}
+    try:
+        items, truncated = _fetch_resolved()
+    except (requests.RequestException, RuntimeError, ValueError, KeyError) as exc:
+        log.warning("zabbix_triggers.resolved_failed", error=str(exc))
+        return {**vazio, "error": str(exc)}
+
+    result = {"items": items, "truncated": truncated, "days": _RESOLVED_DAYS, "error": None}
+    with _cache_lock:
+        _resolved_dados = result
+        _resolved_ts = time.monotonic()
+    return result
+
+
 def invalidate_cache() -> None:
-    """Descarta o cache para a próxima leitura refletir o Zabbix."""
-    global _cache_dados
+    """Descarta os caches para a próxima leitura refletir o Zabbix."""
+    global _cache_dados, _resolved_dados
     with _cache_lock:
         _cache_dados = None
+        _resolved_dados = None
 
 
 def resolve_problem(eventid: str, *, close: bool, acknowledged: bool, message: str) -> bool:

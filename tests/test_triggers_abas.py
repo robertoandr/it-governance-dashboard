@@ -13,6 +13,7 @@ from flask.testing import FlaskClient
 from itgov.api.v1 import zabbix_triggers as zt
 
 _PREFIXO = "990"  # eventids só destes testes — limpos no teardown
+_get_cached_resolved = zt.get_cached_resolved  # o autouse abaixo troca o do módulo
 
 
 def _problema(eventid: str, *, manual_close: bool = False, acknowledged: bool = False, severity: int = 4) -> dict:
@@ -32,22 +33,25 @@ def _problema(eventid: str, *, manual_close: bool = False, acknowledged: bool = 
     }
 
 
-def _dados(problems: list[dict], resolved: list[dict] | None = None) -> dict:
+def _dados(problems: list[dict]) -> dict:
     return {
         "enabled": True,
         "total": len(problems),
         "problems": problems,
-        "resolved": resolved or [],
-        "resolved_days": 7,
         "counts": {},
         "updated_at": "01/10 10:00",
     }
 
 
+def _resolvidos(items: list[dict] | None = None, **extra: object) -> dict:
+    return {"items": items or [], "truncated": False, "days": 7, "error": None, **extra}
+
+
 @pytest.fixture(autouse=True)
 def _ambiente(monkeypatch: pytest.MonkeyPatch, factory_app: Flask) -> Iterator[None]:
     monkeypatch.setenv("ZABBIX_URL", "https://zbx.local")
-    yield
+    with patch.object(zt, "get_cached_resolved", return_value=_resolvidos()):
+        yield
     from app.extensions import db
     from app.models.trigger_resolucao import TriggerResolucao
 
@@ -93,10 +97,11 @@ def _marcas(factory_app: Flask) -> dict:
 class TestPagina:
     def test_separa_abertos_e_resolvidos(self, client_as: Callable[[str], FlaskClient]) -> None:
         resolvido_zbx = {**_problema("9903"), "resolved_at": "01/10 11:00", "resolved_iso": "x"}
-        dados = _dados([_problema("9901"), _problema("9902")], [resolvido_zbx])
+        dados = _dados([_problema("9901"), _problema("9902")])
         client = client_as("operador")
         with (
             patch.object(zt, "get_cached_triggers", return_value=dados),
+            patch.object(zt, "get_cached_resolved", return_value=_resolvidos([resolvido_zbx])),
             patch.object(zt, "resolve_problem", return_value=True),
         ):
             assert client.post("/gov/triggers/9902/resolve", json={"nota": "trocado o disco"}).status_code == 200
@@ -118,10 +123,32 @@ class TestPagina:
             html = client_as("gestor").get("/gov/triggers").get_data(as_text=True)
         assert 'x-data="{' not in html
 
+    @pytest.mark.parametrize(
+        ("resolved", "aviso"),
+        [
+            (_resolvidos(error="timeout"), "Não foi possível buscar o histórico de resolvidos"),
+            (_resolvidos(truncated=True), "a lista abaixo pode estar incompleta"),
+        ],
+    )
+    def test_falha_nos_resolvidos_nao_esconde_abertos(
+        self, client_as: Callable[[str], FlaskClient], resolved: dict, aviso: str
+    ) -> None:
+        with (
+            patch.object(zt, "get_cached_triggers", return_value=_dados([_problema("9901")])),
+            patch.object(zt, "get_cached_resolved", return_value=resolved),
+        ):
+            html = client_as("gestor").get("/gov/triggers").get_data(as_text=True)
+        assert "Problema 9901" in html
+        assert aviso in html
+
     def test_zabbix_indisponivel(self, client_as: Callable[[str], FlaskClient]) -> None:
         dados = {"enabled": False, "reason": "zabbix_not_configured", "problems": [], "counts": {}}
-        with patch.object(zt, "get_cached_triggers", return_value=dados):
+        with (
+            patch.object(zt, "get_cached_triggers", return_value=dados),
+            patch.object(zt, "get_cached_resolved") as resolved,
+        ):
             resp = client_as("admin").get("/gov/triggers")
+        resolved.assert_not_called()
         assert resp.status_code == 200
         assert "Zabbix não disponível" in resp.get_data(as_text=True)
 
@@ -165,17 +192,31 @@ class TestResolver:
         assert resolve.call_args.kwargs["message"] == "Resolvido via Governança de TI 360 por Pytest admin"
         assert _marcas(factory_app)["9901"].fechado_no_zabbix is True
 
-    def test_problema_inexistente_relê_zabbix_e_da_404(self, client_as: Callable[[str], FlaskClient]) -> None:
+    def test_problema_inexistente_da_404(self, client_as: Callable[[str], FlaskClient]) -> None:
         with (
-            patch.object(zt, "get_cached_triggers", return_value=_dados([])) as cached,
-            patch.object(zt, "invalidate_cache") as invalidate,
+            patch.object(zt, "get_cached_triggers", return_value=_dados([])),
             patch.object(zt, "resolve_problem") as resolve,
         ):
             resp = client_as("operador").post("/gov/triggers/9909/resolve")
         assert resp.status_code == 404
-        assert cached.call_count == 2
-        invalidate.assert_called_once()
         resolve.assert_not_called()
+
+    def test_rele_zabbix_antes_de_resolver(self, client_as: Callable[[str], FlaskClient]) -> None:
+        # ack feito no Zabbix há segundos: o cache ainda diria acknowledged=False
+        # e o ack repetido faria o Zabbix recusar a operação.
+        ordem: list[str] = []
+        with (
+            patch.object(zt, "invalidate_cache", side_effect=lambda: ordem.append("invalidate")),
+            patch.object(
+                zt,
+                "get_cached_triggers",
+                side_effect=lambda: ordem.append("get") or _dados([_problema("9901", acknowledged=True)]),
+            ),
+            patch.object(zt, "resolve_problem", return_value=True) as resolve,
+        ):
+            client_as("operador").post("/gov/triggers/9901/resolve")
+        assert ordem == ["invalidate", "get"]
+        assert resolve.call_args.kwargs["acknowledged"] is True
 
     def test_zabbix_recusa_nao_grava_marca(self, client_as: Callable[[str], FlaskClient], factory_app: Flask) -> None:
         with (
@@ -229,9 +270,13 @@ class TestReabrir:
 
 class TestApiZabbix:
     @pytest.fixture(autouse=True)
-    def _cache(self) -> None:
+    def _cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
         zt._cache_dados = None
         zt._cache_ts = 0.0
+        zt._resolved_dados = None
+        zt._resolved_ts = 0.0
+        monkeypatch.setenv("ZABBIX_TOKEN", "tok")
+        monkeypatch.setattr(zt.time, "time", lambda: 1759310000.0)  # 01/10/2025 09:13 UTC
 
     @pytest.mark.parametrize(
         ("close", "acknowledged", "action"),
@@ -284,8 +329,9 @@ class TestApiZabbix:
         ]
         recovery = [{"eventid": "6", "clock": "1759303600"}]
         with patch.object(zt, "_zbx", side_effect=[events, recovery]) as zbx:
-            result = zt._fetch_resolved()
+            result, truncated = zt._fetch_resolved()
 
+        assert truncated is False
         assert [r["eventid"] for r in result] == ["5"]
         item = result[0]
         assert item["host"] == "fw"
@@ -293,8 +339,83 @@ class TestApiZabbix:
         assert item["resolved_at"] == "01/10 04:26"
         assert item["zabbix_url"].endswith("triggerid=t5&eventid=5")
         assert zbx.call_args_list[1].args[1]["eventids"] == ["6"]
+        assert zbx.call_args_list[0].args[1]["time_from"] == 1759310000 - 30 * 86400
+
+    def test_fetch_resolved_janela_pela_normalizacao(self) -> None:
+        dia = 86400
+        agora = 1759310000
+        events = [
+            # aberto há 20 dias, normalizou ontem → entra
+            {
+                "eventid": "1",
+                "objectid": "t1",
+                "name": "antigo",
+                "severity": "3",
+                "clock": str(agora - 20 * dia),
+                "r_eventid": "2",
+            },
+            # aberto e normalizado há 10 dias → fora da janela de 7
+            {
+                "eventid": "3",
+                "objectid": "t3",
+                "name": "velho",
+                "severity": "3",
+                "clock": str(agora - 10 * dia),
+                "r_eventid": "4",
+            },
+            # aberto há 2 dias, normalizou há 1h → entra, primeiro da lista
+            {
+                "eventid": "5",
+                "objectid": "t5",
+                "name": "novo",
+                "severity": "3",
+                "clock": str(agora - 2 * dia),
+                "r_eventid": "6",
+            },
+        ]
+        recovery = [
+            {"eventid": "2", "clock": str(agora - dia)},
+            {"eventid": "4", "clock": str(agora - 9 * dia)},
+            {"eventid": "6", "clock": str(agora - 3600)},
+        ]
+        with patch.object(zt, "_zbx", side_effect=[events, recovery]):
+            result, _ = zt._fetch_resolved()
+        assert [r["eventid"] for r in result] == ["5", "1"]
+        assert "_r_clock" not in result[0]
+
+    def test_fetch_resolved_avisa_truncamento(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(zt, "_RESOLVED_LIMIT", 2)
+        events = [
+            {"eventid": "1", "objectid": "t1", "name": "a", "severity": "3", "clock": "1759300000", "r_eventid": "0"},
+            {"eventid": "2", "objectid": "t2", "name": "b", "severity": "3", "clock": "1759300000", "r_eventid": "0"},
+        ]
+        with patch.object(zt, "_zbx", return_value=events) as zbx:
+            assert zt._fetch_resolved() == ([], True)
+        assert zbx.call_count == 1
 
     def test_fetch_resolved_vazio_nao_busca_recuperacao(self) -> None:
         with patch.object(zt, "_zbx", return_value=[]) as zbx:
-            assert zt._fetch_resolved() == []
+            assert zt._fetch_resolved() == ([], False)
         assert zbx.call_count == 1
+
+    def test_get_cached_resolved_usa_cache_e_invalidate_limpa(self) -> None:
+        with patch.object(zt, "_fetch_resolved", return_value=([{"eventid": "1"}], False)) as fetch:
+            primeiro = _get_cached_resolved()
+            assert _get_cached_resolved() is primeiro
+            zt.invalidate_cache()
+            _get_cached_resolved()
+        assert primeiro == {"items": [{"eventid": "1"}], "truncated": False, "days": 7, "error": None}
+        assert fetch.call_count == 2
+
+    def test_get_cached_resolved_falha_nao_quebra(self) -> None:
+        with patch.object(zt, "_fetch_resolved", side_effect=requests.Timeout("lento")):
+            result = _get_cached_resolved()
+        assert result["items"] == []
+        assert "lento" in result["error"]
+        assert zt._resolved_dados is None  # erro não fica em cache
+
+    def test_get_cached_resolved_sem_configuracao(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ZABBIX_TOKEN", "")
+        with patch.object(zt, "_fetch_resolved") as fetch:
+            assert _get_cached_resolved()["error"] == "zabbix_not_configured"
+        fetch.assert_not_called()

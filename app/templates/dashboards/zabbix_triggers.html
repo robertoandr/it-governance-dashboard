@@ -183,9 +183,14 @@ document.addEventListener('alpine:init', function () {
 <!-- ═══ Resolvidos ═══ -->
 <div x-show="showResolvidos" x-cloak>
 <p class="text-xs text-gray-500 mb-3 dark:text-slate-400">
-  Marcados aqui no dashboard e normalizados pelo Zabbix nos últimos {{ data.resolved_days }} dias.
+  Marcados aqui no dashboard e normalizados pelo Zabbix nos últimos {{ resolved.days }} dias.
   "Zabbix ainda ativo" = marcado como resolvido, mas a condição do trigger ainda não normalizou.
 </p>
+{% if resolved.error %}
+<p class="text-xs text-amber-700 mb-3 dark:text-amber-300">Não foi possível buscar o histórico de resolvidos no Zabbix ({{ resolved.error }}) — mostrando só os marcados aqui.</p>
+{% elif resolved.truncated %}
+<p class="text-xs text-amber-700 mb-3 dark:text-amber-300">Histórico grande demais: a lista abaixo pode estar incompleta.</p>
+{% endif %}
 <div class="bg-white rounded-xl shadow overflow-x-auto dark:bg-slate-800">
   <table class="w-full text-sm">
     <thead>
@@ -236,7 +241,7 @@ document.addEventListener('alpine:init', function () {
   </table>
   {% if not resolvidos %}
   <div class="py-12 text-center text-gray-400">
-    <p class="text-xl">Nada resolvido nos últimos {{ data.resolved_days }} dias</p>
+    <p class="text-xl">Nada resolvido nos últimos {{ resolved.days }} dias</p>
   </div>
   {% endif %}
 </div>

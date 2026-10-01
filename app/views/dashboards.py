@@ -918,13 +918,16 @@ def m365_licenses_update():
 @require_role("admin", "gestor", "operador")
 def zabbix_triggers() -> str:
     """Render painel de Triggers Zabbix — abas Em aberto e Resolvidos."""
-    from itgov.api.v1.zabbix_triggers import get_cached_triggers
+    from itgov.api.v1.zabbix_triggers import get_cached_resolved, get_cached_triggers
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
 
     data = get_cached_triggers()
-    return render_template("dashboards/zabbix_triggers.html", data=data, **_triggers_abas(data))
+    resolved = get_cached_resolved() if data.get("enabled") else {"items": [], "truncated": False, "days": 7}
+    return render_template(
+        "dashboards/zabbix_triggers.html", data=data, resolved=resolved, **_triggers_abas(data, resolved["items"])
+    )
 
 
 def _fmt_local(dt: datetime) -> str:
@@ -934,7 +937,7 @@ def _fmt_local(dt: datetime) -> str:
     return dt.astimezone(_TZ_LOCAL).strftime("%d/%m %H:%M")
 
 
-def _triggers_abas(data: dict) -> dict:
+def _triggers_abas(data: dict, resolved: list[dict]) -> dict:
     """Separa os problemas em "Em aberto" e "Resolvidos" usando as marcas locais.
 
     Problema ativo marcado no dashboard vai para Resolvidos com
@@ -944,7 +947,6 @@ def _triggers_abas(data: dict) -> dict:
     from app.models.trigger_resolucao import TriggerResolucao
 
     problems: list[dict] = data.get("problems", [])
-    resolved: list[dict] = data.get("resolved", [])
     ids = [p["eventid"] for p in problems] + [r["eventid"] for r in resolved]
     marcas = (
         {m.eventid: m for m in TriggerResolucao.query.filter(TriggerResolucao.eventid.in_(ids)).all()} if ids else {}
@@ -1137,13 +1139,12 @@ def zabbix_trigger_reopen(eventid: str) -> tuple[Response, int]:
 
 
 def _problema_ativo(eventid: str) -> dict | None:
-    """Acha o problema no cache; se não estiver, relê o Zabbix uma vez."""
+    """Relê o Zabbix e devolve o problema ativo (ack/manual_close atuais).
+
+    Ler do cache arriscaria um ``acknowledged`` velho: ack repetido faz o
+    Zabbix recusar a operação inteira.
+    """
     from itgov.api.v1 import zabbix_triggers as zt
 
-    for tentativa in range(2):
-        if tentativa:
-            zt.invalidate_cache()
-        for p in zt.get_cached_triggers().get("problems", []):
-            if p["eventid"] == eventid:
-                return p
-    return None
+    zt.invalidate_cache()
+    return next((p for p in zt.get_cached_triggers().get("problems", []) if p["eventid"] == eventid), None)

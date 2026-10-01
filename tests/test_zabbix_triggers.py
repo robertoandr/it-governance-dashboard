@@ -116,7 +116,7 @@ def test_get_cached_triggers_falha_na_api_nao_quebra() -> None:
 
 
 def test_get_cached_triggers_conta_por_severidade_e_usa_cache() -> None:
-    with patch.object(zt, "_zbx", side_effect=[_PROBLEMS, _TRIGGERS, []]):
+    with patch.object(zt, "_zbx", side_effect=[_PROBLEMS, _TRIGGERS]):
         result = zt.get_cached_triggers()
     assert result["enabled"] is True
     assert result["total"] == 3
