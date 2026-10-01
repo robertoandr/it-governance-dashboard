@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterator
+from pathlib import Path
 
 import pytest
 from flask import Flask
@@ -106,3 +108,73 @@ class TestLoginNext:
     def test_login_form_keeps_next(self, factory_client: FlaskClient) -> None:
         resp = factory_client.get("/gov/login?next=/gov/cameras")
         assert b'action="/gov/login?next=/gov/cameras"' in resp.data
+
+
+NGINX_CONF = Path(__file__).resolve().parent.parent / "docker" / "nginx" / "nginx.conf"
+
+# Trechos reais do app.js/index.html do MapaCameras (01/10/2026): rótulos que
+# devem mudar e chaves de campo ("gravador") que não podem ser tocadas.
+MAPA_JS = (
+    "const KIND = { switch: 'Switch', device: 'Gravador (NVR/DVR)' };\n"
+    "const KIND_PL = { switch: 'Switches', device: 'Gravadores' };\n"
+    "it.kind === 'device' ? (it.values.equip || 'Gravador') : x;\n"
+    "o.values.gravador && 'Gravador: ' + linkName(o.values.gravador);\n"
+    "else { add('Gravador', title(dev)); }\n"
+    "const portKeys = (dev) => (dev.kind === 'switch' ? ['switch', 'porta_sw'] : ['gravador', 'porta']);\n"
+    "d.group === 'gravador' ? 'gravador(es)' : 'planta(s)';\n"
+    '<label id="fDevL">Gravador <select id="fDev"></select></label>\n'
+)
+
+
+def _mapa_location() -> str:
+    """Bloco ``location /mapa-cameras/`` do nginx.conf de produção."""
+    conf = NGINX_CONF.read_text(encoding="utf-8")
+    match = re.search(r"location /mapa-cameras/ \{(.*?)\n        \}", conf, re.S)
+    assert match, "location /mapa-cameras/ não encontrado no nginx.conf"
+    return match.group(1)
+
+
+def _sub_filters() -> list[tuple[str, str]]:
+    """Pares (procura, troca) das diretivas ``sub_filter`` do bloco."""
+    quoted = r"""("[^"]*"|'[^']*')"""
+    pairs = re.findall(rf"^\s*sub_filter\s+{quoted}\s+{quoted};", _mapa_location(), re.M)
+    return [(a[1:-1], b[1:-1]) for a, b in pairs]
+
+
+def _apply(text: str) -> str:
+    """Aplica os sub_filter como o nginx: sem diferenciar maiúsculas."""
+    for old, new in _sub_filters():
+        text = re.sub(re.escape(old), lambda _m, n=new: n, text, flags=re.I)
+    return text
+
+
+class TestDispositivosDeInfra:
+    """nginx troca "Gravadores" por "Dispositivos de Infra" na tela do Mapa."""
+
+    def test_resposta_sem_compressao_e_js_filtrado(self) -> None:
+        bloco = _mapa_location()
+        # Com gzip vindo do upstream o sub_filter não enxerga o texto.
+        assert 'proxy_set_header Accept-Encoding "";' in bloco
+        assert "sub_filter_types text/javascript;" in bloco
+        assert "sub_filter_once off;" in bloco
+
+    def test_rotulos_trocados(self) -> None:
+        out = _apply(MAPA_JS)
+        assert "device: 'Dispositivo de Infra'" in out
+        assert "device: 'Dispositivos de Infra'" in out
+        assert "|| 'Dispositivo de Infra')" in out
+        assert "'Dispositivo de Infra: ' + linkName" in out
+        assert "add('Dispositivo de Infra', title(dev))" in out
+        assert '>Dispositivo de Infra <select id="fDev">' in out
+        assert "Gravador" not in out
+
+    def test_chaves_de_campo_intactas(self) -> None:
+        out = _apply(MAPA_JS)
+        assert out.count("values.gravador") == 2
+        assert "['gravador', 'porta']" in out
+        assert "d.group === 'gravador' ? 'gravador(es)'" in out
+
+    def test_padroes_nao_casam_chave_minuscula(self) -> None:
+        # sub_filter ignora maiúsculas: nenhum padrão pode ser só 'gravador'.
+        for old, _new in _sub_filters():
+            assert old.lower() not in ("gravador", "'gravador'", "gravadores")
