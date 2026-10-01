@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Zendesk MTTR — IT Governance{% endblock %}
+{% block title %}Zendesk MTTR — Governança de TI 360{% endblock %}
 
 {% block page_title %}Suporte — Zendesk{% endblock %}
 
 {% block content %}
 {% macro stat_card(label, value, unit, color, sub) %}
-<div class="bg-white rounded-xl shadow p-5">
-  <p class="text-xs text-gray-500 mb-1">{{ label }}</p>
+<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+  <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">{{ label }}</p>
   {% if value is none %}
     <p class="text-3xl font-bold text-gray-300">—</p>
     <p class="text-xs text-gray-400 mt-1">sem dados</p>
@@ -19,13 +19,13 @@
 {% endmacro %}
 
 <div class="mb-4">
-  <h1 class="text-xl font-bold text-gray-800">Suporte — Zendesk</h1>
-  <p class="text-sm text-gray-500">MTTR, SLA e volume de tickets abertos no Zendesk Support.</p>
+  <h1 class="text-xl font-bold text-gray-800 dark:text-slate-100">Suporte — Zendesk</h1>
+  <p class="text-sm text-gray-500 dark:text-slate-400">MTTR, SLA e volume de tickets abertos no Zendesk Support.</p>
 </div>
 
 {# --- KPIs principais --- #}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  {{ stat_card('Tickets abertos', mttr.total_open, '', 'text-gray-800', 'new + open + pending') }}
+  {{ stat_card('Tickets abertos', mttr.total_open, '', 'text-gray-800 dark:text-slate-100', 'new + open + pending') }}
   {{ stat_card('Abertos com SLA violado', mttr.breached,  '',
       'text-red-600' if mttr.breached > 0 else 'text-green-600',
       '1ª resposta ou resolução fora da meta') }}
@@ -42,8 +42,8 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
   {# CSAT #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-sm font-semibold text-gray-700 mb-4">CSAT — Satisfação do Cliente</p>
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-4 dark:text-slate-200">CSAT — Satisfação do Cliente</p>
     {% if mttr.csat_sample == 0 %}
       <p class="text-sm text-gray-400 italic">Nenhuma avaliação respondida no período.</p>
     {% else %}
@@ -56,7 +56,7 @@
         </p>
         <p class="text-sm text-gray-400 mb-1">satisfação</p>
       </div>
-      <div class="space-y-1 text-sm text-gray-600">
+      <div class="space-y-1 text-sm text-gray-600 dark:text-slate-300">
         <div class="flex justify-between">
           <span>Avaliações positivas</span>
           <span class="font-semibold text-green-600">{{ mttr.csat_good }}</span>
@@ -67,15 +67,15 @@
         </div>
         <div class="flex justify-between border-t pt-1 mt-1">
           <span class="text-gray-400">Total de respostas</span>
-          <span class="font-semibold text-gray-700">{{ mttr.csat_sample }}</span>
+          <span class="font-semibold text-gray-700 dark:text-slate-200">{{ mttr.csat_sample }}</span>
         </div>
       </div>
     {% endif %}
   </div>
 
   {# Volume por status #}
-  <div class="bg-white rounded-xl shadow p-5">
-    <p class="text-sm font-semibold text-gray-700 mb-4">Volume por Status</p>
+  <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-4 dark:text-slate-200">Volume por Status</p>
     <div class="space-y-2">
       {% set status_labels = {
           'new':     ('Novo',       'bg-blue-100 text-blue-700'),
@@ -91,7 +91,7 @@
         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ badge_cls }}">
           {{ label }}
         </span>
-        <span class="font-semibold text-gray-800 text-sm">{{ count }}</span>
+        <span class="font-semibold text-gray-800 text-sm dark:text-slate-100">{{ count }}</span>
       </div>
       {% endfor %}
     </div>

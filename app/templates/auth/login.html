@@ -3,9 +3,14 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Login — Governança de TI</title>
-  <script nonce="{{ csp_nonce() }}">tailwind = { config: { darkMode: 'class' } }</script>
+  <title>Login — Governança de TI 360</title>
   <script src="{{ url_for('static', filename='vendor/tailwind.js') }}" nonce="{{ csp_nonce() }}"></script>
+  <!-- A config só vale depois do script: definida antes, ela é
+       sobrescrita no carregamento e o dark mode caía no padrão "media" (tema do SO). -->
+  <script nonce="{{ csp_nonce() }}">
+    tailwind.config = { darkMode: 'class' };
+    if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
+  </script>
   <script defer src="{{ url_for('static', filename='vendor/alpine-csp.min.js') }}" nonce="{{ csp_nonce() }}"></script>
   <script nonce="{{ csp_nonce() }}">
   document.addEventListener('alpine:init', function () {
@@ -42,7 +47,7 @@
                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
         </svg>
       </div>
-      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Governança de TI</h1>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Governança de TI 360</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Grupo Gadens</p>
     </div>
 

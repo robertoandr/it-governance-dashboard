@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -9,12 +10,28 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+
+
+def _project_version() -> str:
+    """Read the version from pyproject.toml, the single source of truth.
+
+    Returns:
+        The ``[project].version`` string, or ``"0.0.0"`` when the file is not
+        shipped (e.g. the m365-collector image copies only ``app/``).
+    """
+    try:
+        with _PYPROJECT.open("rb") as fh:
+            return str(tomllib.load(fh)["project"]["version"])
+    except (OSError, tomllib.TOMLDecodeError, KeyError):
+        return "0.0.0"
+
 
 class AppConfig(BaseSettings):
     """Core Flask settings."""
 
-    name: str = "Governança de TI Dashboard"
-    version: str = "1.1.0"
+    name: str = "Governança de TI 360"
+    version: str = Field(default_factory=_project_version)
     environment: Literal["development", "testing", "production"] = "development"
     secret_key: SecretStr = SecretStr("dev-secret-change-in-prod")
     debug: bool = False

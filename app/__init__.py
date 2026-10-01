@@ -47,6 +47,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         TESTING=settings.app.testing,
         DEBUG=settings.app.debug,
         APP_VERSION=settings.app.version,
+        APP_NAME=settings.app.name,
         APP_ENVIRONMENT=settings.app.environment,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{_users_db}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,

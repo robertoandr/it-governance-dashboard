@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}PMO — IT Governance{% endblock %}
+{% block title %}PMO — Governança de TI 360{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -167,7 +167,7 @@
         {% if t.priority in ("urgent","high") %}
         <span class="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium
           {% if t.priority == 'urgent' %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400
-          {% else %}bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400{% endif %}">
+ dark:bg-red-900/20 dark:text-red-300 {% else %}bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 dark:bg-orange-900/20 dark:text-orange-300{% endif %}">
           {{ t.priority }}
         </span>
         {% endif %}
