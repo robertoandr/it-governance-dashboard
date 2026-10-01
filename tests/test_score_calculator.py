@@ -79,6 +79,30 @@ class TestCalculatePillar:
         pillar = calc.calculate_pillar(PillarID.VALUE_DELIVERY, comps)
         assert pillar.score <= 100.0
 
+    def test_componente_sem_coleta_fica_fora_da_media(self, calc: ScoreCalculator) -> None:
+        comps = [
+            {"id": "real", "label": "Real", "value": 40.0, "weight": 1.0, "source": "zabbix"},
+            {"id": "semente", "label": "Semente", "value": 90.0, "weight": 3.0, "source": "coming_soon"},
+        ]
+        pillar = calc.calculate_pillar(PillarID.RISK_MANAGEMENT, comps)
+        assert pillar.score == 40.0
+        assert len(pillar.components) == 2  # continua listado, só não pesa
+
+    def test_pesos_reais_renormalizados(self, calc: ScoreCalculator) -> None:
+        comps = [
+            {"id": "a", "label": "A", "value": 100.0, "weight": 1.0, "source": "zabbix"},
+            {"id": "b", "label": "B", "value": 40.0, "weight": 3.0, "source": "entra_id"},
+            {"id": "c", "label": "C", "value": 0.0, "weight": 5.0, "source": "coming_soon"},
+        ]
+        assert calc.calculate_pillar(PillarID.VALUE_DELIVERY, comps).score == 55.0
+
+    def test_todos_sem_coleta_usa_sementes(self, calc: ScoreCalculator) -> None:
+        comps = [
+            {"id": "a", "label": "A", "value": 60.0, "weight": 1.0, "source": "coming_soon"},
+            {"id": "b", "label": "B", "value": 80.0, "weight": 1.0, "source": "coming_soon"},
+        ]
+        assert calc.calculate_pillar(PillarID.STRATEGIC_ALIGNMENT, comps).score == 70.0
+
 
 class TestCalculateGlobal:
     def test_five_pillars(self, calc: ScoreCalculator) -> None:

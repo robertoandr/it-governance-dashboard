@@ -44,7 +44,11 @@
 <div class="bg-white rounded-xl shadow p-6 mb-6 dark:bg-slate-800">
   <h3 class="text-sm font-semibold text-gray-600 mb-5 dark:text-slate-300">Componentes</h3>
   <div class="space-y-5">
+    {# Sem nenhum componente real, o score do pilar volta a usar as sementes
+       (ScoreCalculator.calculate_pillar) — aí elas não estão "fora do cálculo". #}
+    {% set any_live = pillar.components | rejectattr('source', 'equalto', 'coming_soon') | list | length > 0 %}
     {% for c in pillar.components %}
+    {% set excluded = any_live and c.source == 'coming_soon' %}
     <div>
       <div class="flex justify-between items-center mb-1">
         <div>
@@ -57,20 +61,23 @@
         <div class="text-right">
           {% if c.error %}
             <span class="text-lg font-bold text-red-400" title="{{ c.error }}">N/D</span>
+          {% elif excluded %}
+            <span class="text-sm font-medium text-slate-400 dark:text-slate-500"
+                  title="Ainda sem coletor: não entra no cálculo do score">sem coleta</span>
           {% else %}
             <span class="text-lg font-bold text-gray-800 dark:text-slate-100">{{ c.value | round(1) }}</span>
           {% endif %}
-          {% if c.raw_value is not none %}
+          {% if c.raw_value is not none and not excluded %}
             <span class="text-xs text-gray-400 ml-1">{{ c.raw_value }} {{ c.unit }}</span>
           {% endif %}
         </div>
       </div>
       <div class="h-3 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
         <div class="h-full rounded-full transition-all duration-700"
-             style="width:{{ c.value }}%; background:{{ 'transparent' if c.error else pillar.color }}"></div>
+             style="width:{{ 0 if excluded else c.value }}%; background:{{ 'transparent' if c.error else pillar.color }}"></div>
       </div>
       <div class="flex justify-between text-xs text-gray-400 mt-0.5">
-        <span>peso {{ c.weight }}</span>
+        <span>{% if excluded %}fora do cálculo{% else %}peso {{ c.weight }}{% endif %}</span>
         <span>tendência:
           {% if c.trend == 'up' %}▲
           {% elif c.trend == 'down' %}▼
