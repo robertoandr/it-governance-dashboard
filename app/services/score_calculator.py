@@ -18,6 +18,9 @@ from app.models.governance import (
 
 log = structlog.get_logger(__name__)
 
+# Valor de ComponentMetric.source para componentes sem coletor (valor semente fixo).
+_COMING_SOON = "coming_soon"
+
 THRESHOLD_OPERATIONAL: float = 85.0
 THRESHOLD_DEGRADED: float = 60.0
 
@@ -52,6 +55,13 @@ class ScoreCalculator:
     ) -> PillarScore:
         """Compute weighted average score for a single pillar.
 
+        Components whose ``source`` is ``coming_soon`` carry a fixed seed value
+        (no collector feeds them yet), so they are left out of the average and
+        the weights of the real components are renormalized — the same rule
+        ``calculate_global`` applies to whole pillars. Only when *no* component
+        is real does the seed set back the score, so the page never renders a
+        blank pillar.
+
         Args:
             pillar_id: The pillar identifier.
             components: List of component dicts with at least 'value' and 'weight'.
@@ -63,8 +73,10 @@ class ScoreCalculator:
         meta = PILLAR_META[pillar_id]
         parsed: list[ComponentMetric] = [ComponentMetric(**c) for c in components]
 
-        total_weight = sum(c.weight for c in parsed)
-        score = 0.0 if total_weight == 0 else sum(c.value * c.weight for c in parsed) / total_weight
+        real = [c for c in parsed if c.source != _COMING_SOON]
+        basis = real or parsed
+        total_weight = sum(c.weight for c in basis)
+        score = 0.0 if total_weight == 0 else sum(c.value * c.weight for c in basis) / total_weight
 
         pillar_trend = _trend(score, previous_score)
 
@@ -73,6 +85,7 @@ class ScoreCalculator:
             pillar=pillar_id.value,
             score=round(score, 2),
             components=len(parsed),
+            components_live=len(real),
             trend=pillar_trend,
         )
 

@@ -57,20 +57,23 @@
         <div class="text-right">
           {% if c.error %}
             <span class="text-lg font-bold text-red-400" title="{{ c.error }}">N/D</span>
+          {% elif c.source == 'coming_soon' %}
+            <span class="text-sm font-medium text-slate-400 dark:text-slate-500"
+                  title="Ainda sem coletor: não entra no cálculo do score">sem coleta</span>
           {% else %}
             <span class="text-lg font-bold text-gray-800 dark:text-slate-100">{{ c.value | round(1) }}</span>
           {% endif %}
-          {% if c.raw_value is not none %}
+          {% if c.raw_value is not none and c.source != 'coming_soon' %}
             <span class="text-xs text-gray-400 ml-1">{{ c.raw_value }} {{ c.unit }}</span>
           {% endif %}
         </div>
       </div>
       <div class="h-3 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
         <div class="h-full rounded-full transition-all duration-700"
-             style="width:{{ c.value }}%; background:{{ 'transparent' if c.error else pillar.color }}"></div>
+             style="width:{{ 0 if c.source == 'coming_soon' else c.value }}%; background:{{ 'transparent' if c.error else pillar.color }}"></div>
       </div>
       <div class="flex justify-between text-xs text-gray-400 mt-0.5">
-        <span>peso {{ c.weight }}</span>
+        <span>{% if c.source == 'coming_soon' %}fora do cálculo{% else %}peso {{ c.weight }}{% endif %}</span>
         <span>tendência:
           {% if c.trend == 'up' %}▲
           {% elif c.trend == 'down' %}▼

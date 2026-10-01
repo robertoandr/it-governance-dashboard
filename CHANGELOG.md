@@ -17,6 +17,7 @@ Início da V2.0 "Governança de TI 360" (revisão página por página de 30/09/2
 
 ### Fixed
 - Alternância de tema claro/escuro não funcionava: a config do Tailwind era definida antes do script e sobrescrita, ficando no modo `media` (tema do SO)
+- Score de governança misturava 7 componentes sem coletor (valores fixos: cobertura de KPIs, orçamento, frequência de deploy, vulnerabilidades críticas, patches, MTTR, sucesso de mudanças) na média do pilar; agora ficam fora do cálculo e aparecem como "sem coleta" no detalhe do pilar
 - Páginas sem variantes `dark:` (M365, Licenças, Compliance, Infra, Acronis, Zabbix, SLA etc.) ficavam ilegíveis no tema escuro
 
 ## [1.1.0] - 2026-06-06
