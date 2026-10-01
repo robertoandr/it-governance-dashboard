@@ -1,73 +1,127 @@
 {% extends "base.html" %}
 {% block title %}Triggers Zabbix — Governança de TI 360{% endblock %}
-{% block page_title %}Problemas Ativos — Zabbix{% endblock %}
+{% block page_title %}Triggers — Zabbix{% endblock %}
+
+{% block head %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('alpine:init', function () {
+  // Alpine CSP build: nada de expressão solta no HTML — só propriedades e
+  // métodos daqui, com os valores vindo de data-*.
+  Alpine.data('triggersPage', function () {
+    return {
+      tab: 'abertos',
+      filter: 'all',
+      busy: false,
+      get showAbertos()    { return this.tab === 'abertos'; },
+      get showResolvidos() { return this.tab === 'resolvidos'; },
+      get tabAbertosClass()    { return this.tab === 'abertos' ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-gray-500 dark:text-slate-400'; },
+      get tabResolvidosClass() { return this.tab === 'resolvidos' ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-gray-500 dark:text-slate-400'; },
+      setTab: function (ev) { this.tab = ev.currentTarget.dataset.tab; },
+      setFilter: function (ev) { this.filter = ev.currentTarget.dataset.sev; },
+      filterClass: function (sev) { return this.filter === sev ? 'ring-2 ring-blue-400' : ''; },
+      rowVisible: function (sev) { return this.filter === 'all' || this.filter === sev; },
+      _post: async function (url, body) {
+        this.busy = true;
+        try {
+          const r = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body || {})
+          });
+          const d = await r.json();
+          if (d.ok) { location.reload(); return; }
+          alert(d.error || 'Falhou');
+        } catch (e) {
+          alert('Falha de comunicação com o servidor');
+        }
+        this.busy = false;
+      },
+      ack: function (ev) {
+        this._post('/gov/triggers/' + ev.currentTarget.dataset.eventid + '/ack',
+                   {message: 'Acknowledged via Governança de TI 360'});
+      },
+      resolve: function (ev) {
+        const nota = prompt('Marcar como resolvido. Observação (opcional):', '');
+        if (nota === null) return;
+        this._post('/gov/triggers/' + ev.currentTarget.dataset.eventid + '/resolve', {nota: nota});
+      },
+      reopen: function (ev) {
+        if (!confirm('Voltar este problema para "Em aberto"?')) return;
+        this._post('/gov/triggers/' + ev.currentTarget.dataset.eventid + '/reopen');
+      },
+      reload: function () { location.reload(); },
+    };
+  });
+});
+</script>
+{% endblock %}
+
+{% macro sev_badge(sev) %}
+  {% set sev_colors = {5: 'purple', 4: 'red', 3: 'orange', 2: 'yellow', 1: 'blue', 0: 'gray'} %}
+  {% set sev_names = {5: 'DESASTRE', 4: 'ALTO', 3: 'MÉDIO', 2: 'AVISO', 1: 'INFO'} %}
+  {% set c = sev_colors.get(sev, 'gray') %}
+  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-{{ c }}-100 text-{{ c }}-800">
+    {{ sev_names.get(sev, 'N/C') }}
+  </span>
+{% endmacro %}
 
 {% block content %}
-<div x-data="{
-  filter: 'all',
-  acking: null,
-  ackMsg: '',
-  async ack(eventid) {
-    this.acking = eventid;
-    try {
-      const r = await fetch('/gov/triggers/' + eventid + '/ack', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message: this.ackMsg || 'Acknowledged via IT Gov Dashboard'})
-      });
-      const d = await r.json();
-      if (d.ok) { this.ackMsg = ''; setTimeout(() => location.reload(), 600); }
-    } catch(e) {}
-    this.acking = null;
-  },
-  matchFilter(sev) {
-    if (this.filter === 'all') return true;
-    return sev.toString() === this.filter;
-  }
-}">
+<div x-data="triggersPage">
 
 {% if not data.enabled %}
 <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center dark:bg-red-900/20 dark:border-red-800">
-  <p class="text-red-700 font-semibold dark:text-red-300">Zabbix nao disponivel</p>
+  <p class="text-red-700 font-semibold dark:text-red-300">Zabbix não disponível</p>
   <p class="text-red-600 text-sm mt-1">{{ data.reason }}</p>
 </div>
 {% else %}
 
-<!-- Contadores por severidade -->
-<div class="grid grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-  <button @click="filter = 'all'"
-          :class="filter === 'all' ? 'ring-2 ring-gray-400' : ''"
+<!-- Abas -->
+<div class="flex items-end justify-between border-b border-gray-200 mb-6 dark:border-slate-700">
+  <div class="flex gap-6">
+    <button type="button" data-tab="abertos" @click="setTab" :class="tabAbertosClass"
+            class="pb-3 border-b-2 text-sm font-semibold transition">
+      Em aberto <span class="ml-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs dark:bg-slate-700 dark:text-slate-200">{{ abertos | length }}</span>
+    </button>
+    <button type="button" data-tab="resolvidos" @click="setTab" :class="tabResolvidosClass"
+            class="pb-3 border-b-2 text-sm font-semibold transition">
+      Resolvidos <span class="ml-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs dark:bg-slate-700 dark:text-slate-200">{{ resolvidos | length }}</span>
+    </button>
+  </div>
+  <div class="pb-3 flex items-center gap-3">
+    <span class="text-xs text-gray-500 dark:text-slate-400">Atualizado: {{ data.updated_at }}</span>
+    <button type="button" @click="reload" class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400">Atualizar</button>
+  </div>
+</div>
+
+<!-- ═══ Em aberto ═══ -->
+<div x-show="showAbertos">
+
+<!-- Contadores por severidade (filtro) -->
+<div class="grid grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
+  <button type="button" data-sev="all" @click="setFilter" :class="filterClass('all')"
           class="bg-white rounded-xl shadow p-4 text-center hover:shadow-md transition dark:bg-slate-800">
-    <p class="text-2xl font-bold text-gray-800 dark:text-slate-100">{{ data.total }}</p>
+    <p class="text-2xl font-bold text-gray-800 dark:text-slate-100">{{ abertos | length }}</p>
     <p class="text-xs text-gray-500 mt-1 dark:text-slate-400">Total</p>
   </button>
   {% set sev_cfg = [
     ('5', 'Desastre', 'purple'),
     ('4', 'Alto', 'red'),
-    ('3', 'Medio', 'orange'),
+    ('3', 'Médio', 'orange'),
     ('2', 'Aviso', 'yellow'),
-    ('1', 'Informacao', 'blue'),
+    ('1', 'Informação', 'blue'),
     ('0', 'N/Class', 'gray'),
   ] %}
   {% for sev_id, sev_label, color in sev_cfg %}
-  {% set cnt = data.problems | selectattr('severity', 'equalto', sev_id | int) | list | length %}
-  {% if cnt > 0 or true %}
-  <button @click="filter = '{{ sev_id }}'"
-          :class="filter === '{{ sev_id }}' ? 'ring-2 ring-{{ color }}-400' : ''"
+  {% set cnt = abertos | selectattr('severity', 'equalto', sev_id | int) | list | length %}
+  <button type="button" data-sev="{{ sev_id }}" @click="setFilter" :class="filterClass('{{ sev_id }}')"
           class="bg-white rounded-xl shadow p-4 text-center hover:shadow-md transition dark:bg-slate-800">
     <p class="text-2xl font-bold text-{{ color }}-600">{{ cnt }}</p>
     <p class="text-xs text-gray-500 mt-1 dark:text-slate-400">{{ sev_label }}</p>
   </button>
-  {% endif %}
   {% endfor %}
 </div>
 
-<!-- Tabela de problemas -->
 <div class="bg-white rounded-xl shadow overflow-x-auto dark:bg-slate-800">
-  <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between dark:border-slate-700">
-    <span class="text-sm text-gray-500 dark:text-slate-400">Atualizado: {{ data.updated_at }}</span>
-    <button onclick="location.reload()" class="text-xs text-blue-600 hover:text-blue-800">Atualizar</button>
-  </div>
   <table class="w-full text-sm">
     <thead>
       <tr class="border-b border-gray-100 text-left dark:border-slate-700">
@@ -76,26 +130,14 @@
         <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Trigger / Problema</th>
         <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Desde</th>
         <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-center dark:text-slate-400">Ack</th>
-        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Acoes</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Ações</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-gray-50">
-      {% for p in data.problems %}
-      <tr x-show="matchFilter({{ p.severity }})"
+    <tbody class="divide-y divide-gray-50 dark:divide-slate-700">
+      {% for p in abertos %}
+      <tr x-show="rowVisible('{{ p.severity }}')"
           class="hover:bg-gray-50 dark:hover:bg-slate-700/50 {% if p.severity == 5 %}bg-purple-50 dark:bg-purple-900/20{% elif p.severity == 4 %}bg-red-50 dark:bg-red-900/20{% endif %}">
-        <td class="px-4 py-3">
-          {% set sev_colors = {5: 'purple', 4: 'red', 3: 'orange', 2: 'yellow', 1: 'blue', 0: 'gray'} %}
-          {% set c = sev_colors.get(p.severity, 'gray') %}
-          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold
-            bg-{{ c }}-100 text-{{ c }}-800">
-            {% if p.severity == 5 %}DESASTRE
-            {% elif p.severity == 4 %}ALTO
-            {% elif p.severity == 3 %}MEDIO
-            {% elif p.severity == 2 %}AVISO
-            {% elif p.severity == 1 %}INFO
-            {% else %}N/C{% endif %}
-          </span>
-        </td>
+        <td class="px-4 py-3">{{ sev_badge(p.severity) }}</td>
         <td class="px-4 py-3 text-gray-700 font-medium dark:text-slate-200">{{ p.host }}</td>
         <td class="px-4 py-3 text-gray-600 max-w-xs truncate dark:text-slate-300" title="{{ p.name }}">{{ p.name }}</td>
         <td class="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap dark:text-slate-400">{{ p.since }}</td>
@@ -103,19 +145,24 @@
           {% if p.acknowledged %}
           <span class="inline-block w-2 h-2 rounded-full bg-green-500" title="Reconhecido"></span>
           {% else %}
-          <span class="inline-block w-2 h-2 rounded-full bg-gray-300" title="Nao reconhecido"></span>
+          <span class="inline-block w-2 h-2 rounded-full bg-gray-300" title="Não reconhecido"></span>
           {% endif %}
         </td>
         <td class="px-4 py-3">
           <div class="flex items-center gap-2">
             {% if not p.acknowledged %}
-            <button @click="ack('{{ p.eventid }}')"
-                    :disabled="acking === '{{ p.eventid }}'"
-                    class="text-xs px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800">
-              <span x-text="acking === '{{ p.eventid }}' ? '...' : 'Ack'"></span>
+            <button type="button" data-eventid="{{ p.eventid }}" @click="ack" :disabled="busy"
+                    title="Reconhecer no Zabbix (o problema continua em aberto)"
+                    class="text-xs px-2 py-1 bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700">
+              Ack
             </button>
             {% endif %}
-            <a href="{{ p.zabbix_url }}" target="_blank" rel="noopener"
+            <button type="button" data-eventid="{{ p.eventid }}" @click="resolve" :disabled="busy"
+                    title="{% if p.manual_close %}Fecha o problema no Zabbix{% else %}Ack + mensagem no Zabbix; sai daqui e vai para Resolvidos{% endif %}"
+                    class="text-xs px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800">
+              Resolvido
+            </button>
+            <a href="{{ p.zabbix_url }}" target="_blank" rel="noopener" title="Abrir o evento no Zabbix"
                class="text-xs px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700">
               Zabbix
             </a>
@@ -125,11 +172,74 @@
       {% endfor %}
     </tbody>
   </table>
-  {% if data.total == 0 %}
+  {% if not abertos %}
   <div class="py-12 text-center text-gray-400">
-    <p class="text-xl">Sistema sem problemas ativos</p>
+    <p class="text-xl">Nenhum problema em aberto</p>
   </div>
   {% endif %}
+</div>
+</div>
+
+<!-- ═══ Resolvidos ═══ -->
+<div x-show="showResolvidos" x-cloak>
+<p class="text-xs text-gray-500 mb-3 dark:text-slate-400">
+  Marcados aqui no dashboard e normalizados pelo Zabbix nos últimos {{ data.resolved_days }} dias.
+  "Zabbix ainda ativo" = marcado como resolvido, mas a condição do trigger ainda não normalizou.
+</p>
+<div class="bg-white rounded-xl shadow overflow-x-auto dark:bg-slate-800">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 text-left dark:border-slate-700">
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Severidade</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Host</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Trigger / Problema</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Desde</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Resolvido em</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Status</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Ações</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50 dark:divide-slate-700">
+      {% for r in resolvidos %}
+      <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+        <td class="px-4 py-3">{{ sev_badge(r.severity) }}</td>
+        <td class="px-4 py-3 text-gray-700 font-medium dark:text-slate-200">{{ r.host }}</td>
+        <td class="px-4 py-3 text-gray-600 max-w-xs truncate dark:text-slate-300" title="{{ r.name }}{% if r.nota %} — {{ r.nota }}{% endif %}">{{ r.name }}</td>
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap dark:text-slate-400">{{ r.since }}</td>
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap dark:text-slate-400">
+          {{ r.resolved_at }}{% if r.resolvido_por %}<span class="block font-sans text-gray-400">por {{ r.resolvido_por }}</span>{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          {% if r.still_active %}
+          <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Zabbix ainda ativo</span>
+          {% else %}
+          <span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Normalizado</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2">
+            {% if r.still_active and not r.manual_close %}
+            <button type="button" data-eventid="{{ r.eventid }}" @click="reopen" :disabled="busy"
+                    class="text-xs px-2 py-1 bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700">
+              Reabrir
+            </button>
+            {% endif %}
+            <a href="{{ r.zabbix_url }}" target="_blank" rel="noopener" title="Abrir o evento no Zabbix"
+               class="text-xs px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700">
+              Zabbix
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not resolvidos %}
+  <div class="py-12 text-center text-gray-400">
+    <p class="text-xl">Nada resolvido nos últimos {{ data.resolved_days }} dias</p>
+  </div>
+  {% endif %}
+</div>
 </div>
 
 {% endif %}

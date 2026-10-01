@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -917,14 +917,66 @@ def m365_licenses_update():
 @login_required
 @require_role("admin", "gestor", "operador")
 def zabbix_triggers() -> str:
-    """Render painel de Triggers Zabbix — problemas ativos."""
+    """Render painel de Triggers Zabbix — abas Em aberto e Resolvidos."""
     from itgov.api.v1.zabbix_triggers import get_cached_triggers
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
 
     data = get_cached_triggers()
-    return render_template("dashboards/zabbix_triggers.html", data=data)
+    return render_template("dashboards/zabbix_triggers.html", data=data, **_triggers_abas(data))
+
+
+def _fmt_local(dt: datetime) -> str:
+    """Formata um datetime do banco (UTC, às vezes sem tzinfo no SQLite) em Brasília."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(_TZ_LOCAL).strftime("%d/%m %H:%M")
+
+
+def _triggers_abas(data: dict) -> dict:
+    """Separa os problemas em "Em aberto" e "Resolvidos" usando as marcas locais.
+
+    Problema ativo marcado no dashboard vai para Resolvidos com
+    ``still_active=True`` (o Zabbix ainda não normalizou); os resolvidos pelo
+    Zabbix ganham o autor da marca, quando houver.
+    """
+    from app.models.trigger_resolucao import TriggerResolucao
+
+    problems: list[dict] = data.get("problems", [])
+    resolved: list[dict] = data.get("resolved", [])
+    ids = [p["eventid"] for p in problems] + [r["eventid"] for r in resolved]
+    marcas = (
+        {m.eventid: m for m in TriggerResolucao.query.filter(TriggerResolucao.eventid.in_(ids)).all()} if ids else {}
+    )
+
+    abertos: list[dict] = []
+    marcados: list[dict] = []
+    for p in problems:
+        marca = marcas.get(p["eventid"])
+        if marca is None:
+            abertos.append(p)
+            continue
+        marcados.append(
+            {
+                **p,
+                "still_active": True,
+                "resolved_at": _fmt_local(marca.resolvido_em),
+                "resolvido_por": marca.resolvido_por,
+                "nota": marca.nota,
+            }
+        )
+
+    resolvidos = marcados + [
+        {
+            **r,
+            "still_active": False,
+            "resolvido_por": marcas[r["eventid"]].resolvido_por if r["eventid"] in marcas else "",
+            "nota": marcas[r["eventid"]].nota if r["eventid"] in marcas else "",
+        }
+        for r in resolved
+    ]
+    return {"abertos": abertos, "resolvidos": resolvidos}
 
 
 @bp.route("/m365")
@@ -1007,3 +1059,91 @@ def zabbix_trigger_ack(eventid: str):
     payload = request.get_json(force=True) or {}
     ok = ack_problem(eventid, message=payload.get("message", ""))
     return (jsonify({"ok": True}) if ok else jsonify({"ok": False, "error": "Zabbix ack falhou"}), 200 if ok else 500)
+
+
+@bp.route("/triggers/<string:eventid>/resolve", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", "operador")
+def zabbix_trigger_resolve(eventid: str) -> tuple[Response, int]:
+    """Marca um problema ativo como resolvido.
+
+    Fecha no Zabbix quando o trigger permite (``manual_close``); senão faz
+    ack com mensagem e guarda a marca local, que move o problema para a aba
+    Resolvidos.
+    """
+    from flask import jsonify
+    from sqlalchemy.exc import IntegrityError
+
+    from app.extensions import db
+    from app.models.trigger_resolucao import TriggerResolucao
+    from itgov.api.v1 import zabbix_triggers as zt
+
+    if TriggerResolucao.query.filter_by(eventid=eventid).first() is not None:
+        return jsonify({"ok": True}), 200
+
+    payload = request.get_json(silent=True) or {}
+    nota = str(payload.get("nota", "")).strip()[:500]
+
+    problema = _problema_ativo(eventid)
+    if problema is None:
+        return jsonify({"ok": False, "error": "Problema não está mais ativo no Zabbix"}), 404
+
+    mensagem = f"Resolvido via Governança de TI 360 por {current_user.name}"
+    if nota:
+        mensagem += f": {nota}"
+    fechar = bool(problema.get("manual_close"))
+    if not zt.resolve_problem(eventid, close=fechar, acknowledged=problema["acknowledged"], message=mensagem):
+        return jsonify({"ok": False, "error": "O Zabbix recusou a operação"}), 502
+
+    db.session.add(
+        TriggerResolucao(
+            eventid=eventid,
+            triggerid=problema["triggerid"],
+            host=problema["host"],
+            name=problema["name"],
+            severity=problema["severity"],
+            fechado_no_zabbix=fechar,
+            nota=nota,
+            resolvido_por=current_user.name,
+        )
+    )
+    try:
+        db.session.commit()
+    except IntegrityError:  # duplo clique: outra requisição gravou primeiro
+        db.session.rollback()
+    log.info("trigger.resolvido", eventid=eventid, fechado_no_zabbix=fechar, user=current_user.email)
+    return jsonify({"ok": True, "fechado_no_zabbix": fechar}), 200
+
+
+@bp.route("/triggers/<string:eventid>/reopen", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", "operador")
+def zabbix_trigger_reopen(eventid: str) -> tuple[Response, int]:
+    """Desfaz a marca local de resolvido (volta para Em aberto se ainda ativo)."""
+    from flask import jsonify
+
+    from app.extensions import db
+    from app.models.trigger_resolucao import TriggerResolucao
+
+    marca = TriggerResolucao.query.filter_by(eventid=eventid).first()
+    if marca is None:
+        return jsonify({"ok": False, "error": "Problema não estava marcado como resolvido"}), 404
+    if marca.fechado_no_zabbix:
+        return jsonify({"ok": False, "error": "Fechado no Zabbix — não dá para reabrir por aqui"}), 409
+    db.session.delete(marca)
+    db.session.commit()
+    log.info("trigger.reaberto", eventid=eventid, user=current_user.email)
+    return jsonify({"ok": True}), 200
+
+
+def _problema_ativo(eventid: str) -> dict | None:
+    """Acha o problema no cache; se não estiver, relê o Zabbix uma vez."""
+    from itgov.api.v1 import zabbix_triggers as zt
+
+    for tentativa in range(2):
+        if tentativa:
+            zt.invalidate_cache()
+        for p in zt.get_cached_triggers().get("problems", []):
+            if p["eventid"] == eventid:
+                return p
+    return None

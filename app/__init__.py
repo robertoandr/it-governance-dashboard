@@ -74,6 +74,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     with app.app_context():
         from app.models import link as _link_model  # noqa: F401
         from app.models import tarefas as _tarefas_model  # noqa: F401
+        from app.models import trigger_resolucao as _trigger_resolucao_model  # noqa: F401
         from app.models import unidade as _unidade_model
         from app.models import user as _user_model  # noqa: F401
 
