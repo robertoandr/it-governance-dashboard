@@ -1,31 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Licencas M365 — Governança de TI 360{% endblock %}
-{% block page_title %}Licencas Microsoft 365{% endblock %}
+{% block title %}Licenças M365 — Governança de TI 360{% endblock %}
+{% block page_title %}Licenças Microsoft 365{% endblock %}
 
 {% block head %}
 <script nonce="{{ csp_nonce() }}">
 document.addEventListener('alpine:init', function () {
+  // Alpine CSP build: nada de expressão solta no HTML — só propriedades e
+  // métodos daqui, com os valores vindo de data-*.
   Alpine.data('licensesPage', function () {
     return {
       showModal: false,
-      editing:   null,
       form:      {},
       saving:    false,
       msg:       '',
-      filterFree: false,
+      mostrarOutras: false,
       _updateUrl: '{{ url_for("dashboards.m365_licenses_update") }}',
 
       get saveLabel()  { return this.saving ? 'Salvando...' : 'Salvar'; },
-      get msgIsError() { return this.msg !== '' && this.msg.indexOf('Erro') === 0; },
+      get msgClass()   { return this.msg.indexOf('Erro') === 0 ? 'text-red-600' : 'text-green-600'; },
+      get outrasLabel() { return this.mostrarOutras ? 'Ocultar gratuitas, testes e capacidade' : 'Mostrar gratuitas, testes e capacidade'; },
+      toggleOutras: function () { this.mostrarOutras = !this.mostrarOutras; },
 
-      openEdit: function (skuJson) {
-        var sku = JSON.parse(skuJson);
-        this.editing = sku.sku_name;
+      openEdit: function (ev) {
+        var sku = JSON.parse(ev.currentTarget.dataset.sku);
         this.form = {
           sku_name:          sku.sku_name,
           friendly_name:     sku.friendly_name,
-          cost_per_unit_brl: sku.cost_per_unit_brl,
-          renewal_date:      sku.renewal_date  || '',
+          cost_per_unit_brl: sku.cost_informado_brl || '',
+          renewal_date:      sku.renewal_origem === 'informado' ? (sku.renewal_date || '') : '',
           billing_cycle:     sku.billing_cycle || 'monthly',
           notes:             sku.notes         || ''
         };
@@ -34,7 +36,6 @@ document.addEventListener('alpine:init', function () {
       },
       closeEdit: function () {
         this.showModal = false;
-        this.editing   = null;
         this.msg       = '';
       },
       save: async function () {
@@ -52,7 +53,7 @@ document.addEventListener('alpine:init', function () {
           } else {
             this.msg = 'Erro: ' + (d.error || 'desconhecido');
           }
-        } catch(e) { this.msg = 'Erro de rede'; }
+        } catch (e) { this.msg = 'Erro de rede'; }
         this.saving = false;
       }
     };
@@ -61,59 +62,88 @@ document.addEventListener('alpine:init', function () {
 </script>
 {% endblock %}
 
+{% macro brl(v) %}R$ {{ '{:,.2f}'.format(v).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% endmacro %}
+
 {% block content %}
 <div x-data="licensesPage">
 
 {% if not data.has_data %}
 <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center dark:bg-yellow-900/20 dark:border-yellow-800">
-  <p class="text-yellow-700 font-semibold dark:text-yellow-300">Nenhum dado de licenca disponivel.</p>
-  <p class="text-yellow-600 text-sm mt-1">O coletor Entra ID escrevera os dados na proxima coleta (a cada 6h).</p>
+  <p class="text-yellow-700 font-semibold dark:text-yellow-300">Nenhum dado de licença disponível.</p>
+  <p class="text-yellow-600 text-sm mt-1">O coletor Entra ID escreverá os dados na próxima coleta (a cada 6h).</p>
 </div>
 {% else %}
 
 {% set s = data.summary %}
+{% set testes = data.licenses | selectattr('categoria', 'equalto', 'teste') | list %}
 
-<!-- Cards resumo -->
+{% if testes %}
+<!-- Testes com data de fim -->
+<div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 dark:bg-orange-900/20 dark:border-orange-800">
+  <p class="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">Assinaturas de teste</p>
+  <ul class="text-sm text-orange-700 dark:text-orange-300 space-y-0.5">
+    {% for t in testes %}
+    <li>
+      <strong>{{ t.friendly_name }}</strong> — {{ t.consumed }} em uso de {{ t.total }}
+      {% if t.renovacao_dias is not none %}
+        · termina em {{ t.renewal_date[8:10] }}/{{ t.renewal_date[5:7] }}/{{ t.renewal_date[:4] }}
+        {% if t.renovacao_dias <= 7 %}<span class="font-bold">({{ t.renovacao_dias }} dia(s))</span>{% endif %}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="text-xs text-orange-600 dark:text-orange-400 mt-1">Testes ficam fora dos totais. Quando terminarem, os recursos deixam de valer para quem só tinha o teste.</p>
+</div>
+{% endif %}
+
+<!-- Cards resumo (só licenças pagas) -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
   <div class="bg-white rounded-xl shadow p-5 text-center dark:bg-slate-800">
     <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">SKUs pagas</p>
     <p class="text-3xl font-bold text-gray-800 dark:text-slate-100">{{ s.total_skus }}</p>
-    <p class="text-xs text-gray-400 mt-1">+ {{ s.total_skus_free }} gratuitas</p>
+    <p class="text-xs text-gray-400 mt-1">+ {{ s.total_skus_free }} gratuitas · {{ s.total_skus_teste }} em teste</p>
   </div>
   <div class="bg-white rounded-xl shadow p-5 text-center dark:bg-slate-800">
-    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Utilizacao geral</p>
+    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Utilização (pagas)</p>
     <p class="text-3xl font-bold {% if s.uso_pct >= 95 %}text-red-600{% elif s.uso_pct >= 80 %}text-yellow-600{% else %}text-green-600{% endif %}">
       {{ s.uso_pct }}%
     </p>
-    <p class="text-xs text-gray-400 mt-1">{{ s.total_consumed }} / {{ s.total_seats }} licencas</p>
+    <p class="text-xs text-gray-400 mt-1">{{ s.total_consumed }} / {{ s.total_seats }} licenças · {{ s.total_unassigned }} livres</p>
   </div>
   <div class="bg-white rounded-xl shadow p-5 text-center dark:bg-slate-800">
-    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Custo mensal total</p>
+    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Custo mensal</p>
     {% if s.custo_mensal_total_brl > 0 %}
-    <p class="text-3xl font-bold text-blue-700 dark:text-blue-300">R$ {{ '{:,.2f}'.format(s.custo_mensal_total_brl) }}</p>
+    <p class="text-3xl font-bold text-blue-700 dark:text-blue-300">{{ brl(s.custo_mensal_total_brl) }}</p>
+    <p class="text-xs text-gray-400 mt-1">
+      {% if s.custo_estimado_brl > 0 %}{{ brl(s.custo_estimado_brl) }} estimado pelo preço de lista{% else %}valores informados{% endif %}
+      {% if s.skus_sem_preco %}· {{ s.skus_sem_preco }} SKU(s) sem preço{% endif %}
+    </p>
     {% else %}
-    <p class="text-2xl font-bold text-gray-300">Nao informado</p>
+    <p class="text-2xl font-bold text-gray-300">Não informado</p>
     <p class="text-xs text-gray-400 mt-1">Edite as SKUs para adicionar custo</p>
     {% endif %}
   </div>
   <div class="bg-white rounded-xl shadow p-5 text-center dark:bg-slate-800">
-    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Desperdicio estimado</p>
+    <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Desperdício</p>
     {% if s.desperdicio_total_brl > 0 %}
-    <p class="text-3xl font-bold text-red-600">R$ {{ '{:,.2f}'.format(s.desperdicio_total_brl) }}</p>
-    <p class="text-xs text-gray-400 mt-1">Licencas pagas nao usadas</p>
+    <p class="text-3xl font-bold text-red-600">{{ brl(s.desperdicio_total_brl) }}</p>
+    <p class="text-xs text-gray-400 mt-1">por mês em licenças pagas não atribuídas</p>
     {% else %}
     <p class="text-2xl font-bold text-gray-300">—</p>
-    <p class="text-xs text-gray-400 mt-1">Informe os custos para calcular</p>
+    <p class="text-xs text-gray-400 mt-1">Nenhuma licença paga com preço sobrando</p>
     {% endif %}
   </div>
 </div>
 
 <!-- Filtro -->
-<div class="flex items-center gap-3 mb-3">
-  <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer dark:text-slate-300">
-    <input type="checkbox" x-model="filterFree" class="rounded">
-    Mostrar SKUs gratuitas/ilimitadas
-  </label>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+  <button type="button" @click="toggleOutras" class="text-sm text-blue-600 hover:underline dark:text-blue-400" x-text="outrasLabel">
+    Mostrar gratuitas, testes e capacidade
+  </button>
+  <p class="text-xs text-gray-400">
+    <span class="inline-block px-1.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">estimado</span>
+    = preço de lista Microsoft (R$/usuário/mês, anual, sem impostos) — clique em Editar para informar o valor do contrato
+  </p>
 </div>
 
 <!-- Tabela -->
@@ -126,76 +156,80 @@ document.addEventListener('alpine:init', function () {
         <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Total</th>
         <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Livres</th>
         <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Uso %</th>
-        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">R$/unit</th>
-        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Custo/mes</th>
-        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Desperdicio</th>
-        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Renovacao</th>
-        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Acao</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">R$/unid.</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Custo/mês</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold text-right dark:text-slate-400">Desperdício</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Renovação</th>
+        <th class="px-4 py-3 text-xs text-gray-500 font-semibold dark:text-slate-400">Ação</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-gray-50">
+    <tbody class="divide-y divide-gray-50 dark:divide-slate-700">
       {% for sku in data.licenses %}
-      <tr x-show="{{ 'true' if not sku.is_free else 'filterFree' }}"
-          class="hover:bg-gray-50 dark:hover:bg-slate-700/50 {% if sku.over_provisioned %}bg-red-50 dark:bg-red-900/20{% elif sku.available > (sku.total * 0.2) and sku.total > 0 and not sku.is_free %}bg-yellow-50 dark:bg-yellow-900/20{% endif %}">
+      {% set paga = sku.categoria == 'pago' %}
+      <tr {% if not paga %}x-show="mostrarOutras" x-cloak{% endif %}
+          class="hover:bg-gray-50 dark:hover:bg-slate-700/50 {% if sku.over_provisioned and paga %}bg-red-50 dark:bg-red-900/20{% elif paga and sku.total > 0 and sku.available > (sku.total * 0.2) %}bg-yellow-50 dark:bg-yellow-900/20{% endif %}">
         <td class="px-4 py-3">
           {% if sku.has_friendly_name %}
           <p class="font-medium text-gray-800 dark:text-slate-100">{{ sku.friendly_name }}</p>
           {% else %}
           <p class="italic text-gray-400">{{ sku.friendly_name or sku.sku_name or sku.sku_id or "SKU sem identificador" }}</p>
           {% endif %}
-          {% if sku.sku_name %}
-          <p class="text-xs text-gray-400 font-mono">{{ sku.sku_name }}</p>
-          {% elif sku.sku_id %}
-          <p class="text-xs text-gray-400 font-mono">{{ sku.sku_id }}</p>
-          {% endif %}
-          {% if sku.over_provisioned %}
+          <p class="text-xs text-gray-400 font-mono">{{ sku.sku_name or sku.sku_id }}</p>
+          {% if sku.over_provisioned and paga %}
           <span class="text-xs text-red-600 font-semibold"
                 title="Licenças em uso excedem o total contratado. Verificar junto à Microsoft.">ACIMA DO LIMITE</span>
           {% endif %}
-          {% if sku.is_free %}
-          <span class="text-xs text-gray-400 bg-gray-100 rounded px-1 dark:bg-slate-700">gratuita</span>
+          {% if sku.categoria == 'gratuito' %}
+          <span class="text-xs text-gray-500 bg-gray-100 rounded px-1 dark:bg-slate-700 dark:text-slate-300">gratuita</span>
+          {% elif sku.categoria == 'teste' %}
+          <span class="text-xs text-orange-700 bg-orange-100 rounded px-1 dark:bg-orange-900/20 dark:text-orange-300">teste</span>
+          {% elif sku.categoria == 'capacidade' %}
+          <span class="text-xs text-gray-500 bg-gray-100 rounded px-1 dark:bg-slate-700 dark:text-slate-300">capacidade (não é licença de usuário)</span>
+          {% endif %}
+          {% if sku.assinaturas_suspensas %}
+          <span class="text-xs text-gray-500 bg-gray-100 rounded px-1 dark:bg-slate-700 dark:text-slate-300">{{ sku.assinaturas_suspensas }} assinatura(s) suspensa(s)</span>
           {% endif %}
         </td>
-        <td class="px-4 py-3 text-right font-mono {% if sku.over_provisioned %}text-red-700 font-bold dark:text-red-300{% endif %}">{{ sku.consumed }}</td>
-        <td class="px-4 py-3 text-right font-mono text-gray-600 dark:text-slate-300">{{ sku.total if not sku.is_free else '∞' }}</td>
-        <td class="px-4 py-3 text-right font-mono {% if sku.available == 0 and not sku.is_free %}text-red-600{% else %}text-gray-600 dark:text-slate-300{% endif %}">
-          {{ sku.available if not sku.is_free else '—' }}
+        <td class="px-4 py-3 text-right font-mono {% if sku.over_provisioned and paga %}text-red-700 font-bold dark:text-red-300{% endif %}">{{ sku.consumed }}</td>
+        <td class="px-4 py-3 text-right font-mono text-gray-600 dark:text-slate-300">{{ sku.total if sku.categoria != 'gratuito' else '∞' }}</td>
+        <td class="px-4 py-3 text-right font-mono {% if paga and sku.available == 0 %}text-red-600{% else %}text-gray-600 dark:text-slate-300{% endif %}">
+          {{ sku.available if paga else '—' }}
         </td>
         <td class="px-4 py-3 text-right">
-          {% if not sku.is_free %}
+          {% if paga %}
           <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium
-            {% if sku.uso_pct >= 100 %}bg-red-100 text-red-700
- dark:text-red-300 dark:bg-red-900/20 {% elif sku.uso_pct >= 80 %}bg-yellow-100 text-yellow-700
- dark:text-yellow-300 dark:bg-yellow-900/20 {% else %}bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300{% endif %}">
+            {% if sku.uso_pct >= 100 %}bg-red-100 text-red-700 dark:text-red-300 dark:bg-red-900/20{% elif sku.uso_pct >= 80 %}bg-yellow-100 text-yellow-700 dark:text-yellow-300 dark:bg-yellow-900/20{% else %}bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300{% endif %}">
             {{ sku.uso_pct }}%
           </span>
           {% else %}
           <span class="text-gray-300">—</span>
           {% endif %}
         </td>
-        <td class="px-4 py-3 text-right text-gray-600 dark:text-slate-300">
-          {% if sku.cost_per_unit_brl > 0 %}R$ {{ '%.2f'|format(sku.cost_per_unit_brl) }}
+        <td class="px-4 py-3 text-right text-gray-600 dark:text-slate-300 whitespace-nowrap">
+          {% if sku.cost_per_unit_brl > 0 %}
+            {{ brl(sku.cost_per_unit_brl) }}
+            {% if sku.preco_origem == 'estimado' %}<span class="block text-[10px] px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">estimado</span>{% endif %}
+          {% elif sku.preco_origem == 'sem_preco' %}
+            <span class="text-xs text-amber-600">sem preço — editar</span>
           {% else %}<span class="text-gray-300">—</span>{% endif %}
         </td>
-        <td class="px-4 py-3 text-right text-gray-700 dark:text-slate-200">
-          {% if sku.custo_mensal_brl > 0 %}R$ {{ '{:,.2f}'.format(sku.custo_mensal_brl) }}
+        <td class="px-4 py-3 text-right text-gray-700 dark:text-slate-200 whitespace-nowrap">
+          {% if sku.custo_mensal_brl > 0 %}{{ brl(sku.custo_mensal_brl) }}
           {% else %}<span class="text-gray-300">—</span>{% endif %}
         </td>
-        <td class="px-4 py-3 text-right {% if sku.desperdicio_brl > 0 %}text-red-600 font-medium{% else %}text-gray-300{% endif %}">
-          {% if sku.desperdicio_brl > 0 %}R$ {{ '{:,.2f}'.format(sku.desperdicio_brl) }}
-          {% else %}—{% endif %}
+        <td class="px-4 py-3 text-right whitespace-nowrap {% if sku.desperdicio_brl > 0 %}text-red-600 font-medium{% else %}text-gray-300{% endif %}">
+          {% if sku.desperdicio_brl > 0 %}{{ brl(sku.desperdicio_brl) }}{% else %}—{% endif %}
         </td>
-        <td class="px-4 py-3 text-gray-600 text-xs dark:text-slate-300">
+        <td class="px-4 py-3 text-gray-600 text-xs dark:text-slate-300 whitespace-nowrap">
           {% if sku.renewal_date %}
-            {% set days_left = ((sku.renewal_date | string)[:10] | strptime('%Y-%m-%d') - now()).days if sku.renewal_date else None %}
-            <span class="{% if days_left is not none and days_left < 30 %}text-red-600 font-semibold{% endif %}">
-              {{ sku.renewal_date[:10] if sku.renewal_date else '—' }}
+            <span class="{% if sku.renovacao_dias is not none and sku.renovacao_dias < 30 %}text-red-600 font-semibold{% endif %}">
+              {{ sku.renewal_date[8:10] }}/{{ sku.renewal_date[5:7] }}/{{ sku.renewal_date[:4] }}
             </span>
+            {% if sku.renewal_origem == 'microsoft' %}<span class="block text-[10px] text-gray-400">da Microsoft</span>{% endif %}
           {% else %}—{% endif %}
         </td>
         <td class="px-4 py-3">
-          <button @click="openEdit($event.currentTarget.dataset.sku)"
-                  data-sku='{{ sku | tojson }}'
+          <button type="button" @click="openEdit" data-sku='{{ sku | tojson }}'
                   class="text-blue-600 hover:text-blue-800 text-xs underline">
             Editar
           </button>
@@ -206,49 +240,48 @@ document.addEventListener('alpine:init', function () {
   </table>
 </div>
 
-<!-- Modal de edicao -->
+<!-- Modal de edição -->
 <div x-show="showModal" x-cloak
      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-     @click.self="closeEdit()">
+     @click.self="closeEdit">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 dark:bg-slate-800" @click.stop>
     <h3 class="text-lg font-bold text-gray-800 mb-4 dark:text-slate-100">Editar SKU: <span x-text="form.sku_name" class="font-mono text-sm text-blue-600"></span></h3>
     <div class="space-y-3">
       <div>
-        <label class="text-xs text-gray-500 dark:text-slate-400">Nome amigavel</label>
+        <label class="text-xs text-gray-500 dark:text-slate-400">Nome amigável</label>
         <input x-model="form.friendly_name" type="text"
-               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700">
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900">
       </div>
       <div>
-        <label class="text-xs text-gray-500 dark:text-slate-400">Custo por unidade (R$)</label>
+        <label class="text-xs text-gray-500 dark:text-slate-400">Custo por unidade do contrato (R$/mês) — vazio usa o preço de lista estimado</label>
         <input x-model="form.cost_per_unit_brl" type="number" step="0.01" min="0"
-               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700">
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900">
       </div>
       <div>
-        <label class="text-xs text-gray-500 dark:text-slate-400">Data de renovacao</label>
+        <label class="text-xs text-gray-500 dark:text-slate-400">Data de renovação — vazio usa a data da Microsoft</label>
         <input x-model="form.renewal_date" type="date"
-               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700">
+               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900">
       </div>
       <div>
-        <label class="text-xs text-gray-500 dark:text-slate-400">Ciclo de cobranca</label>
+        <label class="text-xs text-gray-500 dark:text-slate-400">Ciclo de cobrança</label>
         <select x-model="form.billing_cycle"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700">
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900">
           <option value="monthly">Mensal</option>
           <option value="annual">Anual</option>
         </select>
       </div>
       <div>
-        <label class="text-xs text-gray-500 dark:text-slate-400">Observacoes</label>
+        <label class="text-xs text-gray-500 dark:text-slate-400">Observações</label>
         <textarea x-model="form.notes" rows="2"
-                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700"></textarea>
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900"></textarea>
       </div>
     </div>
     <div class="flex items-center justify-between mt-5">
-      <span x-text="msg" class="text-sm"
-            :class="msgIsError ? 'text-red-600' : 'text-green-600'"></span>
+      <span x-text="msg" class="text-sm" :class="msgClass"></span>
       <div class="flex gap-2">
-        <button @click="closeEdit()"
+        <button type="button" @click="closeEdit"
                 class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-slate-300">Cancelar</button>
-        <button @click="save()" :disabled="saving"
+        <button type="button" @click="save" :disabled="saving"
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
           <span x-text="saveLabel"></span>
         </button>

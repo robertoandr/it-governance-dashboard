@@ -20,6 +20,12 @@ def _reset_cache():
     m365_licenses._invalidar_cache()
 
 
+@pytest.fixture(autouse=True)
+def _sem_graph(monkeypatch):
+    """Assinaturas (teste/renovação) vêm do Graph — nos testes, nenhuma por padrão."""
+    monkeypatch.setattr(m365_licenses, "_assinaturas", lambda: {})
+
+
 @pytest.fixture
 def isolated_costs_file(tmp_path, monkeypatch):
     """Redireciona _COSTS_FILE para um arquivo temporário isolado."""
@@ -187,3 +193,105 @@ class TestLicenseCostsCoverage:
             assert costs[sku]["category"] == "free"
             assert costs[sku]["cost_per_unit_brl"] == 0
             assert costs[sku]["friendly_name"]
+
+
+class TestCategoriasEPrecos:
+    """Totais só com licenças pagas; preço de lista como estimativa; renovação da Microsoft."""
+
+    def _rows(self) -> list[dict]:
+        return [
+            {"sku_id": "a", "sku_name": "O365_BUSINESS_ESSENTIALS", "consumed": 268, "total": 269, "available": 1},
+            {"sku_id": "b", "sku_name": "SHAREPOINTSTORAGE", "consumed": 0, "total": 2000, "available": 2000},
+            {"sku_id": "c", "sku_name": "THREAT_INTELLIGENCE", "consumed": 1, "total": 300, "available": 299},
+            {"sku_id": "d", "sku_name": "FLOW_FREE", "consumed": 114, "total": 10000, "available": 9886},
+            {"sku_id": "e", "sku_name": "PROJECT_P1", "consumed": 4, "total": 5, "available": 1},
+        ]
+
+    def _assinaturas(self) -> dict:
+        from datetime import date
+
+        from itgov.services.m365_assinaturas import AssinaturaSku
+
+        return {
+            "THREAT_INTELLIGENCE": AssinaturaSku(
+                sku_name="THREAT_INTELLIGENCE", teste=True, renovacao=date(2026, 10, 4), ativas=1, suspensas=0
+            ),
+            "O365_BUSINESS_ESSENTIALS": AssinaturaSku(
+                sku_name="O365_BUSINESS_ESSENTIALS", teste=False, renovacao=date(2027, 2, 3), ativas=3, suspensas=0
+            ),
+        }
+
+    def _resumo(self, monkeypatch, isolated_costs_file, costs: dict | None = None) -> dict:
+        _write_costs(isolated_costs_file, costs or {})
+        _mock_rows(monkeypatch, self._rows())
+        monkeypatch.setattr(m365_licenses, "_assinaturas", self._assinaturas)
+        m365_licenses._invalidar_cache()
+        return m365_licenses.get_licenses_summary()
+
+    def _sku(self, resumo: dict, nome: str) -> dict:
+        return next(x for x in resumo["licenses"] if x["sku_name"] == nome)
+
+    def test_teste_capacidade_e_gratuita_ficam_fora_dos_totais(self, monkeypatch, isolated_costs_file):
+        resumo = self._resumo(monkeypatch, isolated_costs_file)
+        assert self._sku(resumo, "THREAT_INTELLIGENCE")["categoria"] == "teste"
+        assert self._sku(resumo, "SHAREPOINTSTORAGE")["categoria"] == "capacidade"
+        assert self._sku(resumo, "FLOW_FREE")["categoria"] == "gratuito"
+        s = resumo["summary"]
+        assert s["total_seats"] == 269 + 5
+        assert s["total_unassigned"] == 1 + 1  # antes somava 2000 GB de SharePoint + 299 do teste
+        assert s["total_skus_teste"] == 1
+
+    def test_preco_de_lista_vira_estimativa(self, monkeypatch, isolated_costs_file):
+        resumo = self._resumo(monkeypatch, isolated_costs_file)
+        basic = self._sku(resumo, "O365_BUSINESS_ESSENTIALS")
+        assert basic["preco_origem"] == "estimado"
+        assert basic["cost_per_unit_brl"] == m365_licenses.PRECOS_LISTA_BRL["O365_BUSINESS_ESSENTIALS"]
+        assert basic["custo_mensal_brl"] == round(268 * basic["cost_per_unit_brl"], 2)
+        assert resumo["summary"]["custo_estimado_brl"] == basic["custo_mensal_brl"]
+
+    def test_sku_paga_sem_preco_de_lista_pede_valor(self, monkeypatch, isolated_costs_file):
+        resumo = self._resumo(monkeypatch, isolated_costs_file)
+        assert self._sku(resumo, "PROJECT_P1")["preco_origem"] == "sem_preco"
+        assert resumo["summary"]["skus_sem_preco"] == 1
+
+    def test_custo_informado_vale_mais_que_o_estimado(self, monkeypatch, isolated_costs_file):
+        resumo = self._resumo(
+            monkeypatch, isolated_costs_file, {"O365_BUSINESS_ESSENTIALS": {"cost_per_unit_brl": 30.0}}
+        )
+        basic = self._sku(resumo, "O365_BUSINESS_ESSENTIALS")
+        assert basic["preco_origem"] == "informado"
+        assert basic["cost_per_unit_brl"] == 30.0
+        assert resumo["summary"]["custo_estimado_brl"] == 0.0
+
+    def test_teste_nao_tem_custo(self, monkeypatch, isolated_costs_file):
+        teste = self._sku(self._resumo(monkeypatch, isolated_costs_file), "THREAT_INTELLIGENCE")
+        assert teste["preco_origem"] == "nao_se_aplica" and teste["custo_mensal_brl"] == 0
+        assert teste["teste_vence"] == "2026-10-04"
+        assert teste["friendly_name"] == "Defender for Office 365 Plano 2"
+
+    def test_renovacao_vem_da_microsoft_se_nao_informada(self, monkeypatch, isolated_costs_file):
+        basic = self._sku(self._resumo(monkeypatch, isolated_costs_file), "O365_BUSINESS_ESSENTIALS")
+        assert basic["renewal_date"] == "2027-02-03" and basic["renewal_origem"] == "microsoft"
+        resumo = self._resumo(
+            monkeypatch, isolated_costs_file, {"O365_BUSINESS_ESSENTIALS": {"renewal_date": "2027-01-15"}}
+        )
+        basic = self._sku(resumo, "O365_BUSINESS_ESSENTIALS")
+        assert basic["renewal_date"] == "2027-01-15" and basic["renewal_origem"] == "informado"
+
+
+def test_pagina_licencas_marca_estimado_e_teste(authed_client, monkeypatch, isolated_costs_file):
+    _mock_rows(monkeypatch, TestCategoriasEPrecos()._rows())
+    monkeypatch.setattr(m365_licenses, "_assinaturas", TestCategoriasEPrecos()._assinaturas)
+    html = authed_client.get("/gov/licenses").get_data(as_text=True)
+    assert "estimado" in html
+    assert "Assinaturas de teste" in html and "Defender for Office 365 Plano 2" in html
+    assert "sem preço — editar" in html
+    assert "openEdit($event" not in html  # Alpine CSP
+
+
+def test_salvar_custo_vazio_volta_para_estimado(authed_client, isolated_costs_file):
+    resp = authed_client.post(
+        "/gov/licenses/update", json={"sku_name": "O365_BUSINESS_ESSENTIALS", "cost_per_unit_brl": ""}
+    )
+    assert resp.get_json() == {"ok": True}
+    assert json.loads(isolated_costs_file.read_text())["O365_BUSINESS_ESSENTIALS"]["cost_per_unit_brl"] == 0.0
