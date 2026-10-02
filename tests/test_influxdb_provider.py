@@ -144,7 +144,9 @@ class TestZendeskSlaStats:
         assert result == {}
 
     def test_enabled_instantiates_service_with_credentials(self, provider: InfluxDBMetricsProvider) -> None:
-        mock_sla = MagicMock(spec=SLAMetric, compliance_pct=91.4, total_tickets=50, breached=4)
+        mock_sla = MagicMock(
+            spec=SLAMetric, compliance_pct=91.4, total_tickets=50, breached=4, avg_resolution_hours=30.0
+        )
         mock_csat = MagicMock(spec=CSATSummary, csat_pct=88.0, sample_size=12)
         mock_svc = MagicMock()
         mock_svc.get_sla_metrics.return_value = mock_sla
@@ -173,6 +175,7 @@ class TestZendeskSlaStats:
             "breached": 4,
             "csat_pct": 88.0,
             "csat_sample": 12,
+            "mttr_hours": 30.0,
         }
 
     def test_service_exception_returns_empty(self, provider: InfluxDBMetricsProvider) -> None:

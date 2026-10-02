@@ -159,6 +159,6 @@ def test_visao_geral_mostra_fontes(authed_client) -> None:
         html = authed_client.get("/gov/").get_data(as_text=True)
     assert 'aria-label="Fontes de dados"' in html
     assert "Zendesk: offline — HTTP 401 (90 ms)" in html
-    assert "GitHub: não configurada" in html
+    assert "GitHub" not in html  # fonte não configurada (decisão: sem integração) não aparece
     assert "bg-red-500" in html and "bg-green-500" in html
     assert "Fonte: InfluxDB" not in html
