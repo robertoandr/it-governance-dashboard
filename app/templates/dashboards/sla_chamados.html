@@ -48,8 +48,14 @@
   {{ stat_card('Tickets abertos', data.total_open, '', 'text-gray-800 dark:text-slate-100', 'new + open + pending') }}
   {{ stat_card('Resolvidos (7d)', data.resolved_7d, '', 'text-green-600', 'últimos 7 dias') }}
   {{ stat_card('Resolvidos (30d)', data.resolved_30d, '', 'text-blue-600', 'últimos 30 dias') }}
-  {{ stat_card('Total histórico', data.total_all, '', 'text-gray-500', 'todos os status') }}
+  {% if historico and historico.desde %}
+  {{ stat_card('Total histórico', historico.total, '', 'text-gray-500', 'desde ' ~ historico.desde[8:10] ~ '/' ~ historico.desde[5:7] ~ '/' ~ historico.desde[:4]) }}
+  {% else %}
+  {{ stat_card('Abertos + resolvidos (30d)', data.total_all, '', 'text-gray-500', 'histórico indisponível agora') }}
+  {% endif %}
 </div>
+
+{% include "dashboards/_zendesk_historico.html" %}
 
 {# --- SLA por prioridade + Baldes de idade --- #}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">

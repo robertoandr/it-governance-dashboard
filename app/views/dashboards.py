@@ -122,9 +122,10 @@ def pillars() -> str:
     from app.services.plano_melhoria import montar_plano
 
     data = _get_governance()
-    # Só a ação que mais rende por pilar; os itens concretos ficam no detalhe.
-    proxima = {p["id"]: next(iter(montar_plano(p, com_itens=False)), None) for p in data["pillars"]}
-    return render_template("dashboards/pillars.html", governance=data, proxima=proxima)
+    # Ações sem os itens concretos (rápido); os itens ficam na página do pilar.
+    planos = {p["id"]: montar_plano(p, com_itens=False) for p in data["pillars"]}
+    proxima = {pid: next(iter(acoes), None) for pid, acoes in planos.items()}
+    return render_template("dashboards/pillars.html", governance=data, proxima=proxima, planos=planos)
 
 
 @bp.route("/pilares")
@@ -139,13 +140,13 @@ def pilares_redirect():
 @require_role("admin", "gestor")
 def sla_chamados() -> str:
     """Render painel SLA / Chamados (Zendesk)."""
-    from itgov.api.v1.zendesk import get_cached_sla_detail
+    from itgov.api.v1.zendesk import get_cached_historico, get_cached_sla_detail
 
     if not zendesk_configured():
         abort(404)
 
     data = get_cached_sla_detail()
-    return render_template("dashboards/sla_chamados.html", data=data)
+    return render_template("dashboards/sla_chamados.html", data=data, historico=get_cached_historico())
 
 
 @bp.route("/zendesk")
@@ -153,7 +154,7 @@ def sla_chamados() -> str:
 @require_role("admin", "gestor")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""
-    from itgov.api.v1.zendesk import get_cached_mttr_summary, get_cached_volume_by_status
+    from itgov.api.v1.zendesk import get_cached_historico, get_cached_mttr_summary, get_cached_volume_by_status
 
     if not zendesk_configured():
         abort(404)
@@ -165,6 +166,7 @@ def zendesk_mttr() -> str:
         "dashboards/zendesk_mttr.html",
         mttr=mttr,
         volume=volume,
+        historico=get_cached_historico(),
     )
 
 
@@ -401,15 +403,11 @@ def cftv_gravador_unidade() -> object:
 @login_required
 @require_role("admin", "gestor", "operador")
 def unidades_list() -> str:
-    """Lista as unidades (sites) em árvore, com faixas de IP e gravadores vinculados."""
-    from app.models.unidade import DvrUnidade, Unidade
+    """Lista as unidades (sites) em árvore, com CNPJ, endereço e faixas de IP."""
+    from app.models.unidade import Unidade
 
     raizes = Unidade.query.filter_by(parent_id=None).order_by(Unidade.nome).all()
-    gravadores: dict[int, list[str]] = {}
-    for v in DvrUnidade.query.order_by(DvrUnidade.dvr).all():
-        if v.unidade_id is not None:
-            gravadores.setdefault(v.unidade_id, []).append(v.dvr)
-    return render_template("dashboards/unidades.html", raizes=raizes, gravadores=gravadores)
+    return render_template("dashboards/unidades.html", raizes=raizes)
 
 
 @bp.route("/unidades/nova", methods=["GET", "POST"])
@@ -425,6 +423,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
         DvrUnidade,
         Unidade,
         normalizar_cep,
+        normalizar_cnpj,
         normalizar_uf,
         parse_faixas,
         tipo_logo,
@@ -470,6 +469,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
     arquivo = request.files.get("logo")
     try:
         faixas = parse_faixas(request.form.get("faixas_ip", ""))
+        cnpj = normalizar_cnpj(request.form.get("cnpj", ""))
         cep = normalizar_cep(request.form.get("cep", ""))
         uf = normalizar_uf(request.form.get("uf", ""))
         # Um byte além do limite basta para tipo_logo() recusar o arquivo.
@@ -489,6 +489,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
     unidade.nome = nome
     unidade.parent_id = parent_id
     unidade.faixas_ip = "\n".join(faixas)
+    unidade.cnpj = cnpj
     unidade.endereco = request.form.get("endereco", "").strip()[:200]
     unidade.cep = cep
     unidade.cidade = request.form.get("cidade", "").strip()[:120]

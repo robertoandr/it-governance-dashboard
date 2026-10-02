@@ -1,11 +1,12 @@
 """Tarefas do ClickUp por responsável (aba ClickUp de ``/gov/tarefas``).
 
-Busca as tarefas do workspace inteiro (todas as listas que o dono do token
-enxerga), não só a lista de projetos da PMO. Cada usuário do dashboard vê as
-tarefas atribuídas ao próprio e-mail; o admin vê todas, separadas por pessoa.
+Busca só as tarefas da lista "Projetos" do espaço TI | Projetos — a mesma
+lista do PMO (``CLICKUP_LIST_ID``), decisão do usuário em 02/10/2026: o
+workspace inteiro trazia tarefas e pessoas de fora da TI. Cada usuário do
+dashboard vê as tarefas atribuídas ao próprio e-mail; o admin vê todas,
+separadas por pessoa.
 
-A busca completa leva ~13 s em série (≈1.000 tarefas, 100 por página); as
-páginas são pedidas em lotes paralelos e o resultado fica em cache com
+As páginas são pedidas em lotes paralelos e o resultado fica em cache com
 atualização em segundo plano, para a página nunca esperar pelo ClickUp.
 """
 
@@ -108,6 +109,11 @@ def _workspace() -> str:
     return os.getenv("CLICKUP_WORKSPACE_ID", "9013344143")
 
 
+def _lista() -> str:
+    """Lista "Projetos" do espaço TI | Projetos — a mesma do PMO (``CLICKUP_LIST_ID``)."""
+    return os.getenv("CLICKUP_LIST_ID", "901321459571")
+
+
 def _data_local(ms: Any) -> date | None:
     if not ms:
         return None
@@ -166,7 +172,7 @@ def converter(bruta: dict[str, Any], hoje: date) -> TarefaClickUp:
 async def _pagina(cliente: httpx.AsyncClient, pagina: int) -> tuple[list[dict[str, Any]], bool]:
     resp = await cliente.get(
         f"{API}/team/{_workspace()}/task",
-        params={"page": pagina, "include_closed": "true", "subtasks": "true"},
+        params={"page": pagina, "include_closed": "true", "subtasks": "true", "list_ids[]": _lista()},
     )
     resp.raise_for_status()
     dados = resp.json()
@@ -175,7 +181,7 @@ async def _pagina(cliente: httpx.AsyncClient, pagina: int) -> tuple[list[dict[st
 
 
 async def buscar_tarefas() -> list[dict[str, Any]]:
-    """Busca todas as tarefas do workspace, em lotes de páginas paralelas.
+    """Busca as tarefas da lista de projetos de TI, em lotes de páginas paralelas.
 
     Returns:
         Tarefas cruas da API, na ordem das páginas.
@@ -230,7 +236,7 @@ _cache: CacheSWR[ResultadoClickUp] = CacheSWR("clickup.tarefas", ttl=300, valido
 
 
 def obter() -> ResultadoClickUp:
-    """Tarefas do workspace com cache de 5 min atualizado em segundo plano."""
+    """Tarefas da lista de projetos de TI com cache de 5 min atualizado em segundo plano."""
     return _cache.get(_carregar)
 
 

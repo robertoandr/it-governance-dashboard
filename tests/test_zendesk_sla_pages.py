@@ -12,6 +12,12 @@ def com_zendesk(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ZENDESK_SUBDOMAIN", "test-corp")
 
 
+@pytest.fixture(autouse=True)
+def _sem_historico(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O histórico busca todos os tickets do grupo; aqui não vai à rede."""
+    monkeypatch.setattr("itgov.api.v1.zendesk.get_cached_historico", lambda: {})
+
+
 def _period(compliance: float | None) -> dict:
     return {
         "total_tickets": 129 if compliance is not None else 0,

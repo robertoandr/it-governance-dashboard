@@ -196,3 +196,23 @@ def test_lista_de_pilares_mostra_proxima_acao(authed_client) -> None:
         html = authed_client.get("/gov/pillars").get_data(as_text=True)
     assert "Próxima ação · +13.8 pts" in html
     assert "Adoção de MFA: Exigir MFA de todos." in html
+
+
+def test_card_do_pilar_abre_no_proprio_card_com_o_plano(authed_client) -> None:
+    from app.services.plano_melhoria import AcaoMelhoria
+
+    acoes = [
+        AcaoMelhoria(componente_id="mfa_adoption", componente="Adoção de MFA", valor=62.0, meta=100.0, ganho=13.8,
+                     o_que_fazer="Exigir MFA de todos.", onde_label="M365", onde_endpoint="dashboards.m365_overview"),
+        AcaoMelhoria(componente_id="incidents_critical", componente="Incidentes críticos", valor=40.0, meta=100.0,
+                     ganho=9.1, o_que_fazer="Resolver os problemas Altos.", onde_label="Triggers",
+                     onde_endpoint="dashboards.zabbix_triggers"),
+    ]  # fmt: skip
+    with patch("app.services.plano_melhoria.montar_plano", return_value=acoes):
+        html = authed_client.get("/gov/pillars").get_data(as_text=True)
+    assert 'x-data="pilarCard"' in html
+    assert '@click="toggle"' in html and 'x-show="open"' in html
+    assert "O que fazer para subir o score" in html
+    assert "Resolver os problemas Altos." in html  # a 2ª ação também aparece no card
+    assert "Abrir a página do pilar com os itens concretos" in html
+    assert 'x-data="{' not in html  # Alpine CSP
