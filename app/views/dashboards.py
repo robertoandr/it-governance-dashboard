@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,9 @@ from flask_login import current_user, login_required
 from app.auth.rbac import require_role
 from app.integrations import graph_configured, zendesk_configured
 from app.services.metrics_aggregator import MetricsAggregator
+
+if TYPE_CHECKING:
+    from app.models.unidade import DvrUnidade
 
 log = structlog.get_logger(__name__)
 
@@ -353,20 +357,109 @@ def cftv_monitoring() -> str:
     filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
 
     data = get_cached_cftv_summary()
+    vinculos = DvrUnidade.query.all()
+    # Sede = unidade raiz; o 1º nível do drill-down soma câmeras por sede
+    sede_por_unidade = {u.id: (u.parent_id or u.id) for u in todas}
     visao = montar_visao(
         data,
-        unidade_por_gravador={v.dvr: v.unidade_id for v in DvrUnidade.query.all()},
+        unidade_por_gravador={v.dvr: v.unidade_id for v in vinculos},
         unidades=nomes,
         unidade_por_loja={u.nome.lower(): u.id for u in unidades},
         filtro=filtro,
+        apelidos={v.dvr: v.apelido for v in vinculos if v.apelido},
+        duplicado_de={v.dvr: v.duplicado_de for v in vinculos if v.duplicado_de},
+        sede_por_unidade=sede_por_unidade,
     )
+    selecionada = next((u for u in todas if filtro_raw == str(u.id)), None)
+    sede = (selecionada.parent or selecionada) if selecionada else None
+    # Sem filtro: só os cards de sede, a não ser que peça todos os gravadores
+    ver_gravadores = filtro is not None or request.args.get("ver") == "gravadores"
     return render_template(
         "dashboards/cftv_monitoring.html",
         data=data,
         visao=visao,
         unidades=sorted(unidades, key=lambda u: u.caminho),
+        sedes=sorted((u for u in unidades if u.parent_id is None), key=lambda u: u.nome),
+        sede=sede,
+        filhas=sorted((f for f in sede.filhas if f.ativo), key=lambda u: u.nome) if sede else [],
+        selecionada=selecionada,
+        ver_gravadores=ver_gravadores,
+        gravadores=sorted({c["gravador"] for c in visao["cards"] if c["gravador"]} | {v.dvr for v in vinculos}),
         filtro=filtro_raw if filtro is not None else "",
     )
+
+
+def _voltar_cftv() -> object:
+    """Redireciona de volta para /cftv mantendo o filtro do formulário."""
+    return redirect(url_for("dashboards.cftv_monitoring", unidade=request.form.get("filtro") or None))
+
+
+def _vinculo_dvr(gravador: str) -> DvrUnidade:
+    """Vínculo do gravador, criado (sem unidade) se ainda não existir."""
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade
+
+    vinculo = DvrUnidade.query.filter_by(dvr=gravador).first()
+    if vinculo is None:
+        vinculo = DvrUnidade(dvr=gravador)
+        db.session.add(vinculo)
+    return vinculo
+
+
+@bp.route("/cftv/gravador/nome", methods=["POST"])
+@login_required
+@require_role("admin")
+def cftv_gravador_nome() -> object:
+    """Renomeia um gravador na página /cftv (só admin; vazio volta ao nome do Zabbix)."""
+    from app.extensions import db
+
+    gravador = request.form.get("gravador", "").strip()
+    apelido = " ".join(request.form.get("apelido", "").split())
+    if not gravador or len(apelido) > 120:
+        abort(400)
+    vinculo = _vinculo_dvr(gravador)
+    vinculo.apelido = apelido
+    db.session.commit()
+    log.info("cftv.gravador_nome", gravador=gravador, apelido=apelido, user=current_user.email)
+    flash(
+        f"{gravador} agora aparece como “{apelido}”." if apelido else f"{gravador} voltou ao nome do Zabbix.", "success"
+    )
+    return _voltar_cftv()
+
+
+@bp.route("/cftv/gravador/duplicado", methods=["POST"])
+@login_required
+@require_role("admin")
+def cftv_gravador_duplicado() -> object:
+    """Marca um gravador como duplicado de outro (só admin; vazio desfaz).
+
+    O duplicado deixa de ter card próprio: seus dispositivos entram no card do
+    principal. Nada é apagado no Zabbix.
+    """
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade
+    from itgov.api.v1.cftv_monitoring import resolver_principal
+
+    gravador = request.form.get("gravador", "").strip()
+    principal = request.form.get("duplicado_de", "").strip()
+    if not gravador or len(principal) > 120:
+        abort(400)
+    if principal:
+        mapa = {v.dvr: v.duplicado_de for v in DvrUnidade.query.all() if v.duplicado_de}
+        mapa[gravador] = principal
+        # Recusa A→A e ciclos (A→B→A): o principal não pode levar de volta a este
+        if resolver_principal(principal, mapa) == gravador or principal == gravador:
+            flash("Não dá para unir: o principal escolhido já é duplicado deste gravador.", "error")
+            return _voltar_cftv()
+    vinculo = _vinculo_dvr(gravador)
+    vinculo.duplicado_de = principal
+    db.session.commit()
+    log.info("cftv.gravador_duplicado", gravador=gravador, duplicado_de=principal, user=current_user.email)
+    if principal:
+        flash(f"{gravador} foi unido a {principal}.", "success")
+    else:
+        flash(f"{gravador} voltou a ter card próprio.", "success")
+    return _voltar_cftv()
 
 
 @bp.route("/cftv/gravador", methods=["POST"])

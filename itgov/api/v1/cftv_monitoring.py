@@ -206,11 +206,15 @@ def montar_visao(
     unidades: dict[int, str],
     unidade_por_loja: dict[str, int],
     filtro: set[int] | str | None = None,
+    apelidos: dict[str, str] | None = None,
+    duplicado_de: dict[str, str] | None = None,
+    sede_por_unidade: dict[int, int] | None = None,
 ) -> dict:
     """Agrupa dispositivos em cards por gravador e aplica o filtro de unidade.
 
     A unidade de um dispositivo vem do vínculo do seu gravador; sem vínculo,
     cai para a tag ``loja`` quando ela bate com o nome de uma unidade.
+    Gravadores marcados como duplicados entram no card do gravador principal.
 
     Args:
         dados: Resultado de ``get_cached_cftv_summary``.
@@ -219,12 +223,22 @@ def montar_visao(
         unidade_por_loja: Nome de unidade (minúsculo) → id, para a tag ``loja``.
         filtro: Ids de unidade aceitos, ``SEM_UNIDADE`` para os sem unidade,
             ou None para todos.
+        apelidos: Gravador → nome dado pelo admin (substitui o do Zabbix).
+        duplicado_de: Gravador duplicado → gravador principal.
+        sede_por_unidade: Id de unidade → id da sede (unidade raiz), para
+            os totais por sede.
 
     Returns:
-        Dicionário com KPIs do recorte, ``cards`` por gravador e listas de
-        offline/manutenção.
+        Dicionário com KPIs do recorte, ``cards`` por gravador, ``sedes`` com
+        os totais de cada sede e listas de offline/manutenção.
     """
-    devices = dados.get("devices", [])
+    apelidos = apelidos or {}
+    principal = {g: resolver_principal(g, duplicado_de or {}) for g in (duplicado_de or {})}
+    devices = [{**d, "gravador": principal.get(d["gravador"], d["gravador"])} for d in dados.get("devices", [])]
+    unidos: dict[str, list[str]] = {}
+    for dup, alvo in sorted(principal.items()):
+        if dup != alvo:
+            unidos.setdefault(alvo, []).append(dup)
 
     def _uid_loja(d: dict) -> int | None:
         return unidade_por_loja.get(d["loja"].strip().lower())
@@ -252,14 +266,20 @@ def montar_visao(
 
     cards: list[dict] = []
     for (gravador, uid), devs in grupos.items():
-        host_gravador = next((d for d in devs if d["is_gravador"]), None)
-        itens = sorted((d for d in devs if not d["is_gravador"]), key=_canal_key)
+        # O host do próprio gravador vai no cabeçalho; o de um duplicado unido
+        # aparece como mais um dispositivo do card.
+        host_gravador = next((d for d in devs if d["is_gravador"] and d["host"] == gravador), None)
+        itens = sorted((d for d in devs if d is not host_gravador), key=_canal_key)
         vendors = sorted({d["vendor"] for d in devs if d["vendor"]})
+        nome_zabbix = host_gravador["name"] if host_gravador else (gravador or STAND_ALONE)
         cards.append(
             {
                 "gravador": gravador,
                 # Câmera sem gravador grava sozinha (cartão SD/nuvem) — "Stand Alone" (pedido do usuário)
-                "titulo": host_gravador["name"] if host_gravador else (gravador or STAND_ALONE),
+                "titulo": apelidos.get(gravador) or nome_zabbix,
+                "nome_zabbix": nome_zabbix,
+                "apelido": apelidos.get(gravador, ""),
+                "unidos": unidos.get(gravador, []),
                 "gravador_host": host_gravador,
                 "unidade_id": uid,
                 "unidade": unidades.get(uid, "") if uid is not None else "",
@@ -277,9 +297,57 @@ def montar_visao(
     return {
         **resumo,
         "cards": cards,
+        "sedes": _totais_por_sede(grupos, unidades, sede_por_unidade or {}),
         "down_list": sorted((d for d in todos if d["status"] == "down"), key=lambda d: (d["gravador"], d["name"])),
         "maint_list": sorted((d for d in todos if d["status"] == "maint"), key=lambda d: d["name"]),
     }
+
+
+def resolver_principal(gravador: str, duplicado_de: dict[str, str]) -> str:
+    """Segue a cadeia "duplicado de" até o gravador principal.
+
+    Um ciclo (A→B→A) não deveria existir — a rota de gravação recusa —, mas
+    se aparecer a cadeia para no último gravador antes de repetir.
+
+    Args:
+        gravador: Nome do gravador.
+        duplicado_de: Gravador duplicado → gravador principal.
+
+    Returns:
+        Nome do gravador principal (o próprio, se não for duplicado).
+    """
+    vistos = {gravador}
+    atual = gravador
+    while (proximo := duplicado_de.get(atual)) and proximo not in vistos:
+        vistos.add(proximo)
+        atual = proximo
+    return atual
+
+
+def _totais_por_sede(
+    grupos: dict[tuple[str, int | None], list[dict]],
+    unidades: dict[int, str],
+    sede_por_unidade: dict[int, int],
+) -> list[dict]:
+    """Totais por sede (unidade raiz) para o primeiro nível do drill-down."""
+    por_sede: dict[int | None, list[dict]] = {}
+    gravadores: dict[int | None, set[str]] = {}
+    for (gravador, uid), devs in grupos.items():
+        sede = sede_por_unidade.get(uid, uid) if uid is not None else None
+        por_sede.setdefault(sede, []).extend(devs)
+        gravadores.setdefault(sede, set()).add(gravador)
+    sedes = [
+        {
+            "id": sede,
+            "nome": unidades.get(sede, "") if sede is not None else "Sem unidade",
+            "gravadores": len(gravadores[sede]),
+            **_contagem(devs),
+        }
+        for sede, devs in por_sede.items()
+    ]
+    # Sedes com câmera offline primeiro; "Sem unidade" por último
+    sedes.sort(key=lambda s: (s["id"] is None, -s["down"], s["nome"]))
+    return sedes
 
 
 def get_cached_cftv_summary() -> dict:

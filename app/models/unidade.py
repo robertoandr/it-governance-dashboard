@@ -153,6 +153,10 @@ class DvrUnidade(db.Model):
     id: int = db.Column(db.Integer, primary_key=True)
     dvr: str = db.Column(db.String(120), nullable=False, unique=True)
     unidade_id: int | None = db.Column(db.Integer, db.ForeignKey("unidades.id", ondelete="SET NULL"), nullable=True)
+    # Nome exibido no lugar do nome do Zabbix (só admin altera)
+    apelido: str = db.Column(db.String(120), nullable=False, default="", server_default="")
+    # Gravador principal quando este é um duplicado (só admin marca); vazio = não é
+    duplicado_de: str = db.Column(db.String(120), nullable=False, default="", server_default="")
 
     unidade = db.relationship("Unidade")
 
@@ -280,8 +284,14 @@ _COLUNAS_NOVAS: tuple[tuple[str, str], ...] = (
 )
 
 
+_COLUNAS_NOVAS_DVR: tuple[tuple[str, str], ...] = (
+    ("apelido", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    ("duplicado_de", "VARCHAR(120) NOT NULL DEFAULT ''"),
+)
+
+
 def garantir_colunas(engine: Engine | None = None) -> None:
-    """Adiciona à tabela ``unidades`` as colunas que ainda faltam.
+    """Adiciona às tabelas ``unidades`` e ``dvr_unidades`` as colunas que faltam.
 
     Com vários workers subindo juntos, outro pode ter criado a coluna entre a
     inspeção e o ALTER; o erro de coluna duplicada é ignorado.
@@ -292,18 +302,25 @@ def garantir_colunas(engine: Engine | None = None) -> None:
     from sqlalchemy.exc import OperationalError
 
     engine = engine or db.engine
-    existentes = {c["name"] for c in inspect(engine).get_columns(Unidade.__tablename__)}
-    for nome, ddl in _COLUNAS_NOVAS:
-        if nome in existentes:
+    inspetor = inspect(engine)
+    for tabela, colunas in (
+        (Unidade.__tablename__, _COLUNAS_NOVAS),
+        (DvrUnidade.__tablename__, _COLUNAS_NOVAS_DVR),
+    ):
+        if not inspetor.has_table(tabela):
             continue
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {Unidade.__tablename__} ADD COLUMN {nome} {ddl}"))
-            log.info("unidades.coluna_adicionada", coluna=nome)
-        except OperationalError as exc:
-            if "duplicate column" not in str(exc).lower():
-                raise
-            log.info("unidades.coluna_concorrente_ignorada", coluna=nome)
+        existentes = {c["name"] for c in inspetor.get_columns(tabela)}
+        for nome, ddl in colunas:
+            if nome in existentes:
+                continue
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {ddl}"))
+                log.info("unidades.coluna_adicionada", tabela=tabela, coluna=nome)
+            except OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+                log.info("unidades.coluna_concorrente_ignorada", tabela=tabela, coluna=nome)
 
 
 def seed_unidades() -> None:
