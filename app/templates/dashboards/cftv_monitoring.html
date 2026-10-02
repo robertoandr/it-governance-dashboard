@@ -6,6 +6,7 @@
 
 {% block content %}
 {% set pode_editar = current_user.role in ('admin', 'gestor') %}
+{% set eh_admin = current_user.role == 'admin' %}
 
 {% macro stat_card(label, value, color, sub) %}
 <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
@@ -66,19 +67,40 @@
   </div>
   {% else %}
 
-  {# ── Filtro por unidade ──────────────────────────────────────────────────── #}
-  <nav class="flex flex-wrap gap-2" aria-label="Filtrar por unidade">
-    {% set pill = 'text-xs font-medium px-3 py-1.5 rounded-full border transition-colors' %}
-    {% set ativo_cls = 'bg-blue-600 border-blue-600 text-white' %}
-    {% set inativo_cls = 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' %}
-    <a href="{{ url_for('dashboards.cftv_monitoring') }}" class="{{ pill }} {{ ativo_cls if not filtro else inativo_cls }}">Todas</a>
-    {% for u in unidades %}
+  {# ── Filtro por sede (unidade raiz) e, dentro da sede, pelas filhas ─────── #}
+  {% set pill = 'text-xs font-medium px-3 py-1.5 rounded-full border transition-colors' %}
+  {% set ativo_cls = 'bg-blue-600 border-blue-600 text-white' %}
+  {% set inativo_cls = 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' %}
+  <nav class="flex flex-wrap gap-2" aria-label="Filtrar por sede">
+    <a href="{{ url_for('dashboards.cftv_monitoring') }}" class="{{ pill }} {{ ativo_cls if not filtro else inativo_cls }}">Todas as sedes</a>
+    {% for u in sedes %}
     <a href="{{ url_for('dashboards.cftv_monitoring', unidade=u.id) }}"
-       class="{{ pill }} {{ ativo_cls if filtro == u.id | string else inativo_cls }}">{{ u.caminho }}</a>
+       class="{{ pill }} {{ ativo_cls if sede and sede.id == u.id else inativo_cls }}">{{ u.nome }}</a>
     {% endfor %}
     <a href="{{ url_for('dashboards.cftv_monitoring', unidade='sem') }}"
        class="{{ pill }} {{ ativo_cls if filtro == 'sem' else inativo_cls }}">Sem unidade</a>
   </nav>
+  {% if filhas %}
+  <nav class="flex flex-wrap gap-2 -mt-3 pl-3 border-l-2 border-blue-200 dark:border-blue-800" aria-label="Filtrar dentro de {{ sede.nome }}">
+    <a href="{{ url_for('dashboards.cftv_monitoring', unidade=sede.id) }}"
+       class="{{ pill }} {{ ativo_cls if selecionada and selecionada.id == sede.id else inativo_cls }}">{{ sede.nome }} inteira</a>
+    {% for f in filhas %}
+    <a href="{{ url_for('dashboards.cftv_monitoring', unidade=f.id) }}"
+       class="{{ pill }} {{ ativo_cls if selecionada and selecionada.id == f.id else inativo_cls }}">{{ f.nome }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  {# ── Trilha do drill-down ─────────────────────────────────────────────────── #}
+  <p class="text-xs text-slate-500 dark:text-slate-400">
+    <a href="{{ url_for('dashboards.cftv_monitoring') }}" class="text-blue-600 dark:text-blue-400 hover:underline">Todas as sedes</a>
+    {% if filtro == 'sem' %} › Sem unidade
+    {% elif sede %} ›
+      {% if selecionada and selecionada.id != sede.id %}<a href="{{ url_for('dashboards.cftv_monitoring', unidade=sede.id) }}" class="text-blue-600 dark:text-blue-400 hover:underline">{{ sede.nome }}</a> › {{ selecionada.nome }}
+      {% else %}{{ sede.nome }}{% endif %}
+    {% elif ver_gravadores %} › todos os gravadores
+    {% endif %}
+  </p>
 
   {# ── KPIs do recorte ─────────────────────────────────────────────────────── #}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -98,8 +120,39 @@
   </div>
   {% endif %}
 
-  {# ── Cards por gravador ──────────────────────────────────────────────────── #}
-  {% if visao.cards %}
+  {# ── Nível 1: cards por sede ─────────────────────────────────────────────── #}
+  {% if not ver_gravadores %}
+  {% if visao.sedes %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    {% for s in visao.sedes %}
+    <a href="{{ url_for('dashboards.cftv_monitoring', unidade=s.id if s.id is not none else 'sem') }}"
+       class="block rounded-xl border bg-white dark:bg-slate-800 p-4 space-y-3 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition
+       {% if s.down > 0 %}border-red-200 dark:border-red-800{% else %}border-slate-200 dark:border-slate-700{% endif %}">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{{ s.nome }}</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ s.gravadores }} gravador{{ 'es' if s.gravadores != 1 }} · {{ s.total }} dispositivo{{ 's' if s.total != 1 }}</p>
+        </div>
+        <span class="text-lg font-bold {% if s.up_pct >= 95 %}text-green-600{% elif s.up_pct >= 80 %}text-yellow-600{% else %}text-red-600{% endif %}">{{ s.up_pct }}%</span>
+      </div>
+      {{ barra(s) }}
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        <span class="font-semibold text-slate-700 dark:text-slate-200">{{ s.up }}</span> online
+        {% if s.down %}· <span class="text-red-600 font-semibold">{{ s.down }} offline</span>{% endif %}
+        {% if s.nodata %}· {{ s.nodata }} sem dados{% endif %}
+        {% if s.maint %}· {{ s.maint }} em manutenção{% endif %}
+      </p>
+      <p class="text-xs font-medium text-blue-600 dark:text-blue-400">Ver gravadores →</p>
+    </a>
+    {% endfor %}
+  </div>
+  <p class="text-xs text-right">
+    <a href="{{ url_for('dashboards.cftv_monitoring', ver='gravadores') }}" class="text-blue-600 dark:text-blue-400 hover:underline">Ver todos os gravadores de uma vez</a>
+  </p>
+  {% endif %}
+
+  {# ── Nível 2: cards por gravador ─────────────────────────────────────────── #}
+  {% elif visao.cards %}
   <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
     {% for c in visao.cards %}
     <section class="rounded-xl border bg-white dark:bg-slate-800 p-4 space-y-3
@@ -111,6 +164,8 @@
             {% if c.unidade %}{{ c.unidade }}{% else %}<span class="text-amber-600 dark:text-amber-400">Sem unidade</span>{% endif %}
             {% if c.vendors %} · {{ c.vendors | join(', ') }}{% endif %}
           </p>
+          {% if c.apelido %}<p class="text-[10px] text-slate-400 mt-0.5" title="Nome no Zabbix">Zabbix: {{ c.nome_zabbix }}</p>{% endif %}
+          {% if c.unidos %}<p class="text-[10px] text-slate-400 mt-0.5">Unido com: {{ c.unidos | join(', ') }}</p>{% endif %}
         </div>
         {% if c.gravador_host %}
         <div class="text-right flex-shrink-0">
@@ -188,6 +243,46 @@
         </select>
         <button type="submit" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 px-2 py-1">Salvar</button>
       </form>
+      {% endif %}
+
+      {% if eh_admin and c.gravador %}
+      <details class="group pt-2 border-t border-slate-100 dark:border-slate-700">
+        <summary class="cursor-pointer select-none text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 list-none">Editar gravador (admin)</summary>
+        <div class="mt-2 space-y-2">
+          <form method="POST" action="{{ url_for('dashboards.cftv_gravador_nome') }}" class="flex items-center gap-2">
+            <input type="hidden" name="gravador" value="{{ c.gravador }}">
+            <input type="hidden" name="filtro" value="{{ filtro }}">
+            <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="nome-{{ loop.index }}">Nome</label>
+            <input id="nome-{{ loop.index }}" name="apelido" maxlength="120" value="{{ c.apelido }}" placeholder="{{ c.nome_zabbix }}"
+                   class="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+            <button type="submit" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 px-2 py-1">Renomear</button>
+          </form>
+          <form method="POST" action="{{ url_for('dashboards.cftv_gravador_duplicado') }}" class="flex items-center gap-2">
+            <input type="hidden" name="gravador" value="{{ c.gravador }}">
+            <input type="hidden" name="filtro" value="{{ filtro }}">
+            <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="dup-{{ loop.index }}">Duplicado de</label>
+            <select id="dup-{{ loop.index }}" name="duplicado_de"
+                    class="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+              <option value="">— escolha o gravador principal —</option>
+              {% for g in gravadores if g != c.gravador and g not in c.unidos %}
+              <option value="{{ g }}">{{ g }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-800 px-2 py-1"
+                    title="Os dispositivos deste gravador passam para o card do principal. Nada é apagado no Zabbix.">Unir</button>
+          </form>
+          {% for u in c.unidos %}
+          <form method="POST" action="{{ url_for('dashboards.cftv_gravador_duplicado') }}" class="flex items-center gap-2">
+            <input type="hidden" name="gravador" value="{{ u }}">
+            <input type="hidden" name="duplicado_de" value="">
+            <input type="hidden" name="filtro" value="{{ filtro }}">
+            <span class="flex-1 text-[11px] text-slate-500 dark:text-slate-400">{{ u }} está unido a este card</span>
+            <button type="submit" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 px-2 py-1">Separar</button>
+          </form>
+          {% endfor %}
+          <p class="text-[10px] text-slate-400">Unir esconde o duplicado e soma os dispositivos dele aqui. Nada é apagado no Zabbix.</p>
+        </div>
+      </details>
       {% endif %}
     </section>
     {% endfor %}

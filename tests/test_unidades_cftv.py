@@ -190,7 +190,7 @@ def test_montar_visao_sem_dados() -> None:
 
 def test_cftv_page_renderiza_cards_e_filtro(authed_client, com_zabbix: None) -> None:
     with patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value=_DADOS):
-        html = authed_client.get("/gov/cftv").get_data(as_text=True)
+        html = authed_client.get("/gov/cftv?ver=gravadores").get_data(as_text=True)
     for trecho in (
         "DVR-1 · 9º/8º",
         "ADM HAUER",
@@ -232,7 +232,7 @@ def test_cftv_page_filtro_unidade_pai_inclui_filhas(authed_client, com_zabbix: N
 
 def test_cftv_page_operador_nao_ve_form_de_unidade(operador_client, com_zabbix: None) -> None:
     with patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value=_DADOS):
-        html = operador_client.get("/gov/cftv").get_data(as_text=True)
+        html = operador_client.get("/gov/cftv?ver=gravadores").get_data(as_text=True)
     assert "DVR-1 · 9º/8º" in html
     assert 'name="gravador"' not in html
 
