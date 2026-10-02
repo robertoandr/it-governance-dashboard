@@ -30,7 +30,7 @@ API = "https://api.clickup.com/api/v2"
 PRAZO_S = 20.0
 PAGINAS_POR_LOTE = 5
 LIMITE_PAGINAS = 50  # trava de segurança: 5.000 tarefas
-_TZ = ZoneInfo("America/Sao_Paulo")
+TZ = ZoneInfo("America/Sao_Paulo")
 
 Situacao = Literal["a_fazer", "andamento", "concluida"]
 
@@ -111,7 +111,7 @@ def _workspace() -> str:
 def _data_local(ms: Any) -> date | None:
     if not ms:
         return None
-    return datetime.fromtimestamp(int(ms) / 1000, tz=UTC).astimezone(_TZ).date()
+    return datetime.fromtimestamp(int(ms) / 1000, tz=UTC).astimezone(TZ).date()
 
 
 def _situacao(tipo: str, nome: str) -> Situacao:
@@ -202,7 +202,7 @@ async def buscar_tarefas() -> list[dict[str, Any]]:
 
 
 def _carregar() -> ResultadoClickUp:
-    agora = datetime.now(_TZ)
+    agora = datetime.now(TZ)
     if not _token():
         return ResultadoClickUp(ok=False, motivo="sem_token", atualizado_em=agora)
     try:
