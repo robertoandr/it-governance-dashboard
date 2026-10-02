@@ -207,6 +207,12 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
         aquecer_fontes()
 
+    # Aba ClickUp de /gov/tarefas: a busca do workspace inteiro leva alguns segundos.
+    if not settings.app.testing and os.getenv("CLICKUP_TOKEN"):
+        from app.services.clickup_tarefas import aquecer as aquecer_clickup
+
+        aquecer_clickup()
+
     # Zendesk leva 7–15 s por consulta: os caches são carregados em segundo
     # plano na subida do worker, para o primeiro acesso não esperar.
     from app.integrations import zendesk_configured

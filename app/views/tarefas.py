@@ -11,6 +11,7 @@ from flask_login import current_user
 from werkzeug.exceptions import NotFound
 
 from app.auth.rbac import require_role
+from app.services import clickup_tarefas
 from app.services.tarefas import board_service as board_svc
 from app.services.tarefas import card_service as card_svc
 from app.services.tarefas import workspace_service as ws_svc
@@ -36,6 +37,24 @@ def workspaces() -> str:
 def workspaces_barra() -> Response:
     """``/gov/tarefas/`` (com barra, comum em link colado) leva à URL canônica."""
     return redirect(url_for("tarefas.workspaces"), code=308)
+
+
+@bp.route("/clickup")
+@require_role(*perfis(Acao.VER))
+def clickup() -> str:
+    """Tarefas do ClickUp: as do próprio usuário, ou de todos por pessoa (admin)."""
+    resultado = clickup_tarefas.obter()
+    ver_todos = pode(current_user.role, Acao.VER_CLICKUP_TODOS)
+    grupos = clickup_tarefas.agrupar_por_responsavel(resultado.tarefas)
+    if not ver_todos:
+        email = current_user.email.lower()
+        grupos = [g for g in grupos if g.email == email]
+    return render_template(
+        "tarefas/clickup.html",
+        resultado=resultado,
+        grupos=grupos,
+        ver_todos=ver_todos,
+    )
 
 
 @bp.route("/b/<int:board_id>")
