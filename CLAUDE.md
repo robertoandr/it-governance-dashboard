@@ -1,9 +1,5 @@
 # IT Governance Dashboard
 
-**Versao atual:** V1.0 (Sprint 10H — concluida)
-**Proximo marco:** V1.1 Go-Live — 30/06/2026
-**Status:** Producao estavel + Evolucao V1.1 em andamento
-
 ---
 
 ## 1. Ambiente
@@ -21,19 +17,7 @@ Consulte `.env.local.example` para o formato esperado.
 
 ---
 
-## 2. Stack Tecnica
-
-### Backend
-
-| Componente     | Tecnologia                                              |
-|----------------|---------------------------------------------------------|
-| Linguagem      | Python 3.11+                                            |
-| Framework      | Flask + Flask-RESTX (namespaces, Swagger auto-gerado)   |
-| Validacao I/O  | Pydantic v2 (modelos tipados obrigatorios)              |
-| ORM / Migrations | SQLModel + Alembic                                    |
-| Observabilidade | structlog (JSON estruturado; `print` proibido)         |
-
-### Persistencia Hibrida
+## 2. Persistencia Hibrida
 
 | Papel                  | Tecnologia DEV   | Tecnologia PROD       |
 |------------------------|------------------|-----------------------|
@@ -46,16 +30,7 @@ Consulte `.env.local.example` para o formato esperado.
 > O InfluxDB ja estava em producao para metricas Zabbix, tornando o
 > dual storage mais eficiente que uma migracao para TimescaleDB unificado.
 
-### Observabilidade e Infra
-
-| Componente       | Tecnologia                              |
-|------------------|-----------------------------------------|
-| Dashboards       | Grafana 13 (embedado via kiosk iframe)  |
-| Monitoramento    | Zabbix 7.0                              |
-| Containers       | Docker + Docker Compose                 |
-| Orquestracao     | Kubernetes 1.28+                        |
-| Gateway          | Nginx (TLS, JWT validation, roteamento) |
-| Autenticacao     | Microsoft Entra ID (OAuth2/OIDC)        |
+ADRs completas em `docs/adr/`.
 
 ---
 
@@ -67,51 +42,6 @@ Consulte `.env.local.example` para o formato esperado.
 | Zabbix           | JSON-RPC 2.0       | Alertas e disponibilidade de infraestrutura|
 | Zendesk          | REST API v2        | SLA e CSAT de service desk                 |
 | Microsoft Graph  | REST + OAuth2      | Dados M365: usuarios, MFA, Secure Score    |
-
----
-
-## 4. Modulo Hero V1.0 — Fornecedores e Contratos (Sprints 9-10)
-
-Nucleo do sistema entregue na V1.0:
-
-- Cadastro completo de fornecedores com dados contratuais
-- Controle de vencimento com alertas antecipados (30d/7d)
-- SLA tracking com calculo automatico de breach
-- CSAT por fornecedor via integracao Zendesk
-- Schema: `db/migrations/001_fornecedores_contratos.sql`
-- ADRs relevantes: ADR-0001 (storage), ADR-0005 (Flask+Grafana), ADR-0003 (LGPD)
-
----
-
-## 5. Baseline V1.0
-
-| Indicador           | Valor                          |
-|---------------------|-------------------------------|
-| Testes              | 215                            |
-| Coverage            | 88.21%                         |
-| PRs entregues       | #75, #79, #80, #81             |
-| Hotfix              | `4933654` (flaky collector test)|
-| Issues P3 residuais | #73, #74, #76, #78 (para V1.1) |
-
----
-
-## 6. Roadmap V1.1 (02/06 - 30/06/2026)
-
-| Sprint | Periodo      | Foco                                    | KPI chave                       |
-|--------|--------------|-----------------------------------------|---------------------------------|
-| 11     | 02-08/06     | Debito Tecnico + Inventario de Ativos   | ADRs 001/002, CRUD /ativos      |
-| 12     | 09-22/06     | Governanca M365 (6 Pilares)             | Secure Score integrado, cache   |
-| 13     | 23-27/06     | Hub SharePoint + 8 Triggers SMTP        | 8 alertas configurados          |
-| 14     | 28-30/06     | Polimento + Go-Live                     | Tag v1.1.0, manifests k8s       |
-
-### Metas globais V1.1
-
-| Meta               | Valor alvo    |
-|--------------------|---------------|
-| Coverage           | >= 90%        |
-| Testes             | >= 350        |
-| Secure Score M365  | >= 60%        |
-| MFA administradores| 100%          |
 
 ---
 
@@ -140,40 +70,19 @@ Nucleo do sistema entregue na V1.0:
 
 ---
 
-## 9. ADRs (Architectural Decision Records)
-
-Localizacao: `docs/adr/`
-
-| ADR    | Titulo                              | Status             | Data       |
-|--------|-------------------------------------|--------------------|------------|
-| 0001   | Dual Storage — SQLite + InfluxDB    | **Ativa**          | 2026-01-15 |
-| 0002   | RBAC — 3 niveis (admin/manager/ro)  | **Ativa**          | 2026-01-20 |
-| 0003   | LGPD Compliance — PII e Erasure     | **Ativa**          | 2026-01-25 |
-| 0004   | TimescaleDB Single Storage          | **SUPERSEDED**     | 2026-02-05 |
-| 0005   | Flask + Grafana Coexistence         | **Ativa**          | 2026-02-10 |
-| 0010   | Frontend Strategy                   | **Ativa**          | 2026-05-31 |
-| ADR-001| Coverage Policy (>= 85% piso)       | **Ativa**          | 2026-06-02 |
-| ADR-002| Verification Rigor (PR checklist)   | **Ativa**          | 2026-06-02 |
-
-> ADR-0004 foi superseded durante o planejamento da V1.1. Ver `docs/adr/0004-timescaledb-single-storage.md`.
-
----
-
 ## 10. Skills do Claude Code Recomendadas
 
-> Auditado em 2026-09-22: a versao anterior desta tabela citava 6 skills
-> (`zabbix-api`, `influxdb-cloud`, `grafana-dashboards`, `postgresql-optimization`,
-> `docker-expert`, `kubernetes-specialist`) e `/python-executor` que nunca
-> existiram em nenhuma marketplace configurada — provavelmente nomes
-> aspiracionais nunca validados. `kubernetes-specialist`, `devops-engineer`,
-> `postgres-pro`, `database-optimizer` e `monitoring-expert` foram instaladas
-> em `~/.claude/skills/` (fonte: marketplace de terceiros `jeffallan/claude-skills`,
-> MIT) como os equivalentes reais mais proximos. Nao existe equivalente para
-> Zabbix, InfluxDB ou fluxo de git especifico — usar o Bash/Zabbix
-> JSON-RPC/InfluxDB Flux diretamente.
+> Auditado em 2026-09-22: `kubernetes-specialist`, `devops-engineer`,
+> `postgres-pro`, `database-optimizer` e `monitoring-expert` estao em
+> `~/.claude/skills/` (fonte: marketplace de terceiros `jeffallan/claude-skills`, MIT).
+> `zabbix-api`, `grafana` e `git` sao versionadas no repo em `.claude/skills/` (PR #224).
+> Nao existe skill para InfluxDB — usar Flux diretamente.
 
 | Skill                    | Quando usar                                               |
 |---------------------------|-----------------------------------------------------------|
+| `zabbix-api`              | Hosts, triggers, itens, eventos via JSON-RPC               |
+| `grafana`                 | Dashboards, datasources e alertas via HTTP API             |
+| `git`                     | Rebase, worktrees, reflog, recuperacao de historico        |
 | `kubernetes-specialist`   | Manifests, Helm, RBAC, NetworkPolicy, GitOps               |
 | `devops-engineer`         | Dockerfiles, CI/CD, Terraform, deploy, runbooks de incidente |
 | `postgres-pro`            | EXPLAIN ANALYZE, JSONB, replicacao, VACUUM (Postgres do Zabbix) |
@@ -183,64 +92,3 @@ Localizacao: `docs/adr/`
 | `security-review`         | Auditoria de seguranca antes de merges em main              |
 | `python-testing-patterns` | pytest, fixtures, mocking, TDD                              |
 | `linux-backup-dr-rclone`  | Backup local + sync externo (usado em `scripts/backup_governanca.sh`) |
-
----
-
-## 11. Comandos Frequentes
-
-### Desenvolvimento
-
-```bash
-# Ambiente virtual
-source venv/bin/activate
-
-# Servidor de desenvolvimento
-flask run --debug --port 5000
-
-# Testes com coverage
-pytest --cov=itgov --cov-report=term-missing -v
-
-# Lint + format
-ruff check . && ruff format --check .
-
-# Migrations
-alembic upgrade head
-alembic revision --autogenerate -m "descricao"
-```
-
-### Git
-
-```bash
-# Criar branch de feature
-git checkout -b feat/nome-da-feature
-
-# Commit semantico
-git commit -m "feat(modulo): descricao curta
-
-Body explicando o que e por que (nao o como).
-
-Refs #ISSUE"
-
-# Verificar estado apos commit
-git status && git log --oneline -5
-```
-
-### Deploy
-
-```bash
-# Build da imagem
-docker build -t itgov:latest .
-
-# Subir servicos
-docker compose up -d
-
-# Logs em tempo real
-docker compose logs -f app
-
-# Aplicar migrations em producao
-docker compose exec app alembic upgrade head
-```
-
----
-
-*Ultima atualizacao: 02/06/2026 - Inicio Sprint 11 / V1.1*
