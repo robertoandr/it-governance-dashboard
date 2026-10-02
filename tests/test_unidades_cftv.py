@@ -160,7 +160,7 @@ def test_montar_visao_um_card_por_gravador() -> None:
 
     # Sem gravador: unidade cai para a tag loja
     sem = por_gravador[""]
-    assert sem["titulo"] == "Sem gravador" and sem["unidade_id"] == 1
+    assert sem["titulo"] == "Stand Alone" and sem["unidade_id"] == 1
 
     # Card com câmera offline vem primeiro
     assert v["cards"][0]["gravador"] == "DVR-1"
@@ -273,11 +273,12 @@ def test_operador_nao_define_unidade(operador_client) -> None:
 # ── Cadastro de unidades ──────────────────────────────────────────────────────
 
 
-def test_lista_unidades_mostra_arvore_e_gravadores(authed_client) -> None:
+def test_lista_unidades_mostra_arvore_sem_gravadores(authed_client) -> None:
     html = authed_client.get("/gov/unidades").get_data(as_text=True)
     for nome in UNIDADES_PADRAO:
         assert nome in html
-    assert "Shopping 1" in html
+    # Conferência V2.0 (u1): a coluna "Gravadores CFTV" saiu da lista de unidades
+    assert "Gravadores CFTV" not in html
 
 
 def test_criar_editar_remover_obra(authed_client, factory_app, unidades_ids) -> None:
