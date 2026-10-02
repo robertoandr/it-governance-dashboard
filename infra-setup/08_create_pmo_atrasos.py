@@ -269,7 +269,16 @@ def main() -> None:
         info(f"Ação '{ACAO_ZENDESK}' não encontrada — nada a ajustar")
     else:
         filtro = acoes[0]["filter"]
-        conds = [{k: c[k] for k in ("conditiontype", "operator", "value", "value2")} for c in filtro["conditions"]]
+        # Copia só os campos preenchidos: condições como "problema suprimido"
+        # (tipo 16) recusam value/value2, mesmo vazios.
+        conds = [
+            {
+                k: c[k]
+                for k in ("conditiontype", "operator", "value", "value2")
+                if k in ("conditiontype", "operator") or c[k]
+            }
+            for c in filtro["conditions"]
+        ]
         # conditiontype 26 = valor de tag; operator 1 = diferente de
         excluir = {"conditiontype": "26", "operator": "1", "value": "pmo", "value2": "origem"}
         if excluir in conds:
