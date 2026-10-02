@@ -1,6 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Governanca M365 — Governança de TI 360{% endblock %}
-{% block page_title %}Governanca Microsoft 365{% endblock %}
+{% block title %}Governança M365 — Governança de TI 360{% endblock %}
+{% block page_title %}Governança Microsoft 365{% endblock %}
+
+{% block head %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('alpine:init', function () {
+  // Alpine CSP build: nada de expressão solta no HTML — só propriedades e métodos.
+  Alpine.data('pilarCard', function () {
+    return {
+      open: false,
+      toggle: function () { this.open = !this.open; },
+      get chevronClass() { return this.open ? 'rotate-180' : ''; },
+    };
+  });
+  Alpine.data('checklistM365', function () {
+    return {
+      filtro: 'TODOS',
+      setFiltro: function (ev) { this.filtro = ev.currentTarget.dataset.filtro; },
+      filtroClass: function (f) { return this.filtro === f ? 'ring-2 ring-offset-1' : ''; },
+      linhaVisivel: function (pri, estado) {
+        if (this.filtro === 'TODOS') return true;
+        if (this.filtro === 'PENDENTE') return estado === 'pendente';
+        return this.filtro === pri;
+      },
+    };
+  });
+});
+</script>
+{% endblock %}
+
+{% macro estado_icone(estado) %}
+  {% if estado == 'ok' %}
+  <span class="inline-flex w-4 h-4 rounded-full bg-green-500 text-white items-center justify-center flex-shrink-0 mt-0.5" title="Ok">
+    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+  </span>
+  {% elif estado == 'pendente' %}
+  <span class="inline-flex w-4 h-4 rounded-full bg-red-500 text-white items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-bold" title="Pendente">!</span>
+  {% else %}
+  <span class="inline-flex w-4 h-4 rounded-full bg-gray-300 text-white items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-bold dark:bg-slate-600" title="Sem dado">?</span>
+  {% endif %}
+{% endmacro %}
 
 {% block content %}
 {% set ss_pct       = secure_score.get('pct', 0) | float %}
@@ -26,6 +65,7 @@
 {% set ca_total    = entra.get('ca_total', none) %}
 {% set ca_enabled  = entra.get('ca_enabled', 0) | int %}
 {% set ca_disabled = entra.get('ca_disabled', 0) | int %}
+{% set ca_report = entra.get('ca_report_only', 0) | int %}
 {% set admin_total = entra.get('admin_total', 0) | int %}
 {% set admin_sem_mfa = entra.get('admin_sem_mfa', none) %}
 {% set lic_ociosas = lic_sum.total_unassigned | int if lic_sum.total_unassigned is defined else 0 %}
@@ -35,6 +75,7 @@
 {% set spf_found   = dns_check.get('spf', {}).get('found', false) %}
 {% set dmarc_found = dns_check.get('dmarc', {}).get('found', false) %}
 {% set dkim_found  = dns_check.get('dkim', {}).get('found', false) %}
+{% set dmarc_policy = (dns_check.get('dmarc', {}).get('policy') or '') | lower %}
 
 {# Cores por threshold #}
 {% if mfa_pct >= 90 %}{% set mfa_c = "green" %}{% elif mfa_pct >= 70 %}{% set mfa_c = "yellow" %}{% else %}{% set mfa_c = "red" %}{% endif %}
@@ -43,7 +84,7 @@
 {% if trig_disaster > 0 %}{% set trig_c = "red" %}{% elif trig_total > 0 %}{% set trig_c = "yellow" %}{% else %}{% set trig_c = "green" %}{% endif %}
 {% if mb_pending > 0 %}{% set mb_c = "red" %}{% elif mb_total > 0 %}{% set mb_c = "yellow" %}{% else %}{% set mb_c = "green" %}{% endif %}
 
-<!-- BLOCO 1 — Banner -->
+<!-- BLOCO 1 — Banner (planos reais do tenant) -->
 <div class="rounded-2xl bg-gradient-to-r from-blue-700 to-blue-500 text-white px-6 py-5 mb-6 flex items-center justify-between shadow">
   <div class="flex items-center gap-4">
     <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -53,8 +94,15 @@
       </svg>
     </div>
     <div>
-      <h2 class="text-lg font-bold leading-tight">Plano ativo: Microsoft 365 Business Premium</h2>
-      <p class="text-blue-100 text-sm">Governanca · Versao 1.0 · Maio 2026 — Grupo Gadens</p>
+      <h2 class="text-lg font-bold leading-tight">Planos do tenant — Grupo Gadens</h2>
+      {% if painel.planos %}
+      <p class="text-blue-100 text-sm">
+        {% for p in painel.planos %}{{ p.nome }}: <strong class="text-white">{{ p.atribuidas }}</strong>{% if not loop.last %} · {% endif %}{% endfor %}
+      </p>
+      {% else %}
+      <p class="text-blue-100 text-sm">Licenças ainda não coletadas</p>
+      {% endif %}
+      <p class="text-blue-200 text-xs mt-0.5">{{ painel.usuarios_internos }} usuários internos · recursos do Business Premium só protegem quem tem a licença</p>
     </div>
   </div>
 </div>
@@ -72,7 +120,7 @@
     </div>
     {% if mfa_pct > 0 %}
       <p class="text-3xl font-bold text-{{ mfa_c }}-600">{{ mfa_pct | round(1) }}%</p>
-      <p class="text-xs text-gray-400 mt-1">{{ mfa_habilitados }}/{{ total_users }} usuarios</p>
+      <p class="text-xs text-gray-400 mt-1">{{ mfa_habilitados }}/{{ total_users }} usuários</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Sem dados</p>
@@ -105,14 +153,14 @@
   <a href="{{ url_for('dashboards.m365_licenses') }}"
      class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Licencas</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Licenças</p>
       <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ lic_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
     </div>
     {% if licenses.has_data %}
       <p class="text-3xl font-bold text-{{ lic_c }}-600">{{ uso | round(1) }}%</p>
-      <p class="text-xs text-gray-400 mt-1">{{ lic_sum.total_consumed }}/{{ lic_sum.total_seats }} licencas</p>
+      <p class="text-xs text-gray-400 mt-1">{{ lic_sum.total_consumed }}/{{ lic_sum.total_seats }} licenças</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
@@ -125,7 +173,7 @@
   <a href="{{ url_for('dashboards.zabbix_triggers') }}"
      class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Alertas Ativos</p>
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-slate-400">Triggers Zabbix</p>
       <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-{{ trig_c }}-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
@@ -133,7 +181,7 @@
     <p class="text-3xl font-bold text-{{ trig_c }}-600">{{ trig_total }}</p>
     <p class="text-xs text-gray-400 mt-1">
       {% if trig_disaster > 0 %}<span class="text-red-600 font-semibold">{{ trig_disaster }} desastre</span> · {% endif %}
-      {{ trig_high }} alto · {{ trig_medio }} medio
+      {{ trig_high }} alto · {{ trig_medio }} médio
     </p>
     <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
       <div class="h-full rounded-full bg-{{ trig_c }}-500" style="width: 100%"></div>
@@ -153,8 +201,8 @@
       <p class="text-3xl font-bold text-{{ mb_c }}-600">{{ mb_pending }}</p>
       <p class="text-xs text-gray-400 mt-1">
         {% if mb_pending > 0 %}pendentes >7d · {{ mb_oldest }}d mais antiga
-        {% elif mb_total > 0 %}{{ mb_total }} excluidas · todas recentes
-        {% else %}nenhuma caixa excluida{% endif %}
+        {% elif mb_total > 0 %}{{ mb_total }} excluídas · todas recentes
+        {% else %}nenhuma caixa excluída{% endif %}
       </p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
@@ -177,7 +225,7 @@
     {% if sspr_pct is not none %}
       {% if sspr_pct >= 80 %}{% set sspr_c = "green" %}{% elif sspr_pct >= 50 %}{% set sspr_c = "yellow" %}{% else %}{% set sspr_c = "red" %}{% endif %}
       <p class="text-3xl font-bold text-{{ sspr_c }}-600">{{ sspr_pct | round(1) }}%</p>
-      <p class="text-xs text-gray-400 mt-1">usuarios com reset proprio</p>
+      <p class="text-xs text-gray-400 mt-1">usuários com redefinição própria</p>
       <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
         <div class="h-full rounded-full bg-{{ sspr_c }}-500" style="width: {{ [sspr_pct, 100] | min }}%"></div>
       </div>
@@ -193,9 +241,9 @@
     <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Acesso Condicional</p>
     {% if ca_total is not none %}
       {% set ca_int = ca_total | int %}
-      {% if ca_int >= 5 %}{% set ca_c = "green" %}{% elif ca_int >= 2 %}{% set ca_c = "yellow" %}{% else %}{% set ca_c = "red" %}{% endif %}
-      <p class="text-3xl font-bold text-{{ ca_c }}-600">{{ ca_int }}</p>
-      <p class="text-xs text-gray-400 mt-1">{{ ca_enabled }} ativas · {{ ca_disabled }} desab.</p>
+      {% if ca_enabled >= 2 %}{% set ca_c = "green" %}{% elif ca_enabled == 1 %}{% set ca_c = "yellow" %}{% else %}{% set ca_c = "red" %}{% endif %}
+      <p class="text-3xl font-bold text-{{ ca_c }}-600">{{ ca_enabled }}<span class="text-base font-semibold text-gray-400"> / {{ ca_int }}</span></p>
+      <p class="text-xs text-gray-400 mt-1">aplicadas · {{ ca_report }} só relatório · {{ ca_disabled }} desativ.</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Sem dados</p>
@@ -220,11 +268,11 @@
 
   <!-- Licencas ociosas -->
   <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Licencas Ociosas</p>
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Licenças Ociosas</p>
     {% if licenses.has_data %}
       {% if lic_ociosas == 0 %}{% set loc_c = "green" %}{% elif lic_ociosas <= 10 %}{% set loc_c = "yellow" %}{% else %}{% set loc_c = "red" %}{% endif %}
       <p class="text-3xl font-bold text-{{ loc_c }}-600">{{ lic_ociosas }}</p>
-      <p class="text-xs text-gray-400 mt-1">licencas nao atribuidas</p>
+      <p class="text-xs text-gray-400 mt-1">licenças não atribuídas</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
@@ -232,14 +280,14 @@
     <p class="text-xs text-gray-300 mt-1.5">KPI-LIC-02</p>
   </div>
 
-  <!-- Alertas Defender -->
+  <!-- Alertas de segurança M365 (Defender + Entra Identity Protection) -->
   <a href="{{ url_for('dashboards.governance_security_alerts') }}"
      class="bg-white rounded-xl shadow p-4 hover:shadow-md transition group block dark:bg-slate-800">
-    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Alertas Defender</p>
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2 dark:text-slate-400">Alertas de Segurança</p>
     {% if sa_enabled %}
       {% if sa_gt24h == 0 %}{% set sa_c = "green" %}{% elif sa_gt24h <= 3 %}{% set sa_c = "yellow" %}{% else %}{% set sa_c = "red" %}{% endif %}
       <p class="text-3xl font-bold text-{{ sa_c }}-600">{{ sa_gt24h }}</p>
-      <p class="text-xs text-gray-400 mt-1">abertos >24h · {{ sa_high }} alto</p>
+      <p class="text-xs text-gray-400 mt-1">abertos há +24h · {{ sa_high }} alta</p>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
       <p class="text-xs text-gray-400 mt-1">Aguardando coleta</p>
@@ -255,8 +303,8 @@
         <span class="text-xs font-semibold {% if spf_found %}text-green-600{% else %}text-red-500{% endif %}">
           {% if spf_found %}SPF{% else %}SPF ausente{% endif %}
         </span>
-        <span class="text-xs font-semibold {% if dmarc_found %}text-green-600{% else %}text-red-500{% endif %}">
-          {% if dmarc_found %}DMARC{% else %}DMARC ausente{% endif %}
+        <span class="text-xs font-semibold {% if dmarc_policy in ('quarantine', 'reject') %}text-green-600{% elif dmarc_found %}text-yellow-600{% else %}text-red-500{% endif %}">
+          {% if not dmarc_found %}DMARC ausente{% elif dmarc_policy %}DMARC p={{ dmarc_policy }}{% else %}DMARC sem política{% endif %}
         </span>
         <span class="text-xs font-semibold {% if dkim_found %}text-green-600{% else %}text-red-500{% endif %}">
           {% if dkim_found %}DKIM{% else %}DKIM ausente{% endif %}
@@ -264,165 +312,94 @@
       </div>
     {% else %}
       <p class="text-2xl font-bold text-gray-300">—</p>
-      <p class="text-xs text-gray-400 mt-1">Dominio nao configurado</p>
+      <p class="text-xs text-gray-400 mt-1">Domínio não configurado</p>
     {% endif %}
     <p class="text-xs text-gray-300 mt-1.5">KPI-EMAIL-02</p>
   </div>
 
 </div>
 
-<!-- BLOCO 5 — 6 Pilares expansíveis -->
-{% set intune_total = licenses.licenses | selectattr('sku_name', 'in', ['O365_BUSINESS_PREMIUM','O365_BUSINESS_ESSENTIALS']) | list | length %}
+<!-- BLOCO 5 — 6 Pilares (estado real de cada verificação) -->
 <div class="mb-6">
-  <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3 px-1 dark:text-slate-300">6 Pilares de Seguranca — Business Premium</h3>
+  <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3 px-1 dark:text-slate-300">6 Pilares de Segurança</h3>
   <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-    {% set pilares = [
-      (
-        "4.1", "Identidade", "Entra ID P1",
-        "blue",
-        "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
-        "ativo" if mfa_pct >= 90 else ("parcial" if mfa_pct >= 50 else "verificar"),
-        ["MFA (Autenticacao Multifator)", "Acesso Condicional (CA Policies)", "Single Sign-On (SSO)", "Protecao de identidade"],
-        "MFA " ~ (mfa_pct | round(1)) ~ "% · " ~ ca_policies ~ " CA policies",
-        url_for('dashboards.governance_compliance')
-      ),
-      (
-        "4.2", "Endpoint", "Defender for Business",
-        "red",
-        "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
-        "parcial",
-        ["EDR (Endpoint Detection & Response)", "Antivirus de ultima geracao", "Protecao anti-ransomware", "Reducao de superficie de ataque"],
-        "Verificar integracao Defender",
-        "https://security.microsoft.com"
-      ),
-      (
-        "4.3", "Dispositivos", "Intune Plan 1",
-        "green",
-        "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
-        "parcial",
-        ["Gerenciamento de dispositivos (MDM)", "Gerenciamento de apps (MAM)", "Windows Autopilot", "Politicas de conformidade"],
-        "Ver painel de dispositivos",
-        url_for('dashboards.governance_devices')
-      ),
-      (
-        "4.4", "E-mail", "Defender for Office 365 P1",
-        "yellow",
-        "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
-        "ativo",
-        ["Safe Links (URLs verificadas)", "Safe Attachments (anexos sandbox)", "Anti-phishing avancado", "Quarentena e relatorios"],
-        "Ativo via Business Premium",
-        "https://security.microsoft.com"
-      ),
-      (
-        "4.5", "Dados", "Purview / DLP",
-        "purple",
-        "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4",
-        "verificar",
-        ["Sensitivity labels (rotulos de sensibilidade)", "DLP (prevencao de perda de dados)", "Conformidade LGPD", "Classificacao e protecao de dados"],
-        "Purview: 0 labels configurados",
-        url_for('dashboards.governance_data')
-      ),
-      (
-        "4.6", "Auditoria", "Log Unificado",
-        "slate",
-        "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-        "ativo" if ss_pct > 0 else "verificar",
-        ["Log de auditoria unificado", "Retencao de logs (90 dias default)", "Litigation Hold (retencao legal)", "Relatorios de conformidade"],
-        "Secure Score: " ~ (ss_pct | round(1)) ~ "%",
-        "https://purview.microsoft.com"
-      ),
-    ] %}
-
-    {% for num, titulo, produto, cor, icon, status, bullets, fonte, link in pilares %}
-    <div x-data="{open: false}" class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
-      <button @click="open = !open"
+    {% for p in painel.pilares %}
+    <div x-data="pilarCard" class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+      <button type="button" @click="toggle"
               class="w-full flex items-start gap-3 p-4 hover:bg-gray-50 transition text-left dark:hover:bg-slate-700/50">
-        <div class="w-9 h-9 rounded-lg bg-{{ cor }}-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <svg class="w-5 h-5 text-{{ cor }}-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon }}"/>
+        <div class="w-9 h-9 rounded-lg bg-{{ p.cor }}-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <svg class="w-5 h-5 text-{{ p.cor }}-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ p.icon }}"/>
           </svg>
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-2">
-            <p class="text-xs text-gray-400 font-semibold uppercase">{{ num }} · {{ titulo }}</p>
+            <p class="text-xs text-gray-400 font-semibold uppercase">{{ p.num }} · {{ p.titulo }}</p>
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              {% if status == 'ativo' %}
+              {% if p.status == 'ativo' %}
               <span class="text-[10px] font-bold bg-green-100 text-green-700 rounded-full px-2 py-0.5 dark:bg-green-900/20 dark:text-green-300">Ativo</span>
-              {% elif status == 'parcial' %}
+              {% elif p.status == 'parcial' %}
               <span class="text-[10px] font-bold bg-yellow-100 text-yellow-700 rounded-full px-2 py-0.5 dark:bg-yellow-900/20 dark:text-yellow-300">Parcial</span>
+              {% elif p.status == 'pendente' %}
+              <span class="text-[10px] font-bold bg-red-100 text-red-700 rounded-full px-2 py-0.5 dark:bg-red-900/20 dark:text-red-300">Pendente</span>
               {% else %}
-              <span class="text-[10px] font-bold bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 dark:bg-slate-700 dark:text-slate-400">Verificar</span>
+              <span class="text-[10px] font-bold bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 dark:bg-slate-700 dark:text-slate-400">Sem dados</span>
               {% endif %}
-              <svg class="w-4 h-4 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''"
+              <svg class="w-4 h-4 text-gray-400 transition-transform" :class="chevronClass"
                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
               </svg>
             </div>
           </div>
-          <p class="text-sm font-semibold text-gray-800 mt-0.5 dark:text-slate-100">{{ produto }}</p>
-          <p class="text-xs text-gray-400 mt-0.5">{{ fonte }}</p>
+          <p class="text-sm font-semibold text-gray-800 mt-0.5 dark:text-slate-100">{{ p.produto }}</p>
+          <p class="text-xs text-gray-400 mt-0.5">{{ p.resumo }}</p>
         </div>
       </button>
-      <div x-show="open" x-collapse class="border-t border-gray-100 dark:border-slate-700">
-        <ul class="px-4 py-3 space-y-1.5">
-          {% for b in bullets %}
-          <li class="flex items-start gap-2 text-xs text-gray-600 dark:text-slate-300">
-            <span class="text-{{ cor }}-400 font-bold mt-0.5 flex-shrink-0">&#8226;</span>
-            {{ b }}
+      <div x-show="open" x-cloak class="border-t border-gray-100 dark:border-slate-700">
+        <ul class="px-4 py-3 space-y-2">
+          {% for i in p.itens %}
+          <li class="flex items-start gap-2 text-xs">
+            {{ estado_icone(i.estado) }}
+            <span>
+              <span class="text-gray-700 dark:text-slate-200">{{ i.texto }}</span>
+              {% if i.detalhe %}<span class="block text-gray-400">{{ i.detalhe }}</span>{% endif %}
+            </span>
           </li>
           {% endfor %}
         </ul>
         <div class="px-4 pb-3">
-          <a href="{{ link }}" {% if link.startswith('http') %}target="_blank" rel="noopener"{% endif %}
-             class="inline-flex items-center gap-1 text-xs text-{{ cor }}-600 hover:underline font-medium">
+          <a href="{{ p.link }}" {% if p.link.startswith('http') %}target="_blank" rel="noopener"{% endif %}
+             class="inline-flex items-center gap-1 text-xs text-{{ p.cor }}-600 hover:underline font-medium">
             Ver detalhes
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="{% if link.startswith('http') %}M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14{% else %}M9 5l7 7-7 7{% endif %}"/>
+                    d="{% if p.link.startswith('http') %}M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14{% else %}M9 5l7 7-7 7{% endif %}"/>
             </svg>
           </a>
         </div>
       </div>
     </div>
     {% endfor %}
-
   </div>
 </div>
 
-<!-- BLOCO 6 — Checklist interativo com filtro e descrição -->
-<div class="bg-white rounded-xl shadow mb-6 overflow-hidden dark:bg-slate-800"
-     x-data="{
-       filtro: 'TODOS',
-       checks: [
-         {id:1,  pri:'ALTA',  done:false, task:'Habilitar MFA para todos os usuarios',        desc:'Entra ID > Metodos de autenticacao > MFA obrigatorio para todos'},
-         {id:2,  pri:'ALTA',  done:false, task:'Configurar Acesso Condicional (CA policies)',  desc:'Entra ID > Seguranca > Acesso condicional — bloquear acesso sem MFA'},
-         {id:3,  pri:'ALTA',  done:false, task:'Ativar Defender for Business nos endpoints',  desc:'Microsoft Defender > Integracoes > onboarding de todos os dispositivos'},
-         {id:4,  pri:'ALTA',  done:false, task:'Inscrever dispositivos no Intune (MDM)',       desc:'Intune > Dispositivos > Inscricao automatica via Azure AD join'},
-         {id:5,  pri:'ALTA',  done:false, task:'Configurar Safe Links e Safe Attachments',    desc:'Defender for Office 365 > Politicas > Safe Links + Safe Attachments ON'},
-         {id:6,  pri:'MEDIA', done:false, task:'Criar sensitivity labels no Purview',         desc:'Purview > Protecao de informacoes > Labels: Publico / Interno / Confidencial'},
-         {id:7,  pri:'MEDIA', done:false, task:'Habilitar retencao de logs (Audit Log)',      desc:'Purview > Audit > Verificar log unificado ativo e retencao minima 90d'},
-         {id:8,  pri:'MEDIA', done:false, task:'Revisar e reduzir roles privilegiadas',       desc:'Entra ID > Funcoes > PIM — limitar Global Admin a no maximo 2 contas'},
-         {id:9,  pri:'MEDIA', done:false, task:'Mapear contas obsoletas (90d+ inativas)',     desc:'Entra ID > Usuarios > Filtrar por ultimo login — desabilitar ou remover'},
-         {id:10, pri:'BAIXA', done:false, task:'Permissionamento SharePoint Owners/Members',  desc:'SharePoint Admin > Sites > Configurar grupos Owners / Members / Visitors'},
-       ],
-       get filtrados() {
-         return this.filtro === 'TODOS' ? this.checks : this.checks.filter(c => c.pri === this.filtro);
-       },
-       get concluidos() { return this.checks.filter(c=>c.done).length; },
-       get pct() { return Math.round(this.concluidos / this.checks.length * 100); }
-     }">
-
+<!-- BLOCO 6 — Checklist calculado a partir dos dados coletados -->
+{% set ck = painel.checklist %}
+{% set ck_ok = ck | selectattr('estado', 'equalto', 'ok') | list | length %}
+{% set ck_medidos = ck | rejectattr('estado', 'equalto', 'sem_dado') | list | length %}
+<div x-data="checklistM365" class="bg-white rounded-xl shadow mb-6 overflow-hidden dark:bg-slate-800">
   <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 dark:border-slate-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Checklist de Implementacao</h3>
+    <div>
+      <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Checklist de Implementação</h3>
+      <p class="text-xs text-gray-400">Estado lido do tenant (Secure Score, Entra, Purview, DNS) — não é marcado à mão</p>
+    </div>
     <div class="flex items-center gap-2">
-      <span class="text-xs text-gray-400" x-text="concluidos + '/' + checks.length + ' concluidas'"></span>
+      <span class="text-xs text-gray-400">{{ ck_ok }}/{{ ck_medidos }} concluídas</span>
       <div class="flex gap-1">
-        {% for f, cls in [('TODOS','gray'), ('ALTA','red'), ('MEDIA','yellow'), ('BAIXA','blue')] %}
-        <button @click="filtro = '{{ f }}'"
-                :class="filtro === '{{ f }}' ? 'ring-2 ring-offset-1 ring-{{ cls }}-400' : ''"
-                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-{{ cls }}-100 text-{{ cls }}-700 transition">
-          {{ f }}
+        {% for f, label, cls in [('TODOS','TODOS','gray'), ('PENDENTE','PENDENTES','orange'), ('ALTA','ALTA','red'), ('MEDIA','MÉDIA','yellow'), ('BAIXA','BAIXA','blue')] %}
+        <button type="button" data-filtro="{{ f }}" @click="setFiltro" :class="filtroClass('{{ f }}')"
+                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-{{ cls }}-100 text-{{ cls }}-700 ring-{{ cls }}-400 transition">
+          {{ label }}
         </button>
         {% endfor %}
       </div>
@@ -436,45 +413,36 @@
           <th class="px-4 py-2 w-8"></th>
           <th class="px-4 py-2 text-left w-20">Prioridade</th>
           <th class="px-4 py-2 text-left">Tarefa</th>
-          <th class="px-4 py-2 text-left hidden md:table-cell">Descricao</th>
+          <th class="px-4 py-2 text-left hidden md:table-cell">Situação</th>
+          <th class="px-4 py-2 text-left hidden lg:table-cell">Onde</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-50">
-        <template x-for="c in filtrados" :key="c.id">
-          <tr class="hover:bg-gray-50 cursor-pointer dark:hover:bg-slate-700/50" @click="c.done = !c.done"
-              :class="c.done ? 'opacity-60' : ''">
-            <td class="px-4 py-3">
-              <div class="w-4 h-4 rounded border-2 flex items-center justify-center transition"
-                   :class="c.done ? 'bg-green-500 border-green-500' : 'border-gray-300'">
-                <svg x-show="c.done" class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                </svg>
-              </div>
-            </td>
-            <td class="px-4 py-3">
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                    :class="{
-                      'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300':    c.pri === 'ALTA',
-                      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300': c.pri === 'MEDIA',
-                      'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300':  c.pri === 'BAIXA'
-                    }" x-text="c.pri"></span>
-            </td>
-            <td class="px-4 py-3 text-gray-700 text-xs font-medium dark:text-slate-200"
-                :class="c.done ? 'line-through text-gray-400' : ''" x-text="c.task"></td>
-            <td class="px-4 py-3 text-gray-400 text-xs hidden md:table-cell" x-text="c.desc"></td>
-          </tr>
-        </template>
+      <tbody class="divide-y divide-gray-50 dark:divide-slate-700">
+        {% for t in ck %}
+        <tr x-show="linhaVisivel('{{ t.prioridade }}', '{{ t.estado }}')" class="{% if t.estado == 'ok' %}opacity-60{% endif %}">
+          <td class="px-4 py-3">{{ estado_icone(t.estado) }}</td>
+          <td class="px-4 py-3">
+            {% set pc = {'ALTA': 'red', 'MEDIA': 'yellow', 'BAIXA': 'blue'}[t.prioridade] %}
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-{{ pc }}-100 text-{{ pc }}-700 dark:bg-{{ pc }}-900/20 dark:text-{{ pc }}-300">{{ 'MÉDIA' if t.prioridade == 'MEDIA' else t.prioridade }}</span>
+          </td>
+          <td class="px-4 py-3 text-xs font-medium {% if t.estado == 'ok' %}line-through text-gray-400{% else %}text-gray-700 dark:text-slate-200{% endif %}">{{ t.tarefa }}</td>
+          <td class="px-4 py-3 text-xs text-gray-500 hidden md:table-cell dark:text-slate-400">
+            {% if t.estado == 'sem_dado' %}Sem dado{% if t.detalhe %} — {{ t.detalhe }}{% endif %}{% else %}{{ t.detalhe or ('Concluído' if t.estado == 'ok' else 'Pendente') }}{% endif %}
+          </td>
+          <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">{{ t.onde }}</td>
+        </tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
 
   <div class="px-5 py-3 border-t border-gray-100 dark:border-slate-700">
-    <div class="flex items-center justify-between mb-1">
-      <span class="text-xs text-gray-500 dark:text-slate-400">Progresso geral</span>
-      <span class="text-xs font-bold text-gray-700 dark:text-slate-200" x-text="pct + '%'"></span>
+    {% set ck_pct = ((ck_ok / ck_medidos * 100) | round(0) | int) if ck_medidos else 0 %}
+    <div class="flex items-center justify-between text-xs text-gray-500 mb-1 dark:text-slate-400">
+      <span>Progresso geral</span><span>{{ ck_pct }}%</span>
     </div>
-    <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
-      <div class="h-full bg-green-500 rounded-full transition-all" :style="'width:' + pct + '%'"></div>
+    <div class="h-2 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
+      <div class="h-full rounded-full bg-green-500" style="width: {{ ck_pct }}%"></div>
     </div>
   </div>
 </div>
@@ -482,7 +450,7 @@
 <!-- BLOCO 7 — Links Rápidos (consoles M365) -->
 <div class="bg-white rounded-xl shadow mb-6 overflow-hidden dark:bg-slate-800">
   <div class="px-5 py-3 border-b border-gray-100 dark:border-slate-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Links Rapidos — Consoles M365</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Links Rápidos — Consoles M365</h3>
     <p class="text-xs text-gray-400">Todos abrem em nova aba</p>
   </div>
   <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-gray-100 dark:divide-slate-700">
@@ -518,20 +486,20 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
   {% set cadencias = [
-    ("Diaria", "blue", [
+    ("Diária", "blue", [
       "Revisar alertas no Microsoft Defender Portal",
       "Verificar Service Health (incidentes M365)",
       "Monitorar sign-ins suspeitos no Entra ID",
     ]),
     ("Semanal", "indigo", [
-      "Auditar novos usuarios convidados (guests)",
-      "Revisar dispositivos nao conformes no Intune",
+      "Auditar novos usuários convidados (guests)",
+      "Revisar dispositivos não conformes no Intune",
       "Verificar quarentena de e-mails (Defender)",
-      "Validar cobertura MFA de novos usuarios",
+      "Validar cobertura MFA de novos usuários",
     ]),
     ("Mensal", "violet", [
       "Analisar e melhorar o Secure Score",
-      "Revisar consumo e over-provisioning de licencas",
+      "Revisar consumo e over-provisioning de licenças",
       "Validar CA Policies e regras de acesso condicional",
       "Auditar roles privilegiadas (Global Admin, etc.)",
       "Atualizar notícias e documentos no SharePoint",
@@ -566,7 +534,7 @@
     <thead>
       <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-400">
         <th class="px-5 py-3 text-left">Grupo</th>
-        <th class="px-5 py-3 text-left">Nivel de acesso</th>
+        <th class="px-5 py-3 text-left">Nível de acesso</th>
         <th class="px-5 py-3 text-left">Quem pertence</th>
       </tr>
     </thead>
@@ -589,7 +557,7 @@
           </span>
         </td>
         <td class="px-5 py-3">
-          <span class="text-xs bg-blue-100 text-blue-700 font-semibold rounded px-2 py-0.5 dark:bg-blue-900/20 dark:text-blue-300">Editar conteudo</span>
+          <span class="text-xs bg-blue-100 text-blue-700 font-semibold rounded px-2 py-0.5 dark:bg-blue-900/20 dark:text-blue-300">Editar conteúdo</span>
         </td>
         <td class="px-5 py-3 text-xs text-gray-600 dark:text-slate-300">Analistas de TI · Suporte N2 e N3</td>
       </tr>
@@ -602,7 +570,7 @@
         <td class="px-5 py-3">
           <span class="text-xs bg-green-100 text-green-700 font-semibold rounded px-2 py-0.5 dark:bg-green-900/20 dark:text-green-300">Somente leitura</span>
         </td>
-        <td class="px-5 py-3 text-xs text-gray-600 dark:text-slate-300">Suporte N1 · Estagiarios · Auditores externos</td>
+        <td class="px-5 py-3 text-xs text-gray-600 dark:text-slate-300">Suporte N1 · Estagiários · Auditores externos</td>
       </tr>
     </tbody>
   </table>
