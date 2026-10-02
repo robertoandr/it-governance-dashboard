@@ -62,6 +62,12 @@ def _visao(**kw: object) -> dict:
     )
 
 
+@pytest.fixture(autouse=True)
+def _sem_historico_real(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A página busca o histórico de quedas no Zabbix; nos testes, vazio.
+    monkeypatch.setattr(cftv_monitoring, "get_cached_historico_quedas", lambda: {})
+
+
 # ── Serviço ───────────────────────────────────────────────────────────────────
 
 

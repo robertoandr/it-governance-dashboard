@@ -14,10 +14,14 @@ import os
 import threading
 import time
 from collections import Counter
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 import structlog
+
+from itgov.utils.cache_swr import CacheSWR
 
 log = structlog.get_logger(__name__)
 
@@ -110,6 +114,8 @@ def _buscar_cftv() -> dict:
     # Agrupar severidade máxima por host (via trigger → host)
     # Para simplificar, conta apenas total de problemas por host via tags
     problems_by_host: dict[str, int] = {}
+    # Início do problema "sem ping" em aberto, por host (para "offline há")
+    offline_desde: dict[str, int] = {}
     if problems_raw:
         trigger_ids = list({p["objectid"] for p in problems_raw})
         triggers = _zbx(
@@ -120,10 +126,17 @@ def _buscar_cftv() -> dict:
                 "triggerids": trigger_ids,
             },
         )
+        hosts_do_trigger: dict[str, list[str]] = {}
         for t in triggers or []:
-            for h in t.get("hosts", []):
-                hid = h["hostid"]
+            hosts_do_trigger[t["triggerid"]] = [h["hostid"] for h in t.get("hosts", [])]
+            for hid in hosts_do_trigger[t["triggerid"]]:
                 problems_by_host[hid] = problems_by_host.get(hid, 0) + 1
+        for p in problems_raw:
+            if TRIGGER_SEM_PING not in p.get("name", ""):
+                continue
+            for hid in hosts_do_trigger.get(p["objectid"], []):
+                inicio = int(p["clock"])
+                offline_desde[hid] = min(inicio, offline_desde.get(hid, inicio))
 
     # ── 4. Um registro por dispositivo, com status de ping ────────────────────
     devices: list[dict] = []
@@ -158,6 +171,11 @@ def _buscar_cftv() -> dict:
                 "model": tags.get("model", ""),
                 "status": status,
                 "problems": problems_by_host.get(hid, 0),
+                "offline_desde": offline_desde.get(hid),
+                # Zabbix pinga a cada 1 min, inclusive os offline: é o "ping persistente"
+                "ultimo_ping": int(ping_map[hid]["lastclock"])
+                if hid in ping_map and ping_map[hid].get("lastclock")
+                else None,
             }
         )
 
@@ -165,6 +183,10 @@ def _buscar_cftv() -> dict:
 
 
 SUBCATS_GRAVADOR = frozenset({"dvr", "nvr"})
+# Nome do trigger do template "ICMP Ping" que marca o dispositivo como offline
+TRIGGER_SEM_PING = "Unavailable by ICMP ping"
+DIAS_HISTORICO = 30
+_TZ = ZoneInfo("America/Sao_Paulo")
 SEM_UNIDADE = "sem"
 STAND_ALONE = "Stand Alone"
 
@@ -209,6 +231,7 @@ def montar_visao(
     apelidos: dict[str, str] | None = None,
     duplicado_de: dict[str, str] | None = None,
     sede_por_unidade: dict[int, int] | None = None,
+    quedas: dict[str, dict] | None = None,
 ) -> dict:
     """Agrupa dispositivos em cards por gravador e aplica o filtro de unidade.
 
@@ -227,6 +250,8 @@ def montar_visao(
         duplicado_de: Gravador duplicado → gravador principal.
         sede_por_unidade: Id de unidade → id da sede (unidade raiz), para
             os totais por sede.
+        quedas: Resultado de ``historico_quedas`` (host → quedas no período),
+            para a coluna de quedas e o ranking do recorte.
 
     Returns:
         Dicionário com KPIs do recorte, ``cards`` por gravador, ``sedes`` com
@@ -234,7 +259,11 @@ def montar_visao(
     """
     apelidos = apelidos or {}
     principal = {g: resolver_principal(g, duplicado_de or {}) for g in (duplicado_de or {})}
-    devices = [{**d, "gravador": principal.get(d["gravador"], d["gravador"])} for d in dados.get("devices", [])]
+    quedas = quedas or {}
+    devices = [
+        {**d, "gravador": principal.get(d["gravador"], d["gravador"]), "historico": quedas.get(d["host"])}
+        for d in dados.get("devices", [])
+    ]
     unidos: dict[str, list[str]] = {}
     for dup, alvo in sorted(principal.items()):
         if dup != alvo:
@@ -298,6 +327,11 @@ def montar_visao(
         **resumo,
         "cards": cards,
         "sedes": _totais_por_sede(grupos, unidades, sede_por_unidade or {}),
+        # Quem mais caiu no período, só entre os dispositivos do recorte
+        "ranking_quedas": sorted(
+            (d for d in todos if d["historico"]),
+            key=lambda d: (-d["historico"]["quedas"], -d["historico"]["segundos"], d["name"]),
+        ),
         "down_list": sorted((d for d in todos if d["status"] == "down"), key=lambda d: (d["gravador"], d["name"])),
         "maint_list": sorted((d for d in todos if d["status"] == "maint"), key=lambda d: d["name"]),
     }
@@ -348,6 +382,106 @@ def _totais_por_sede(
     # Sedes com câmera offline primeiro; "Sem unidade" por último
     sedes.sort(key=lambda s: (s["id"] is None, -s["down"], s["nome"]))
     return sedes
+
+
+def formatar_duracao(segundos: float) -> str:
+    """Duração curta em português, ex.: ``"3 d 4 h"``, ``"2 h 15 min"``, ``"40 min"``.
+
+    Args:
+        segundos: Duração em segundos.
+
+    Returns:
+        Texto com no máximo duas unidades; abaixo de 1 min, ``"< 1 min"``.
+    """
+    minutos = int(segundos // 60)
+    if minutos < 1:
+        return "< 1 min"
+    dias, resto = divmod(minutos, 1440)
+    horas, mins = divmod(resto, 60)
+    if dias:
+        return f"{dias} d {horas} h" if horas else f"{dias} d"
+    if horas:
+        return f"{horas} h {mins} min" if mins else f"{horas} h"
+    return f"{mins} min"
+
+
+def _quando(ts: int) -> str:
+    return datetime.fromtimestamp(ts, tz=_TZ).strftime("%d/%m %H:%M")
+
+
+def historico_quedas(eventos: list[dict], fim_por_evento: dict[str, int], agora: float) -> dict[str, dict]:
+    """Agrega as quedas de ping por host.
+
+    Args:
+        eventos: Eventos de problema do Zabbix (``event.get`` com ``selectHosts``),
+            com ``eventid``, ``clock``, ``r_eventid`` e ``hosts``.
+        fim_por_evento: Id do evento de recuperação → horário da recuperação.
+        agora: Horário atual (epoch), usado como fim das quedas em aberto.
+
+    Returns:
+        Host técnico → ``quedas`` (quantas vezes), ``segundos`` (tempo total
+        offline), ``tempo`` (formatado), ``ultima`` (início da última queda,
+        formatado) e ``em_aberto``.
+    """
+    por_host: dict[str, dict] = {}
+    for e in eventos:
+        inicio = int(e["clock"])
+        aberto = e.get("r_eventid", "0") in ("0", "")
+        fim = agora if aberto else fim_por_evento.get(e["r_eventid"], agora)
+        for h in e.get("hosts", []):
+            reg = por_host.setdefault(h["host"], {"quedas": 0, "segundos": 0.0, "ultima_ts": 0, "em_aberto": False})
+            reg["quedas"] += 1
+            reg["segundos"] += max(0.0, fim - inicio)
+            reg["ultima_ts"] = max(reg["ultima_ts"], inicio)
+            reg["em_aberto"] = reg["em_aberto"] or aberto
+    for reg in por_host.values():
+        reg["tempo"] = formatar_duracao(reg["segundos"])
+        reg["ultima"] = _quando(reg["ultima_ts"])
+    return por_host
+
+
+def _buscar_quedas() -> dict[str, dict]:
+    """Quedas de ping dos hosts CFTV nos últimos ``DIAS_HISTORICO`` dias."""
+    groups = _zbx("hostgroup.get", {"output": ["groupid", "name"], "search": {"name": "CFTV"}})
+    gids = [g["groupid"] for g in groups if g["name"].startswith("CFTV")]
+    if not gids:
+        return {}
+    agora = time.time()
+    eventos = _zbx(
+        "event.get",
+        {
+            "output": ["eventid", "clock", "r_eventid"],
+            "groupids": gids,
+            "source": 0,
+            "object": 0,
+            "value": 1,
+            "time_from": int(agora) - DIAS_HISTORICO * 86400,
+            "search": {"name": TRIGGER_SEM_PING},
+            "selectHosts": ["host"],
+        },
+    )
+    r_ids = [e["r_eventid"] for e in eventos if e.get("r_eventid") not in (None, "0", "")]
+    recuperacoes = _zbx("event.get", {"output": ["eventid", "clock"], "eventids": r_ids}) if r_ids else []
+    fim = {r["eventid"]: int(r["clock"]) for r in recuperacoes}
+    return historico_quedas(eventos, fim, agora)
+
+
+# Histórico muda devagar: 10 min basta e a página não espera o Zabbix.
+# Falha vira None, que não substitui um histórico bom já guardado.
+_cache_quedas: CacheSWR[dict[str, dict] | None] = CacheSWR("cftv.quedas", ttl=600, valido=lambda v: v is not None)
+
+
+def get_cached_historico_quedas() -> dict[str, dict]:
+    """Quedas de ping por host nos últimos 30 dias (cache 10 min; falha = vazio)."""
+
+    def carregar() -> dict[str, dict] | None:
+        try:
+            return _buscar_quedas()
+        except (requests.RequestException, RuntimeError, KeyError, ValueError) as exc:
+            log.warning("cftv_monitoring.quedas_falhou", erro=str(exc))
+            return None
+
+    return _cache_quedas.get(carregar) or {}
 
 
 def get_cached_cftv_summary() -> dict:
