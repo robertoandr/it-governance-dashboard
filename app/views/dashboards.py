@@ -1036,6 +1036,7 @@ def _triggers_abas(data: dict, resolved: list[dict]) -> dict:
 def m365_overview() -> str:
     """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
     from app.services.influxdb_provider import InfluxDBMetricsProvider
+    from app.services.m365_governanca import obter_painel
     from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
     from itgov.api.v1.m365_licenses import get_licenses_summary
     from itgov.api.v1.zabbix_triggers import get_cached_triggers
@@ -1086,8 +1087,11 @@ from(bucket: "{provider._bucket_raw}")
 """)
     mailbox: dict = {r["_field"]: r["_value"] for r in mb_rows}
 
+    painel = obter_painel(lic.get("licenses", []), entra, dns_check, url_for)
+
     return render_template(
         "dashboards/m365_overview.html",
+        painel=painel,
         secure_score=secure_score,
         entra=entra,
         licenses=lic,
