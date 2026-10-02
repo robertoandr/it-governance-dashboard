@@ -949,7 +949,8 @@ def m365_licenses_update():
         costs = _load_costs()
         if sku not in costs:
             costs[sku] = {}
-        costs[sku]["cost_per_unit_brl"] = float(payload.get("cost_per_unit_brl", 0))
+        # vazio = sem valor de contrato → a tela usa o preço de lista (estimado)
+        costs[sku]["cost_per_unit_brl"] = float(payload.get("cost_per_unit_brl") or 0)
         costs[sku]["renewal_date"] = str(payload.get("renewal_date", ""))
         costs[sku]["billing_cycle"] = str(payload.get("billing_cycle", "monthly"))
         costs[sku]["notes"] = str(payload.get("notes", ""))
