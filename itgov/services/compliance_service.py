@@ -8,6 +8,7 @@ from itgov.models.governance_compliance import (
     HistoricoPonto,
     RecomendacaoControle,
 )
+from itgov.services.secure_score_pt import resumo_pt, titulo_pt
 
 _TOP_RECOMENDACOES = 10
 
@@ -114,7 +115,7 @@ def montar_tabela_controles(
         linhas.append(
             ControlePendente(
                 control_name=nome,
-                title=perfil.get("title") or nome,
+                title=titulo_pt(nome, perfil.get("title") or ""),
                 categoria=perfil.get("controlCategory") or cs.get("controlCategory") or "Outros",
                 max_score=max_score,
                 score=score,
@@ -220,8 +221,9 @@ def calcular_resumo_compliance(
     recomendacoes = [
         RecomendacaoControle(
             control_name=c.get("controlName") or "",
+            titulo=titulo_pt(c.get("controlName") or ""),
             categoria=c.get("controlCategory") or "Outros",
-            descricao=c.get("description") or "",
+            descricao=resumo_pt(c.get("controlName") or "", c.get("description") or ""),
             score_pct=c.get("scoreInPercentage") or 0.0,
         )
         for c in pendentes[:_TOP_RECOMENDACOES]
