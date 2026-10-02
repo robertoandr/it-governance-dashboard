@@ -50,6 +50,7 @@ credencial_model_fields = {
     "tipo": fields.String(description="password | certificate"),
     "end_date_time": fields.String,
     "dias_restantes": fields.Integer(description="Negativo = já expirado"),
+    "gerenciado_microsoft": fields.Boolean(description="App mantido por serviço da Microsoft"),
 }
 
 app_summary_model = ns.model(
@@ -58,6 +59,7 @@ app_summary_model = ns.model(
         "total_apps": fields.Integer,
         "secrets_expirando_30d": fields.Integer,
         "secrets_expirados": fields.Integer,
+        "gerenciados_microsoft": fields.Integer(description="Credenciais de apps mantidos pela Microsoft"),
         "expirando": fields.List(fields.Nested(ns.model("CredencialExpirando", credencial_model_fields))),
     },
 )

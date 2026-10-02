@@ -15,6 +15,9 @@ class CredencialExpirando(BaseModel):
     tipo: str = Field(description="password | certificate")
     end_date_time: datetime
     dias_restantes: int = Field(description="Negativo = já expirado")
+    gerenciado_microsoft: bool = Field(
+        default=False, description="App criado e mantido por serviço da Microsoft (ex.: Copilot Studio)"
+    )
 
 
 class AppRegistrationSummary(BaseModel):
@@ -28,4 +31,5 @@ class AppRegistrationSummary(BaseModel):
     total_apps: int = Field(ge=0)
     secrets_expirando_30d: int = Field(ge=0)
     secrets_expirados: int = Field(ge=0)
+    gerenciados_microsoft: int = Field(default=0, ge=0, description="Credenciais de apps mantidos pela Microsoft")
     expirando: list[CredencialExpirando] = Field(default_factory=list)

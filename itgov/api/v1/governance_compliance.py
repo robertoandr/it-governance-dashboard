@@ -45,6 +45,7 @@ def _gravar_cache(dados: dict) -> None:
 
 
 recomendacao_fields = {
+    "titulo": fields.String(description="Título em PT-BR"),
     "control_name": fields.String,
     "categoria": fields.String,
     "descricao": fields.String,

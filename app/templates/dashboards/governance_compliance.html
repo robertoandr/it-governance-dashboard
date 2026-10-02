@@ -94,13 +94,13 @@ document.addEventListener('alpine:init', function () {
     {% for rec in summary.recomendacoes %}
     <div class="border-b border-gray-100 pb-3 dark:border-slate-700">
       <div class="flex items-center justify-between mb-1">
-        <span class="text-sm font-medium text-gray-800 dark:text-slate-100">{{ rec.control_name }}</span>
+        <span class="text-sm font-medium text-gray-800 dark:text-slate-100">{{ rec.titulo or rec.control_name }}</span>
         <span class="text-xs font-semibold px-2 py-0.5 rounded-full
                      {{ 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' if rec.score_pct < 30 else 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300' }}">
           {{ rec.score_pct }}% — {{ rec.categoria }}
         </span>
       </div>
-      <p class="text-xs text-gray-500 dark:text-slate-400">{{ rec.descricao }}</p>
+      <p class="text-xs text-gray-500 dark:text-slate-400">{{ rec.descricao | striptags }}</p>
     </div>
     {% endfor %}
   </div>

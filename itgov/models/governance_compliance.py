@@ -9,6 +9,7 @@ class RecomendacaoControle(BaseModel):
     """Controle do Secure Score com implementação baixa — ação recomendada."""
 
     control_name: str
+    titulo: str = ""
     categoria: str
     descricao: str
     score_pct: float = Field(ge=0.0, le=100.0)

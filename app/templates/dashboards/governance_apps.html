@@ -17,39 +17,63 @@
   <p class="text-sm text-gray-500 dark:text-slate-400">App Registrations e governança de credenciais (secrets/certificados).</p>
 </div>
 
+{% set da_empresa = summary.expirando | rejectattr('gerenciado_microsoft') | list %}
+{% set da_microsoft = summary.expirando | selectattr('gerenciado_microsoft') | list %}
+{% macro tipo_pt(t) %}{{ 'certificado' if t == 'certificate' else ('segredo' if t == 'password' else t) }}{% endmacro %}
+{% macro dias_pt(d) %}{% if d < 0 %}vencido há {{ -d }} dia(s){% elif d == 0 %}vence hoje{% else %}vence em {{ d }} dia(s){% endif %}{% endmacro %}
+
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
   {{ stat_card('Total de App Registrations', summary.total_apps, '', 'text-gray-800 dark:text-slate-100') }}
-  {{ stat_card('Secrets expirando (30d)', summary.secrets_expirando_30d, '', 'text-yellow-600' if summary.secrets_expirando_30d > 0 else 'text-green-600') }}
-  {{ stat_card('Secrets já expirados', summary.secrets_expirados, '', 'text-red-600' if summary.secrets_expirados > 0 else 'text-green-600') }}
+  {{ stat_card('Credenciais vencendo (30d)', summary.secrets_expirando_30d, '', 'text-yellow-600' if summary.secrets_expirando_30d > 0 else 'text-green-600') }}
+  {{ stat_card('Credenciais vencidas', summary.secrets_expirados, '', 'text-red-600' if summary.secrets_expirados > 0 else 'text-green-600') }}
 </div>
 
 <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
-  <p class="text-sm font-semibold text-gray-700 mb-3 dark:text-slate-200">Credenciais expirando ou expiradas</p>
-  {% if summary.expirando %}
+  <p class="text-sm font-semibold text-gray-700 mb-1 dark:text-slate-200">Apps da empresa com credencial vencendo ou vencida</p>
+  <p class="text-xs text-gray-400 mb-3">Sem credencial válida o app para de autenticar. Se o app não é mais usado, remova o registro no Entra ID.</p>
+  {% if da_empresa %}
   <table class="w-full text-sm">
     <thead>
-      <tr class="text-left text-gray-500 border-b dark:text-slate-400">
+      <tr class="text-left text-gray-500 border-b dark:text-slate-400 dark:border-slate-700">
         <th class="py-2">App</th>
         <th class="py-2">Tipo</th>
         <th class="py-2">Vencimento</th>
-        <th class="py-2">Dias restantes</th>
+        <th class="py-2">Situação</th>
       </tr>
     </thead>
     <tbody>
-      {% for cred in summary.expirando %}
+      {% for cred in da_empresa %}
       <tr class="border-b border-gray-100 dark:border-slate-700">
         <td class="py-2 text-gray-800 dark:text-slate-100">{{ cred.app_display_name }}</td>
-        <td class="py-2 text-gray-500 dark:text-slate-400">{{ cred.tipo }}</td>
-        <td class="py-2 text-gray-500 dark:text-slate-400">{{ cred.end_date_time[:10] }}</td>
-        <td class="py-2 font-semibold {{ 'text-red-600' if cred.dias_restantes < 0 else 'text-yellow-600' }}">
-          {{ cred.dias_restantes }}
-        </td>
+        <td class="py-2 text-gray-500 dark:text-slate-400">{{ tipo_pt(cred.tipo) }}</td>
+        <td class="py-2 text-gray-500 dark:text-slate-400">{{ cred.end_date_time[8:10] }}/{{ cred.end_date_time[5:7] }}/{{ cred.end_date_time[:4] }}</td>
+        <td class="py-2 font-semibold {{ 'text-red-600' if cred.dias_restantes < 0 else 'text-yellow-600' }}">{{ dias_pt(cred.dias_restantes) }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p class="text-sm text-green-600">Nenhuma credencial expirando nos próximos 30 dias.</p>
+  <p class="text-sm text-green-600">Nenhuma credencial de app da empresa vencendo nos próximos 30 dias.</p>
   {% endif %}
 </div>
+
+{% if da_microsoft %}
+<details class="bg-white rounded-xl shadow p-5 mt-4 dark:bg-slate-800">
+  <summary class="text-sm font-semibold text-gray-700 cursor-pointer dark:text-slate-200">
+    Apps mantidos pela Microsoft ({{ da_microsoft | length }} credencial(is)) — não exigem ação
+  </summary>
+  <p class="text-xs text-gray-400 mt-2 mb-3">Criados por serviços como o Copilot Studio; a própria Microsoft cuida das credenciais. Ficam fora das contagens acima.</p>
+  <table class="w-full text-sm">
+    <tbody>
+      {% for cred in da_microsoft %}
+      <tr class="border-b border-gray-100 dark:border-slate-700">
+        <td class="py-2 text-gray-600 dark:text-slate-300">{{ cred.app_display_name }}</td>
+        <td class="py-2 text-gray-400">{{ tipo_pt(cred.tipo) }}</td>
+        <td class="py-2 text-gray-400">{{ dias_pt(cred.dias_restantes) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
 {% endblock %}
