@@ -72,15 +72,20 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # Use "from ... import" — plain "import app.models.user" would rebind the
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
+        from app.models import aprovacao as _aprovacao_model  # noqa: F401
         from app.models import link as _link_model  # noqa: F401
         from app.models import tarefas as _tarefas_model  # noqa: F401
         from app.models import trigger_resolucao as _trigger_resolucao_model  # noqa: F401
         from app.models import unidade as _unidade_model
-        from app.models import user as _user_model  # noqa: F401
+        from app.models import user as _user_model
 
         db.create_all()
         _unidade_model.garantir_colunas()
         _unidade_model.seed_unidades()
+        _user_model.garantir_coluna_super_admin()
+        from app.services.aprovacoes import super_admin_email
+
+        _user_model.definir_super_admin(super_admin_email())
 
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
@@ -191,6 +196,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     import os
 
     from app.auth import bp as auth_bp
+    from app.views.aprovacoes import bp as aprovacoes_bp
     from app.views.dashboards import bp as dashboards_bp
     from app.views.tarefas import bp as tarefas_bp
     from app.views.users import bp as users_bp
@@ -199,6 +205,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     app.register_blueprint(auth_bp, url_prefix=_gov_prefix)
     app.register_blueprint(dashboards_bp, url_prefix=_gov_prefix)
     app.register_blueprint(users_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(aprovacoes_bp, url_prefix=_gov_prefix)
     app.register_blueprint(tarefas_bp, url_prefix=f"{_gov_prefix}/tarefas")
 
     # Situação das fontes (Visão Geral): primeira checagem em segundo plano.
@@ -298,7 +305,16 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             "current_user": cu,
             "graph_on": graph_configured(),
             "zendesk_on": zendesk_configured(),
+            "aprovacoes_pendentes": _aprovacoes_pendentes(cu),
         }
+
+    def _aprovacoes_pendentes(cu: Any) -> int:
+        """Quantas solicitações esperam o super admin (0 para os demais)."""
+        if not getattr(cu, "is_authenticated", False) or not getattr(cu, "super_admin", False):
+            return 0
+        from app.services.aprovacoes import contar_pendentes
+
+        return contar_pendentes()
 
     # LIC-01: garantir que o arquivo de custos de licenças exista no volume persistente,
     # populando a partir do seed versionado no primeiro boot

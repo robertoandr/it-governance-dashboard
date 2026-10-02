@@ -110,7 +110,9 @@ document.addEventListener('alpine:init', function () {
 
             <!-- Role badge -->
             <td class="px-4 py-3">
-              {% if u.role == 'admin' %}
+              {% if u.super_admin %}
+                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" title="Admin que aprova as alterações de cadastro dos demais">Super admin</span>
+              {% elif u.role == 'admin' %}
                 <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Admin</span>
               {% elif u.role == 'gestor' %}
                 <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Gestor</span>

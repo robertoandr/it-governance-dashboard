@@ -16,12 +16,48 @@ from flask_login import current_user, login_required
 
 from app.auth.rbac import require_role
 from app.integrations import graph_configured, zendesk_configured
+from app.services.aprovacoes import requer_aprovacao
 from app.services.metrics_aggregator import MetricsAggregator
 
 if TYPE_CHECKING:
     from app.models.unidade import DvrUnidade
 
 log = structlog.get_logger(__name__)
+
+
+def _resumo_gravador_unidade() -> str:
+    from app.models.unidade import Unidade
+
+    raw = request.form.get("unidade_id", "").strip()
+    unidade = db_get(Unidade, int(raw)) if raw.isdigit() else None
+    destino = unidade.caminho if unidade else "sem unidade"
+    return f"CFTV: gravador {request.form.get('gravador', '')} → {destino}"
+
+
+def _resumo_unidade(unidade_id: int | None = None) -> str:
+    from app.models.unidade import Unidade
+
+    atual = db_get(Unidade, unidade_id) if unidade_id else None
+    if atual and request.form.get("action") == "delete":
+        return f"Unidades: excluir {atual.caminho}"
+    nome = request.form.get("nome", "").strip()
+    return f"Unidades: editar {atual.caminho} (nome: {nome})" if atual else f"Unidades: criar {nome}"
+
+
+def _resumo_link(link_id: int | None = None) -> str:
+    acao = request.form.get("action", "save")
+    alvo = request.form.get("name", "").strip() or request.form.get("ip", "").strip() or f"#{link_id}"
+    if acao == "delete":
+        return f"Links WAN: remover link #{link_id}"
+    return f"Links WAN: {'editar' if link_id else 'criar'} {alvo}"
+
+
+def db_get(model: type, ident: int) -> object | None:
+    """``db.session.get`` sem importar ``db`` no topo do módulo."""
+    from app.extensions import db
+
+    return db.session.get(model, ident)
+
 
 _TZ_LOCAL = ZoneInfo("America/Sao_Paulo")
 
@@ -421,6 +457,11 @@ def _vinculo_dvr(gravador: str) -> DvrUnidade:
 @bp.route("/cftv/gravador/nome", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(
+    lambda: (
+        f"CFTV: renomear gravador {request.form.get('gravador', '')} para “{request.form.get('apelido', '').strip() or 'nome do Zabbix'}”"
+    )
+)
 def cftv_gravador_nome() -> object:
     """Renomeia um gravador na página /cftv (só admin; vazio volta ao nome do Zabbix)."""
     from app.extensions import db
@@ -442,6 +483,13 @@ def cftv_gravador_nome() -> object:
 @bp.route("/cftv/gravador/duplicado", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(
+    lambda: (
+        f"CFTV: unir gravador {request.form.get('gravador', '')} a {request.form.get('duplicado_de')}"
+        if request.form.get("duplicado_de")
+        else f"CFTV: separar gravador {request.form.get('gravador', '')}"
+    )
+)
 def cftv_gravador_duplicado() -> object:
     """Marca um gravador como duplicado de outro (só admin; vazio desfaz).
 
@@ -477,6 +525,7 @@ def cftv_gravador_duplicado() -> object:
 @bp.route("/cftv/gravador", methods=["POST"])
 @login_required
 @require_role("admin", "gestor")
+@requer_aprovacao(_resumo_gravador_unidade)
 def cftv_gravador_unidade() -> object:
     """Define a unidade de um gravador (DVR/NVR) a partir do card na página /cftv."""
     from app.extensions import db
@@ -519,6 +568,7 @@ def unidades_list() -> str:
 @bp.route("/unidades/<int:unidade_id>/editar", methods=["GET", "POST"])
 @login_required
 @require_role("admin", "gestor")
+@requer_aprovacao(_resumo_unidade)
 def unidade_form(unidade_id: int | None = None) -> object:
     """Formulário de criação/edição de unidade (nome, pai, faixas de IP, endereço e logo)."""
     from app.extensions import db
@@ -758,6 +808,7 @@ def rede_monitoring() -> str:
 @bp.route("/rede/cadastrar", methods=["GET", "POST"])
 @login_required
 @require_role("admin", "gestor")
+@requer_aprovacao(lambda: f"Rede: cadastrar ativo {request.form.get('ip') or request.args.get('ip', '')}")
 def rede_cadastrar_ativo() -> object:
     """Cadastra um host descoberto como ativo de rede, já com tipo e unidade sugeridos."""
     from sqlalchemy import select
@@ -892,6 +943,7 @@ def ativos_rede() -> str:
 @bp.route("/ativos-rede/<uuid:ativo_id>/remover", methods=["POST"])
 @login_required
 @require_role("admin", "gestor")
+@requer_aprovacao(lambda ativo_id: f"Rede: remover ativo {ativo_id}")
 def ativo_rede_remover(ativo_id: UUID) -> object:
     """Remove (soft delete) um ativo do inventário."""
     from itgov.db.session import get_session
@@ -924,6 +976,7 @@ def links_manager() -> str:
 @bp.route("/links/<int:link_id>/editar", methods=["GET", "POST"])
 @login_required
 @require_role("admin", "gestor")
+@requer_aprovacao(_resumo_link)
 def link_form(link_id: int | None = None) -> str:
     """Formulario de criacao e edicao de links WAN."""
     from app.extensions import db
@@ -1053,6 +1106,9 @@ def m365_licenses() -> str:
 @bp.route("/licenses/update", methods=["POST"])
 @login_required
 @require_role("admin", "gestor")
+@requer_aprovacao(
+    lambda: f"Licenças: alterar custo/dados de {(request.get_json(silent=True) or {}).get('sku_name', '?')}"
+)
 def m365_licenses_update():
     """Salvar custo/renovação de uma SKU (JSON POST)."""
 
