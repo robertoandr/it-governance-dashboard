@@ -92,7 +92,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trivy — CRITICAL + HIGH (fail on findings)
-        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master em 2026-08-14 (trivy v0.74.0)
+        uses: aquasecurity/trivy-action@c03d123cb480c08c69b054af418ea5e69fe6e57e # master em 2026-08-14 (trivy v0.74.0)
         with:
           image-ref: ${{ needs.build-push.outputs.image }}@${{ needs.build-push.outputs.digest }}
           format: sarif
