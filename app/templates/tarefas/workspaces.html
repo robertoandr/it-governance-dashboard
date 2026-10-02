@@ -111,6 +111,8 @@ document.addEventListener('alpine:init', function () {
     {% endif %}
   </div>
 
+  {% include "tarefas/_abas.html" %}
+
   {% if workspaces %}
   <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Workspaces">
     {% for ws in workspaces %}

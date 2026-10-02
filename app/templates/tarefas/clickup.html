@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Tarefas no ClickUp — Governança de TI 360{% endblock %}
+{% block page_title %}Tarefas{% endblock %}
+
+{% macro linha(t) %}
+<li class="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+  <div class="min-w-0">
+    <a href="{{ t.url }}" target="_blank" rel="noopener noreferrer"
+       class="font-medium text-slate-800 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-400 hover:underline break-words">{{ t.nome }}</a>
+    <p class="text-xs text-slate-500 dark:text-slate-400 break-words">
+      {{ t.local or "—" }}{% if t.prioridade and t.prioridade != "Normal" %} · prioridade {{ t.prioridade|lower }}{% endif %}
+    </p>
+  </div>
+  <div class="flex items-center gap-2 text-xs shrink-0">
+    <span class="rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-slate-700 dark:text-slate-200">{{ t.status }}</span>
+    {% if t.situacao == "concluida" %}
+      {% if t.concluida_em %}<span class="text-slate-500 dark:text-slate-400">concluída em {{ t.concluida_em.strftime('%d/%m/%Y') }}</span>{% endif %}
+    {% elif t.atrasada %}
+      <span class="rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 font-medium text-red-700 dark:text-red-300">atrasada · {{ t.vencimento.strftime('%d/%m/%Y') }}</span>
+    {% elif t.vencimento %}
+      <span class="text-slate-500 dark:text-slate-400">vence {{ t.vencimento.strftime('%d/%m/%Y') }}</span>
+    {% endif %}
+  </div>
+</li>
+{% endmacro %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Tarefas</h1>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+      {% if ver_todos %}Tarefas do ClickUp de todas as pessoas, separadas por responsável.
+      {% else %}Suas tarefas no ClickUp (atribuídas a {{ current_user.email }}).{% endif %}
+    </p>
+  </div>
+
+  {% include "tarefas/_abas.html" %}
+
+  {% if not resultado.ok %}
+  <div role="alert" class="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 p-4 text-sm text-amber-800 dark:text-amber-200">
+    {% if resultado.motivo == "sem_token" %}Integração com o ClickUp não configurada (falta <code>CLICKUP_TOKEN</code>).
+    {% else %}Não foi possível consultar o ClickUp agora. Uma nova tentativa é feita em instantes.{% endif %}
+  </div>
+  {% else %}
+
+  {% if ver_todos and grupos %}
+  <section aria-labelledby="clickup-resumo" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-x-auto">
+    <h2 id="clickup-resumo" class="sr-only">Resumo por pessoa</h2>
+    <table class="w-full text-sm">
+      <thead class="text-left text-xs uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+        <tr>
+          <th scope="col" class="px-4 py-2 font-medium">Pessoa</th>
+          <th scope="col" class="px-4 py-2 font-medium text-right">Abertas</th>
+          <th scope="col" class="px-4 py-2 font-medium text-right">Atrasadas</th>
+          <th scope="col" class="px-4 py-2 font-medium text-right">Concluídas</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+        {% for g in grupos %}
+        <tr>
+          <td class="px-4 py-2"><a href="#pessoa-{{ loop.index }}" class="text-blue-700 dark:text-blue-400 hover:underline">{{ g.nome }}</a></td>
+          <td class="px-4 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{{ g.abertas|length }}</td>
+          <td class="px-4 py-2 text-right tabular-nums {% if g.atrasadas %}font-semibold text-red-700 dark:text-red-400{% else %}text-slate-500 dark:text-slate-400{% endif %}">{{ g.atrasadas }}</td>
+          <td class="px-4 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{{ g.total_concluidas }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% for g in grupos %}
+  <details id="pessoa-{{ loop.index }}" {% if not ver_todos or g.atrasadas %}open{% endif %}
+           class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+    <summary class="flex flex-wrap items-center justify-between gap-2 cursor-pointer px-4 py-3">
+      <span class="font-semibold text-slate-800 dark:text-slate-100">{{ g.nome }}</span>
+      <span class="text-xs text-slate-600 dark:text-slate-400">
+        {{ g.abertas|length }} aberta{{ "s" if g.abertas|length != 1 }}
+        {% if g.atrasadas %}· <span class="font-semibold text-red-700 dark:text-red-400">{{ g.atrasadas }} atrasada{{ "s" if g.atrasadas != 1 }}</span>{% endif %}
+        · {{ g.total_concluidas }} concluída{{ "s" if g.total_concluidas != 1 }}
+      </span>
+    </summary>
+    {% if g.abertas %}
+    <ul class="divide-y divide-slate-100 dark:divide-slate-700 border-t border-slate-100 dark:border-slate-700" aria-label="Tarefas abertas de {{ g.nome }}">
+      {% for t in g.abertas %}{{ linha(t) }}{% endfor %}
+    </ul>
+    {% else %}
+    <p class="border-t border-slate-100 dark:border-slate-700 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">Nenhuma tarefa aberta.</p>
+    {% endif %}
+    {% if g.concluidas %}
+    <details class="border-t border-slate-100 dark:border-slate-700">
+      <summary class="cursor-pointer px-4 py-2 text-xs text-slate-600 dark:text-slate-400">Concluídas recentemente ({{ g.concluidas|length }} de {{ g.total_concluidas }})</summary>
+      <ul class="divide-y divide-slate-100 dark:divide-slate-700" aria-label="Tarefas concluídas de {{ g.nome }}">
+        {% for t in g.concluidas %}{{ linha(t) }}{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </details>
+  {% else %}
+  <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-10 text-center">
+    <p class="font-medium text-slate-700 dark:text-slate-200">Nenhuma tarefa no ClickUp</p>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+      {% if ver_todos %}Nenhuma tarefa com responsável no workspace.
+      {% else %}Não há tarefas atribuídas a {{ current_user.email }}. Confira se o seu usuário no ClickUp usa o mesmo e-mail.{% endif %}
+    </p>
+  </div>
+  {% endfor %}
+
+  <p class="text-xs text-slate-500 dark:text-slate-400">
+    Atualizado em {{ resultado.atualizado_em.strftime('%d/%m/%Y %H:%M') }} · lista refeita a cada 5 minutos.
+    {% if ver_todos and resultado.sem_responsavel %}{{ resultado.sem_responsavel }} tarefa{{ "s" if resultado.sem_responsavel != 1 }} sem responsável no ClickUp não aparece{{ "m" if resultado.sem_responsavel != 1 }} aqui.{% endif %}
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

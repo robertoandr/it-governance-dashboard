@@ -18,6 +18,7 @@ class Acao(StrEnum):
     EDITAR_CARD = "editar_card"
     COMENTAR = "comentar"
     MODERAR_COMENTARIO = "moderar_comentario"
+    VER_CLICKUP_TODOS = "ver_clickup_todos"
 
 
 _TODOS = ("admin", "gestor", "operador", "visualizador")
@@ -28,6 +29,8 @@ _MATRIZ: dict[Acao, tuple[str, ...]] = {
     Acao.EDITAR_CARD: ("admin", "gestor", "operador"),
     Acao.COMENTAR: ("admin", "gestor", "operador"),
     Acao.MODERAR_COMENTARIO: ("admin",),
+    # Aba ClickUp: os demais perfis veem só as tarefas atribuídas ao próprio e-mail.
+    Acao.VER_CLICKUP_TODOS: ("admin",),
 }
 
 
