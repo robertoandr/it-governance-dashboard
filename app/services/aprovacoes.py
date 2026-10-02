@@ -28,7 +28,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 
 import structlog
 from flask import current_app, flash, g, get_flashed_messages, jsonify, redirect, request, url_for
@@ -143,10 +143,23 @@ def registrar(resumo: str, view_args: dict[str, Any]) -> Solicitacao:
 
 
 def _voltar() -> str:
-    """Página de onde o pedido veio (mesmo site), senão a fila de aprovações."""
-    ref = request.referrer or ""
-    if ref and urlparse(ref).netloc == request.host:
-        return ref
+    """Página de onde o pedido veio (mesmo site), senão a fila de aprovações.
+
+    A URL é remontada com ``url_for`` a partir da rota casada, nunca devolvida
+    crua: só destinos que existem no app saem daqui (evita open redirect).
+    """
+    ref = urlparse(request.referrer or "")
+    if ref.netloc == request.host:
+        caminho = ref.path
+        raiz = request.script_root
+        if raiz and caminho.startswith(raiz):
+            caminho = caminho[len(raiz) :]
+        try:
+            endpoint, valores = current_app.url_map.bind(request.host).match(caminho, method="GET")
+        except HTTPException:
+            return url_for("aprovacoes.lista")
+        consulta = {k: v for k, v in parse_qsl(ref.query) if k not in valores}
+        return url_for(endpoint, **valores, **consulta)
     return url_for("aprovacoes.lista")
 
 

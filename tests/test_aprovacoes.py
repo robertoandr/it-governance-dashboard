@@ -313,3 +313,25 @@ def test_resumo_de_edicao_mostra_antes_e_depois(admin_client, factory_app, super
         with factory_app.app_context():
             User.query.filter_by(email="pytest-editado@test.local").delete()
             db.session.commit()
+
+
+@pytest.mark.parametrize(
+    ("referer", "destino"),
+    [
+        ("http://localhost/gov/users?busca=ana", "/gov/users?busca=ana"),
+        ("http://evil.example/gov/users", "/gov/aprovacoes"),
+        ("http://localhost/gov/nao-existe", "/gov/aprovacoes"),
+        ("", "/gov/aprovacoes"),
+    ],
+)
+def test_pendente_volta_so_para_rota_do_proprio_app(
+    admin_client, factory_app, super_id: int, referer: str, destino: str
+) -> None:
+    headers = {"Referer": referer} if referer else {}
+    resp = admin_client.post(
+        "/gov/users",
+        data={"name": "Novo Aprov", "email": "pytest-novo-aprov@test.local", "role": "operador"},
+        headers=headers,
+    )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].removeprefix("http://localhost") == destino
