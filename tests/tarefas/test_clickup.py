@@ -191,3 +191,23 @@ def test_pagina_sem_token(cliente: Cliente, monkeypatch: pytest.MonkeyPatch) -> 
 def test_aba_clickup_na_pagina_de_workspaces(cliente: Cliente) -> None:
     html = cliente("visualizador").get("/gov/tarefas").get_data(as_text=True)
     assert 'href="/gov/tarefas/clickup"' in html
+
+
+def test_busca_so_a_lista_de_projetos_de_ti(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Só a lista Projetos (TI) — o workspace inteiro trazia pessoas de fora da TI."""
+    pedidos: list[httpx.Request] = []
+
+    def responder(req: httpx.Request) -> httpx.Response:
+        pedidos.append(req)
+        return httpx.Response(200, json={"tasks": [], "last_page": True})
+
+    monkeypatch.delenv("CLICKUP_LIST_ID", raising=False)
+    transporte = httpx.MockTransport(responder)
+
+    async def rodar() -> tuple[list[dict[str, Any]], bool]:
+        async with httpx.AsyncClient(transport=transporte) as c:
+            return await ck._pagina(c, 0)
+
+    assert asyncio.run(rodar()) == ([], True)
+    assert pedidos[0].url.params.get("list_ids[]") == "901321459571"
+    assert pedidos[0].url.params.get("subtasks") == "true"
