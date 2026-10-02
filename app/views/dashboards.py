@@ -389,15 +389,11 @@ def cftv_gravador_unidade() -> object:
 @login_required
 @require_role("admin", "gestor", "operador")
 def unidades_list() -> str:
-    """Lista as unidades (sites) em árvore, com faixas de IP e gravadores vinculados."""
-    from app.models.unidade import DvrUnidade, Unidade
+    """Lista as unidades (sites) em árvore, com CNPJ, endereço e faixas de IP."""
+    from app.models.unidade import Unidade
 
     raizes = Unidade.query.filter_by(parent_id=None).order_by(Unidade.nome).all()
-    gravadores: dict[int, list[str]] = {}
-    for v in DvrUnidade.query.order_by(DvrUnidade.dvr).all():
-        if v.unidade_id is not None:
-            gravadores.setdefault(v.unidade_id, []).append(v.dvr)
-    return render_template("dashboards/unidades.html", raizes=raizes, gravadores=gravadores)
+    return render_template("dashboards/unidades.html", raizes=raizes)
 
 
 @bp.route("/unidades/nova", methods=["GET", "POST"])
@@ -413,6 +409,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
         DvrUnidade,
         Unidade,
         normalizar_cep,
+        normalizar_cnpj,
         normalizar_uf,
         parse_faixas,
         tipo_logo,
@@ -458,6 +455,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
     arquivo = request.files.get("logo")
     try:
         faixas = parse_faixas(request.form.get("faixas_ip", ""))
+        cnpj = normalizar_cnpj(request.form.get("cnpj", ""))
         cep = normalizar_cep(request.form.get("cep", ""))
         uf = normalizar_uf(request.form.get("uf", ""))
         # Um byte além do limite basta para tipo_logo() recusar o arquivo.
@@ -477,6 +475,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
     unidade.nome = nome
     unidade.parent_id = parent_id
     unidade.faixas_ip = "\n".join(faixas)
+    unidade.cnpj = cnpj
     unidade.endereco = request.form.get("endereco", "").strip()[:200]
     unidade.cep = cep
     unidade.cidade = request.form.get("cidade", "").strip()[:120]

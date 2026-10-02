@@ -222,7 +222,7 @@
             <td class="py-1.5 pr-3 text-slate-700 dark:text-slate-200 font-medium">{{ d.name }}</td>
             <td class="py-1.5 pr-3 text-slate-500 font-mono">{{ d.ip }}</td>
             <td class="py-1.5 pr-3 text-slate-500">{{ d.subcat }}</td>
-            <td class="py-1.5 pr-3 text-slate-500">{{ d.gravador or '—' }}</td>
+            <td class="py-1.5 pr-3 text-slate-500">{{ d.gravador or 'Stand Alone' }}</td>
             <td class="py-1.5 text-right">{% if d.problems %}<span class="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded px-1.5 py-0.5 font-medium">{{ d.problems }}</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
