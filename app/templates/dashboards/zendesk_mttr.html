@@ -98,4 +98,52 @@
   </div>
 
 </div>
+
+{% include "dashboards/_zendesk_historico.html" %}
+
+{% macro tabela_volume(titulo, linhas, rotulo, nota) %}
+<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800 min-w-0">
+  <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">{{ titulo }}</p>
+  <p class="text-xs text-gray-400 mb-3">{{ nota }}</p>
+  {% if linhas %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm tabular-nums">
+      <thead>
+        <tr class="text-left text-xs text-gray-500 border-b dark:text-slate-400 dark:border-slate-700">
+          <th class="py-2 pr-3">{{ rotulo }}</th>
+          <th class="py-2 pr-3 text-right">Total</th>
+          <th class="py-2 pr-3 text-right">Em aberto</th>
+          <th class="py-2 pr-3 text-right">Resolvidos</th>
+          <th class="py-2 text-right">30 dias</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in linhas %}
+        <tr class="border-b border-gray-50 dark:border-slate-700/50">
+          <td class="py-1.5 pr-3 text-gray-700 dark:text-slate-200">{{ v.nome }}</td>
+          <td class="py-1.5 pr-3 text-right font-mono font-semibold">{{ v.total }}</td>
+          <td class="py-1.5 pr-3 text-right font-mono {{ 'text-amber-600' if v.em_aberto else 'text-gray-400' }}">{{ v.em_aberto }}</td>
+          <td class="py-1.5 pr-3 text-right font-mono text-gray-500">{{ v.resolvidos }}</td>
+          <td class="py-1.5 text-right font-mono text-gray-500">{{ v.ultimos_30d }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400">Sem chamados.</p>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% if historico %}
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+  {{ tabela_volume('Volume por responsável', historico.por_responsavel, 'Responsável',
+                   'Agente atribuído no Zendesk, desde a criação do grupo.') }}
+  {{ tabela_volume('Volume por solicitante', historico.por_solicitante, 'Solicitante',
+                   'Quem mais abre chamados (top 15), desde a criação do grupo.') }}
+</div>
+{% else %}
+<p class="text-sm text-gray-400 mb-6">Histórico e volume por usuário indisponíveis agora — nova tentativa em instantes.</p>
+{% endif %}
 {% endblock %}

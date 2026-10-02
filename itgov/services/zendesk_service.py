@@ -271,6 +271,33 @@ class ZendeskService(SyncAPIClient):
         log.info("zendesk_groups_fetched", count=len(groups))
         return [{"id": g["id"], "name": g["name"]} for g in groups]
 
+    def get_group(self) -> dict[str, Any] | None:
+        """Grupo configurado (nome e data de criação), ou None sem grupo."""
+        if not self._group_id:
+            return None
+        return self._get_json(f"/api/v2/groups/{self._group_id}.json").get("group")
+
+    def count_tickets(self, query: str) -> int:
+        """Quantos tickets batem com a busca (no grupo configurado), sem baixá-los.
+
+        Args:
+            query: Termos da Search API, ex.: ``"solved>=2026-09-01 solved<2026-10-01"``.
+        """
+        q = f"type:ticket {query}"
+        if self._group_id:
+            q += f" group_id:{self._group_id}"
+        return int(self._get_json("/api/v2/search/count.json", query=q).get("count") or 0)
+
+    def get_user_names(self, ids: list[int]) -> dict[int, str]:
+        """Nome de cada usuário (agente ou solicitante), em lotes de 100."""
+        nomes: dict[int, str] = {}
+        unicos = sorted(set(ids))
+        for i in range(0, len(unicos), 100):
+            lote = ",".join(str(u) for u in unicos[i : i + 100])
+            for u in self._get_json("/api/v2/users/show_many.json", ids=lote).get("users", []):
+                nomes[int(u["id"])] = u.get("name") or u.get("email") or str(u["id"])
+        return nomes
+
     def get_tickets(self, status: str | None = None) -> list[Ticket]:
         """Retorna tickets com filtro opcional por status.
 
@@ -285,18 +312,19 @@ class ZendeskService(SyncAPIClient):
             Lista de Ticket ordenada por data de criação decrescente.
         """
         if self._group_id:
-            query = f"type:ticket group_id:{self._group_id}"
+            query = f"group_id:{self._group_id}"
             if status:
                 query += f" status:{status}"
+            # search/export pagina por cursor e não tem o teto de 1.000
+            # resultados da search.json (o grupo passa disso com o tempo).
             raw = self._paginate(
-                "/api/v2/search.json",
+                "/api/v2/search/export.json",
                 "results",
-                cursor=False,
                 query=query,
-                sort_by="created_at",
-                sort_order="desc",
+                **{"filter[type]": "ticket"},
             )
             raw = [t for t in raw if t.get("result_type") == "ticket" or "subject" in t]
+            raw.sort(key=lambda t: str(t.get("created_at") or ""), reverse=True)
         else:
             params: dict[str, Any] = {"sort_by": "created_at", "sort_order": "desc"}
             if status:

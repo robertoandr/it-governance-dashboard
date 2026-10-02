@@ -25,6 +25,8 @@ _CACHE_TTL_SLA = 600  # 10min — para SLA detail (fetch completo de todos os ti
 _cache_mttr: CacheSWR[dict] = CacheSWR("zendesk.mttr", _CACHE_TTL)
 _cache_vol: CacheSWR[dict] = CacheSWR("zendesk.volume", _CACHE_TTL)
 _cache_sla: CacheSWR[dict] = CacheSWR("zendesk.sla_detail", _CACHE_TTL_SLA)
+# Histórico muda devagar e custa ~7 páginas + 1 contagem por mês: 1 h basta.
+_cache_hist: CacheSWR[dict] = CacheSWR("zendesk.historico", 3600, valido=bool)
 
 _SLA_WINDOW_DAYS = 30
 
@@ -117,6 +119,7 @@ def _carregar_sla_detail() -> dict:
 
     dados = {
         "total_open": len(open_tickets),
+        # Abertos + resolvidos em 30 dias — NÃO é o histórico (ver get_cached_historico).
         "total_all": len(open_tickets) + len(solved_recent),
         "by_priority": by_priority,
         "oldest": oldest_list,
@@ -185,11 +188,49 @@ def _carregar_volume() -> dict:
         return svc.get_ticket_volume_by_status()
 
 
+def get_cached_historico() -> dict:
+    """Histórico do grupo (chamados por mês e volume por usuário), cache de 1 h.
+
+    Zendesk fora do ar na primeira carga devolve ``{}`` (a página mostra
+    "indisponível agora") em vez de derrubar a página.
+    """
+    import httpx
+    from tenacity import RetryError
+
+    try:
+        return _cache_hist.get(_carregar_historico)
+    except (httpx.HTTPError, RetryError, ValueError, KeyError) as exc:
+        log.warning("zendesk.historico_indisponivel", erro=type(exc).__name__)
+        return {}
+
+
+def _carregar_historico() -> dict:
+    """Busca no Zendesk todos os tickets do grupo e monta o histórico (sem cache)."""
+    from datetime import date
+
+    from itgov.services.zendesk_historico import data_criacao, meses_desde, resumir
+
+    hoje = date.today()
+    with _svc() as svc:
+        grupo = svc.get_group()
+        tickets = svc.get_tickets()
+        desde = data_criacao(grupo) or (min(t.created_at.date() for t in tickets) if tickets else None)
+        resolvidos = {
+            ini.strftime("%Y-%m"): svc.count_tickets(f"solved>={ini.isoformat()} solved<{fim.isoformat()}")
+            for ini, fim in (meses_desde(desde, hoje) if desde else [])
+        }
+        ids = [t.assignee_id for t in tickets if t.assignee_id] + [t.requester_id for t in tickets]
+        nomes = svc.get_user_names(ids)
+    hist = resumir(tickets, nomes, resolvidos, (grupo or {}).get("name") or "Todos os grupos", desde, hoje)
+    return hist.model_dump(mode="json")
+
+
 def aquecer_caches() -> None:
     """Carrega os caches do Zendesk em segundo plano (subida do worker)."""
     _cache_mttr.aquecer(_carregar_mttr_summary)
     _cache_vol.aquecer(_carregar_volume)
     _cache_sla.aquecer(_carregar_sla_detail)
+    _cache_hist.aquecer(_carregar_historico)
 
 
 ns = Namespace("zendesk", description="Zendesk support integration")
