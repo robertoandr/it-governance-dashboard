@@ -763,11 +763,14 @@ def _listar_ativos() -> list[dict]:
 def rede_monitoring() -> str:
     """Render painel de rede: fila de revisão dos hosts descobertos pelo nmap."""
     from app.models.unidade import Unidade
+    from itgov.api.v1.rede_descoberta import SIGLA_TIPO, faixas_fora_da_varredura, resumo_por_unidade, sigla_unidade
     from itgov.api.v1.rede_monitoring import (
         SEM_UNIDADE,
         STATUS_CADASTRADO,
         STATUS_NOVO,
+        STATUS_RECENTE,
         get_cached_rede_summary,
+        get_latencia,
         montar_descobertos,
     )
     from itgov.models.ativo import TIPO_LABELS
@@ -780,16 +783,18 @@ def rede_monitoring() -> str:
     filtro_raw = request.args.get("unidade", "")
     filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
     status = request.args.get("status", "")
-    if status not in (STATUS_NOVO, STATUS_CADASTRADO):
+    if status not in (STATUS_NOVO, STATUS_CADASTRADO, STATUS_RECENTE):
         status = ""
 
     data = get_cached_rede_summary()
     ativos_por_ip = {a["metadata"]["ip"]: a for a in _listar_ativos() if a["metadata"].get("ip")}
+    faixas = [(u.id, f) for u in unidades for f in u.faixas]
+    nomes = {u.id: u.caminho for u in todas}
     revisao = montar_descobertos(
-        data["influx"].get("hosts", []),
-        faixas=[(u.id, f) for u in unidades for f in u.faixas],
+        data.get("hosts", []),
+        faixas=faixas,
         ativos_por_ip=ativos_por_ip,
-        unidades={u.id: u.caminho for u in todas},
+        unidades=nomes,
         filtro_unidade=filtro,
         filtro_status=status,
     )
@@ -797,6 +802,14 @@ def rede_monitoring() -> str:
         "dashboards/rede_monitoring.html",
         data=data,
         revisao=revisao,
+        cards=resumo_por_unidade(data.get("hosts", []), faixas, nomes, set(ativos_por_ip)),
+        latencia=get_latencia(faixas, nomes),
+        faixas_fora=faixas_fora_da_varredura(
+            [(u.caminho, f) for u in unidades for f in u.faixas],
+            [r for dr in data.get("active_drules", []) for r in dr["ranges"]],
+        ),
+        siglas=[(u.nome, sigla_unidade(u.nome)) for u in unidades if u.parent_id is None],
+        sigla_tipo=SIGLA_TIPO,
         unidades=sorted(unidades, key=lambda u: u.caminho),
         filtro=filtro_raw if filtro is not None else "",
         status=status,
@@ -814,6 +827,7 @@ def rede_cadastrar_ativo() -> object:
     from sqlalchemy import select
 
     from app.models.unidade import Unidade
+    from itgov.api.v1.rede_descoberta import sigla_unidade, sugerir_nome
     from itgov.api.v1.rede_monitoring import host_descoberto, unidade_do_ip
     from itgov.db.session import get_session
     from itgov.models.ativo import AMBIENTES_VALIDOS, CRITICIDADES_VALIDAS, TIPO_LABELS
@@ -824,18 +838,25 @@ def rede_cadastrar_ativo() -> object:
     host = host_descoberto(ip) if ip else None
     if host is None:
         abort(404)
-    if any(a["metadata"].get("ip") == ip for a in _listar_ativos()):
+    ativos = _listar_ativos()
+    if any(a["metadata"].get("ip") == ip for a in ativos):
         flash(f"{ip} já está cadastrado como ativo.", "error")
         return redirect(url_for("dashboards.ativos_rede"))
 
     unidades = sorted((u for u in Unidade.query.all() if u.ativo), key=lambda u: u.caminho)
+    tipo = host["tipo_sugerido"] if host["tipo_sugerido"] in TIPO_LABELS else "outro"
+    unidade_id = unidade_do_ip(ip, [(u.id, f) for u in unidades for f in u.faixas])
+    unidade_ip = next((u for u in unidades if u.id == unidade_id), None)
+    # Nome no padrão SIGLA-TIPO-NNN (sigla da unidade raiz); o nome visto na rede vai para a descrição
+    raiz = unidade_ip.caminho.split(" / ")[0] if unidade_ip else ""
+    visto = host.get("ia_nome") or (host["hostname"] if host["hostname"] != ip else "")
     sugestao = {
-        "nome": host["hostname"] if host["hostname"] and host["hostname"] != ip else f"{host['tipo_sugerido']}-{ip}",
-        "tipo": host["tipo_sugerido"] if host["tipo_sugerido"] in TIPO_LABELS else "outro",
-        "unidade_id": unidade_do_ip(ip, [(u.id, f) for u in unidades for f in u.faixas]),
+        "nome": sugerir_nome(tipo, sigla_unidade(raiz), (a["nome"] for a in ativos)),
+        "tipo": tipo,
+        "unidade_id": unidade_id,
         "criticidade": "media",
         "ambiente": "prod",
-        "descricao": "",
+        "descricao": visto or "",
     }
 
     def _render(valores: dict) -> str:
