@@ -155,6 +155,9 @@ class SLAMetric(BaseModel):
     first_reply_compliance_pct: float | None = Field(default=None, ge=0.0, le=100.0)
     resolution_compliance_pct: float | None = Field(default=None, ge=0.0, le=100.0)
     window_days: int | None = None
+    avg_resolution_hours: float | None = Field(
+        default=None, ge=0.0, description="MTTR: média de horas corridas entre abertura e solução"
+    )
 
 
 class SatisfactionRating(BaseModel):

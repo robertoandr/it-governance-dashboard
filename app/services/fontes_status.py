@@ -225,6 +225,11 @@ def status_fontes() -> list[FonteStatus]:
     return _cache.get(_carregar)
 
 
+def atualizar_agora() -> list[FonteStatus]:
+    """Confere as fontes agora, sem esperar o cache vencer (botão "Atualizar")."""
+    return _cache.atualizar_agora(_carregar)
+
+
 def aquecer() -> None:
     """Faz a primeira checagem em segundo plano (subida do worker)."""
     _cache.aquecer(_carregar)

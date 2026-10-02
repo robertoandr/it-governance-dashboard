@@ -93,12 +93,25 @@ def dashboard_redirect():
 @bp.route("/")
 @login_required
 @require_role("admin", "gestor", "visualizador")
-def overview() -> str:
-    """Render governance overview dashboard."""
-    from app.services.fontes_status import status_fontes
+def overview() -> str | Response:
+    """Render governance overview dashboard.
+
+    ``?atualizar=1`` (botão "Atualizar") confere as fontes na hora e volta para
+    a página limpa — recarregar depois não força a checagem de novo.
+    """
+    from app.services import fontes_status
+
+    if request.args.get("atualizar"):
+        fontes_status.atualizar_agora()
+        return redirect(url_for("dashboards.overview"))
 
     data = _get_governance()
-    return render_template("dashboards/overview.html", governance=data, fontes=status_fontes())
+    return render_template(
+        "dashboards/overview.html",
+        governance=data,
+        fontes=fontes_status.status_fontes(),
+        pagina_atualizada=datetime.now(_TZ_LOCAL).strftime("%d/%m/%Y %H:%M:%S"),
+    )
 
 
 @bp.route("/pillars")

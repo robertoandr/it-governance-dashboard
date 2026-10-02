@@ -252,6 +252,13 @@ REGRAS: dict[str, Regra] = {
         onde_endpoint="dashboards.zabbix_triggers",
         itens=_problemas_zabbix(so_indisponivel=True),
     ),
+    "mttr": Regra(
+        100,
+        "Fechar primeiro os chamados mais antigos e os parados aguardando a TI — a meta é resolver em até 24 h em média.",
+        "SLA de chamados",
+        onde_endpoint="dashboards.sla_chamados",
+        itens=_chamados_fora_do_sla,
+    ),
     "monitoring_coverage": Regra(
         100,
         "Cadastrar no Zabbix os ativos que ainda não são monitorados.",
