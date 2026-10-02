@@ -8,7 +8,7 @@ vira problema no Zabbix (e portanto em /gov/triggers), um por pessoa, que
 fecha sozinho quando a pessoa não tiver mais projeto atrasado.
 
 Cria/atualiza (idempotente):
-  - Grupo "Governança — PMO" e host "ClickUp — PMO" (sem interface)
+  - Grupo "Governança — PMO" e host "ClickUp-PMO" (visível "ClickUp — PMO", sem interface)
   - Item Script "pmo.clickup.resumo" (10 min): lê a lista no ClickUp e devolve
     abertas/concluídas/atrasadas por responsável — mesmas regras da página
     (status pelo tipo; "cancelado" conta como encerrado; atraso = vencimento
@@ -62,7 +62,10 @@ except ImportError:
     sys.exit("Instale: pip install zabbix-utils --break-system-packages")
 
 GRUPO = "Governança — PMO"
-HOST = "ClickUp — PMO"
+# Nome técnico só aceita letras, números, espaço, ponto, hífen e sublinhado;
+# o travessão fica no nome visível.
+HOST = "ClickUp-PMO"
+HOST_VISIVEL = "ClickUp — PMO"
 CHAVE_RESUMO = "pmo.clickup.resumo"
 CHAVE_LLD = "pmo.responsaveis"
 ACAO_ZENDESK = "Governança — Chamado Zendesk"
@@ -156,6 +159,7 @@ def main() -> None:
         hosts,
         {
             "host": HOST,
+            "name": HOST_VISIVEL,
             "groups": [{"groupid": groupid}],
             "tags": [{"tag": "origem", "value": "pmo"}],
             "description": "Lista PMO do ClickUp (TI | Projetos). Criado por infra-setup/08_create_pmo_atrasos.py.",
