@@ -166,6 +166,7 @@ def _buscar_cftv() -> dict:
 
 SUBCATS_GRAVADOR = frozenset({"dvr", "nvr"})
 SEM_UNIDADE = "sem"
+STAND_ALONE = "Stand Alone"
 
 
 def gravador_do_dispositivo(host: str, subcat: str, tags: dict[str, str]) -> str:
@@ -257,7 +258,8 @@ def montar_visao(
         cards.append(
             {
                 "gravador": gravador,
-                "titulo": host_gravador["name"] if host_gravador else (gravador or "Sem gravador"),
+                # Câmera sem gravador grava sozinha (cartão SD/nuvem) — "Stand Alone" (pedido do usuário)
+                "titulo": host_gravador["name"] if host_gravador else (gravador or STAND_ALONE),
                 "gravador_host": host_gravador,
                 "unidade_id": uid,
                 "unidade": unidades.get(uid, "") if uid is not None else "",

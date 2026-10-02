@@ -102,6 +102,7 @@ class Unidade(db.Model):
     parent_id: int | None = db.Column(db.Integer, db.ForeignKey("unidades.id"), nullable=True)
     faixas_ip: str = db.Column(db.Text, nullable=False, default="")
     ativo: bool = db.Column(db.Boolean, nullable=False, default=True)
+    cnpj: str = db.Column(db.String(18), nullable=False, default="", server_default="")
     endereco: str = db.Column(db.String(200), nullable=False, default="", server_default="")
     cep: str = db.Column(db.String(9), nullable=False, default="", server_default="")
     cidade: str = db.Column(db.String(120), nullable=False, default="", server_default="")
@@ -199,6 +200,37 @@ def normalizar_cep(texto: str) -> str:
     return f"{digitos[:5]}-{digitos[5:]}"
 
 
+def _digito_cnpj(base: str) -> str:
+    pesos = list(range(len(base) - 7, 1, -1)) + list(range(9, 1, -1))
+    resto = sum(int(d) * p for d, p in zip(base, pesos, strict=True)) % 11
+    return "0" if resto < 2 else str(11 - resto)
+
+
+def normalizar_cnpj(texto: str) -> str:
+    """Valida um CNPJ (dígitos verificadores) e devolve ``00.000.000/0000-00``.
+
+    Args:
+        texto: CNPJ digitado, com ou sem pontuação.
+
+    Returns:
+        CNPJ formatado, ou string vazia quando nada foi informado.
+
+    Raises:
+        ValueError: Se não tiver 14 dígitos ou os dígitos verificadores não baterem.
+    """
+    digitos = re.sub(r"[\s./\-]", "", texto)
+    if not digitos:
+        return ""
+    if not re.fullmatch(r"\d{14}", digitos) or len(set(digitos)) == 1:
+        raise ValueError(f"CNPJ inválido: {texto.strip()}")
+    base = digitos[:12]
+    dv = _digito_cnpj(base)
+    dv += _digito_cnpj(base + dv)
+    if digitos[12:] != dv:
+        raise ValueError(f"CNPJ inválido (dígito verificador): {texto.strip()}")
+    return f"{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:]}"
+
+
 def normalizar_uf(texto: str) -> str:
     """Valida a sigla do estado (``sc`` → ``SC``); vazio é aceito.
 
@@ -238,6 +270,7 @@ def tipo_logo(dados: bytes) -> str:
 # Colunas criadas depois da tabela existir em produção: create_all() não
 # altera tabelas existentes, então são adicionadas aqui (idempotente).
 _COLUNAS_NOVAS: tuple[tuple[str, str], ...] = (
+    ("cnpj", "VARCHAR(18) NOT NULL DEFAULT ''"),
     ("endereco", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ("cep", "VARCHAR(9) NOT NULL DEFAULT ''"),
     ("cidade", "VARCHAR(120) NOT NULL DEFAULT ''"),

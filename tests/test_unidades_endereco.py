@@ -15,6 +15,7 @@ from app.models.unidade import (
     Unidade,
     garantir_colunas,
     normalizar_cep,
+    normalizar_cnpj,
     normalizar_uf,
     tipo_logo,
 )
@@ -126,7 +127,7 @@ def test_garantir_colunas_adiciona_faltantes_e_e_idempotente(tmp_path) -> None:
     garantir_colunas(engine)
     garantir_colunas(engine)  # segunda chamada não pode falhar
 
-    novas = {"endereco", "cep", "cidade", "uf", "logo", "logo_mime"}
+    novas = {"cnpj", "endereco", "cep", "cidade", "uf", "logo", "logo_mime"}
     assert novas <= {c["name"] for c in inspect(engine).get_columns("unidades")}
     with engine.connect() as conn:
         # Linhas antigas recebem string vazia, não NULL.
@@ -249,3 +250,38 @@ def test_logo_exige_login(factory_client, factory_app) -> None:
     nome = _nome("Loja Anonimo")
     uid = _unidade_com_logo(factory_app, nome)
     assert factory_client.get(f"/gov/unidades/{uid}/logo").status_code == 302
+
+
+# ── CNPJ ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("bruto", "esperado"),
+    [("11222333000181", "11.222.333/0001-81"), (" 11.222.333/0001-81 ", "11.222.333/0001-81"), ("", "")],
+)
+def test_normalizar_cnpj(bruto: str, esperado: str) -> None:
+    assert normalizar_cnpj(bruto) == esperado
+
+
+@pytest.mark.parametrize("bruto", ["11222333000182", "1122233300018", "00000000000000", "abc"])
+def test_normalizar_cnpj_invalido(bruto: str) -> None:
+    with pytest.raises(ValueError, match="CNPJ inválido"):
+        normalizar_cnpj(bruto)
+
+
+def test_cnpj_salvo_e_listado_sem_coluna_de_gravadores(authed_client, factory_app) -> None:
+    nome = _nome("Loja CNPJ")
+    assert _criar(authed_client, nome, cnpj="11222333000181").status_code == 302
+    with factory_app.app_context():
+        assert Unidade.query.filter_by(nome=nome).one().cnpj == "11.222.333/0001-81"
+    lista = authed_client.get("/gov/unidades").get_data(as_text=True)
+    assert "CNPJ 11.222.333/0001-81" in lista
+    assert "Gravadores CFTV" not in lista
+
+
+def test_cnpj_invalido_nao_salva(authed_client, factory_app) -> None:
+    nome = _nome("Loja CNPJ ruim")
+    html = _criar(authed_client, nome, cnpj="11222333000182").get_data(as_text=True)
+    assert "CNPJ inválido" in html
+    with factory_app.app_context():
+        assert Unidade.query.filter_by(nome=nome).first() is None

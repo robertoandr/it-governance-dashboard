@@ -43,6 +43,13 @@
     </div>
 
     <div>
+      <label for="cnpj" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">CNPJ</label>
+      <input id="cnpj" type="text" name="cnpj" maxlength="18" inputmode="numeric"
+             value="{{ f.get('cnpj', unidade.cnpj if unidade else '') }}"
+             placeholder="00.000.000/0000-00" class="{{ campo }} font-mono sm:max-w-xs">
+    </div>
+
+    <div>
       <label for="endereco" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Endereço</label>
       <input id="endereco" type="text" name="endereco" maxlength="200" autocomplete="street-address"
              value="{{ f.get('endereco', unidade.endereco if unidade else '') }}"

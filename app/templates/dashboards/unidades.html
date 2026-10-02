@@ -16,6 +16,7 @@
       <span class="text-sm {{ 'text-slate-600 dark:text-slate-300' if filha else 'font-semibold text-slate-800 dark:text-slate-100' }}">{{ u.nome }}</span>
       {% if not u.ativo %}<span class="text-[10px] text-slate-400">(inativa)</span>{% endif %}
     </div>
+    {% if u.cnpj %}<div class="{{ 'pl-6' if filha }} mt-0.5 text-[11px] font-mono text-slate-400">CNPJ {{ u.cnpj }}</div>{% endif %}
   </td>
   <td class="py-2.5 pr-4 text-xs text-slate-500">
     {% if u.endereco or u.local or u.cep %}
@@ -25,9 +26,6 @@
   </td>
   <td class="py-2.5 pr-4 text-xs font-mono text-slate-500">
     {{ u.faixas | join(', ') if u.faixas else '—' }}
-  </td>
-  <td class="py-2.5 pr-4 text-xs text-slate-500">
-    {{ gravadores.get(u.id, []) | join(', ') or '—' }}
   </td>
   <td class="py-2.5 text-right">
     {% if pode_editar %}
@@ -42,7 +40,7 @@
     <div>
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Unidades</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-        Sites da empresa. As faixas de IP definem a unidade dos ativos descobertos na rede; os gravadores são vinculados na página CFTV.
+        Sites da empresa. As faixas de IP definem a unidade dos ativos descobertos na rede.
       </p>
     </div>
     {% if pode_editar %}
@@ -62,7 +60,6 @@
           <th class="text-left py-1 pr-4 font-medium">Unidade</th>
           <th class="text-left py-1 pr-4 font-medium">Endereço</th>
           <th class="text-left py-1 pr-4 font-medium">Faixas de IP</th>
-          <th class="text-left py-1 pr-4 font-medium">Gravadores CFTV</th>
           <th class="py-1"></th>
         </tr>
       </thead>
