@@ -37,7 +37,7 @@ log = structlog.get_logger(__name__)
 LOTE = 25
 ESPERA_FALHA = 600  # segundos sem tentar de novo depois de uma falha
 _ocupado = threading.Lock()  # um lote por vez
-_falhou_em = 0.0
+_falhou_em = float("-inf")  # monotonic() pode ser menor que ESPERA_FALHA logo após o boot
 
 _PROMPT = """Você classifica dispositivos encontrados numa rede corporativa (lojas, shopping, fábrica, escritório).
 Para cada host recebe: ip, portas TCP abertas, descrição SNMP (sysDescr), nome DNS ou do monitoramento.

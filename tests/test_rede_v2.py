@@ -300,7 +300,7 @@ def test_processar_falha_de_rede_espera_antes_de_tentar(factory_app, monkeypatch
     with factory_app.app_context():
         db.session.add(RedeVisto(ip=host["ip"]))
         db.session.commit()
-    monkeypatch.setattr(rede_ia, "_falhou_em", 0.0)
+    monkeypatch.setattr(rede_ia, "_falhou_em", float("-inf"))
     try:
         with patch.object(rede_ia.requests, "post", side_effect=requests.ConnectionError("fora")):
             rede_ia._processar(factory_app, [host])
@@ -383,9 +383,20 @@ def test_pagina_rede_filtra_novos_na_rede(authed_client, pagina) -> None:
 def test_um_lote_por_vez(factory_app, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REDE_IA_URL", "http://ia.test/v1")
     monkeypatch.setenv("REDE_IA_KEY", "fake-key-for-tests")
-    monkeypatch.setattr(rede_ia, "_falhou_em", 0.0)
+    monkeypatch.setattr(rede_ia, "_falhou_em", float("-inf"))
     with patch.object(rede_ia.threading, "Thread") as thread:
         rede_ia.processar_em_segundo_plano(factory_app, [])
         rede_ia.processar_em_segundo_plano(factory_app, [])  # o primeiro ainda "rodando"
     assert thread.call_count == 1
+    rede_ia._ocupado.release()
+
+
+def test_dispara_logo_apos_o_boot(factory_app, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sem falha anterior, dispara mesmo com monotonic() pequeno (runner recém-ligado)."""
+    monkeypatch.setenv("REDE_IA_URL", "http://ia.test/v1")
+    monkeypatch.setenv("REDE_IA_KEY", "fake-key-for-tests")
+    monkeypatch.setattr(rede_ia, "_falhou_em", float("-inf"))
+    with patch.object(rede_ia.time, "monotonic", return_value=5.0), patch.object(rede_ia.threading, "Thread") as t:
+        rede_ia.processar_em_segundo_plano(factory_app, [])
+    assert t.call_count == 1
     rede_ia._ocupado.release()
