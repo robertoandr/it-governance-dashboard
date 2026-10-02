@@ -1,0 +1,44 @@
+{# Histórico mensal do grupo do Zendesk (Conferência V2.0 z4/sl1). Espera `historico`. #}
+{% if historico and historico.meses %}
+{% set maior = (historico.meses | map(attribute='abertos') | max) or 1 %}
+{% set maior = [maior, (historico.meses | map(attribute='resolvidos') | max) or 1] | max %}
+<div class="bg-white rounded-xl shadow p-5 mb-6 dark:bg-slate-800">
+  <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+    <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">Histórico mês a mês — {{ historico.grupo }}</p>
+    <p class="text-xs text-gray-400">
+      {{ historico.total }} chamados desde {{ historico.desde[8:10] }}/{{ historico.desde[5:7] }}/{{ historico.desde[:4] }} (criação do grupo)
+      {% if historico.media_mensal is not none %}· média de {{ ('%.0f' % historico.media_mensal) }} abertos por mês completo{% endif %}
+    </p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm tabular-nums">
+      <thead>
+        <tr class="text-left text-xs text-gray-500 border-b dark:text-slate-400 dark:border-slate-700">
+          <th class="py-2 pr-3">Mês</th>
+          <th class="py-2 pr-3 text-right">Abertos</th>
+          <th class="py-2 pr-3 text-right">Resolvidos</th>
+          <th class="py-2 w-1/2 hidden sm:table-cell"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in historico.meses | reverse %}
+        <tr class="border-b border-gray-50 dark:border-slate-700/50">
+          <td class="py-1.5 pr-3 text-gray-700 dark:text-slate-200">{{ m.rotulo }}{% if loop.first %} <span class="text-[10px] text-gray-400">(parcial)</span>{% endif %}</td>
+          <td class="py-1.5 pr-3 text-right font-mono">{{ m.abertos }}</td>
+          <td class="py-1.5 pr-3 text-right font-mono">{{ m.resolvidos }}</td>
+          <td class="py-1.5 hidden sm:table-cell">
+            <div class="h-1.5 rounded-full bg-blue-500 mb-0.5" style="width: {{ (m.abertos / maior * 100) | round(1) }}%"></div>
+            <div class="h-1.5 rounded-full bg-green-500" style="width: {{ (m.resolvidos / maior * 100) | round(1) }}%"></div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-[11px] text-gray-400 mt-2">
+    <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span> abertos no mês ·
+    <span class="inline-block w-2 h-2 rounded-full bg-green-500"></span> resolvidos no mês.
+    Só o grupo {{ historico.grupo }}; chamados de antes da criação dele estão em outros grupos do Zendesk.
+  </p>
+</div>
+{% endif %}

@@ -126,13 +126,13 @@ def pilares_redirect():
 @require_role("admin", "gestor")
 def sla_chamados() -> str:
     """Render painel SLA / Chamados (Zendesk)."""
-    from itgov.api.v1.zendesk import get_cached_sla_detail
+    from itgov.api.v1.zendesk import get_cached_historico, get_cached_sla_detail
 
     if not zendesk_configured():
         abort(404)
 
     data = get_cached_sla_detail()
-    return render_template("dashboards/sla_chamados.html", data=data)
+    return render_template("dashboards/sla_chamados.html", data=data, historico=get_cached_historico())
 
 
 @bp.route("/zendesk")
@@ -140,7 +140,7 @@ def sla_chamados() -> str:
 @require_role("admin", "gestor")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""
-    from itgov.api.v1.zendesk import get_cached_mttr_summary, get_cached_volume_by_status
+    from itgov.api.v1.zendesk import get_cached_historico, get_cached_mttr_summary, get_cached_volume_by_status
 
     if not zendesk_configured():
         abort(404)
@@ -152,6 +152,7 @@ def zendesk_mttr() -> str:
         "dashboards/zendesk_mttr.html",
         mttr=mttr,
         volume=volume,
+        historico=get_cached_historico(),
     )
 
 
