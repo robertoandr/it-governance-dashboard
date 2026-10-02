@@ -109,9 +109,10 @@ def pillars() -> str:
     from app.services.plano_melhoria import montar_plano
 
     data = _get_governance()
-    # Só a ação que mais rende por pilar; os itens concretos ficam no detalhe.
-    proxima = {p["id"]: next(iter(montar_plano(p, com_itens=False)), None) for p in data["pillars"]}
-    return render_template("dashboards/pillars.html", governance=data, proxima=proxima)
+    # Ações sem os itens concretos (rápido); os itens ficam na página do pilar.
+    planos = {p["id"]: montar_plano(p, com_itens=False) for p in data["pillars"]}
+    proxima = {pid: next(iter(acoes), None) for pid, acoes in planos.items()}
+    return render_template("dashboards/pillars.html", governance=data, proxima=proxima, planos=planos)
 
 
 @bp.route("/pilares")
