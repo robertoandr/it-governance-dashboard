@@ -11,8 +11,31 @@ from flask_login import current_user, login_required
 from app.auth.rbac import require_role
 from app.extensions import db
 from app.models.user import ROLES, User
+from app.services.aprovacoes import requer_aprovacao
 
 bp = Blueprint("users", __name__, template_folder="../templates/users")
+
+
+def _alvo(user_id: int) -> str:
+    user = db.session.get(User, user_id)
+    return f"{user.name} <{user.email}>" if user else f"#{user_id}"
+
+
+def _resumo_criar() -> str:
+    return f"Usuários: criar {request.form.get('name', '').strip()} <{request.form.get('email', '').strip().lower()}> como {request.form.get('role', 'visualizador')}"
+
+
+def _resumo_editar(user_id: int) -> str:
+    return (
+        f"Usuários: editar {_alvo(user_id)} → {request.form.get('name', '').strip()} "
+        f"<{request.form.get('email', '').strip().lower()}>, perfil {request.form.get('role', '')}"
+    )
+
+
+def _resumo_toggle(user_id: int) -> str:
+    user = db.session.get(User, user_id)
+    acao = "desativar" if user and user.is_active else "ativar"
+    return f"Usuários: {acao} {_alvo(user_id)}"
 
 
 def _count_active_admins() -> int:
@@ -30,6 +53,7 @@ def list_users():
 @bp.route("/users", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(_resumo_criar)
 def create_user():
     name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip().lower()
@@ -64,6 +88,7 @@ def create_user():
 @bp.route("/users/<int:user_id>/edit", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(_resumo_editar)
 def edit_user(user_id: int):
     user = db.session.get(User, user_id)
     if user is None:
@@ -82,6 +107,10 @@ def edit_user(user_id: int):
         flash("Perfil inválido.", "error")
         return redirect(url_for("users.list_users"))
 
+    if user.super_admin and role != "admin":
+        flash("O super admin precisa continuar com perfil Admin.", "error")
+        return redirect(url_for("users.list_users"))
+
     conflict = User.query.filter(User.email == email, User.id != user_id).first()
     if conflict:
         flash(f"Email '{email}' já está em uso por outro usuário.", "error")
@@ -98,6 +127,7 @@ def edit_user(user_id: int):
 @bp.route("/users/<int:user_id>/reset-password", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(lambda user_id: f"Usuários: redefinir senha de {_alvo(user_id)} (senha gerada na aprovação)")
 def reset_password(user_id: int):
     user = db.session.get(User, user_id)
     if user is None:
@@ -120,6 +150,7 @@ def reset_password(user_id: int):
 @bp.route("/users/<int:user_id>/toggle", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(_resumo_toggle)
 def toggle_user(user_id: int):
     user = db.session.get(User, user_id)
     if user is None:
@@ -128,6 +159,10 @@ def toggle_user(user_id: int):
 
     if user.id == current_user.id:
         flash("Você não pode desativar sua própria conta.", "error")
+        return redirect(url_for("users.list_users"))
+
+    if user.is_active and user.super_admin:
+        flash("O super admin não pode ser desativado.", "error")
         return redirect(url_for("users.list_users"))
 
     if user.is_active and user.role == "admin" and _count_active_admins() <= 1:
@@ -144,6 +179,7 @@ def toggle_user(user_id: int):
 @bp.route("/users/<int:user_id>/delete", methods=["POST"])
 @login_required
 @require_role("admin")
+@requer_aprovacao(lambda user_id: f"Usuários: excluir {_alvo(user_id)}")
 def delete_user(user_id: int):
     user = db.session.get(User, user_id)
     if user is None:
@@ -152,6 +188,10 @@ def delete_user(user_id: int):
 
     if user.id == current_user.id:
         flash("Você não pode excluir sua própria conta.", "error")
+        return redirect(url_for("users.list_users"))
+
+    if user.super_admin:
+        flash("O super admin não pode ser excluído.", "error")
         return redirect(url_for("users.list_users"))
 
     if user.role == "admin" and _count_active_admins() <= 1:

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Aprovações — Governança de TI 360{% endblock %}
+{% block page_title %}Aprovações{% endblock %}
+
+{% macro campos(sol) %}
+{% if sol.corpo is not none %}
+  <dl class="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-[11px]">
+    {% for k, v in sol.corpo.items() %}
+    <dt class="text-slate-400">{{ k }}</dt><dd class="text-slate-600 dark:text-slate-300 break-all">{{ v }}</dd>
+    {% endfor %}
+  </dl>
+{% elif sol.form %}
+  <dl class="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-[11px]">
+    {% for k, v in sol.form if v %}
+    <dt class="text-slate-400">{{ k }}</dt><dd class="text-slate-600 dark:text-slate-300 break-all">{{ v }}</dd>
+    {% endfor %}
+    {% for a in sol.arquivos %}
+    <dt class="text-slate-400">{{ a.campo }}</dt><dd class="text-slate-600 dark:text-slate-300">arquivo {{ a.nome }}</dd>
+    {% endfor %}
+  </dl>
+{% endif %}
+{% endmacro %}
+
+{% macro selo(status) %}
+{% set cores = {
+  'pendente': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  'aprovada': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  'rejeitada': 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  'falhou': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+} %}
+<span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium {{ cores.get(status, '') }}">{{ rotulo.get(status, status) }}</span>
+{% endmacro %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Aprovações</h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+      {% if pode_decidir %}
+      Alterações de cadastro e configuração feitas por outros usuários esperam sua aprovação para valer.
+      {% else %}
+      Suas alterações de cadastro e configuração valem depois que o super admin aprova.
+      {% endif %}
+      Triggers e tarefas não passam por aprovação.
+    </p>
+    {% if not ativa %}
+    <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Nenhum super admin ativo: as alterações estão valendo direto, sem fila.</p>
+    {% endif %}
+  </div>
+
+  <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Pendentes ({{ pendentes | length }})</h2>
+    {% if not pendentes %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">Nada esperando aprovação.</p>
+    {% else %}
+    <ul class="divide-y divide-slate-100 dark:divide-slate-700">
+      {% for s in pendentes %}
+      <li class="py-3 grid gap-2 md:grid-cols-[1fr,auto] md:items-start">
+        <div class="min-w-0 space-y-1">
+          <p class="text-sm font-medium text-slate-800 dark:text-slate-100">#{{ s.id }} · {{ s.resumo }}</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Pedido por {{ s.solicitante_nome }} em {{ s.criado_em | data_local }}
+          </p>
+          <details>
+            <summary class="cursor-pointer text-xs text-blue-600 dark:text-blue-400">Ver dados enviados</summary>
+            <div class="mt-1">{{ campos(s) }}</div>
+          </details>
+        </div>
+        {% if pode_decidir %}
+        <div class="flex flex-wrap items-center gap-2">
+          <form method="POST" action="{{ url_for('aprovacoes.aprovar_solicitacao', sol_id=s.id) }}">
+            <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700">Aprovar</button>
+          </form>
+          <form method="POST" action="{{ url_for('aprovacoes.rejeitar_solicitacao', sol_id=s.id) }}" class="flex items-center gap-2">
+            <label class="sr-only" for="motivo-{{ s.id }}">Motivo</label>
+            <input id="motivo-{{ s.id }}" name="motivo" maxlength="1000" placeholder="Motivo (opcional)"
+                   class="w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+            <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Rejeitar</button>
+          </form>
+        </div>
+        {% else %}
+        <div>{{ selo(s.status) }}</div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {% if historico %}
+  <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Decididas (últimas {{ historico | length }})</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 uppercase">
+            <th class="text-left py-1 pr-3 font-medium">#</th>
+            <th class="text-left py-1 pr-3 font-medium">Alteração</th>
+            <th class="text-left py-1 pr-3 font-medium">Pedido por</th>
+            <th class="text-left py-1 pr-3 font-medium">Situação</th>
+            <th class="text-left py-1 pr-3 font-medium">Decidido</th>
+            <th class="text-left py-1 font-medium">Resultado</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {% for s in historico %}
+          <tr>
+            <td class="py-1.5 pr-3 text-slate-400 font-mono">{{ s.id }}</td>
+            <td class="py-1.5 pr-3 text-slate-700 dark:text-slate-200">{{ s.resumo }}</td>
+            <td class="py-1.5 pr-3 text-slate-500">{{ s.solicitante_nome }}</td>
+            <td class="py-1.5 pr-3">{{ selo(s.status) }}</td>
+            <td class="py-1.5 pr-3 text-slate-500 whitespace-nowrap">{{ s.decidido_por }}{% if s.decidido_em %} · {{ s.decidido_em | data_local }}{% endif %}</td>
+            <td class="py-1.5 text-slate-500">{{ s.resultado }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

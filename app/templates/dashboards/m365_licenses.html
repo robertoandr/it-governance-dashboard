@@ -47,7 +47,9 @@ document.addEventListener('alpine:init', function () {
             body: JSON.stringify(this.form)
           });
           const d = await r.json();
-          if (d.ok) {
+          if (d.ok && d.pendente) {
+            this.msg = d.mensagem;
+          } else if (d.ok) {
             this.msg = 'Salvo!';
             setTimeout(function () { location.reload(); }, 800);
           } else {
