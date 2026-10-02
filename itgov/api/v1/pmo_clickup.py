@@ -11,6 +11,8 @@ from typing import Any
 import requests
 import structlog
 
+from app.services import clickup_tarefas
+
 log = structlog.get_logger(__name__)
 
 CLICKUP_LIST_ID = os.getenv("CLICKUP_LIST_ID", "901321459571")
@@ -174,12 +176,38 @@ def get_cached_pmo() -> dict:
     else:
         tasks = [_parse_task(t) for t in raw_tasks]
         result = _build_summary(tasks)
+        result.update(_por_usuario(raw_tasks))
 
     with _CACHE_LOCK:
         _CACHE["data"] = result
         _CACHE["ts"] = time.monotonic()
 
     return result
+
+
+def _por_usuario(raw_tasks: list[dict]) -> dict[str, Any]:
+    """Totais por responsável com as regras da aba ClickUp de /gov/tarefas.
+
+    Abertas/concluídas vêm do tipo do status no ClickUp (e "cancelado" conta
+    como encerrada), o mesmo critério do trigger do Zabbix para atraso.
+    """
+    hoje = datetime.now(clickup_tarefas.TZ).date()
+    tarefas = [clickup_tarefas.converter(t, hoje) for t in raw_tasks]
+    grupos = clickup_tarefas.agrupar_por_responsavel(tarefas, concluidas_max=0)
+    sem = [t for t in tarefas if not t.responsaveis and t.situacao != "concluida"]
+    return {
+        "por_usuario": [
+            {
+                "nome": g.nome,
+                "abertas": len(g.abertas),
+                "concluidas": g.total_concluidas,
+                "atrasadas": g.atrasadas,
+            }
+            for g in grupos
+        ],
+        "sem_responsavel_abertas": len(sem),
+        "sem_responsavel_atrasadas": sum(1 for t in sem if t.atrasada),
+    }
 
 
 def _build_summary(tasks: list[dict]) -> dict:
@@ -246,6 +274,9 @@ def _empty_result(reason: str = "") -> dict:
         "ativos": [],
         "concluidos": [],
         "todas_tarefas": [],
+        "por_usuario": [],
+        "sem_responsavel_abertas": 0,
+        "sem_responsavel_atrasadas": 0,
         "updated_at": datetime.now(UTC).strftime("%d/%m %H:%M"),
     }
 

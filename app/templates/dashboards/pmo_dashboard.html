@@ -57,6 +57,46 @@
     {% endfor %}
   </div>
 
+  {# Totais por responsável — atraso vira trigger no Zabbix (host "ClickUp — PMO") #}
+  {% if data.por_usuario %}
+  <section aria-labelledby="pmo-por-usuario" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+      <h2 id="pmo-por-usuario" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Por responsável</h2>
+      <a href="{{ url_for('dashboards.zabbix_triggers') }}" class="text-xs text-blue-700 dark:text-blue-400 hover:underline">Atrasos abrem trigger no Zabbix →</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700">
+          <tr>
+            <th scope="col" class="px-5 py-2 font-medium">Pessoa</th>
+            <th scope="col" class="px-5 py-2 font-medium text-right">Abertos</th>
+            <th scope="col" class="px-5 py-2 font-medium text-right">Concluídos</th>
+            <th scope="col" class="px-5 py-2 font-medium text-right">Atrasados</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+          {% for u in data.por_usuario %}
+          <tr>
+            <td class="px-5 py-2 text-slate-800 dark:text-slate-100">{{ u.nome }}</td>
+            <td class="px-5 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{{ u.abertas }}</td>
+            <td class="px-5 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{{ u.concluidas }}</td>
+            <td class="px-5 py-2 text-right tabular-nums {% if u.atrasadas %}font-semibold text-red-700 dark:text-red-400{% else %}text-slate-500 dark:text-slate-400{% endif %}">{{ u.atrasadas }}</td>
+          </tr>
+          {% endfor %}
+          {% if data.sem_responsavel_abertas %}
+          <tr>
+            <td class="px-5 py-2 italic text-slate-500 dark:text-slate-400">Sem responsável</td>
+            <td class="px-5 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{{ data.sem_responsavel_abertas }}</td>
+            <td class="px-5 py-2 text-right text-slate-400">—</td>
+            <td class="px-5 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{{ data.sem_responsavel_atrasadas }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
   {# Taxa de conclusão + por equipe #}
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
     <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 col-span-1">

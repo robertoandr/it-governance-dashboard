@@ -147,3 +147,47 @@ def test_get_cached_pmo_sem_token(monkeypatch: pytest.MonkeyPatch) -> None:
     assert r["has_data"] is False
     assert r["token_ok"] is False
     assert r["reason"] == "token_missing"
+
+
+def test_por_usuario_usa_tipo_do_status_e_conta_sem_responsavel() -> None:
+    def tarefa(id_: str, tipo: str, nome: str, due: datetime | None, pessoas: list[str]) -> dict:
+        return {
+            "id": id_,
+            "name": id_,
+            "status": {"status": nome, "type": tipo},
+            "due_date": _ms(due) if due else None,
+            "assignees": [{"username": p, "email": f"{p}@x"} for p in pessoas],
+        }
+
+    brutas = [
+        tarefa("t1", "custom", "atrasado", _ONTEM - timedelta(days=1), ["ana"]),
+        tarefa("t2", "custom", "cancelado", _ONTEM - timedelta(days=1), ["ana"]),
+        tarefa("t3", "closed", "finalizado", None, ["ana", "bia"]),
+        tarefa("t4", "open", "a fazer", _AMANHA, ["bia"]),
+        tarefa("t5", "open", "a fazer", _ONTEM - timedelta(days=1), []),
+    ]
+    with patch.object(pmo, "_fetch_tasks", return_value=brutas):
+        r = pmo.get_cached_pmo()
+
+    assert r["por_usuario"] == [
+        {"nome": "ana", "abertas": 1, "concluidas": 2, "atrasadas": 1},
+        {"nome": "bia", "abertas": 1, "concluidas": 1, "atrasadas": 0},
+    ]
+    assert (r["sem_responsavel_abertas"], r["sem_responsavel_atrasadas"]) == (1, 1)
+
+
+def test_pagina_pmo_mostra_tabela_por_responsavel(authed_client) -> None:
+    brutas = [
+        {
+            "id": "p1",
+            "name": "Projeto atrasado",
+            "status": {"status": "in progress", "type": "custom"},
+            "due_date": _ms(_ONTEM - timedelta(days=1)),
+            "assignees": [{"username": "Ana Lima", "email": "ana@x"}],
+        }
+    ]
+    with patch.object(pmo, "_fetch_tasks", return_value=brutas):
+        html = authed_client.get("/gov/pmo").get_data(as_text=True)
+    assert "Por responsável" in html
+    assert "Ana Lima" in html
+    assert 'href="/gov/triggers"' in html
