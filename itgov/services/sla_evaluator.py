@@ -212,6 +212,12 @@ def summarize(
     overall = [r.overall for r in results]
     replies = [t.metric_set.reply_business_minutes for t in tickets if t.metric_set]
     replies = [r for r in replies if r is not None]
+    # MTTR em horas corridas (abertura -> solução), como o solicitante percebe
+    resolucoes = [
+        (t.metric_set.solved_at - t.created_at).total_seconds() / 3600
+        for t in tickets
+        if t.metric_set and t.metric_set.solved_at and t.metric_set.solved_at >= t.created_at
+    ]
 
     return SLAMetric(
         total_tickets=len(tickets),
@@ -222,4 +228,5 @@ def summarize(
         resolution_compliance_pct=_compliance([r.resolution for r in results]),
         avg_first_reply_minutes=round(sum(replies) / len(replies), 1) if replies else None,
         window_days=window_days,
+        avg_resolution_hours=round(sum(resolucoes) / len(resolucoes), 1) if resolucoes else None,
     )

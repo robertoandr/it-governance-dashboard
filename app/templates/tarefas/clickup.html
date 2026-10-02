@@ -30,8 +30,8 @@
   <div>
     <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Tarefas</h1>
     <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-      {% if ver_todos %}Tarefas do ClickUp de todas as pessoas, separadas por responsável.
-      {% else %}Suas tarefas no ClickUp (atribuídas a {{ current_user.email }}).{% endif %}
+      {% if ver_todos %}Tarefas da lista Projetos (TI) no ClickUp, separadas por responsável.
+      {% else %}Suas tarefas na lista Projetos (TI) do ClickUp (atribuídas a {{ current_user.email }}).{% endif %}
     </p>
   </div>
 
@@ -101,7 +101,7 @@
   <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-10 text-center">
     <p class="font-medium text-slate-700 dark:text-slate-200">Nenhuma tarefa no ClickUp</p>
     <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
-      {% if ver_todos %}Nenhuma tarefa com responsável no workspace.
+      {% if ver_todos %}Nenhuma tarefa com responsável na lista Projetos (TI).
       {% else %}Não há tarefas atribuídas a {{ current_user.email }}. Confira se o seu usuário no ClickUp usa o mesmo e-mail.{% endif %}
     </p>
   </div>

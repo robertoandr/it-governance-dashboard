@@ -85,6 +85,17 @@ class CacheSWR(Generic[T]):  # noqa: UP046 — o CI também roda em Python 3.11 
 
         threading.Thread(target=_rodar, daemon=True).start()
 
+    def atualizar_agora(self, carregar: Callable[[], T]) -> T:
+        """Busca na origem já, esperando o resultado (ex.: botão "Atualizar").
+
+        Falha da origem não apaga o valor anterior; devolve o que ficou valendo.
+        """
+        with self._lock:
+            self._atualizando = True
+        self._atualizar(carregar)
+        with self._lock:
+            return self._valor  # type: ignore[return-value]
+
     def limpar(self) -> None:
         """Esquece o valor guardado (usado em testes)."""
         with self._lock:

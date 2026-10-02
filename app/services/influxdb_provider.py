@@ -162,16 +162,7 @@ class InfluxDBMetricsProvider:
                     "weight": 1.5,
                     "trend": "stable",
                 },
-                {
-                    "id": "mttr",
-                    "label": "MTTR (tempo médio de recuperação)",
-                    "value": 73.0,
-                    "raw_value": None,
-                    "unit": "h",
-                    "source": "coming_soon",
-                    "weight": 2.5,
-                    "trend": "stable",
-                },
+                _componente_mttr(_cache_zendesk_sla.get(self._zendesk_sla_stats).get("mttr_hours")),
                 {
                     "id": "change_success_rate",
                     "label": "Taxa de sucesso de mudanças",
@@ -1257,10 +1248,51 @@ from(bucket: "{self._bucket_raw}")
                 "breached": int(sla.breached),
                 "csat_pct": float(csat_summary.csat_pct) if csat_summary.csat_pct is not None else None,
                 "csat_sample": int(csat_summary.sample_size),
+                "mttr_hours": sla.avg_resolution_hours,
             }
         except Exception as exc:
             log.warning("zendesk_sla_stats_failed", error=str(exc))
             return {}
+
+
+# Meta de MTTR: resolução de prioridade normal do SLA Zendesk (24 h).
+_MTTR_META_HORAS = 24.0
+
+
+def _componente_mttr(mttr_horas: float | None) -> dict[str, Any]:
+    """Componente MTTR a partir do tempo médio de resolução do Zendesk.
+
+    Nota 100 até a meta; acima dela cai na proporção meta/MTTR (48 h = 50).
+    Sem dado do Zendesk o componente fica ``coming_soon`` e sai da média.
+
+    Args:
+        mttr_horas: Média de horas entre abertura e solução (30 dias) ou None.
+
+    Returns:
+        Dict do componente no formato dos demais.
+    """
+    if mttr_horas is None:
+        return {
+            "id": "mttr",
+            "label": "MTTR (tempo médio de recuperação)",
+            "value": 0.0,
+            "raw_value": None,
+            "unit": "h",
+            "source": "coming_soon",
+            "weight": 2.5,
+            "trend": "stable",
+        }
+    nota = 100.0 if mttr_horas <= _MTTR_META_HORAS else _MTTR_META_HORAS / mttr_horas * 100
+    return {
+        "id": "mttr",
+        "label": "MTTR (tempo médio de recuperação)",
+        "value": round(nota, 1),
+        "raw_value": round(mttr_horas, 1),
+        "unit": "h",
+        "source": "zendesk",
+        "weight": 2.5,
+        "trend": "stable",
+    }
 
 
 def aquecer_zendesk_sla() -> None:
