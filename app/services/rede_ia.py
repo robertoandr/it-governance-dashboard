@@ -36,8 +36,7 @@ log = structlog.get_logger(__name__)
 
 LOTE = 25
 ESPERA_FALHA = 600  # segundos sem tentar de novo depois de uma falha
-_lock = threading.Lock()
-_rodando = False
+_ocupado = threading.Lock()  # um lote por vez
 _falhou_em = 0.0
 
 _PROMPT = """Você classifica dispositivos encontrados numa rede corporativa (lojas, shopping, fábrica, escritório).
@@ -120,18 +119,22 @@ def processar_em_segundo_plano(app: Flask, hosts: list[dict[str, Any]]) -> None:
     Não faz nada se a IA estiver desligada, se já houver um lote rodando ou se
     a última tentativa falhou há pouco.
     """
-    global _rodando
-    if not ia_ativa():
+    if not ia_ativa() or time.monotonic() - _falhou_em < ESPERA_FALHA:
         return
-    with _lock:
-        if _rodando or time.monotonic() - _falhou_em < ESPERA_FALHA:
-            return
-        _rodando = True
-    threading.Thread(target=_processar, args=(app, hosts), daemon=True).start()
+    if not _ocupado.acquire(blocking=False):
+        return
+    threading.Thread(target=_rodar, args=(app, hosts), daemon=True).start()
+
+
+def _rodar(app: Flask, hosts: list[dict[str, Any]]) -> None:
+    try:
+        _processar(app, hosts)
+    finally:
+        _ocupado.release()
 
 
 def _processar(app: Flask, hosts: list[dict[str, Any]]) -> None:
-    global _rodando, _falhou_em
+    global _falhou_em
     from app.extensions import db
     from app.models.rede import RedeVisto
 
@@ -155,6 +158,3 @@ def _processar(app: Flask, hosts: list[dict[str, Any]]) -> None:
     except (requests.RequestException, ValueError, KeyError) as exc:
         _falhou_em = time.monotonic()
         log.warning("rede_ia.lote_falhou", erro=str(exc))
-    finally:
-        with _lock:
-            _rodando = False
