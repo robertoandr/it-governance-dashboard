@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -345,7 +346,14 @@ def infra_temperatura_diaria():
 def cftv_monitoring() -> str:
     """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
     from app.models.unidade import DvrUnidade, Unidade
-    from itgov.api.v1.cftv_monitoring import SEM_UNIDADE, get_cached_cftv_summary, montar_visao
+    from itgov.api.v1.cftv_monitoring import (
+        DIAS_HISTORICO,
+        SEM_UNIDADE,
+        formatar_duracao,
+        get_cached_cftv_summary,
+        get_cached_historico_quedas,
+        montar_visao,
+    )
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
@@ -369,6 +377,7 @@ def cftv_monitoring() -> str:
         apelidos={v.dvr: v.apelido for v in vinculos if v.apelido},
         duplicado_de={v.dvr: v.duplicado_de for v in vinculos if v.duplicado_de},
         sede_por_unidade=sede_por_unidade,
+        quedas=get_cached_historico_quedas(),
     )
     selecionada = next((u for u in todas if filtro_raw == str(u.id)), None)
     sede = (selecionada.parent or selecionada) if selecionada else None
@@ -386,6 +395,9 @@ def cftv_monitoring() -> str:
         ver_gravadores=ver_gravadores,
         gravadores=sorted({c["gravador"] for c in visao["cards"] if c["gravador"]} | {v.dvr for v in vinculos}),
         filtro=filtro_raw if filtro is not None else "",
+        dias_historico=DIAS_HISTORICO,
+        agora=time.time(),
+        duracao=formatar_duracao,
     )
 
 

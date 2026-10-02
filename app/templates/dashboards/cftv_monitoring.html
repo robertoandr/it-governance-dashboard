@@ -204,7 +204,8 @@
                 <th class="text-left py-1 pr-2 font-medium">Dispositivo</th>
                 <th class="text-left py-1 pr-2 font-medium">IP</th>
                 <th class="text-left py-1 pr-2 font-medium" title="Modelo ainda não coletado mostra só o fabricante">Modelo</th>
-                <th class="text-left py-1 font-medium">Status</th>
+                <th class="text-left py-1 pr-2 font-medium">Status</th>
+                <th class="text-right py-1 font-medium" title="Quedas de ping nos últimos {{ dias_historico }} dias">Quedas</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
@@ -219,7 +220,9 @@
                 <td class="py-1 pr-2 text-slate-500">
                   {% if d.model %}{{ d.vendor }} {{ d.model }}{% else %}{{ d.vendor or '—' }}{% endif %}
                 </td>
-                <td class="py-1">{{ status_badge(d.status) }}</td>
+                <td class="py-1 pr-2">{{ status_badge(d.status) }}</td>
+                <td class="py-1 text-right font-mono {% if d.historico and d.historico.quedas >= 5 %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}"
+                    {% if d.historico %}title="{{ d.historico.tempo }} offline no total"{% endif %}>{{ d.historico.quedas if d.historico else '—' }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -300,6 +303,7 @@
       <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
       <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Dispositivos offline ({{ visao.down_list | length }})</p>
     </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">O Zabbix continua pingando estes dispositivos a cada minuto; quando um volta, sai desta lista sozinho em até 2 minutos.</p>
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
         <thead>
@@ -308,6 +312,8 @@
             <th class="text-left py-1 pr-3 font-medium">IP</th>
             <th class="text-left py-1 pr-3 font-medium">Tipo</th>
             <th class="text-left py-1 pr-3 font-medium">Gravador</th>
+            <th class="text-left py-1 pr-3 font-medium">Offline há</th>
+            <th class="text-left py-1 pr-3 font-medium">Último ping</th>
             <th class="text-right py-1 font-medium">Problemas</th>
           </tr>
         </thead>
@@ -318,6 +324,8 @@
             <td class="py-1.5 pr-3 text-slate-500 font-mono">{{ d.ip }}</td>
             <td class="py-1.5 pr-3 text-slate-500">{{ d.subcat }}</td>
             <td class="py-1.5 pr-3 text-slate-500">{{ d.gravador or 'Stand Alone' }}</td>
+            <td class="py-1.5 pr-3 text-red-600 dark:text-red-400 whitespace-nowrap">{{ duracao(agora - d.offline_desde) if d.offline_desde else '—' }}</td>
+            <td class="py-1.5 pr-3 text-slate-500 whitespace-nowrap">{{ 'há ' ~ duracao(agora - d.ultimo_ping) if d.ultimo_ping else '—' }}</td>
             <td class="py-1.5 text-right">{% if d.problems %}<span class="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded px-1.5 py-0.5 font-medium">{{ d.problems }}</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
@@ -328,6 +336,46 @@
   {% elif visao.total > 0 %}
   <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 text-sm text-green-700 dark:text-green-400 font-medium">
     Todos os dispositivos deste recorte estão online.
+  </div>
+  {% endif %}
+
+  {# ── Histórico de quedas ─────────────────────────────────────────────────── #}
+  {% if visao.ranking_quedas %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="w-2 h-2 rounded-full bg-orange-500 inline-block"></span>
+      <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Histórico de quedas — últimos {{ dias_historico }} dias ({{ visao.ranking_quedas | length }} dispositivo{{ 's' if visao.ranking_quedas | length != 1 }})</p>
+    </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Quantas vezes cada dispositivo ficou sem ping e por quanto tempo no total. Quem mais caiu aparece primeiro.</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 uppercase">
+            <th class="text-left py-1 pr-3 font-medium">Dispositivo</th>
+            <th class="text-left py-1 pr-3 font-medium">Gravador</th>
+            <th class="text-right py-1 pr-3 font-medium">Quedas</th>
+            <th class="text-right py-1 pr-3 font-medium">Tempo offline</th>
+            <th class="text-left py-1 pr-3 font-medium">Última queda</th>
+            <th class="text-left py-1 font-medium">Agora</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {% for d in visao.ranking_quedas[:20] %}
+          <tr>
+            <td class="py-1.5 pr-3 text-slate-700 dark:text-slate-200">{{ d.name }}</td>
+            <td class="py-1.5 pr-3 text-slate-500">{{ d.gravador or 'Stand Alone' }}</td>
+            <td class="py-1.5 pr-3 text-right font-mono font-semibold {% if d.historico.quedas >= 5 %}text-red-600{% else %}text-slate-700 dark:text-slate-200{% endif %}">{{ d.historico.quedas }}</td>
+            <td class="py-1.5 pr-3 text-right text-slate-500 whitespace-nowrap">{{ d.historico.tempo }}</td>
+            <td class="py-1.5 pr-3 text-slate-500 whitespace-nowrap">{{ d.historico.ultima }}</td>
+            <td class="py-1.5">{{ status_badge(d.status) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if visao.ranking_quedas | length > 20 %}
+      <p class="mt-2 text-xs text-slate-400 text-right">Exibindo 20 de {{ visao.ranking_quedas | length }}. Escolha uma sede para ver os demais.</p>
+      {% endif %}
+    </div>
   </div>
   {% endif %}
 

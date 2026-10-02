@@ -76,6 +76,12 @@ def operador_client(factory_app) -> Iterator:
         yield c
 
 
+@pytest.fixture(autouse=True)
+def _sem_historico_real(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A página busca o histórico de quedas no Zabbix; nos testes, vazio.
+    monkeypatch.setattr(cftv_monitoring, "get_cached_historico_quedas", lambda: {})
+
+
 # ── Model ─────────────────────────────────────────────────────────────────────
 
 
