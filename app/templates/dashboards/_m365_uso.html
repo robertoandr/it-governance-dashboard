@@ -1,0 +1,76 @@
+{# Uso dos apps e serviços M365 (Conferência V2.0 a1). Espera `uso_apps` (UsoM365 ou None). #}
+{% if uso_apps %}
+{% set nomes = {"Office 365": "Qualquer serviço", "Exchange": "E-mail", "OneDrive": "OneDrive", "SharePoint": "SharePoint", "Teams": "Teams", "Yammer": "Viva Engage"} %}
+{% macro barras(itens) %}
+  <div class="space-y-2">
+    {% for i in itens %}
+    <div>
+      <div class="flex items-baseline justify-between text-sm">
+        <span class="text-gray-700 dark:text-slate-200">{{ i.nome }}</span>
+        <span class="tabular-nums"><span class="font-semibold">{{ '%.0f' % i.pct }}%</span>
+          <span class="text-xs text-gray-400">{{ i.usuarios }}/{{ i.total }}</span></span>
+      </div>
+      <div class="h-1.5 rounded-full bg-gray-100 dark:bg-slate-700">
+        <div class="h-1.5 rounded-full {% if i.pct >= 70 %}bg-green-500{% elif i.pct >= 30 %}bg-blue-500{% else %}bg-amber-500{% endif %}" style="width: {{ i.pct }}%"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% endmacro %}
+<div class="mb-6">
+  <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3 px-1">
+    <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide dark:text-slate-300">Uso dos apps — últimos 30 dias</h3>
+    <p class="text-xs text-gray-400">
+      {{ uso_apps.ativas }} de {{ uso_apps.contas }} contas ({{ '%.0f' % uso_apps.pct_ativas }}%) usaram algum serviço
+      {% if uso_apps.atualizado_em %}· relatório da Microsoft de {{ uso_apps.atualizado_em[8:10] }}/{{ uso_apps.atualizado_em[5:7] }}{% endif %}
+    </p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3 dark:text-slate-400">Serviços</p>
+      {{ barras(uso_apps.servicos) }}
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3 dark:text-slate-400">Apps</p>
+      {{ barras(uso_apps.apps) }}
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+      <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3 dark:text-slate-400">Onde usam</p>
+      {{ barras(uso_apps.plataformas) }}
+      <p class="text-[11px] text-gray-400 mt-3">Apps e plataformas: {{ uso_apps.contas_apps }} contas com licença de apps do Microsoft 365.</p>
+    </div>
+  </div>
+
+  {% if uso_apps.meses %}
+  <div class="bg-white rounded-xl shadow p-5 mt-4 dark:bg-slate-800">
+    <p class="text-sm font-semibold text-gray-700 mb-3 dark:text-slate-200">Histórico — média de contas ativas por dia útil</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm tabular-nums">
+        <thead>
+          <tr class="text-left text-xs text-gray-500 border-b dark:text-slate-400 dark:border-slate-700">
+            <th class="py-2 pr-3">Mês</th>
+            {% for c in uso_apps.colunas_historico %}<th class="py-2 pr-3 text-right">{{ nomes.get(c, c) }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in uso_apps.meses | reverse %}
+          <tr class="border-b border-gray-50 dark:border-slate-700/50">
+            <td class="py-1.5 pr-3 text-gray-700 dark:text-slate-200">{{ m.rotulo }}{% if m.parcial %} <span class="text-[10px] text-gray-400">(parcial)</span>{% endif %}</td>
+            {% for c in uso_apps.colunas_historico %}
+            <td class="py-1.5 pr-3 text-right font-mono">
+              {% if c in m.medias %}{{ '%.0f' % m.medias[c] }}{% if uso_apps.contas %} <span class="text-[10px] text-gray-400">{{ '%.0f' % (m.medias[c] / uso_apps.contas * 100) }}%</span>{% endif %}{% else %}—{% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-gray-400 mt-2">
+      Fonte: relatórios de uso do Microsoft 365 (últimos 180 dias). Fins de semana ficam fora da média.
+      O % é sobre as {{ uso_apps.contas }} contas de hoje. Os nomes das contas vêm mascarados pela opção de privacidade do tenant.
+    </p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
