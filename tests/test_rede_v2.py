@@ -139,9 +139,10 @@ def test_latencia_por_unidade() -> None:
 
 
 def test_faixas_fora_da_varredura() -> None:
-    faixas = [("Sede Centro", "172.29.0.0/22"), ("Shopping", "10.41.0.0/16"), ("Casa", "192.168.0.0/24")]
-    fora = faixas_fora_da_varredura(faixas, ["172.29.0.0/22", "192.168.0.1-254", "lixo"])
-    assert fora == [("Shopping", "10.41.0.0/16"), ("Casa", "192.168.0.0/24")]  # .0 e .255 fora do intervalo
+    faixas = [("Sede Centro", "172.29.0.0/16"), ("Shopping", "10.41.0.0/16"), ("Casa", "192.168.0.0/24"),
+              ("Triunfo", "172.17.0.0/16")]  # fmt: skip
+    fora = faixas_fora_da_varredura(faixas, ["172.29.0.0/22", "192.168.0.1-254", "10.41.100.0/24", "lixo"])
+    assert fora == [("Triunfo", "172.17.0.0/16")]  # /16 com alguma sub-rede varrida conta como coberto
 
 
 # ── Montagem (rede_monitoring) ───────────────────────────────────────────────

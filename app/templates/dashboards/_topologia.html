@@ -1,0 +1,98 @@
+{# Topologia lógica: mapa geral (túneis entre unidades) e, por unidade, operadoras → FortiGate → redes → dispositivos #}
+{% set cor_status = {'up': '#16a34a', 'warn': '#d97706', 'degraded': '#dc2626', 'down': '#dc2626'} %}
+<section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 space-y-5">
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Topologia da rede</h2>
+    <span class="text-[11px] text-slate-400">lógica, pelos FortiGates: operadora → firewall → VLAN → dispositivos · física (switch/porta) exige SNMP/LLDP nos switches</span>
+  </div>
+
+  {% if not topologia.unidades and not topologia.pendentes %}
+  <p class="text-sm text-slate-500">Nenhum FortiGate configurado (FORTIGATE_&lt;UNIDADE&gt;_URL e _TOKEN).</p>
+  {% else %}
+
+  {# ── Mapa geral ── #}
+  <div>
+    <p class="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Geral — túneis entre unidades (SLA do SD-WAN)</p>
+    <div class="overflow-x-auto">
+      <svg viewBox="0 0 {{ mapa.largura }} {{ mapa.altura }}" class="w-full max-w-3xl mx-auto text-slate-700 dark:text-slate-200" role="img" aria-label="Mapa geral da rede">
+        {% for a in mapa.arestas %}
+        <line x1="{{ a.x1 }}" y1="{{ a.y1 }}" x2="{{ a.x2 }}" y2="{{ a.y2 }}" stroke="{{ cor_status.get(a.status, '#94a3b8') }}" stroke-width="2.5" {% if a.status == 'down' %}stroke-dasharray="6 5"{% endif %} />
+        <rect x="{{ a.lx - 34 }}" y="{{ a.ly - 10 }}" width="68" height="18" rx="9" class="fill-white dark:fill-slate-800" stroke="{{ cor_status.get(a.status, '#94a3b8') }}" />
+        <text x="{{ a.lx }}" y="{{ a.ly + 3 }}" text-anchor="middle" font-size="10" fill="currentColor">{{ a.rotulo }}</text>
+        {% endfor %}
+        {% for n in mapa.nos %}
+        {% if n.tipo == 'externo' %}
+        <rect x="{{ n.x - 42 }}" y="{{ n.y - 14 }}" width="84" height="28" rx="6" class="fill-slate-100 dark:fill-slate-700" stroke="#94a3b8" />
+        <text x="{{ n.x }}" y="{{ n.y + 4 }}" text-anchor="middle" font-size="11" fill="currentColor">{{ n.nome }}</text>
+        {% else %}
+        <circle cx="{{ n.x }}" cy="{{ n.y }}" r="30" class="{{ 'fill-orange-50 dark:fill-orange-900/40' if n.tipo == 'unidade' else 'fill-slate-100 dark:fill-slate-700' }}" stroke="{{ '#ea580c' if n.ok else '#94a3b8' }}" stroke-width="2" {% if n.tipo == 'pendente' %}stroke-dasharray="4 3"{% endif %} />
+        <text x="{{ n.x }}" y="{{ n.y + 4 }}" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">{{ n.nome }}</text>
+        {% if n.tipo == 'pendente' %}<text x="{{ n.x }}" y="{{ n.y + 46 }}" text-anchor="middle" font-size="9" fill="#94a3b8">token pendente</text>{% endif %}
+        {% endif %}
+        {% endfor %}
+      </svg>
+    </div>
+    {% if topologia.tuneis %}
+    <ul class="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-5 gap-y-1">
+      {% for t in topologia.tuneis %}
+      <li><span class="font-medium text-slate-600 dark:text-slate-300">{{ t.de }} → {{ t.para }}</span> via {{ t.iface }}: {{ '%.1f ms' % t.latency_ms if t.latency_ms is not none else 'sem resposta' }}{% if t.caidos %} · <span class="text-red-600 dark:text-red-400">{{ t.caidos }} de {{ t.membros }} caminhos fora</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  {# ── Por unidade ── #}
+  {% for u in topologia.unidades %}
+  <details class="rounded-lg border border-slate-100 dark:border-slate-700" {{ 'open' if loop.first }}>
+    <summary class="cursor-pointer px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+      {{ u.nome }} <span class="font-normal text-slate-400">· {{ u.fortigate }} {{ u.modelo }} · {{ u.redes|length }} rede{{ 's' if u.redes|length != 1 }} · {{ u.dispositivos }} dispositivo{{ 's' if u.dispositivos != 1 }}</span>
+    </summary>
+    <div class="px-4 pb-4 grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,10rem)_minmax(0,1fr)] items-start">
+      {# Operadoras #}
+      <div class="space-y-1.5">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Operadoras</p>
+        {% for w in u.wans %}
+        <div class="flex items-center justify-between gap-2 rounded border px-2 py-1 text-[11px] {{ 'border-green-200 dark:border-green-800/60' if w.link else 'border-red-200 dark:border-red-800/60' }}">
+          <span class="truncate text-slate-700 dark:text-slate-200">{{ w.operadora }}</span>
+          <span class="font-mono text-slate-400">{{ w.iface }}</span>
+        </div>
+        {% else %}<p class="text-[11px] text-slate-400">—</p>{% endfor %}
+      </div>
+      {# Firewall #}
+      <div class="flex lg:flex-col items-center justify-center gap-2 lg:pt-6">
+        <span class="hidden lg:block text-slate-300 dark:text-slate-600">→</span>
+        <div class="rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-900/30 px-3 py-2 text-center">
+          <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">FortiGate</p>
+          <p class="text-[10px] text-slate-500 font-mono">{{ u.host }}</p>
+        </div>
+        <span class="hidden lg:block text-slate-300 dark:text-slate-600">→</span>
+      </div>
+      {# Redes #}
+      <div>
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Redes (LAN / VLAN)</p>
+        <div class="grid sm:grid-cols-2 gap-2">
+          {% for r in u.redes %}
+          <div class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] {{ 'opacity-60' if not r.ativa }}">
+            <div class="flex items-baseline justify-between gap-2">
+              <span class="font-semibold text-slate-700 dark:text-slate-200 truncate" title="{{ r.iface }}">{{ r.alias or r.iface }}</span>
+              {% if r.vlan %}<span class="text-[10px] bg-slate-100 dark:bg-slate-700 rounded px-1.5">VLAN {{ r.vlan }}</span>{% endif %}
+            </div>
+            <p class="font-mono text-slate-500 dark:text-slate-400">{{ r.cidr }}{% if r.pai %} · {{ r.pai }}{% endif %}</p>
+            <p class="text-slate-500 dark:text-slate-400 mt-0.5">
+              {% if r.total %}<span class="text-slate-700 dark:text-slate-200 font-medium">{{ r.total }}</span> dispositivo{{ 's' if r.total != 1 }} ({{ r.online }} online){% else %}nenhum dispositivo visto{% endif %}
+            </p>
+            {% if r.por_tipo %}
+            <p class="mt-1 flex flex-wrap gap-1">{% for t, n in r.por_tipo.items() %}<span class="bg-slate-100 dark:bg-slate-700 rounded px-1.5">{{ tipo_labels.get(t, t) }} {{ n }}</span>{% endfor %}</p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </details>
+  {% endfor %}
+  {% if topologia.sem_rede %}
+  <p class="text-[11px] text-slate-400">{{ topologia.sem_rede }} dispositivo{{ 's' if topologia.sem_rede != 1 }} fora das redes dos FortiGates lidos{% if topologia.pendentes %} (ex.: {{ topologia.pendentes|join(', ') }}, sem token){% endif %}.</p>
+  {% endif %}
+  {% endif %}
+</section>

@@ -403,7 +403,10 @@ def latencia_por_unidade(
 
 
 def faixas_fora_da_varredura(faixas: list[tuple[str, str]], ranges: list[str]) -> list[tuple[str, str]]:
-    """Faixas de unidade que nenhuma discovery rule ativa do Zabbix cobre.
+    """Faixas de unidade que nenhuma discovery rule ativa do Zabbix varre, nem em parte.
+
+    Uma faixa larga da unidade (ex.: /16) conta como coberta quando a regra
+    varre ao menos uma sub-rede dela — normalmente só as sub-redes em uso.
 
     Args:
         faixas: Pares ``(nome da unidade, cidr)``.
@@ -433,6 +436,6 @@ def faixas_fora_da_varredura(faixas: list[tuple[str, str]], ranges: list[str]) -
         except ValueError:
             continue
         a, b = int(rede.network_address), int(rede.broadcast_address)
-        if not any(ini <= a and b <= fim for ini, fim in cobertos):
+        if not any(ini <= b and a <= fim for ini, fim in cobertos):
             fora.append((nome, str(rede)))
     return fora

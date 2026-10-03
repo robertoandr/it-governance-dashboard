@@ -234,5 +234,27 @@
     </details>
   </div>
 
+  {# ── r5: avaliação de ferramentas ───────────────────────────────────────── #}
+  <details class="{{ card }} p-5">
+    <summary class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Avaliação de ferramentas: Auvik, LogicMonitor, Datadog, Dynatrace</summary>
+    <div class="text-xs text-slate-600 dark:text-slate-300 mt-3 space-y-3">
+      <p><span class="font-semibold">Recomendação: solução própria</span> (Zabbix + API dos FortiGates + este dashboard). Os dados já estão aqui, sem custo de licença e sem dados de rede saindo para SaaS; o que falta é a topologia física (switch/porta), que se resolve com SNMP + LLDP nos switches.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[11px]">
+          <thead><tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
+            <th class="pb-1.5 pr-3 font-medium">Ferramenta</th><th class="pb-1.5 pr-3 font-medium">Foco</th><th class="pb-1.5 pr-3 font-medium">Topologia física</th><th class="pb-1.5 pr-3 font-medium">Cobrança</th><th class="pb-1.5 font-medium">Encaixe aqui</th>
+          </tr></thead>
+          <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+            <tr><td class="py-1.5 pr-3 font-medium">Auvik</td><td class="pr-3">Rede</td><td class="pr-3">Sim (forte)</td><td class="pr-3">Por dispositivo de rede</td><td>Bom para topologia física; duplica o Zabbix</td></tr>
+            <tr><td class="py-1.5 pr-3 font-medium">LogicMonitor</td><td class="pr-3">Infra híbrida</td><td class="pr-3">Sim</td><td class="pr-3">Por recurso</td><td>Bom, mas duplica Zabbix + dashboard</td></tr>
+            <tr><td class="py-1.5 pr-3 font-medium">Datadog</td><td class="pr-3">Observabilidade (apps); rede é módulo</td><td class="pr-3">Parcial</td><td class="pr-3">Por host/dispositivo e volume</td><td>Caro para muitos dispositivos de borda</td></tr>
+            <tr><td class="py-1.5 pr-3 font-medium">Dynatrace</td><td class="pr-3">APM (aplicações)</td><td class="pr-3">Não é o foco</td><td class="pr-3">Por consumo</td><td>Sobra para rede/CFTV</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-slate-500 dark:text-slate-400">Sem preços: dependem de cotação. Reavaliar se a topologia física for obrigatória e os switches não puderem receber SNMP/LLDP (aí Auvik é o caminho mais direto). Documento completo: <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">docs/spikes/avaliacao-monitoramento-rede.md</code>.</p>
+    </div>
+  </details>
+
 </div>{# /space-y-6 #}
 {% endblock %}
