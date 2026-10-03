@@ -925,10 +925,12 @@ def rede_cadastrar_ativo() -> object:
 @login_required
 @require_role("admin", "gestor", "operador")
 def ativos_rede() -> str:
-    """Ativos do inventário separados por unidade, com filtro por unidade e tipo."""
+    """Topologia da rede e ativos do inventário separados por unidade, com filtro por unidade e tipo."""
     from app.models.unidade import Unidade
-    from itgov.api.v1.rede_monitoring import SEM_UNIDADE
+    from itgov.api.v1.rede_monitoring import SEM_UNIDADE, get_cached_rede_summary
+    from itgov.api.v1.rede_topologia import layout_geral, montar_topologia
     from itgov.models.ativo import TIPO_LABELS
+    from itgov.services.fortigate_api import configurados, get_cached_fortigates
 
     todas = Unidade.query.all()
     unidades = [u for u in todas if u.ativo]
@@ -950,8 +952,15 @@ def ativos_rede() -> str:
 
     secoes = [(nome or "Sem unidade", sorted(itens, key=lambda a: a["nome"].lower())) for nome, itens in grupos.items()]
     secoes.sort(key=lambda s: (s[0] == "Sem unidade", s[0]))
+    topologia = montar_topologia(
+        get_cached_fortigates() if configurados()[0] else [],
+        configurados()[1],
+        get_cached_rede_summary().get("hosts", []) if os.getenv("ZABBIX_URL") else [],
+    )
     return render_template(
         "dashboards/ativos_rede.html",
+        topologia=topologia,
+        mapa=layout_geral(topologia),
         secoes=secoes,
         total=sum(len(i) for _, i in secoes),
         unidades=sorted(unidades, key=lambda u: u.caminho),

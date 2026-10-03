@@ -25,6 +25,7 @@ verificação (rede interna, token só de leitura) e isso é registrado no log.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -167,6 +168,46 @@ def montar_wans(interfaces: dict[str, dict], wans: list[dict]) -> list[dict[str,
     return linhas
 
 
+# Interfaces internas do FortiOS que não são redes de usuários (FortiLink/NAC)
+_REDES_DE_SISTEMA = ("nac_segment", "quarantine", "rspan", "fortilink")
+
+
+def montar_redes(cfg: list[dict]) -> list[dict[str, Any]]:
+    """Redes internas do FortiGate (interfaces LAN e VLANs com IP), para a topologia.
+
+    Ficam de fora as WANs, os túneis e as interfaces de sistema (NAC, quarentena,
+    RSPAN do FortiLink).
+
+    Returns:
+        Um dict por rede: ``iface``, ``alias``, ``cidr``, ``gateway``, ``vlan``,
+        ``pai`` e ``ativa``.
+    """
+    redes = []
+    for c in cfg or []:
+        nome = c.get("name", "")
+        ip_mask = (c.get("ip") or "").split()
+        if c.get("role") == "wan" or c.get("type") == "tunnel" or nome.startswith(_REDES_DE_SISTEMA):
+            continue
+        if len(ip_mask) != 2 or ip_mask[0] == "0.0.0.0":  # nosec B104 — valor lido, não bind
+            continue
+        try:
+            rede = ipaddress.ip_network(f"{ip_mask[0]}/{ip_mask[1]}", strict=False)
+        except ValueError:
+            continue
+        redes.append(
+            {
+                "iface": nome,
+                "alias": c.get("alias") or "",
+                "cidr": str(rede),
+                "gateway": ip_mask[0],
+                "vlan": int(c.get("vlanid") or 0),
+                "pai": c.get("interface") or "",
+                "ativa": c.get("status", "up") == "up",
+            }
+        )
+    return sorted(redes, key=lambda r: (ipaddress.ip_network(r["cidr"]).network_address, r["iface"]))
+
+
 def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
     base: dict[str, Any] = {
         "hostid": f"api:{fw['nome']}",
@@ -181,6 +222,7 @@ def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
         "uptime_h": None,
         "sdwan": [],
         "wans": [],
+        "redes": [],
         "problems": [],
         "problem_count": 0,
         "modelo": "",
@@ -189,13 +231,14 @@ def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
     try:
         status = _get(fw, "monitor/system/status") or {}
         perf = _get(fw, "monitor/system/performance/status") or {}
-        wans_cfg = _get(fw, "cmdb/system/interface?format=name|alias|role|ip&filter=role==wan") or []
+        cfg = _get(fw, "cmdb/system/interface?format=name|alias|role|ip|vlanid|interface|type|status") or []
         interfaces = _get(fw, "monitor/system/interface") or {}
         health = _get(fw, "monitor/virtual-wan/health-check") or {}
     except (requests.RequestException, ValueError) as exc:
         log.warning("fortigate_api.leitura_falhou", fortigate=fw["nome"], erro=str(exc))
         return {**base, "erro": str(exc)}
 
+    wans_cfg = [c for c in cfg if c.get("role") == "wan"]
     cpu = (perf.get("cpu") or {}).get("idle")
     mem = perf.get("mem") or {}
     rotulos = {c["name"]: c.get("alias") or c["name"] for c in wans_cfg}
@@ -208,6 +251,7 @@ def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
         "mem_pct": round(mem["used"] / mem["total"] * 100, 1) if mem.get("total") else None,
         "sdwan": montar_sdwan(health, rotulos),
         "wans": montar_wans(interfaces, wans_cfg),
+        "redes": montar_redes(cfg),
         "modelo": status.get("model", ""),
     }
 

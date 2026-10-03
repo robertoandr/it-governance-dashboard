@@ -92,8 +92,18 @@ def test_montar_clientes_junta_dhcp_e_arp() -> None:
 _RESPOSTAS = {
     "monitor/system/status": {"hostname": "FGT60F-Gadens-SHP", "model": "FGT60F"},
     "monitor/system/performance/status": {"cpu": {"idle": 93}, "mem": {"total": 2000, "used": 1000}},
-    "cmdb/system/interface?format=name|alias|role|ip&filter=role==wan": [
-        {"name": "wan1", "alias": "ALGAR", "ip": "189.112.203.34 255.255.255.252"}
+    "cmdb/system/interface?format=name|alias|role|ip|vlanid|interface|type|status": [
+        {"name": "wan1", "alias": "ALGAR", "role": "wan", "ip": "189.112.203.34 255.255.255.252"},
+        {
+            "name": "VLAN10",
+            "alias": "Rede-Corporativa",
+            "role": "lan",
+            "type": "vlan",
+            "ip": "172.29.3.254 255.255.252.0",
+            "vlanid": 10,
+            "interface": "Switch",
+            "status": "up",
+        },
     ],
     "monitor/system/interface": {"wan1": {"link": True, "speed": 1000}},
     "monitor/virtual-wan/health-check": {"Ping_Externo": {"wan1": {"status": "up", "latency": 3.0}}},
@@ -107,6 +117,23 @@ def test_ler_fortigate() -> None:
     assert (r["name"], r["modelo"], r["host"], r["origem"]) == ("FGT60F-Gadens-SHP", "FGT60F", "10.41.1.1", "api")
     assert (r["cpu_pct"], r["mem_pct"], r["api_up"], r["has_data"]) == (7.0, 50.0, True, True)
     assert r["sdwan"][0]["members"][0]["label"] == "ALGAR" and r["wans"][0]["operadora"] == "ALGAR"
+    assert [w["iface"] for w in r["wans"]] == ["wan1"] and r["redes"][0]["cidr"] == "172.29.0.0/22"
+
+
+def test_montar_redes_ignora_wan_tunel_e_sistema() -> None:
+    cfg = [
+        {"name": "wan1", "role": "wan", "ip": "189.112.203.34 255.255.255.252"},
+        {"name": "GDS-SHP-TRF2", "type": "tunnel", "ip": "10.0.0.1 255.255.255.255"},
+        {"name": "nac_segment", "type": "vlan", "ip": "10.255.13.1 255.255.255.0"},
+        {"name": "a", "type": "physical", "ip": "0.0.0.0 0.0.0.0"},
+        {"name": "VLAN110", "alias": "Rede-CFTV", "role": "lan", "type": "vlan", "ip": "172.29.11.254 255.255.255.0",
+         "vlanid": 110, "interface": "Switch", "status": "up"},
+        {"name": "Rede-Interna", "role": "lan", "type": "switch", "ip": "10.41.1.1 255.0.0.0", "status": "up"},
+    ]  # fmt: skip
+    redes = fa.montar_redes(cfg)
+    assert [r["cidr"] for r in redes] == ["10.0.0.0/8", "172.29.11.0/24"]
+    assert redes[1] == {"iface": "VLAN110", "alias": "Rede-CFTV", "cidr": "172.29.11.0/24", "gateway": "172.29.11.254",
+                        "vlan": 110, "pai": "Switch", "ativa": True}  # fmt: skip
 
 
 def test_ler_fortigate_com_falha_mostra_erro() -> None:
