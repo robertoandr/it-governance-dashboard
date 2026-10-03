@@ -55,7 +55,13 @@ _HOSTS = [
 ]
 _DADOS = {
     "enabled": True,
-    "influx": {"has_data": True, "last_scan": "2026-09-25 10:00:00", "total": 4, "hosts": _HOSTS, "history": []},
+    "hosts": _HOSTS,
+    "total": 4,
+    "online": 4,
+    "recentes": 0,
+    "fontes": {"zabbix": 4, "nmap": 0, "nmap_ultimo": None},
+    "ia_ativa": False,
+    "erro_descoberta": "",
     "drules": [],
     "active_drules": [],
     "scan_ranges": [],
@@ -97,7 +103,10 @@ def faixas(factory_app) -> Iterator[dict[str, int]]:
 @pytest.fixture
 def rede(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("ZABBIX_URL", "https://zabbix.test")
-    with patch.object(rede_monitoring, "get_cached_rede_summary", return_value=_DADOS):
+    with (
+        patch.object(rede_monitoring, "get_cached_rede_summary", return_value=_DADOS),
+        patch.object(rede_monitoring, "get_latencia", return_value={"unidades": [], "piores": []}),
+    ):
         yield
 
 
@@ -175,7 +184,7 @@ def test_rede_page_mostra_fila_de_revisao(authed_client, rede, ativos_db, faixas
     html = authed_client.get("/gov/rede").get_data(as_text=True)
     for trecho in (
         "Ativos descobertos",
-        "4 novos",
+        "4 sem cadastro",
         "impressora-rh",
         "Impressora",
         "MAC VMware",
@@ -209,14 +218,15 @@ def test_rede_page_operador_nao_ve_botao_cadastrar(operador_client, rede, ativos
 
 def test_cadastrar_get_pre_preenche_tipo_e_unidade(authed_client, rede, ativos_db, faixas) -> None:
     html = authed_client.get("/gov/rede/cadastrar?ip=172.29.1.20").get_data(as_text=True)
-    assert 'value="impressora-rh"' in html
+    assert 'value="SCE-IMP-001"' in html  # padrão SIGLA-TIPO-NNN
+    assert "impressora-rh" in html  # nome visto na rede vai para a descrição
     assert '<option value="impressora" selected' in html
     assert f'<option value="{faixas["Sede Centro"]}" selected' in html
 
 
 def test_cadastrar_nome_padrao_sem_hostname(authed_client, rede, ativos_db) -> None:
     html = authed_client.get("/gov/rede/cadastrar?ip=10.41.5.9").get_data(as_text=True)
-    assert 'value="camera-10.41.5.9"' in html
+    assert 'value="GER-CAM-001"' in html  # sem unidade: sigla GER
 
 
 def test_cadastrar_post_cria_ativo_com_metadata(authed_client, rede, ativos_db, faixas) -> None:

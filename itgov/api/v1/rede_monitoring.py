@@ -1,11 +1,13 @@
 """Dados de Rede para o dashboard.
 
 Combina:
-- InfluxDB: gov_infra_assets (totais por categoria do último nmap scan)
-             gov_infra_asset_detail (um ponto por IP descoberto)
-- Zabbix API: discovery rules (drules) — configuração e status
+- Zabbix API: descoberta de rede (``dservice``) cruzada com os hosts já
+  monitorados, discovery rules (drules) e itens de ping (latência/perda).
+- InfluxDB: gov_infra_asset_detail do scanner nmap, quando ele roda — os
+  dados dele (MAC, fabricante, portas) completam os do Zabbix.
+- app.db: ``rede_vistos`` (primeira vez que cada IP apareceu e sugestão da IA).
 
-Cache TTL 5min (scan muda no máximo a cada hora).
+Cache TTL 5min (a descoberta do Zabbix roda de hora em hora).
 
 ``montar_descobertos`` cruza cada host com a unidade (faixa de IP mais
 específica) e com o ativo já cadastrado no inventário (pelo IP em metadata).
@@ -17,12 +19,18 @@ import ipaddress
 import os
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
 import structlog
 
+from itgov.api.v1.rede_descoberta import hosts_da_descoberta, latencia_por_unidade
+from itgov.utils.cache_swr import CacheSWR
+
 log = structlog.get_logger(__name__)
+
+RECENTE_DIAS = 7  # IP que apareceu há menos disso é "novo na rede"
 
 _CACHE_TTL = 300  # 5 minutos
 _lock = threading.Lock()
@@ -115,6 +123,93 @@ def _buscar_drules() -> list[dict]:
     except Exception as exc:
         log.warning("rede_monitoring.drules_falhou", erro=str(exc))
         return []
+
+
+def _buscar_descoberta() -> list[dict]:
+    """Hosts da descoberta de rede do Zabbix, já classificados."""
+    dchecks = {
+        c["dcheckid"]: (str(c.get("type", "")), str(c.get("ports", "")))
+        for c in _zbx("dcheck.get", {"output": ["dcheckid", "type", "ports"]})
+    }
+    dservices = _zbx("dservice.get", {"output": ["ip", "dcheckid", "status", "value", "dns", "lastup"]})
+    zhosts = _zbx(
+        "host.get",
+        {"output": ["name"], "selectInterfaces": ["ip"], "selectHostGroups": ["name"], "filter": {"status": "0"}},
+    )
+    monitorados: dict[str, dict] = {}
+    for h in zhosts:
+        for itf in h.get("interfaces", []):
+            if itf.get("ip"):
+                monitorados.setdefault(
+                    itf["ip"], {"nome": h["name"], "grupos": [g["name"] for g in h.get("hostgroups", [])]}
+                )
+    return hosts_da_descoberta(dservices, dchecks, monitorados)
+
+
+def _buscar_medidas_ping() -> list[dict]:
+    """Último ping, perda e disponibilidade em 24 h de cada host com ICMP no Zabbix."""
+    itens = _zbx(
+        "item.get",
+        {
+            "output": ["itemid", "key_", "lastvalue", "hostid"],
+            "search": {"key_": "icmpping"},
+            "startSearch": True,
+            "filter": {"status": "0"},
+            "monitored": True,
+        },
+    )
+    hostids = sorted({i["hostid"] for i in itens})
+    hosts = {
+        h["hostid"]: h
+        for h in _zbx("host.get", {"output": ["hostid", "name"], "hostids": hostids, "selectInterfaces": ["ip"]})
+    }
+    pings = [i["itemid"] for i in itens if i["key_"].split("[")[0] == "icmpping"]
+    disp: dict[str, list[float]] = {}
+    if pings:
+        tendencias = _zbx(
+            "trend.get",
+            {"output": ["itemid", "value_avg"], "itemids": pings, "time_from": int(time.time()) - 86400},
+        )
+        for t in tendencias:
+            disp.setdefault(t["itemid"], []).append(float(t["value_avg"]))
+
+    por_host: dict[str, dict] = {}
+    for i in itens:
+        h = hosts.get(i["hostid"])
+        ip = next((itf["ip"] for itf in (h or {}).get("interfaces", []) if itf.get("ip")), "")
+        if h is None or not ip:
+            continue
+        m = por_host.setdefault(
+            i["hostid"], {"ip": ip, "nome": h["name"], "ms": None, "perda": None, "up": False, "disp_24h": None}
+        )
+        chave = i["key_"].split("[")[0]
+        try:
+            valor = float(i.get("lastvalue") or 0)
+        except ValueError:
+            continue
+        if chave == "icmppingsec":
+            m["ms"] = valor * 1000
+        elif chave == "icmppingloss":
+            m["perda"] = valor
+        elif chave == "icmpping":
+            m["up"] = valor >= 1
+            amostras = disp.get(i["itemid"])
+            if amostras:
+                m["disp_24h"] = sum(amostras) / len(amostras) * 100
+    return list(por_host.values())
+
+
+_cache_ping: CacheSWR[list[dict]] = CacheSWR("rede.ping", _CACHE_TTL, valido=bool)
+
+
+def get_latencia(faixas: list[tuple[int, str]], nomes: dict[int, str]) -> dict[str, Any]:
+    """Latência e estabilidade por unidade (cache de 5 min nas medidas do Zabbix)."""
+    try:
+        medidas = _cache_ping.get(_buscar_medidas_ping)
+    except (requests.RequestException, RuntimeError) as exc:
+        log.warning("rede_monitoring.ping_falhou", erro=str(exc))
+        medidas = []
+    return latencia_por_unidade(medidas, faixas, nomes)
 
 
 # ── InfluxDB ──────────────────────────────────────────────────────────────────
@@ -217,6 +312,7 @@ from(bucket: "{bucket}")
 SEM_UNIDADE = "sem"
 STATUS_NOVO = "novos"
 STATUS_CADASTRADO = "cadastrados"
+STATUS_RECENTE = "recentes"
 
 
 def unidade_do_ip(ip: str, faixas: list[tuple[int, str]]) -> int | None:
@@ -255,12 +351,13 @@ def montar_descobertos(
     """Prepara a fila de revisão da página Rede.
 
     Args:
-        hosts: Hosts de ``_ler_assets_influx``.
+        hosts: Hosts de ``get_cached_rede_summary``.
         faixas: Pares ``(unidade_id, cidr)`` das unidades ativas.
         ativos_por_ip: IP → ``{"id", "nome", "tipo"}`` dos ativos já cadastrados.
         unidades: Id → nome completo da unidade.
         filtro_unidade: Ids aceitos, ``SEM_UNIDADE`` ou None para todas.
-        filtro_status: ``STATUS_NOVO``, ``STATUS_CADASTRADO`` ou "" para todos.
+        filtro_status: ``STATUS_NOVO`` (sem cadastro), ``STATUS_CADASTRADO``,
+            ``STATUS_RECENTE`` (apareceu na rede há pouco) ou "" para todos.
 
     Returns:
         ``hosts`` enriquecidos e filtrados, mais contagens do recorte por unidade.
@@ -277,6 +374,8 @@ def montar_descobertos(
             continue
         if filtro_status == STATUS_CADASTRADO and not ativo:
             continue
+        if filtro_status == STATUS_RECENTE and not h.get("recente"):
+            continue
         linhas.append({**h, "unidade_id": uid, "unidade": unidades.get(uid, "") if uid else "", "ativo": ativo})
 
     novos = sum(1 for linha in linhas if not linha["ativo"])
@@ -284,10 +383,14 @@ def montar_descobertos(
     for linha in linhas:
         por_tipo[linha["tipo_sugerido"]] = por_tipo.get(linha["tipo_sugerido"], 0) + 1
     return {
-        "hosts": sorted(linhas, key=lambda x: (x["ativo"] is not None, x["unidade"] or "~", _ip_key(x["ip"]))),
+        "hosts": sorted(
+            linhas,
+            key=lambda x: (x["ativo"] is not None, not x.get("recente"), x["unidade"] or "~", _ip_key(x["ip"])),
+        ),
         "total": len(linhas),
         "novos": novos,
         "cadastrados": len(linhas) - novos,
+        "recentes": sum(1 for linha in linhas if linha.get("recente")),
         "por_tipo": dict(sorted(por_tipo.items(), key=lambda kv: -kv[1])),
     }
 
@@ -301,32 +404,125 @@ def _ip_key(ip: str) -> tuple[int, int]:
 
 
 def host_descoberto(ip: str) -> dict | None:
-    """Último registro do host ``ip`` na varredura (via cache da página)."""
-    return next((h for h in get_cached_rede_summary()["influx"].get("hosts", []) if h["ip"] == ip), None)
+    """Último registro do host ``ip`` na descoberta (via cache da página)."""
+    return next((h for h in get_cached_rede_summary().get("hosts", []) if h["ip"] == ip), None)
 
 
 # ── Montagem final ─────────────────────────────────────────────────────────────
 
 
-def _buscar_rede() -> dict:
-    influx = _ler_assets_influx()
-    drules = _buscar_drules()
+def _juntar(zabbix: list[dict], nmap: list[dict]) -> list[dict]:
+    """Une as duas fontes por IP; o nmap completa MAC, fabricante e portas.
 
-    # Ranges únicos varridos
+    O tipo vindo do Zabbix vale quando o host já é monitorado lá (sinal mais
+    forte); fora isso, vale o do nmap, que vê MAC e mais portas.
+    """
+    por_ip = {h["ip"]: dict(h) for h in zabbix}
+    for n in nmap:
+        atual = por_ip.get(n["ip"])
+        if atual is None:
+            por_ip[n["ip"]] = {**n, "online": True, "origem": "nmap", "zabbix_grupos": [], "snmp_descr": ""}
+            continue
+        for campo in ("hostname", "vendor", "os_guess", "mac", "portas"):
+            if n.get(campo) and not atual.get(campo):
+                atual[campo] = n[campo]
+        if not atual.get("zabbix_grupos") and n.get("tipo_sugerido") not in (None, "", "outro"):
+            atual["tipo_sugerido"], atual["motivo"] = n["tipo_sugerido"], n.get("motivo", "")
+        atual["origem"] = "zabbix+nmap"
+    return list(por_ip.values())
+
+
+def _utc(dt: datetime) -> datetime:
+    # SQLite devolve datetime sem fuso mesmo gravando com UTC
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _registrar_vistos(hosts: list[dict]) -> dict[str, Any]:
+    """Grava IPs novos em ``rede_vistos`` e devolve o registro de cada IP.
+
+    Na primeira carga (tabela vazia) tudo entra como ``baseline``: o que já
+    estava na rede não aparece como novo.
+    """
+    from flask import has_app_context
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.extensions import db
+    from app.models.rede import RedeVisto
+
+    if not has_app_context():
+        return {}
+    try:
+        vistos = {v.ip: v for v in RedeVisto.query.all()}
+        primeira_carga = not vistos
+        agora = datetime.now(UTC)
+        for h in hosts:
+            v = vistos.get(h["ip"])
+            if v is None:
+                v = RedeVisto(ip=h["ip"], primeiro_visto=agora, ultimo_visto=agora, baseline=primeira_carga)
+                db.session.add(v)
+                vistos[h["ip"]] = v
+            elif h.get("online"):
+                v.ultimo_visto = agora
+        db.session.commit()
+        return vistos
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        log.warning("rede_monitoring.vistos_falhou", erro=str(exc))
+        return {}
+
+
+def _enriquecer(hosts: list[dict], vistos: dict[str, Any], agora: datetime) -> None:
+    """Marca ``recente`` e aplica a sugestão da IA onde as regras não souberam."""
+    limite = agora - timedelta(days=RECENTE_DIAS)
+    for h in hosts:
+        v = vistos.get(h["ip"])
+        h["recente"] = bool(v and not v.baseline and _utc(v.primeiro_visto) >= limite)
+        h["primeiro_visto"] = _utc(v.primeiro_visto).isoformat() if v else ""
+        h["ia_nome"] = (v.ia_nome if v else "") or ""
+        if v and v.ia_tipo and v.ia_tipo != "outro" and h.get("tipo_sugerido") == "outro":
+            h["tipo_sugerido"], h["motivo"], h["por_ia"] = v.ia_tipo, f"IA: {v.ia_motivo}", True
+
+
+def _buscar_rede() -> dict:
+    from flask import current_app, has_app_context
+
+    from app.services.rede_ia import ia_ativa, processar_em_segundo_plano
+
+    drules = _buscar_drules()
+    erro = ""
+    try:
+        zabbix = _buscar_descoberta()
+    except (requests.RequestException, RuntimeError) as exc:
+        log.warning("rede_monitoring.descoberta_falhou", erro=str(exc))
+        zabbix, erro = [], str(exc)
+    try:
+        influx = _ler_assets_influx()
+    except Exception as exc:  # provider do Influx levanta tipos variados (rede, auth, query)
+        log.warning("rede_monitoring.influx_falhou", erro=str(exc))
+        influx = {"has_data": False, "hosts": [], "last_scan": None}
+
+    hosts = _juntar(zabbix, influx.get("hosts", []))
+    _enriquecer(hosts, _registrar_vistos(hosts), datetime.now(UTC))
+    if has_app_context():
+        processar_em_segundo_plano(current_app._get_current_object(), hosts)  # type: ignore[attr-defined]
+
     all_ranges: list[str] = []
     for dr in drules:
         for r in dr["ranges"]:
             if r not in all_ranges:
                 all_ranges.append(r)
 
-    # Conta ranges ativos (drule habilitada)
-    active_drules = [dr for dr in drules if dr["enabled"]]
-
     return {
         "enabled": True,
-        "influx": influx,
+        "hosts": hosts,
+        "total": len(hosts),
+        "online": sum(1 for h in hosts if h.get("online")),
+        "recentes": sum(1 for h in hosts if h.get("recente")),
+        "fontes": {"zabbix": len(zabbix), "nmap": len(influx.get("hosts", [])), "nmap_ultimo": influx.get("last_scan")},
+        "ia_ativa": ia_ativa(),
+        "erro_descoberta": erro,
         "drules": drules,
-        "active_drules": active_drules,
+        "active_drules": [dr for dr in drules if dr["enabled"]],
         "scan_ranges": all_ranges,
     }
 
@@ -346,11 +542,16 @@ def get_cached_rede_summary() -> dict:
         log.warning("rede_monitoring.busca_falhou", erro=str(exc))
         dados = {
             "enabled": False,
-            "influx": {"has_data": False, "total": 0, "hosts": [], "history": []},
+            "hosts": [],
+            "total": 0,
+            "online": 0,
+            "recentes": 0,
+            "fontes": {"zabbix": 0, "nmap": 0, "nmap_ultimo": None},
+            "ia_ativa": False,
+            "erro_descoberta": str(exc),
             "drules": [],
             "active_drules": [],
             "scan_ranges": [],
-            "_erro": str(exc),
         }
     with _lock:
         _cache_data = dados

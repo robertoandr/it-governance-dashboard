@@ -2,162 +2,132 @@
 {% block title %}Rede — Governança de TI 360{% endblock %}
 
 {% block content %}
-{% set inf = data.influx %}
+{% set card = 'bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700' %}
 
 <div class="space-y-6">
 
   {# ── Header ──────────────────────────────────────────────────────────────── #}
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Varredura de Rede</h1>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Rede</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-        Ativos descobertos por nmap &bull; Zabbix Network Discovery
-        {% if inf.last_scan %}
-          &bull; Ultimo scan: <span class="font-medium">{{ inf.last_scan }}</span>
-        {% endif %}
+        {{ data.fontes.zabbix }} IP{{ 's' if data.fontes.zabbix != 1 }} na descoberta do Zabbix (de hora em hora)
+        {% if data.fontes.nmap %}&bull; {{ data.fontes.nmap }} no scanner nmap{% if data.fontes.nmap_ultimo %} ({{ data.fontes.nmap_ultimo }}){% endif %}{% endif %}
       </p>
     </div>
-    <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-      {% if data.active_drules %}
-        <span class="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded px-2 py-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-          {{ data.active_drules|length }} drule(s) ativa(s)
-        </span>
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <span class="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded px-2 py-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>{{ data.online }} respondendo agora
+      </span>
+      {% if data.recentes %}
+      <a href="{{ url_for('dashboards.rede_monitoring', status='recentes') }}" class="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 hover:underline">
+        {{ data.recentes }} novo{{ 's' if data.recentes != 1 }} na rede (7 dias)
+      </a>
+      {% endif %}
+      {% if data.ia_ativa %}
+      <span class="bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-2 py-1" title="Hosts que as regras não classificam vão para a IA">IA ligada</span>
       {% else %}
-        <span class="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
-          Nenhuma drule ativa
-        </span>
+      <span class="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded px-2 py-1" title="Configure REDE_IA_URL e REDE_IA_KEY para ligar">IA desligada · só regras</span>
       {% endif %}
     </div>
   </div>
 
-  {# ── Estado vazio: nunca rodou o collector ────────────────────────────────── #}
-  {% if not inf.has_data %}
-  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
-    <svg class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
-    </svg>
-    <p class="text-slate-600 dark:text-slate-300 font-medium mb-1">Nenhum scan executado ainda</p>
-    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Execute o collector para descobrir ativos na rede.</p>
-    <code class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded px-3 py-1.5 block w-fit mx-auto">
-      python3 collectors/network_discovery.py --scan-now --report
-    </code>
-    <p class="text-xs text-slate-400 mt-3">Ou inicie o servico Docker: <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">docker compose --profile discovery up -d</code></p>
+  {% if data.erro_descoberta %}
+  <div class="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+    Não foi possível ler a descoberta do Zabbix agora: {{ data.erro_descoberta }}
   </div>
   {% endif %}
 
-  {# ── KPI Cards ────────────────────────────────────────────────────────────── #}
-  {% if inf.has_data %}
-  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-    {% set kpis = [
-      ('Total', inf.total, 'text-slate-700 dark:text-slate-200', 'bg-slate-50 dark:bg-slate-800'),
-      ('Linux', inf.linux, 'text-blue-700 dark:text-blue-400', 'bg-blue-50 dark:bg-blue-900/20'),
-      ('Windows', inf.windows, 'text-sky-700 dark:text-sky-400', 'bg-sky-50 dark:bg-sky-900/20'),
-      ('Rede/FW', inf.rede, 'text-purple-700 dark:text-purple-400', 'bg-purple-50 dark:bg-purple-900/20'),
-      ('Databases', inf.databases, 'text-orange-700 dark:text-orange-400', 'bg-orange-50 dark:bg-orange-900/20'),
-      ('Com Agente', inf.com_agente, 'text-green-700 dark:text-green-400', 'bg-green-50 dark:bg-green-900/20'),
-      ('Genericos', inf.genericos, 'text-slate-500 dark:text-slate-400', 'bg-slate-100 dark:bg-slate-700/50'),
-    ] %}
-    {% for label, val, color, bg in kpis %}
-    <div class="rounded-xl border border-slate-200 dark:border-slate-700 {{ bg }} p-4 flex flex-col items-center justify-center text-center">
-      <p class="text-2xl font-bold {{ color }}">{{ val }}</p>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ label }}</p>
-    </div>
+  {# ── Cards por unidade ───────────────────────────────────────────────────── #}
+  {% if cards %}
+  <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+    {% for c in cards %}
+    <a href="{{ url_for('dashboards.rede_monitoring', unidade=c.id if c.id else 'sem') }}" class="{{ card }} p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+      <p class="text-xs font-medium text-slate-500 dark:text-slate-400 truncate" title="{{ c.nome }}">{{ c.nome }}</p>
+      <p class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{{ c.total }}</p>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 space-x-2">
+        <span class="text-green-700 dark:text-green-400">{{ c.online }} online</span>
+        <span>{{ c.sem_cadastro }} sem cadastro</span>
+        {% if c.recentes %}<span class="text-blue-700 dark:text-blue-300">{{ c.recentes }} novo{{ 's' if c.recentes != 1 }}</span>{% endif %}
+      </p>
+    </a>
     {% endfor %}
   </div>
   {% endif %}
 
-  {# ── Linha 2: Distribuicao por categoria + Discovery Rules ────────────────── #}
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  {% if faixas_fora %}
+  <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+    A descoberta do Zabbix ainda não varre estas faixas — inclua-as na regra <strong>{{ data.active_drules[0].name if data.active_drules else 'de discovery' }}</strong> (Coleta de dados → Descoberta) para ver os dispositivos delas:
+    {% for nome, cidr in faixas_fora %}<code class="bg-white/60 dark:bg-slate-800 rounded px-1.5 py-0.5 ml-1">{{ cidr }}</code> <span class="text-amber-600 dark:text-amber-400">{{ nome }}</span>{% endfor %}
+  </div>
+  {% endif %}
 
-    {# Distribuicao por categoria #}
-    {% if inf.has_data %}
-    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-4">Distribuicao por Categoria</h2>
-      {% set cats = {} %}
-      {% for h in inf.hosts %}
-        {% if h.category not in cats %}
-          {% set _ = cats.update({h.category: 0}) %}
-        {% endif %}
-        {% set _ = cats.update({h.category: cats[h.category] + 1}) %}
-      {% endfor %}
-      {% if cats %}
-        {% for cat, count in cats.items()|sort(attribute='1', reverse=True) %}
-        {% set pct = (count / inf.total * 100)|round|int if inf.total else 0 %}
-        {% if cat == 'Servidor Linux' or cat == 'Servidor Linux (sem agente)' %}{% set bar_color = 'bg-blue-500' %}
-        {% elif cat == 'Servidor Windows' %}{% set bar_color = 'bg-sky-500' %}
-        {% elif 'Rede' in cat or 'Cisco' in cat or 'MikroTik' in cat or 'Firewall' in cat %}{% set bar_color = 'bg-purple-500' %}
-        {% elif cat == 'Banco de Dados' %}{% set bar_color = 'bg-orange-500' %}
-        {% elif cat == 'Aplicacao Web' %}{% set bar_color = 'bg-teal-500' %}
-        {% else %}{% set bar_color = 'bg-slate-400' %}
-        {% endif %}
-        <div class="mb-2.5">
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-slate-600 dark:text-slate-300">{{ cat }}</span>
-            <span class="font-semibold text-slate-700 dark:text-slate-200">{{ count }} <span class="font-normal text-slate-400">({{ pct }}%)</span></span>
-          </div>
-          <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div class="{{ bar_color }} h-full rounded-full" style="width:{{ pct }}%"></div>
-          </div>
-        </div>
+  {# ── Latência e estabilidade ─────────────────────────────────────────────── #}
+  <div class="{{ card }} p-5 space-y-4">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Latência e estabilidade por unidade</h2>
+      <span class="text-[11px] text-slate-400">ping do Zabbix nos hosts monitorados · disponibilidade = % de pings ok em 24 h</span>
+    </div>
+    {% if latencia.unidades %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
+            <th class="pb-2 pr-3 font-medium">Unidade</th>
+            <th class="pb-2 pr-3 font-medium text-right">Hosts</th>
+            <th class="pb-2 pr-3 font-medium text-right">Offline</th>
+            <th class="pb-2 pr-3 font-medium text-right">Média</th>
+            <th class="pb-2 pr-3 font-medium text-right">p95</th>
+            <th class="pb-2 pr-3 font-medium text-right">Máx.</th>
+            <th class="pb-2 pr-3 font-medium text-right">Perda média</th>
+            <th class="pb-2 pr-3 font-medium text-right">Com perda</th>
+            <th class="pb-2 font-medium text-right">Disponib. 24 h</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50 tabular-nums">
+          {% for u in latencia.unidades %}
+          {% set ruim = (u.disp_24h is not none and u.disp_24h < 99) or (u.perda_media or 0) > 1 %}
+          <tr>
+            <td class="py-2 pr-3 text-slate-700 dark:text-slate-200">{{ u.nome }}</td>
+            <td class="py-2 pr-3 text-right">{{ u.hosts }}</td>
+            <td class="py-2 pr-3 text-right {{ 'text-red-600 dark:text-red-400 font-semibold' if u.offline }}">{{ u.offline }}</td>
+            <td class="py-2 pr-3 text-right">{{ '%.1f ms' % u.media_ms if u.media_ms is not none else '—' }}</td>
+            <td class="py-2 pr-3 text-right">{{ '%.1f ms' % u.p95_ms if u.p95_ms is not none else '—' }}</td>
+            <td class="py-2 pr-3 text-right">{{ '%.1f ms' % u.max_ms if u.max_ms is not none else '—' }}</td>
+            <td class="py-2 pr-3 text-right">{{ '%.1f%%' % u.perda_media if u.perda_media is not none else '—' }}</td>
+            <td class="py-2 pr-3 text-right {{ 'text-amber-600 dark:text-amber-400' if u.com_perda }}">{{ u.com_perda }}</td>
+            <td class="py-2 text-right font-semibold {{ 'text-red-600 dark:text-red-400' if ruim else 'text-green-700 dark:text-green-400' }}">{{ '%.2f%%' % u.disp_24h if u.disp_24h is not none else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if latencia.piores %}
+    <div>
+      <p class="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Hosts com perda ou acima de 100 ms agora</p>
+      <ul class="text-xs text-slate-600 dark:text-slate-300 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+        {% for m in latencia.piores %}
+        <li class="flex justify-between gap-3 tabular-nums"><span class="truncate" title="{{ m.ip }}">{{ m.nome }}</span><span class="whitespace-nowrap text-slate-500">{{ '%.0f ms' % m.ms if m.ms is not none else '—' }} · {{ '%.0f%%' % (m.perda or 0) }} perda</span></li>
         {% endfor %}
-      {% else %}
-        <p class="text-sm text-slate-400">Sem hosts descobertos</p>
-      {% endif %}
+      </ul>
     </div>
     {% endif %}
-
-    {# Discovery Rules #}
-    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-4">Zabbix Discovery Rules</h2>
-      {% if data.drules %}
-        <div class="space-y-4">
-          {% for dr in data.drules %}
-          <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-3">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ dr.name }}</span>
-              {% if dr.enabled %}
-                <span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded px-2 py-0.5">ativa</span>
-              {% else %}
-                <span class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 rounded px-2 py-0.5">desabilitada</span>
-              {% endif %}
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 space-y-1">
-              <p>Intervalo: <span class="font-medium text-slate-600 dark:text-slate-300">{{ dr.delay }}</span></p>
-              <p>Checks: <span class="font-medium text-slate-600 dark:text-slate-300">{{ dr.checks|join(', ') }}</span></p>
-              <div class="mt-1.5">
-                <p class="mb-1">Ranges varridos:</p>
-                <div class="flex flex-wrap gap-1">
-                  {% for r in dr.ranges %}
-                  <code class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded px-1.5 py-0.5 text-[10px]">{{ r }}</code>
-                  {% endfor %}
-                </div>
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p class="text-sm text-slate-400">Nenhuma discovery rule configurada</p>
-        <p class="text-xs text-slate-400 mt-1">Execute: <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">python3 infra-setup/01_configure_discovery.py</code></p>
-      {% endif %}
-    </div>
-
-  </div>{# /grid #}
+    {% else %}
+    <p class="text-sm text-slate-500">Sem itens de ping no Zabbix para medir.</p>
+    {% endif %}
+  </div>
 
   {# ── Revisão dos hosts descobertos ─────────────────────────────────────────── #}
-  {% if inf.has_data %}
   {% set pode_editar = current_user.role in ('admin', 'gestor') %}
   {% set pill = 'text-xs font-medium px-3 py-1.5 rounded-full border transition-colors' %}
   {% set on = 'bg-blue-600 border-blue-600 text-white' %}
   {% set off = 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' %}
-  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4">
+  <div class="{{ card }} p-5 space-y-4">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
         Ativos descobertos
         <span class="text-slate-400 font-normal ml-1">
-          {{ revisao.novos }} novo{{ 's' if revisao.novos != 1 }} · {{ revisao.cadastrados }} cadastrado{{ 's' if revisao.cadastrados != 1 }}
+          {{ revisao.novos }} sem cadastro · {{ revisao.cadastrados }} cadastrado{{ 's' if revisao.cadastrados != 1 }}{% if revisao.recentes %} · {{ revisao.recentes }} novo{{ 's' if revisao.recentes != 1 }} na rede{% endif %}
         </span>
       </h2>
       <a href="{{ url_for('dashboards.ativos_rede') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Ver ativos de rede →</a>
@@ -178,7 +148,7 @@
       <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
     </nav>
     <nav class="flex flex-wrap items-center gap-2" aria-label="Filtrar por status">
-      {% for valor, rotulo in [('', 'Todos'), ('novos', 'Novos'), ('cadastrados', 'Cadastrados')] %}
+      {% for valor, rotulo in [('', 'Todos'), ('recentes', 'Novos na rede'), ('novos', 'Sem cadastro'), ('cadastrados', 'Cadastrados')] %}
       <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
       {% endfor %}
       {% for t, n in revisao.por_tipo.items() %}
@@ -192,8 +162,8 @@
         <thead>
           <tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
             <th class="pb-2 pr-3 font-medium">IP</th>
-            <th class="pb-2 pr-3 font-medium">Hostname</th>
-            <th class="pb-2 pr-3 font-medium">Fabricante / MAC</th>
+            <th class="pb-2 pr-3 font-medium">Nome visto</th>
+            <th class="pb-2 pr-3 font-medium">Fabricante / SNMP</th>
             <th class="pb-2 pr-3 font-medium">Portas</th>
             <th class="pb-2 pr-3 font-medium">Tipo sugerido</th>
             <th class="pb-2 pr-3 font-medium">Unidade</th>
@@ -203,15 +173,18 @@
         <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
           {% for h in revisao.hosts %}
           <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-            <td class="py-2 pr-3 font-mono text-slate-700 dark:text-slate-200">{{ h.ip }}</td>
-            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title="{{ h.hostname }}">{{ h.hostname if h.hostname and h.hostname != h.ip else '—' }}</td>
+            <td class="py-2 pr-3 font-mono text-slate-700 dark:text-slate-200 whitespace-nowrap">
+              <span class="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle {{ 'bg-green-500' if h.online else 'bg-slate-300 dark:bg-slate-600' }}" title="{{ 'respondendo agora' if h.online else 'não respondeu na última varredura' }}"></span>{{ h.ip }}
+              {% if h.recente %}<span class="ml-1 font-sans text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded px-1.5 py-0.5">novo na rede</span>{% endif %}
+            </td>
+            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title="{{ h.hostname }}">{{ h.ia_nome or (h.hostname if h.hostname and h.hostname != h.ip else '—') }}</td>
             <td class="py-2 pr-3 text-slate-500 dark:text-slate-400 max-w-[200px]">
               <span class="block truncate">{{ h.vendor or h.os_guess[:40] or '—' }}</span>
               {% if h.mac %}<span class="block font-mono text-[10px] text-slate-400">{{ h.mac }}</span>{% endif %}
             </td>
             <td class="py-2 pr-3 font-mono text-slate-500 dark:text-slate-400 max-w-[140px] truncate" title="{{ h.portas }}">{{ h.portas or '—' }}</td>
             <td class="py-2 pr-3">
-              <span class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded px-1.5 py-0.5">{{ tipo_labels.get(h.tipo_sugerido, h.tipo_sugerido) }}</span>
+              <span class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded px-1.5 py-0.5">{{ tipo_labels.get(h.tipo_sugerido, h.tipo_sugerido) }}</span>{% if h.por_ia %}<span class="ml-1 text-[10px] font-semibold text-violet-700 dark:text-violet-300">IA</span>{% endif %}
               {% if h.motivo %}<span class="block text-[10px] text-slate-400 mt-0.5">{{ h.motivo }}</span>{% endif %}
             </td>
             <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{% if h.unidade %}{{ h.unidade }}{% else %}<span class="text-amber-600 dark:text-amber-400">Sem unidade</span>{% endif %}</td>
@@ -221,7 +194,7 @@
               {% elif pode_editar %}
                 <a href="{{ url_for('dashboards.rede_cadastrar_ativo', ip=h.ip) }}" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium rounded px-2.5 py-1">Cadastrar</a>
               {% else %}
-                <span class="text-slate-400">novo</span>
+                <span class="text-slate-400">sem cadastro</span>
               {% endif %}
             </td>
           </tr>
@@ -233,31 +206,31 @@
     <p class="text-sm text-slate-500 text-center py-6">Nenhum host neste recorte.</p>
     {% endif %}
   </div>
-  {% endif %}
 
-  {# ── Como executar o collector ─────────────────────────────────────────────── #}
-  <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Como executar o collector</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-      <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-        <p class="font-medium text-slate-600 dark:text-slate-300 mb-1.5">Scan imediato (terminal)</p>
-        <code class="text-slate-500 dark:text-slate-400 block leading-5">python3 collectors/network_discovery.py --scan-now</code>
+  {# ── Nomenclatura e origem dos dados ─────────────────────────────────────── #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <details class="{{ card }} p-5 group">
+      <summary class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Padrão de nomes dos ativos</summary>
+      <div class="text-xs text-slate-600 dark:text-slate-300 mt-3 space-y-2">
+        <p><code class="bg-slate-100 dark:bg-slate-700 rounded px-1">SIGLA-TIPO-NNN</code> — ex.: <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">SHO-CAM-012</code>. Ao cadastrar, o nome já vem sugerido com o próximo número livre; o nome visto na rede vai para a descrição.</p>
+        <p><span class="font-medium">Unidades:</span> {% for nome, sg in siglas %}<code class="bg-slate-100 dark:bg-slate-700 rounded px-1">{{ sg }}</code> {{ nome }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+        <p><span class="font-medium">Tipos:</span> {% for t, sg in sigla_tipo.items() if t in tipo_labels %}<code class="bg-slate-100 dark:bg-slate-700 rounded px-1">{{ sg }}</code> {{ tipo_labels[t] }}{{ ' · ' if not loop.last }}{% endfor %}</p>
       </div>
-      <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-        <p class="font-medium text-slate-600 dark:text-slate-300 mb-1.5">Dry-run (sem gravar)</p>
-        <code class="text-slate-500 dark:text-slate-400 block leading-5">python3 collectors/network_discovery.py --dry-run --report</code>
+    </details>
+
+    <details class="{{ card }} p-5">
+      <summary class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Como os dispositivos são encontrados e classificados</summary>
+      <div class="text-xs text-slate-600 dark:text-slate-300 mt-3 space-y-2">
+        <p>A regra de descoberta do Zabbix varre as faixas abaixo de hora em hora (ping, portas e SNMP). Cada IP é cruzado com os hosts já monitorados no Zabbix e com o inventário; IP que nunca tinha aparecido ganha o selo <span class="text-blue-700 dark:text-blue-300 font-medium">novo na rede</span> por 7 dias.</p>
+        <p>O tipo é sugerido por regras (grupo no Zabbix, descrição SNMP, portas). {% if data.ia_ativa %}O que as regras não resolvem e tem algum sinal vai para a IA, que sugere tipo e nome.{% else %}A IA para os casos sem regra está desligada (configure <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_URL</code> e <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_KEY</code>).{% endif %} Host que só responde a ping fica como "Outro" até ser revisado.</p>
+        {% for dr in data.drules %}
+        <p class="pt-1 border-t border-slate-100 dark:border-slate-700">
+          <span class="font-medium">{{ dr.name }}</span> — {{ 'ativa' if dr.enabled else 'desabilitada' }}, a cada {{ dr.delay }} · {{ dr.checks|join(', ') }}<br>
+          {% for r in dr.ranges %}<code class="bg-slate-100 dark:bg-slate-700 rounded px-1 mr-1">{{ r }}</code>{% endfor %}
+        </p>
+        {% endfor %}
       </div>
-      <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-        <p class="font-medium text-slate-600 dark:text-slate-300 mb-1.5">Daemon Docker (1h/ciclo)</p>
-        <code class="text-slate-500 dark:text-slate-400 block leading-5">docker compose --profile discovery up -d</code>
-      </div>
-    </div>
-    <p class="text-[10px] text-slate-400 mt-3">
-      Varre <code class="bg-white dark:bg-slate-700 rounded px-1">INFRA_SCAN_RANGES</code> (padrão 172.29.0.0/22) +
-      as faixas de IP de cada <a href="{{ url_for('dashboards.unidades_list') }}" class="underline">unidade</a> &bull;
-      Não cadastra no Zabbix (use <code class="bg-white dark:bg-slate-700 rounded px-1">INFRA_ZABBIX_AUTOREGISTER=true</code> para isso) &bull;
-      Resultado gravado em InfluxDB bucket <code class="bg-white dark:bg-slate-700 rounded px-1">governance_raw</code>
-    </p>
+    </details>
   </div>
 
 </div>{# /space-y-6 #}
