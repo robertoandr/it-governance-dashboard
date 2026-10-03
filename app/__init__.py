@@ -232,6 +232,14 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         aquecer_caches()
         aquecer_zendesk_sla()
 
+    # Uso dos apps M365: três relatórios CSV do Graph, alguns segundos.
+    from app.integrations import graph_configured
+
+    if not settings.app.testing and graph_configured():
+        from itgov.services.m365_uso import aquecer as aquecer_m365_uso
+
+        aquecer_m365_uso()
+
     # CLI commands
     from app.commands import register_commands
 

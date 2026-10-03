@@ -1255,6 +1255,7 @@ def m365_overview() -> str:
     from itgov.api.v1.m365_licenses import get_licenses_summary
     from itgov.api.v1.zabbix_triggers import get_cached_triggers
     from itgov.services.dns_check_service import get_email_security_summary
+    from itgov.services.m365_uso import obter_uso
 
     provider = InfluxDBMetricsProvider()
 
@@ -1313,6 +1314,7 @@ from(bucket: "{provider._bucket_raw}")
         mailbox=mailbox,
         security_alerts=security_alerts,
         dns_check=dns_check,
+        uso_apps=obter_uso() if graph_configured() else None,
     )
 
 
