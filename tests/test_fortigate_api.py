@@ -23,7 +23,7 @@ def env_fortigates(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_configurados_separa_prontos_e_pendentes(env_fortigates) -> None:
     prontos, pendentes = fa.configurados()
-    assert prontos == [{"nome": "Sede", "url": "https://172.29.3.254:5443", "token": "fake-token-sede"}]
+    assert prontos == [{"nome": "Sede", "url": "https://172.29.3.254:5443", "token": "fake-token-sede", "sha256": ""}]
     assert pendentes == ["Triunfo"]
 
 
@@ -121,9 +121,20 @@ def test_get_recusa_status_diferente_de_success() -> None:
     resp = requests.Response()
     resp.status_code = 200
     resp._content = b'{"status": "error", "http_status": 403}'
-    with patch.object(fa.requests, "get", return_value=resp) as get, pytest.raises(ValueError):
+    with patch.object(fa.requests.Session, "get", return_value=resp) as get, pytest.raises(ValueError):
         fa._get(fw, "monitor/system/status")
     assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer fake-token"}
+
+
+def test_impressao_digital_fixa_o_certificado(monkeypatch: pytest.MonkeyPatch, env_fortigates) -> None:
+    monkeypatch.setenv("FORTIGATE_SEDE_SHA256", "1F:90:A2:88")
+    (fw,), _ = fa.configurados()
+    assert fw["sha256"] == "1F:90:A2:88"
+    sessao = fa._sessao(fw)
+    adaptador = sessao.get_adapter("https://172.29.3.254:5443")
+    assert isinstance(adaptador, fa._CertificadoFixo)
+    assert adaptador.poolmanager.connection_pool_kw["assert_fingerprint"] == "1f90a288"
+    assert not isinstance(fa._sessao({**fw, "sha256": ""}).get_adapter("https://x"), fa._CertificadoFixo)
 
 
 def test_sem_fortigate_configurado_nao_busca(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,8 +15,12 @@ Duas leituras, cada uma com cache próprio:
 - ``get_cached_clientes``: concessões DHCP e tabela ARP, que dão nome, MAC e
   classe DHCP aos IPs da página Rede.
 
-Os FortiGates usam certificado autoassinado na interface de gerência, então a
-verificação TLS fica desligada (rede interna, token só de leitura).
+Os FortiGates usam certificado autoassinado na interface de gerência (CN
+"FortiGate", sem o IP), que nenhuma CA valida. Com ``FORTIGATE_<UNIDADE>_SHA256``
+(impressão digital do certificado, ``openssl x509 -fingerprint -sha256``) a
+conexão só é aceita se o certificado for exatamente aquele — protege contra
+intermediário mesmo sem CA. Sem a impressão digital, a conexão segue sem
+verificação (rede interna, token só de leitura) e isso é registrado no log.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from urllib.parse import urlparse
 
 import requests
 import structlog
+from requests.adapters import HTTPAdapter
 
 from itgov.utils.cache_swr import CacheSWR
 
@@ -52,19 +57,43 @@ def configurados() -> tuple[list[dict[str, str]], list[str]]:
         nome = m.group(1).replace("_", " ").title()
         token = os.getenv(f"FORTIGATE_{m.group(1)}_TOKEN", "").strip()
         if token:
-            prontos.append({"nome": nome, "url": url.strip().rstrip("/"), "token": token})
+            sha256 = os.getenv(f"FORTIGATE_{m.group(1)}_SHA256", "").strip()
+            prontos.append({"nome": nome, "url": url.strip().rstrip("/"), "token": token, "sha256": sha256})
         else:
             pendentes.append(nome)
     return prontos, pendentes
 
 
+class _CertificadoFixo(HTTPAdapter):
+    """Aceita só o certificado com a impressão digital SHA-256 informada."""
+
+    def __init__(self, sha256: str) -> None:
+        self._sha256 = sha256.replace(":", "").lower()
+        super().__init__()
+
+    def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["assert_fingerprint"] = self._sha256
+        super().init_poolmanager(*args, **kwargs)
+
+
+def _sessao(fw: dict[str, str]) -> requests.Session:
+    sessao = requests.Session()
+    if fw.get("sha256"):
+        sessao.mount("https://", _CertificadoFixo(fw["sha256"]))
+    else:
+        log.warning("fortigate_api.sem_impressao_digital", fortigate=fw["nome"])
+    return sessao
+
+
 def _get(fw: dict[str, str], caminho: str) -> Any:
-    resp = requests.get(
-        f"{fw['url']}/api/v2/{caminho}",
-        headers={"Authorization": f"Bearer {fw['token']}"},
-        timeout=_TIMEOUT,
-        verify=False,  # nosec B501 # noqa: S501 — certificado autoassinado do FortiGate, rede interna
-    )
+    with _sessao(fw) as sessao:
+        resp = sessao.get(
+            f"{fw['url']}/api/v2/{caminho}",
+            headers={"Authorization": f"Bearer {fw['token']}"},
+            timeout=_TIMEOUT,
+            # Autoassinado: a CA não valida; a confiança vem da impressão digital (_CertificadoFixo)
+            verify=False,  # nosec B501
+        )
     resp.raise_for_status()
     dados = resp.json()
     if dados.get("status") != "success":
