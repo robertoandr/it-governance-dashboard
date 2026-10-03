@@ -19,7 +19,9 @@ _NOMES = ["Sede", "Shopping", "Triunfo"]
         ("Ping_Triunfo", "Triunfo"),
         ("Ping_Matriz", "Sede"),  # apelido
         ("Ping_Shopping", "Shopping"),
-        ("Ping_IDC", "IDC"),  # destino externo
+        ("Ping_IDC", "Opus Cloud"),  # datacenter: Nuvem 1 e 2 são a Opus Cloud
+        ("Ping_Opus", "Opus Cloud"),
+        ("Ping_Datacenter_X", "Datacenter X"),  # externo sem apelido
         ("Ping_Externo", None),
         ("Default_DNS", None),
         ("Teste", None),
@@ -77,7 +79,9 @@ def test_montar_topologia_conta_por_rede_e_monta_tuneis() -> None:
     assert topo["sem_rede"] == 1 and topo["pendentes"] == ["Triunfo"]
 
     tuneis = {(t["de"], t["para"]): t for t in topo["tuneis"]}
-    assert set(tuneis) == {("Sede", "Shopping"), ("Shopping", "Sede"), ("Shopping", "Triunfo"), ("Shopping", "Opus")}
+    assert set(tuneis) == {
+        ("Sede", "Shopping"), ("Shopping", "Sede"), ("Shopping", "Triunfo"), ("Shopping", "Opus Cloud"),
+    }  # fmt: skip
     matriz = tuneis[("Shopping", "Sede")]
     assert (matriz["iface"], matriz["latency_ms"], matriz["status"]) == ("GDS-STS-MTZ2", 2.3, "up")  # o caminho de pé
     assert (matriz["membros"], matriz["caidos"]) == (2, 1)
@@ -87,8 +91,8 @@ def test_montar_topologia_conta_por_rede_e_monta_tuneis() -> None:
 def test_layout_une_ida_e_volta_e_posiciona_externos() -> None:
     mapa = layout_geral(montar_topologia(_FORTIGATES, ["Triunfo"], _HOSTS))
     nos = {n["nome"]: n for n in mapa["nos"]}
-    assert nos["Triunfo"]["tipo"] == "pendente" and nos["Opus"]["tipo"] == "externo"
-    assert nos["Opus"]["y"] == mapa["altura"] - 22
+    assert nos["Triunfo"]["tipo"] == "pendente" and nos["Opus Cloud"]["tipo"] == "externo"
+    assert nos["Opus Cloud"]["y"] == mapa["altura"] - 22
     assert len(mapa["arestas"]) == 3  # Sede↔Shopping vira uma só
     rotulos = sorted(a["rotulo"] for a in mapa["arestas"])
     assert rotulos == ["2 ms", "2 ms", "sem resposta"]

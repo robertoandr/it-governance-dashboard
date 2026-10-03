@@ -18,8 +18,8 @@ import math
 import unicodedata
 from typing import Any
 
-# Destino do SLA "Ping_<x>" → nome do FortiGate, quando o apelido difere
-APELIDOS = {"matriz": "sede", "mtz": "sede"}
+# Destino do SLA "Ping_<x>" → nome exibido, quando o apelido difere (FortiGate ou unidade sem FortiGate)
+APELIDOS = {"matriz": "Sede", "mtz": "Sede", "opus": "Opus Cloud", "idc": "Opus Cloud"}
 # SLAs que medem internet, não um túnel
 _SLAS_INTERNET = {"externo", "teste"}
 
@@ -36,19 +36,21 @@ def destino_do_sla(sla: str, nomes: list[str]) -> str | None:
         nomes: Nomes dos FortiGates (configurados e pendentes).
 
     Returns:
-        O nome do FortiGate, o destino externo (ex.: "IDC") ou None quando o SLA
-        não é de túnel (``Default_*``, ``Ping_Externo``).
+        O nome do FortiGate, o destino externo (ex.: "Opus Cloud", para onde
+        apontam ``Ping_Opus`` e ``Ping_IDC``) ou None quando o SLA não é de
+        túnel (``Default_*``, ``Ping_Externo``).
     """
     if not sla.lower().startswith("ping_"):
         return None
     alvo = sla[5:].replace("_", " ").strip()
-    chave = APELIDOS.get(_norm(alvo), _norm(alvo))
-    if not alvo or chave in _SLAS_INTERNET:
+    if not alvo or _norm(alvo) in _SLAS_INTERNET:
         return None
+    exibido = APELIDOS.get(_norm(alvo), alvo)
+    chave = _norm(exibido)
     for nome in nomes:
         if _norm(nome) == chave or chave in _norm(nome) or _norm(nome) in chave:
             return nome
-    return alvo
+    return exibido
 
 
 def _melhor_rede(ip: str, redes: list[tuple[str, int, ipaddress.IPv4Network | ipaddress.IPv6Network]]) -> str | None:
