@@ -51,6 +51,7 @@ SIGLA_TIPO: dict[str, str] = {
     "impressora": "IMP",
     "camera": "CAM",
     "endpoint": "EST",
+    "movel": "MOV",
     "app": "APP",
     "licenca": "LIC",
     "outro": "DSP",
@@ -171,6 +172,10 @@ def classificar(host: dict[str, Any]) -> tuple[str, str]:
         if "linux" in descr:
             return "servidor", "SNMP Linux"
 
+    por_dhcp = _pelo_dhcp(host.get("vci") or "", host.get("hostname") or "")
+    if por_dhcp:
+        return por_dhcp
+
     servidor = sorted(portas & PORTAS_SERVIDOR)
     if servidor:
         return "servidor", f"portas {servidor}"
@@ -181,11 +186,75 @@ def classificar(host: dict[str, Any]) -> tuple[str, str]:
     return "outro", "só responde a ping"
 
 
+# Nome de host (DHCP) → tipo; a ordem importa (celular antes de "estação")
+_NOMES = (
+    (re.compile(r"IPHONE|IPAD|GALAXY|REDMI|XIAOMI|MOTO[ -]?[A-Z0-9]|POCO|ANDROID", re.I), "movel", "celular/tablet"),
+    (re.compile(r"PRINTER|IMPRESSORA|EPSON|RICOH|LEXMARK|^(?:BRN|NPI|HP)[0-9A-F]{6,12}$", re.I),
+     "impressora", "impressora"),
+    (re.compile(r"\b(?:CAM|DVR|NVR)|HIKVISION|INTELBRAS", re.I), "camera", "câmera/DVR"),
+    (re.compile(r"\bSRV|SERVER|SERVIDOR", re.I), "servidor", "servidor"),
+    (re.compile(r"^(?:DESKTOP|LAPTOP|NOTE|NB|PC|WS)[-_]|NOTEBOOK", re.I), "endpoint", "computador"),
+    (re.compile(r"UNIFI|\bUAP|\bAP[-_]", re.I), "ap", "access point"),
+)  # fmt: skip
+
+
+def _pelo_dhcp(vci: str, hostname: str) -> tuple[str, str] | None:
+    """Tipo pela classe DHCP (vci) e pelo nome de host que o próprio aparelho informa."""
+    if hostname:
+        for padrao, tipo, rotulo in _NOMES:
+            if padrao.search(hostname):
+                return tipo, f"nome {hostname} ({rotulo})"
+    baixo = vci.lower()
+    if baixo.startswith("android"):
+        return "movel", f"DHCP {vci}"
+    if baixo.startswith("msft"):
+        return "endpoint", "DHCP Windows (MSFT)"
+    if baixo.startswith("ubnt"):
+        return "ap", "DHCP Ubiquiti"
+    return None
+
+
+def aplicar_clientes(hosts: list[dict[str, Any]], clientes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Completa os hosts com o DHCP/ARP dos FortiGates e acrescenta os que a varredura não viu.
+
+    Nome e MAC só preenchem o que está vazio; o tipo é refeito quando as regras
+    ainda não tinham sinal (``outro``) e o host não é monitorado no Zabbix.
+
+    Args:
+        hosts: Hosts da descoberta (e do nmap).
+        clientes: ``fortigate_api.get_cached_clientes``.
+
+    Returns:
+        A lista de hosts atualizada (mesmos dicts, mais os novos).
+    """
+    por_ip = {h["ip"]: h for h in hosts}
+    for c in clientes:
+        h = por_ip.get(c["ip"])
+        if h is None:
+            h = {
+                "ip": c["ip"], "category": "FortiGate", "hostname": "", "vendor": "", "os_guess": "", "open_ports": 0,
+                "has_agent": False, "has_snmp": False, "has_ssh": False, "mac": "", "portas": "", "scan_time": "",
+                "online": c["fonte"] == "arp", "ultimo_visto": 0, "zabbix_host": "", "zabbix_grupos": [],
+                "snmp_descr": "", "origem": "fortigate", "tipo_sugerido": "outro", "motivo": "",
+            }  # fmt: skip
+            por_ip[c["ip"]] = h
+            hosts.append(h)
+        else:
+            h["origem"] = f"{h.get('origem', 'zabbix')}+fortigate"
+        h["hostname"] = h.get("hostname") or c["hostname"]
+        h["mac"] = h.get("mac") or c["mac"]
+        h["vci"] = c["vci"]
+        h["fortigate"] = c["fortigate"]
+        if h.get("tipo_sugerido") in (None, "", "outro") and not h.get("zabbix_grupos"):
+            h["tipo_sugerido"], h["motivo"] = classificar(h)
+    return hosts
+
+
 def precisa_ia(host: dict[str, Any]) -> bool:
     """Host que as regras não classificaram mas tem algum sinal para a IA analisar."""
     if host.get("tipo_sugerido") != "outro" or host.get("zabbix_grupos"):
         return False
-    return bool(host.get("portas") or host.get("snmp_descr") or host.get("hostname"))
+    return bool(host.get("portas") or host.get("snmp_descr") or host.get("hostname") or host.get("vci"))
 
 
 # ── Nomenclatura ─────────────────────────────────────────────────────────────

@@ -156,6 +156,11 @@
       <h2 class="text-base font-semibold text-slate-700 dark:text-slate-200">Firewalls FortiGate</h2>
       <span class="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-full px-2 py-0.5">{{ fortinet | length }}</span>
     </div>
+    {% if fortigate_pendentes %}
+    <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-3">
+      Token de API pendente: {{ fortigate_pendentes|join(', ') }} (configure <code>FORTIGATE_&lt;UNIDADE&gt;_TOKEN</code>).
+    </p>
+    {% endif %}
 
     <div class="space-y-3">
     {% for fw in fortinet %}
@@ -218,7 +223,8 @@
               </div>
               <div class="min-w-0">
                 <p class="font-semibold text-slate-800 dark:text-slate-100 leading-tight truncate">{{ fw.name }}</p>
-                <code class="text-[11px] text-slate-400 font-mono">{{ fw.host }}</code>
+                <code class="text-[11px] text-slate-400 font-mono">{{ fw.host }}</code>{% if fw.modelo %}<span class="text-[11px] text-slate-400"> · {{ fw.modelo }}</span>{% endif %}{% if fw.origem == 'api' %}<span class="text-[10px] text-slate-400"> · API</span>{% endif %}
+                {% if fw.erro %}<p class="text-[11px] text-red-600 dark:text-red-400 mt-0.5">Falha ao ler a API: {{ fw.erro[:120] }}</p>{% endif %}
               </div>
             </div>
 
@@ -270,6 +276,27 @@
               </span>
             </div>
           </div>
+
+          {# Interfaces WAN (leitura pela API do FortiGate) #}
+          {% if fw.wans %}
+          <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+            <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Links WAN</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+              {% for w in fw.wans %}
+              <div class="rounded-lg border {{ 'border-green-200 dark:border-green-800/60' if w.link else 'border-red-200 dark:border-red-800/60' }} px-3 py-2 text-[11px]">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-semibold text-slate-700 dark:text-slate-200 truncate">{{ w.operadora }}</span>
+                  <span class="inline-flex items-center gap-1 {{ 'text-green-700 dark:text-green-400' if w.link else 'text-red-600 dark:text-red-400' }}">
+                    <span class="w-1.5 h-1.5 rounded-full {{ 'bg-green-500' if w.link else 'bg-red-500' }}"></span>{{ 'link ok' if w.link else 'sem link' }}
+                  </span>
+                </div>
+                <p class="text-slate-500 dark:text-slate-400 font-mono mt-0.5">{{ w.iface }}{% if w.ip %} · {{ w.ip }}{% endif %}{% if w.speed_mbps %} · {{ w.speed_mbps|int }} Mbps{% endif %}</p>
+                <p class="text-slate-400 tabular-nums">↓ {{ w.rx_gb }} GB · ↑ {{ w.tx_gb }} GB{% if w.erros %} · <span class="text-amber-600 dark:text-amber-400">{{ w.erros }} erros</span>{% endif %}</p>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
 
           {# SD-WAN: cards em grade — um card por SLA #}
           {% if fw.sdwan %}

@@ -25,7 +25,7 @@ from typing import Any
 import requests
 import structlog
 
-from itgov.api.v1.rede_descoberta import hosts_da_descoberta, latencia_por_unidade
+from itgov.api.v1.rede_descoberta import aplicar_clientes, hosts_da_descoberta, latencia_por_unidade
 from itgov.utils.cache_swr import CacheSWR
 
 log = structlog.get_logger(__name__)
@@ -432,16 +432,33 @@ def _juntar(zabbix: list[dict], nmap: list[dict]) -> list[dict]:
     return list(por_ip.values())
 
 
+def _clientes_fortigate() -> list[dict]:
+    """DHCP/ARP dos FortiGates; falha de leitura não derruba a página."""
+    from itgov.services.fortigate_api import get_cached_clientes
+
+    try:
+        return get_cached_clientes()
+    except (requests.RequestException, ValueError) as exc:
+        log.warning("rede_monitoring.fortigate_falhou", erro=str(exc))
+        return []
+
+
 def _utc(dt: datetime) -> datetime:
     # SQLite devolve datetime sem fuso mesmo gravando com UTC
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _marco(fortigate: str) -> str:
+    return f"fortigate:{fortigate}"[:45]
 
 
 def _registrar_vistos(hosts: list[dict]) -> dict[str, Any]:
     """Grava IPs novos em ``rede_vistos`` e devolve o registro de cada IP.
 
     Na primeira carga (tabela vazia) tudo entra como ``baseline``: o que já
-    estava na rede não aparece como novo.
+    estava na rede não aparece como novo. O mesmo vale para a primeira leitura
+    de cada FortiGate (marcador ``fortigate:<nome>`` na própria tabela), senão
+    os clientes DHCP de uma unidade apareceriam todos como novos de uma vez.
     """
     from flask import has_app_context
     from sqlalchemy.exc import SQLAlchemyError
@@ -455,14 +472,20 @@ def _registrar_vistos(hosts: list[dict]) -> dict[str, Any]:
         vistos = {v.ip: v for v in RedeVisto.query.all()}
         primeira_carga = not vistos
         agora = datetime.now(UTC)
+        fortigates_novos = {
+            h["fortigate"] for h in hosts if h.get("fortigate") and _marco(h["fortigate"]) not in vistos
+        }
         for h in hosts:
             v = vistos.get(h["ip"])
             if v is None:
-                v = RedeVisto(ip=h["ip"], primeiro_visto=agora, ultimo_visto=agora, baseline=primeira_carga)
+                baseline = primeira_carga or h.get("fortigate") in fortigates_novos
+                v = RedeVisto(ip=h["ip"], primeiro_visto=agora, ultimo_visto=agora, baseline=baseline)
                 db.session.add(v)
                 vistos[h["ip"]] = v
             elif h.get("online"):
                 v.ultimo_visto = agora
+        for nome in fortigates_novos:
+            db.session.add(RedeVisto(ip=_marco(nome), primeiro_visto=agora, ultimo_visto=agora, baseline=True))
         db.session.commit()
         return vistos
     except SQLAlchemyError as exc:
@@ -502,6 +525,8 @@ def _buscar_rede() -> dict:
         influx = {"has_data": False, "hosts": [], "last_scan": None}
 
     hosts = _juntar(zabbix, influx.get("hosts", []))
+    clientes = _clientes_fortigate()
+    aplicar_clientes(hosts, clientes)
     _enriquecer(hosts, _registrar_vistos(hosts), datetime.now(UTC))
     if has_app_context():
         processar_em_segundo_plano(current_app._get_current_object(), hosts)  # type: ignore[attr-defined]
@@ -518,7 +543,12 @@ def _buscar_rede() -> dict:
         "total": len(hosts),
         "online": sum(1 for h in hosts if h.get("online")),
         "recentes": sum(1 for h in hosts if h.get("recente")),
-        "fontes": {"zabbix": len(zabbix), "nmap": len(influx.get("hosts", [])), "nmap_ultimo": influx.get("last_scan")},
+        "fontes": {
+            "zabbix": len(zabbix),
+            "nmap": len(influx.get("hosts", [])),
+            "nmap_ultimo": influx.get("last_scan"),
+            "fortigate": len(clientes),
+        },
         "ia_ativa": ia_ativa(),
         "erro_descoberta": erro,
         "drules": drules,

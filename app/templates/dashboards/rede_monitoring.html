@@ -12,6 +12,7 @@
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Rede</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
         {{ data.fontes.zabbix }} IP{{ 's' if data.fontes.zabbix != 1 }} na descoberta do Zabbix (de hora em hora)
+        {% if data.fontes.fortigate %}&bull; {{ data.fontes.fortigate }} cliente{{ 's' if data.fontes.fortigate != 1 }} no DHCP/ARP dos FortiGates{% endif %}
         {% if data.fontes.nmap %}&bull; {{ data.fontes.nmap }} no scanner nmap{% if data.fontes.nmap_ultimo %} ({{ data.fontes.nmap_ultimo }}){% endif %}{% endif %}
       </p>
     </div>
@@ -163,7 +164,7 @@
           <tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
             <th class="pb-2 pr-3 font-medium">IP</th>
             <th class="pb-2 pr-3 font-medium">Nome visto</th>
-            <th class="pb-2 pr-3 font-medium">Fabricante / SNMP</th>
+            <th class="pb-2 pr-3 font-medium">Fabricante / SNMP / DHCP</th>
             <th class="pb-2 pr-3 font-medium">Portas</th>
             <th class="pb-2 pr-3 font-medium">Tipo sugerido</th>
             <th class="pb-2 pr-3 font-medium">Unidade</th>
@@ -179,7 +180,7 @@
             </td>
             <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title="{{ h.hostname }}">{{ h.ia_nome or (h.hostname if h.hostname and h.hostname != h.ip else '—') }}</td>
             <td class="py-2 pr-3 text-slate-500 dark:text-slate-400 max-w-[200px]">
-              <span class="block truncate">{{ h.vendor or h.os_guess[:40] or '—' }}</span>
+              <span class="block truncate">{{ h.vendor or h.os_guess[:40] or h.vci or '—' }}</span>
               {% if h.mac %}<span class="block font-mono text-[10px] text-slate-400">{{ h.mac }}</span>{% endif %}
             </td>
             <td class="py-2 pr-3 font-mono text-slate-500 dark:text-slate-400 max-w-[140px] truncate" title="{{ h.portas }}">{{ h.portas or '—' }}</td>
@@ -221,8 +222,8 @@
     <details class="{{ card }} p-5">
       <summary class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Como os dispositivos são encontrados e classificados</summary>
       <div class="text-xs text-slate-600 dark:text-slate-300 mt-3 space-y-2">
-        <p>A regra de descoberta do Zabbix varre as faixas abaixo de hora em hora (ping, portas e SNMP). Cada IP é cruzado com os hosts já monitorados no Zabbix e com o inventário; IP que nunca tinha aparecido ganha o selo <span class="text-blue-700 dark:text-blue-300 font-medium">novo na rede</span> por 7 dias.</p>
-        <p>O tipo é sugerido por regras (grupo no Zabbix, descrição SNMP, portas). {% if data.ia_ativa %}O que as regras não resolvem e tem algum sinal vai para a IA, que sugere tipo e nome.{% else %}A IA para os casos sem regra está desligada (configure <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_URL</code> e <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_KEY</code>).{% endif %} Host que só responde a ping fica como "Outro" até ser revisado.</p>
+        <p>A regra de descoberta do Zabbix varre as faixas abaixo de hora em hora (ping, portas e SNMP). Os FortiGates completam com o DHCP/ARP (nome que o aparelho informa, MAC e classe DHCP) e trazem os clientes que não respondem à varredura. Cada IP é cruzado com os hosts já monitorados no Zabbix e com o inventário; IP que nunca tinha aparecido ganha o selo <span class="text-blue-700 dark:text-blue-300 font-medium">novo na rede</span> por 7 dias.</p>
+        <p>O tipo é sugerido por regras (grupo no Zabbix, descrição SNMP, nome e classe DHCP, portas). {% if data.ia_ativa %}O que as regras não resolvem e tem algum sinal vai para a IA, que sugere tipo e nome.{% else %}A IA para os casos sem regra está desligada (configure <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_URL</code> e <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_KEY</code>).{% endif %} Host que só responde a ping fica como "Outro" até ser revisado.</p>
         {% for dr in data.drules %}
         <p class="pt-1 border-t border-slate-100 dark:border-slate-700">
           <span class="font-medium">{{ dr.name }}</span> — {{ 'ativa' if dr.enabled else 'desabilitada' }}, a cada {{ dr.delay }} · {{ dr.checks|join(', ') }}<br>

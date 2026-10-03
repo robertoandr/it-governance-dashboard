@@ -40,7 +40,8 @@ _ocupado = threading.Lock()  # um lote por vez
 _falhou_em = float("-inf")  # monotonic() pode ser menor que ESPERA_FALHA logo após o boot
 
 _PROMPT = """Você classifica dispositivos encontrados numa rede corporativa (lojas, shopping, fábrica, escritório).
-Para cada host recebe: ip, portas TCP abertas, descrição SNMP (sysDescr), nome DNS ou do monitoramento.
+Para cada host recebe: ip, portas TCP abertas, descrição SNMP (sysDescr), nome (DHCP, DNS ou monitoramento),
+classe DHCP (vendor class id) e MAC (o prefixo indica o fabricante).
 Responda SOMENTE com JSON: {"hosts": [{"ip": "...", "tipo": "...", "nome": "...", "motivo": "..."}]}
 - tipo: um destes valores: %(tipos)s. Use "outro" se os sinais não bastarem.
 - nome: nome curto e descritivo do dispositivo (ex.: "Impressora Ricoh IM C2000"), até 60 caracteres.
@@ -55,7 +56,7 @@ def ia_ativa() -> bool:
 
 def assinatura(host: dict[str, Any]) -> str:
     """Resumo dos sinais do host; muda quando vale perguntar de novo."""
-    sinais = [host.get("portas", ""), host.get("snmp_descr", ""), host.get("hostname", "")]
+    sinais = [host.get("portas", ""), host.get("snmp_descr", ""), host.get("hostname", ""), host.get("vci", "")]
     return hashlib.sha256(json.dumps(sinais).encode()).hexdigest()[:32]
 
 
@@ -65,6 +66,8 @@ def _sinais(host: dict[str, Any]) -> dict[str, str]:
         "portas": host.get("portas", ""),
         "snmp": (host.get("snmp_descr") or "")[:300],
         "nome": host.get("hostname", ""),
+        "classe_dhcp": host.get("vci", ""),
+        "mac": host.get("mac", ""),
     }
 
 

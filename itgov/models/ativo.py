@@ -44,7 +44,7 @@ class TipoAtivo(str):
 
 
 # Rótulos exibidos na UI; as chaves são os tipos aceitos. Os de infraestrutura
-# (vm, impressora, camera, ap, firewall, outro) vêm da descoberta de rede.
+# (vm, impressora, camera, ap, firewall, movel, outro) vêm da descoberta de rede.
 TIPO_LABELS: dict[str, str] = {
     "servidor": "Servidor",
     "vm": "Máquina virtual",
@@ -54,6 +54,7 @@ TIPO_LABELS: dict[str, str] = {
     "impressora": "Impressora",
     "camera": "Câmera / DVR",
     "endpoint": "Estação de trabalho",
+    "movel": "Celular / tablet",
     "app": "Aplicação",
     "licenca": "Licença",
     "outro": "Outro",
