@@ -986,11 +986,20 @@ def ativo_rede_remover(ativo_id: UUID) -> object:
 def links_manager() -> str:
     """Render gerenciador de links WAN/Internet."""
     from itgov.api.v1.links_manager import get_cached_links
+    from itgov.services.fortigate_api import configurados, get_cached_fortigates
     from itgov.services.fortinet_service import get_cached_fortinet
 
     data = get_cached_links()
-    fortinet = get_cached_fortinet()
-    return render_template("dashboards/links_manager.html", data=data, fortinet=fortinet)
+    # Zabbix (template FortiGate by HTTP) + leitura direta pela API; a API vale quando há as duas
+    pela_api = get_cached_fortigates()
+    nomes_api = {fw["name"] for fw in pela_api}
+    fortinet = [fw for fw in get_cached_fortinet() if fw["name"] not in nomes_api] + pela_api
+    return render_template(
+        "dashboards/links_manager.html",
+        data=data,
+        fortinet=fortinet,
+        fortigate_pendentes=configurados()[1],
+    )
 
 
 @bp.route("/links/novo", methods=["GET", "POST"])

@@ -400,3 +400,68 @@ def test_dispara_logo_apos_o_boot(factory_app, monkeypatch: pytest.MonkeyPatch) 
         rede_ia.processar_em_segundo_plano(factory_app, [])
     assert t.call_count == 1
     rede_ia._ocupado.release()
+
+
+# ── FortiGate: DHCP/ARP na página Rede ───────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("vci", "hostname", "tipo"),
+    [
+        ("android-dhcp-14", "", "movel"),
+        ("MSFT 5.0", "", "endpoint"),
+        ("MSFT 5.0", "Galaxy-S23", "movel"),  # o nome vale mais que a classe
+        ("", "DESKTOP-7Q2K", "endpoint"),
+        ("", "BRN30055C1A2B3C", "impressora"),
+        ("", "DESKTOP-HPA1B2C3", "endpoint"),  # "HP" no meio não é impressora
+        ("ubnt", "", "ap"),
+        ("", "SRV-ARQUIVOS", "servidor"),
+        ("udhcpc1.21.1", "", "outro"),
+    ],
+)
+def test_classificar_pelo_dhcp(vci: str, hostname: str, tipo: str) -> None:
+    assert classificar({"vci": vci, "hostname": hostname})[0] == tipo
+
+
+def test_aplicar_clientes_completa_e_acrescenta() -> None:
+    from itgov.api.v1.rede_descoberta import aplicar_clientes
+
+    hosts = [
+        {"ip": "10.41.100.5", "hostname": "", "mac": "", "tipo_sugerido": "outro", "zabbix_grupos": [],
+         "origem": "zabbix", "online": True},
+        {"ip": "10.41.100.9", "hostname": "cam-9", "mac": "", "tipo_sugerido": "camera",
+         "zabbix_grupos": ["CFTV/Cameras"], "origem": "zabbix", "online": True},
+    ]  # fmt: skip
+    clientes = [
+        {"ip": "10.41.100.5", "mac": "AA:01", "hostname": "DESKTOP-X", "vci": "MSFT 5.0", "fonte": "dhcp",
+         "fortigate": "Shopping"},
+        {"ip": "10.41.100.9", "mac": "AA:09", "hostname": "android-123", "vci": "android-dhcp-14", "fonte": "dhcp",
+         "fortigate": "Shopping"},
+        {"ip": "10.41.101.7", "mac": "AA:07", "hostname": "", "vci": "android-dhcp-16", "fonte": "dhcp",
+         "fortigate": "Shopping"},
+    ]  # fmt: skip
+    por_ip = {h["ip"]: h for h in aplicar_clientes(hosts, clientes)}
+    assert por_ip["10.41.100.5"]["tipo_sugerido"] == "endpoint" and por_ip["10.41.100.5"]["mac"] == "AA:01"
+    assert por_ip["10.41.100.9"]["tipo_sugerido"] == "camera"  # monitorado no Zabbix não muda
+    assert por_ip["10.41.100.9"]["hostname"] == "cam-9" and por_ip["10.41.100.9"]["origem"] == "zabbix+fortigate"
+    novo = por_ip["10.41.101.7"]
+    assert novo["origem"] == "fortigate" and novo["tipo_sugerido"] == "movel" and not novo["online"]
+
+
+def test_primeira_leitura_do_fortigate_vira_baseline(factory_app) -> None:
+    ips = ["198.51.100.31", "198.51.100.32"]
+    with factory_app.app_context():
+        RedeVisto.query.filter(RedeVisto.ip.like("198.51.100.%")).delete(synchronize_session=False)
+        RedeVisto.query.filter(RedeVisto.ip == "fortigate:Teste").delete()
+        db.session.add(RedeVisto(ip="198.51.100.250", baseline=True))  # tabela não vazia
+        db.session.commit()
+        try:
+            vistos = rede_monitoring._registrar_vistos([{"ip": ips[0], "fortigate": "Teste"}])
+            assert vistos[ips[0]].baseline  # primeira leitura desse FortiGate
+            assert db.session.get(RedeVisto, "fortigate:Teste") is not None
+            vistos = rede_monitoring._registrar_vistos([{"ip": ips[1], "fortigate": "Teste"}])
+            assert not vistos[ips[1]].baseline  # depois disso, IP novo é novo de verdade
+        finally:
+            RedeVisto.query.filter(RedeVisto.ip.like("198.51.100.%")).delete(synchronize_session=False)
+            RedeVisto.query.filter(RedeVisto.ip == "fortigate:Teste").delete()
+            db.session.commit()
