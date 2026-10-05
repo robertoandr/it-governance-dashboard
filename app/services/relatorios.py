@@ -146,7 +146,7 @@ def secao_disponibilidade() -> Secao:
                 tom=_tom_qtd(triggers.get("total")),
                 detalhe=", ".join(f"{k}: {v}" for k, v in contagem.items() if v),
             ),
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Problemas em aberto",
@@ -160,7 +160,7 @@ def secao_disponibilidade() -> Secao:
                         "Sim" if p.get("acknowledged") else "Não",
                     ]
                     for p in problemas
-                ],  # fmt: skip
+                ],
             )
         ],
     )
@@ -177,12 +177,29 @@ def secao_links() -> Secao:
     for fw in fortigates:
         for w in fw.get("wans", []):
             fora += 0 if w.get("link") else 1
-            wans.append([fw.get("unidade", ""), w.get("operadora", ""), w.get("iface", ""),
-                         "Ativo" if w.get("link") else "Sem link", _int(w.get("speed_mbps")), _int(w.get("erros"))])  # fmt: skip
+            wans.append(
+                [
+                    fw.get("unidade", ""),
+                    w.get("operadora", ""),
+                    w.get("iface", ""),
+                    "Ativo" if w.get("link") else "Sem link",
+                    _int(w.get("speed_mbps")),
+                    _int(w.get("erros")),
+                ]
+            )
         for sla in fw.get("sdwan", []):
             for m in sla.get("members", []):
-                slas.append([fw.get("unidade", ""), sla.get("sla", ""), m.get("label", ""), _ms(m.get("latency_ms")),
-                             _ms(m.get("jitter_ms")), _pct(m.get("loss_pct")), m.get("status", "")])  # fmt: skip
+                slas.append(
+                    [
+                        fw.get("unidade", ""),
+                        sla.get("sla", ""),
+                        m.get("label", ""),
+                        _ms(m.get("latency_ms")),
+                        _ms(m.get("jitter_ms")),
+                        _pct(m.get("loss_pct")),
+                        m.get("status", ""),
+                    ]
+                )
     caidos = sum(1 for s in slas if s[-1] == "down")
     return Secao(
         chave="links",
@@ -206,7 +223,7 @@ def secao_links() -> Secao:
                 colunas=["Unidade", "SLA", "Caminho", "Latência", "Jitter", "Perda", "Status"],
                 linhas=slas,
             ),
-        ],  # fmt: skip
+        ],
     )
 
 
@@ -239,7 +256,7 @@ def secao_cftv() -> Secao:
                     [d.get("name", ""), d.get("andar") or d.get("loja", ""), d.get("ip", ""), d.get("gravador", "")]
                     for d in offline
                 ],
-            ),  # fmt: skip
+            ),
             Tabela(
                 titulo="Mais quedas",
                 colunas=["Dispositivo", "Quedas", "Tempo offline", "Última queda", "Ainda fora"],
@@ -253,7 +270,7 @@ def secao_cftv() -> Secao:
                     ]
                     for h, q in ranking[:20]
                 ],
-            ),  # fmt: skip
+            ),
         ],
     )
 
@@ -295,7 +312,7 @@ def secao_sla() -> Secao:
                 valor=_int(sla.get("total_open")),
                 detalhe=f"{_int(sla.get('backlog_breached'))} com SLA vencido",
             ),
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Por prioridade",
@@ -321,12 +338,12 @@ def secao_sla() -> Secao:
                     for chave, nome in prioridades.items()
                     if (p := (sla.get("by_priority") or {}).get(chave))
                 ],
-            ),  # fmt: skip
+            ),
             Tabela(
                 titulo="Idade do backlog",
                 colunas=["Faixa", "Chamados"],
                 linhas=[[faixa, _int(qtd)] for faixa, qtd in idades.items()],
-            ),  # fmt: skip
+            ),
             Tabela(
                 titulo="Chamados abertos mais antigos",
                 colunas=["#", "Assunto", "Prioridade", "Aberto em", "Idade", "SLA vencido"],
@@ -341,7 +358,7 @@ def secao_sla() -> Secao:
                     ]
                     for o in (sla.get("oldest") or [])[:15]
                 ],
-            ),  # fmt: skip
+            ),
         ],
     )
 
@@ -396,7 +413,7 @@ def secao_volume() -> Secao:
                     for r in hist.get("por_solicitante") or []
                 ],
             ),
-        ],  # fmt: skip
+        ],
     )
 
 
@@ -426,7 +443,7 @@ def secao_secure_score() -> Secao:
                 tom="neutro" if variacao is None else ("ok" if variacao >= 0 else "alerta"),
             ),
             Kpi(rotulo="Empresas parecidas", valor=_pct(sc.get("comparative_pct"))),
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Por categoria",
@@ -446,7 +463,7 @@ def secao_secure_score() -> Secao:
                     for r in sc.get("recomendacoes") or []
                 ],
             ),
-        ],  # fmt: skip
+        ],
     )
 
 
@@ -489,7 +506,7 @@ def secao_ameacas() -> Secao:
                 valor=_int(ac.get("patches_critical")),
                 tom=_tom_qtd(ac.get("patches_critical")),
             ),
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Alertas do Defender por severidade",
@@ -527,7 +544,7 @@ def secao_ameacas() -> Secao:
                 colunas=["Equipamento"],
                 linhas=[[s.get("name", "")] for s in ac.get("sem_plano") or []],
             ),
-        ],  # fmt: skip
+        ],
     )
 
 
@@ -543,8 +560,7 @@ def secao_identidade_email() -> Secao:
     def _registro(nome: str) -> list[str]:
         r = dns.get(nome) or {}
         detalhe = (
-            (r.get("policy")
-            and f"política {r['policy']}")
+            (r.get("policy") and f"política {r['policy']}")
             or r.get("record")
             or (f"seletor {r['selector']}" if r.get("selector") else "")
         )
@@ -561,14 +577,14 @@ def secao_identidade_email() -> Secao:
                 tom=_tom_pct(mfa.get("mfa_enabled_pct"), 95, 80),
             ),
             Kpi(rotulo="Domínio", valor=dominio or "não configurado"),
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Proteção do domínio",
                 colunas=["Registro", "Situação", "Valor"],
                 linhas=[_registro(n) for n in ("spf", "dkim", "dmarc")] if dns else [],
             )
-        ],  # fmt: skip
+        ],
     )
 
 
@@ -583,8 +599,10 @@ def secao_licencas() -> Secao:
     resumo = dados.get("summary") or {}
     pagas = [lic for lic in dados.get("licenses") or [] if not lic.get("is_free")]
     pagas.sort(key=lambda lic: -(_num(lic.get("custo_mensal_brl")) or 0))
-    renovando = sorted((lic for lic in pagas if (_num(lic.get("renovacao_dias")) or 9999) <= 90),
-                       key=lambda lic: _num(lic.get("renovacao_dias")) or 0)  # fmt: skip
+    renovando = sorted(
+        (lic for lic in pagas if (_num(lic.get("renovacao_dias")) or 9999) <= 90),
+        key=lambda lic: _num(lic.get("renovacao_dias")) or 0,
+    )
     return Secao(
         chave="licencas",
         titulo="Licenças e custos Microsoft 365",
@@ -603,7 +621,7 @@ def secao_licencas() -> Secao:
                 detalhe=f"{_int(resumo.get('total_consumed'))} de {_int(resumo.get('total_seats'))}",
             ),
             Kpi(rotulo="Renovam em 90 dias", valor=str(len(renovando)), tom="alerta" if renovando else "ok"),
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Licenças pagas",
@@ -630,7 +648,7 @@ def secao_licencas() -> Secao:
                     ]
                     for lic in pagas
                 ],
-            ),  # fmt: skip
+            ),
             Tabela(
                 titulo="Renovações nos próximos 90 dias",
                 colunas=["Licença", "Renova em", "Dias", "Custo mensal"],
@@ -644,7 +662,7 @@ def secao_licencas() -> Secao:
                     for lic in renovando
                 ],
             ),
-        ],  # fmt: skip
+        ],
     )
 
 
@@ -666,7 +684,7 @@ def secao_uso_apps() -> Secao:
                 tom=_tom_pct(uso.pct_ativas, 80, 60),
                 detalhe=f"{uso.ativas} de {uso.contas} contas",
             )
-        ],  # fmt: skip
+        ],
         tabelas=[
             Tabela(
                 titulo="Serviços",
@@ -683,7 +701,7 @@ def secao_uso_apps() -> Secao:
                 colunas=["Mês", *uso.colunas_historico],
                 linhas=[[m.rotulo, *(_int(m.medias.get(c)) for c in uso.colunas_historico)] for m in uso.meses],
             ),
-        ],  # fmt: skip
+        ],
     )
 
 
