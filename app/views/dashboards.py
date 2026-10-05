@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import structlog
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from werkzeug.exceptions import ServiceUnavailable
 
 from app.auth.rbac import require_role
 from app.integrations import graph_configured, zendesk_configured
@@ -244,8 +245,8 @@ def governance_apps() -> str:
 
     try:
         summary = get_cached_app_summary()
-    except RuntimeError:
-        abort(503)
+    except RuntimeError as exc:
+        raise ServiceUnavailable() from exc
 
     return render_template("dashboards/governance_apps.html", summary=summary, uso_apps=obter_uso())
 

@@ -215,3 +215,11 @@ def test_pagina_aplicativos_avisa_quando_o_graph_nao_responde(authed_client) -> 
     ):
         html = authed_client.get("/gov/governance/apps").get_data(as_text=True)
     assert "não responderam agora" in html
+
+
+def test_pagina_aplicativos_503_quando_o_resumo_falha(authed_client) -> None:
+    with (
+        patch("app.views.dashboards.graph_configured", return_value=True),
+        patch("itgov.api.v1.governance_apps.get_cached_app_summary", side_effect=RuntimeError("graph fora")),
+    ):
+        assert authed_client.get("/gov/governance/apps").status_code == 503
