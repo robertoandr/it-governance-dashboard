@@ -1,4 +1,4 @@
-{# Uso dos apps e serviços M365 (Conferência V2.0 a1). Espera `uso_apps` (UsoM365 ou None). #}
+{# Uso dos apps e serviços M365 (Conferência V2.0 a1). Espera `uso_apps`: UsoM365, None (Graph falhou → aviso) ou False (Graph desligado → nada). #}
 {% if uso_apps %}
 {% set nomes = {"Office 365": "Qualquer serviço", "Exchange": "E-mail", "OneDrive": "OneDrive", "SharePoint": "SharePoint", "Teams": "Teams", "Yammer": "Viva Engage"} %}
 {% macro barras(itens) %}
@@ -72,5 +72,13 @@
     </p>
   </div>
   {% endif %}
+</div>
+{% elif uso_apps is none %}
+<div class="bg-white rounded-xl shadow p-5 mb-6 dark:bg-slate-800">
+  <h2 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Uso dos apps e serviços</h2>
+  <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">
+    Os relatórios de uso do Microsoft 365 não responderam agora (o Graph limita as consultas do tenant).
+    Uma nova tentativa é feita sozinha; recarregue a página em alguns minutos.
+  </p>
 </div>
 {% endif %}
