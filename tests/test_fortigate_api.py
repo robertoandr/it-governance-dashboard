@@ -112,9 +112,14 @@ _RESPOSTAS = {
 
 def test_ler_fortigate() -> None:
     fw = {"nome": "Shopping", "url": "https://10.41.1.1", "token": "fake-token"}
-    with patch.object(fa, "_get", side_effect=lambda _fw, caminho: _RESPOSTAS[caminho]):
+    respostas = {**_RESPOSTAS, "monitor/vpn/ipsec": [{"name": "GDS-STS-MTZ2", "rgwy": "45.166.249.159",
+                                                       "proxyid": [{"status": "up"}], "incoming_bytes": 2e9}]}  # fmt: skip
+    with patch.object(fa, "_get", side_effect=lambda _fw, caminho: respostas[caminho]):
         r = fa._ler_fortigate(fw)
     assert (r["name"], r["modelo"], r["host"], r["origem"]) == ("FGT60F-Gadens-SHP", "FGT60F", "10.41.1.1", "api")
+    assert r["ipsec"] == [
+        {"nome": "GDS-STS-MTZ2", "remoto": "45.166.249.159", "status": "up", "rx_gb": 2.0, "tx_gb": 0.0}
+    ]
     assert (r["cpu_pct"], r["mem_pct"], r["api_up"], r["has_data"]) == (7.0, 50.0, True, True)
     assert r["sdwan"][0]["members"][0]["label"] == "ALGAR" and r["wans"][0]["operadora"] == "ALGAR"
     assert [w["iface"] for w in r["wans"]] == ["wan1"] and r["redes"][0]["cidr"] == "172.29.0.0/22"
@@ -134,6 +139,30 @@ def test_montar_redes_ignora_wan_tunel_e_sistema() -> None:
     assert [r["cidr"] for r in redes] == ["10.0.0.0/8", "172.29.11.0/24"]
     assert redes[1] == {"iface": "VLAN110", "alias": "Rede-CFTV", "cidr": "172.29.11.0/24", "gateway": "172.29.11.254",
                         "vlan": 110, "pai": "Switch", "ativa": True}  # fmt: skip
+
+
+def test_montar_ipsec_ignora_antigos_e_le_fase_2() -> None:
+    tuneis = fa.montar_ipsec(
+        [
+            {"name": "TRF-GDS-MTZ2", "proxyid": [{"status": "down"}]},
+            {"name": "GDS-STS-MTZ-OLD", "proxyid": [{"status": "down"}]},
+            {"name": "TRF-GDS-MTZ", "rgwy": "189.112.100.49", "proxyid": [{"status": "down"}, {"status": "up"}]},
+        ]
+    )
+    assert [(t["nome"], t["status"]) for t in tuneis] == [("TRF-GDS-MTZ", "up"), ("TRF-GDS-MTZ2", "down")]
+
+
+def test_ipsec_sem_permissao_nao_derruba_a_leitura() -> None:
+    fw = {"nome": "Shopping", "url": "https://10.41.1.1", "token": "fake-token"}
+
+    def _get(_fw: dict, caminho: str) -> object:
+        if caminho == "monitor/vpn/ipsec":
+            raise ValueError("403")
+        return _RESPOSTAS[caminho]
+
+    with patch.object(fa, "_get", side_effect=_get):
+        r = fa._ler_fortigate(fw)
+    assert r["api_up"] and r["ipsec"] == []
 
 
 def test_ler_fortigate_com_falha_mostra_erro() -> None:

@@ -85,6 +85,7 @@ def test_pagina_apps_separa_os_da_microsoft(authed_client) -> None:
     with (
         patch("app.views.dashboards.graph_configured", return_value=True),
         patch("itgov.api.v1.governance_apps.get_cached_app_summary", return_value=resumo),
+        patch("itgov.services.m365_uso.obter_uso", return_value=None),
     ):
         html = authed_client.get("/gov/governance/apps").get_data(as_text=True)
     assert "ConnectSyncProvisioning_SRV-FS_9b1ca12ca9b4" in html

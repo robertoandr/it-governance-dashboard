@@ -208,6 +208,45 @@ def montar_redes(cfg: list[dict]) -> list[dict[str, Any]]:
     return sorted(redes, key=lambda r: (ipaddress.ip_network(r["cidr"]).network_address, r["iface"]))
 
 
+def montar_ipsec(tuneis: list[dict]) -> list[dict[str, Any]]:
+    """Túneis IPsec (``monitor/vpn/ipsec``) com status e tráfego.
+
+    Túneis antigos (nome com ``OLD``) ficam de fora: estão desligados de propósito.
+
+    Args:
+        tuneis: Resultado cru da API.
+
+    Returns:
+        Um item por túnel: nome, gateway remoto, status (``up`` se alguma fase 2
+        está de pé) e tráfego em GB.
+    """
+    saida = []
+    for t in tuneis:
+        nome = t.get("name") or ""
+        if not nome or "OLD" in nome.upper():
+            continue
+        fases = t.get("proxyid") or []
+        saida.append(
+            {
+                "nome": nome,
+                "remoto": t.get("rgwy") or "",
+                "status": "up" if any(f.get("status") == "up" for f in fases) else "down",
+                "rx_gb": round((t.get("incoming_bytes") or 0) / 1e9, 1),
+                "tx_gb": round((t.get("outgoing_bytes") or 0) / 1e9, 1),
+            }
+        )
+    return sorted(saida, key=lambda t: t["nome"])
+
+
+def _ler_ipsec(fw: dict[str, str]) -> list[dict[str, Any]]:
+    # Opcional: token sem permissão de VPN não derruba o resto da leitura
+    try:
+        return montar_ipsec(_get(fw, "monitor/vpn/ipsec") or [])
+    except (requests.RequestException, ValueError) as exc:
+        log.warning("fortigate_api.ipsec_falhou", fortigate=fw["nome"], erro=str(exc))
+        return []
+
+
 def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
     base: dict[str, Any] = {
         "hostid": f"api:{fw['nome']}",
@@ -223,6 +262,7 @@ def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
         "sdwan": [],
         "wans": [],
         "redes": [],
+        "ipsec": [],
         "problems": [],
         "problem_count": 0,
         "modelo": "",
@@ -252,6 +292,7 @@ def _ler_fortigate(fw: dict[str, str]) -> dict[str, Any]:
         "sdwan": montar_sdwan(health, rotulos),
         "wans": montar_wans(interfaces, wans_cfg),
         "redes": montar_redes(cfg),
+        "ipsec": _ler_ipsec(fw),
         "modelo": status.get("model", ""),
     }
 

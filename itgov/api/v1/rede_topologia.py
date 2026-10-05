@@ -4,7 +4,8 @@ Fontes (já lidas por outros módulos):
 
 - FortiGates pela API (``fortigate_api``): WANs, redes internas (LAN/VLAN com
   IP e máscara) e SD-WAN — os SLAs ``Ping_<destino>`` medem os túneis entre
-  unidades e para datacenters.
+  unidades e para datacenters. Túnel IPsec sem SLA (ex.: Triunfo → Matriz)
+  entra pelo status do IPsec, sem latência.
 - Hosts da página Rede: cada um vai para a rede do FortiGate que o contém.
 
 A topologia é lógica (operadora → FortiGate → VLAN → dispositivos). A física
@@ -22,6 +23,15 @@ from typing import Any
 APELIDOS = {"matriz": "Sede", "mtz": "Sede", "opus": "Opus Cloud", "idc": "Opus Cloud"}
 # SLAs que medem internet, não um túnel
 _SLAS_INTERNET = {"externo", "teste"}
+# Siglas nos nomes dos túneis IPsec (ex.: TRF-GDS-MTZ2) → destino
+SIGLAS_IPSEC = {
+    "MTZ": "Sede",
+    "SHP": "Shopping",
+    "SHOP": "Shopping",
+    "TRF": "Triunfo",
+    "OPS": "Opus Cloud",
+    "AUT": "Autoshop",
+}
 
 
 def _norm(texto: str) -> str:
@@ -45,12 +55,38 @@ def destino_do_sla(sla: str, nomes: list[str]) -> str | None:
     alvo = sla[5:].replace("_", " ").strip()
     if not alvo or _norm(alvo) in _SLAS_INTERNET:
         return None
-    exibido = APELIDOS.get(_norm(alvo), alvo)
+    return _resolver(APELIDOS.get(_norm(alvo), alvo), nomes)
+
+
+def _resolver(exibido: str, nomes: list[str]) -> str:
     chave = _norm(exibido)
     for nome in nomes:
         if _norm(nome) == chave or chave in _norm(nome) or _norm(nome) in chave:
             return nome
     return exibido
+
+
+def destino_do_ipsec(tunel: dict[str, Any], origem: str, wans: dict[str, str], nomes: list[str]) -> str | None:
+    """Para onde vai um túnel IPsec: pelo IP remoto (WAN de outro FortiGate) ou pela sigla no nome.
+
+    Args:
+        tunel: Item de ``fortigate_api.montar_ipsec``.
+        origem: Unidade do FortiGate dono do túnel.
+        wans: IP público de WAN → unidade.
+        nomes: Nomes dos FortiGates (configurados e pendentes).
+
+    Returns:
+        A unidade/destino, ou None quando não dá para saber (ou aponta para a própria unidade).
+    """
+    destino = wans.get(tunel.get("remoto") or "")
+    if destino is None:
+        siglas = [t.rstrip("0123456789") for t in tunel["nome"].upper().split("-")]
+        candidatos = [SIGLAS_IPSEC[s] for s in reversed(siglas) if s in SIGLAS_IPSEC]
+        candidatos = [c for c in candidatos if _norm(_resolver(c, nomes)) != _norm(origem)]
+        if not candidatos:
+            return None
+        destino = _resolver(candidatos[0], nomes)
+    return None if destino == origem else destino
 
 
 def _melhor_rede(ip: str, redes: list[tuple[str, int, ipaddress.IPv4Network | ipaddress.IPv6Network]]) -> str | None:
@@ -140,6 +176,22 @@ def montar_topologia(
                                        "status": m["status"], "membros": (atual or {}).get("membros", 0)}  # fmt: skip
                 tuneis[chave_t]["membros"] += 1
                 tuneis[chave_t]["caidos"] = tuneis[chave_t].get("caidos", 0) + (1 if m["status"] == "down" else 0)
+
+    # Túneis IPsec que nenhum SLA mede: entram com o status do túnel, sem latência
+    wans = {w["ip"]: fw["unidade"] for fw in fortigates for w in fw.get("wans", []) if w.get("ip")}
+    for fw in fortigates:
+        medidos = {m["iface"] for sla in fw.get("sdwan", []) for m in sla["members"]}
+        for ip in fw.get("ipsec", []):
+            destino = destino_do_ipsec(ip, fw["unidade"], wans, nomes)
+            if not destino or ip["nome"] in medidos:
+                continue
+            chave_t = (fw["unidade"], destino)
+            atual = tuneis.setdefault(chave_t, {"de": fw["unidade"], "para": destino, "iface": ip["nome"], "latency_ms": None,
+                                                "status": ip["status"], "membros": 0, "caidos": 0})  # fmt: skip
+            if atual["status"] == "down" and ip["status"] == "up":
+                atual.update(iface=ip["nome"], status="up", latency_ms=None)
+            atual["membros"] += 1
+            atual["caidos"] = atual.get("caidos", 0) + (1 if ip["status"] == "down" else 0)
     return {
         "unidades": unidades,
         "pendentes": list(pendentes),
@@ -182,7 +234,7 @@ def layout_geral(topologia: dict[str, Any], largura: int = 760, altura: int = 36
         arestas.append(
             {
                 "x1": a["x"], "y1": a["y"], "x2": b["x"], "y2": b["y"],
-                "rotulo": f"{min(latencias):.0f} ms" if latencias else "sem resposta",
+                "rotulo": f"{min(latencias):.0f} ms" if latencias else ("IPsec ativo" if any(t["status"] == "up" for t in medidas) else "sem resposta"),
                 "status": min((t["status"] for t in medidas), key=lambda s: ordem.get(s, 0)),
                 "lx": round((a["x"] + b["x"]) / 2), "ly": round((a["y"] + b["y"]) / 2),
             }

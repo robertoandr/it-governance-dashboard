@@ -2,7 +2,9 @@
 
 Busca só as tarefas da lista "Projetos" do espaço TI | Projetos — a mesma
 lista do PMO (``CLICKUP_LIST_ID``), decisão do usuário em 02/10/2026: o
-workspace inteiro trazia tarefas e pessoas de fora da TI. Cada usuário do
+workspace inteiro trazia tarefas e pessoas de fora da TI. Só entram os
+membros dessa lista (conferência de 05/10/2026: tarefas atribuídas a
+pessoas de fora da equipe não aparecem). Cada usuário do
 dashboard vê as tarefas atribuídas ao próprio e-mail; o admin vê todas,
 separadas por pessoa.
 
@@ -207,12 +209,50 @@ async def buscar_tarefas() -> list[dict[str, Any]]:
     return brutas
 
 
+async def buscar_membros() -> set[str]:
+    """E-mails (minúsculos) dos membros da lista de projetos de TI.
+
+    Raises:
+        httpx.HTTPError: Falha de rede ou resposta de erro do ClickUp.
+    """
+    async with httpx.AsyncClient(headers={"Authorization": _token()}, timeout=PRAZO_S) as cliente:
+        resp = await cliente.get(f"{API}/list/{_lista()}/member")
+        resp.raise_for_status()
+    return {(m.get("email") or "").lower() for m in resp.json().get("members") or [] if m.get("email")}
+
+
+def so_da_equipe(tarefas: list[TarefaClickUp], membros: set[str]) -> list[TarefaClickUp]:
+    """Tira das tarefas quem não é membro da lista; some a tarefa que só tinha gente de fora.
+
+    Args:
+        tarefas: Tarefas convertidas.
+        membros: E-mails dos membros da lista (vazio = não filtra).
+
+    Returns:
+        Tarefas sem responsáveis de fora; as sem ninguém atribuído continuam.
+    """
+    if not membros:
+        return tarefas
+    filtradas: list[TarefaClickUp] = []
+    for t in tarefas:
+        da_equipe = [r for r in t.responsaveis if r.email in membros]
+        if t.responsaveis and not da_equipe:
+            continue
+        filtradas.append(t.model_copy(update={"responsaveis": da_equipe}))
+    return filtradas
+
+
+async def _buscar() -> tuple[list[dict[str, Any]], set[str]]:
+    brutas, membros = await asyncio.gather(buscar_tarefas(), buscar_membros())
+    return brutas, membros
+
+
 def _carregar() -> ResultadoClickUp:
     agora = datetime.now(TZ)
     if not _token():
         return ResultadoClickUp(ok=False, motivo="sem_token", atualizado_em=agora)
     try:
-        brutas = asyncio.run(buscar_tarefas())
+        brutas, membros = asyncio.run(_buscar())
     except httpx.HTTPError as exc:
         log.warning("clickup_tarefas.busca_falhou", error=str(exc))
         return ResultadoClickUp(ok=False, motivo="erro", atualizado_em=agora)
@@ -223,6 +263,7 @@ def _carregar() -> ResultadoClickUp:
         if t.id not in vistas:  # paginação pode repetir tarefa alterada no meio da busca
             vistas.add(t.id)
             tarefas.append(t)
+    tarefas = so_da_equipe(tarefas, membros)
     log.info("clickup_tarefas.carregado", total=len(tarefas))
     return ResultadoClickUp(
         ok=True,

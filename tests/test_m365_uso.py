@@ -180,3 +180,38 @@ def test_pagina_m365_sem_graph_nao_mostra_o_bloco(authed_client) -> None:
         resp = authed_client.get("/gov/m365")
     assert resp.status_code == 200
     assert "Uso dos apps" not in resp.get_data(as_text=True)
+
+
+def test_pagina_aplicativos_mostra_o_uso_dos_apps(authed_client) -> None:
+    resumo = {"total_apps": 0, "secrets_expirando_30d": 0, "secrets_expirados": 0, "expirando": []}
+    with (
+        patch("itgov.services.m365_uso.CacheSWR.get", lambda _self, carregar: carregar()),
+        patch.object(mu, "_fetch_token", AsyncMock(return_value="tok")),
+        patch.object(
+            mu,
+            "_baixar",
+            side_effect=lambda _c, _t, url: {
+                mu._URL_SERVICOS: ler_csv(_SERVICOS),
+                mu._URL_APPS: ler_csv(_APPS),
+                mu._URL_HISTORICO: _SETEMBRO,
+            }[url],
+        ),
+        patch("app.views.dashboards.graph_configured", return_value=True),
+        patch("itgov.api.v1.governance_apps.get_cached_app_summary", return_value=resumo),
+    ):
+        resp = authed_client.get("/gov/governance/apps")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Uso dos apps — últimos 30 dias" in html
+    assert "285 de 366 contas" in html
+
+
+def test_pagina_aplicativos_avisa_quando_o_graph_nao_responde(authed_client) -> None:
+    resumo = {"total_apps": 0, "secrets_expirando_30d": 0, "secrets_expirados": 0, "expirando": []}
+    with (
+        patch("itgov.services.m365_uso.obter_uso", return_value=None),
+        patch("app.views.dashboards.graph_configured", return_value=True),
+        patch("itgov.api.v1.governance_apps.get_cached_app_summary", return_value=resumo),
+    ):
+        html = authed_client.get("/gov/governance/apps").get_data(as_text=True)
+    assert "não responderam agora" in html
