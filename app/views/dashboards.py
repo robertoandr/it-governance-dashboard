@@ -390,6 +390,7 @@ def cftv_monitoring() -> str:
         get_cached_historico_quedas,
         montar_visao,
     )
+    from itgov.services.cftv_snmp import AUTH_PROTOCOLOS, NIVEIS, PRIV_PROTOCOLOS
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
@@ -429,6 +430,9 @@ def cftv_monitoring() -> str:
         filhas=sorted((f for f in sede.filhas if f.ativo), key=lambda u: u.nome) if sede else [],
         selecionada=selecionada,
         ver_gravadores=ver_gravadores,
+        niveis_snmp=NIVEIS,
+        auth_snmp=AUTH_PROTOCOLOS,
+        priv_snmp=PRIV_PROTOCOLOS,
         gravadores=sorted({c["gravador"] for c in visao["cards"] if c["gravador"]} | {v.dvr for v in vinculos}),
         filtro=filtro_raw if filtro is not None else "",
         dias_historico=DIAS_HISTORICO,
@@ -477,6 +481,66 @@ def cftv_gravador_nome() -> object:
     flash(
         f"{gravador} agora aparece como “{apelido}”." if apelido else f"{gravador} voltou ao nome do Zabbix.", "success"
     )
+    return _voltar_cftv()
+
+
+def _resumo_snmp() -> str:
+    f = request.form
+    versao = "v2c" if f.get("snmp_versao") == "2" else "v3"
+    return f"CFTV: SNMP do gravador {f.get('gravador', '')} — {f.get('snmp_ip', '')}, {versao}"
+
+
+@bp.route("/cftv/gravador/snmp", methods=["POST"])
+@login_required
+@require_role("admin")
+@requer_aprovacao(_resumo_snmp)
+def cftv_gravador_snmp() -> object:
+    """Grava IP e SNMP (v2c/v3) de um gravador no Zabbix; cria o host se não existir (só admin).
+
+    As senhas vão direto para macros secretas do host no Zabbix; em branco,
+    mantém as que já estão lá.
+    """
+    import requests
+    from pydantic import ValidationError
+
+    from itgov.api.v1.cftv_monitoring import invalidar_cache_cftv
+    from itgov.services.cftv_snmp import ConfigSnmp, aplicar
+
+    f = request.form
+    gravador = f.get("gravador", "").strip()
+    if not gravador or len(gravador) > 120:
+        abort(400)
+    try:
+        cfg = ConfigSnmp(
+            ip=f.get("snmp_ip", "").strip(),
+            porta=f.get("snmp_porta") or 161,
+            versao=f.get("snmp_versao", ""),
+            community=f.get("snmp_community", ""),
+            usuario=f.get("snmp_usuario", ""),
+            nivel=f.get("snmp_nivel") or 2,
+            auth_protocolo=f.get("snmp_auth_protocolo") or 1,
+            auth_senha=f.get("snmp_auth_senha", ""),
+            priv_protocolo=f.get("snmp_priv_protocolo") or 1,
+            priv_senha=f.get("snmp_priv_senha", ""),
+        )
+    except ValidationError as exc:
+        motivos = "; ".join(str(e["msg"]).removeprefix("Value error, ") for e in exc.errors())
+        flash(f"SNMP de {gravador} não foi salvo: {motivos}.", "error")
+        return _voltar_cftv()
+    try:
+        res = aplicar(gravador, cfg)
+    except (RuntimeError, requests.RequestException) as exc:
+        log.warning("cftv.gravador_snmp_falhou", gravador=gravador, erro=str(exc)[:200])
+        flash(f"O Zabbix recusou o SNMP de {gravador}: {exc}", "error")
+        return _voltar_cftv()
+    invalidar_cache_cftv()
+    log.info("cftv.gravador_snmp", gravador=gravador, criado=res.criado, versao=cfg.versao, user=current_user.email)
+    msg = f"{gravador} {'cadastrado no Zabbix' if res.criado else 'atualizado no Zabbix'} ({cfg.ip}, SNMP v{'2c' if cfg.versao == '2' else '3'})."
+    if res.itens_verificados:
+        msg += f" Pedi a checagem de {res.itens_verificados} itens SNMP agora; o status aparece em até 1 minuto."
+    flash(msg, "success")
+    if res.senhas_faltando:
+        flash(f"Falta informar: {', '.join(res.senhas_faltando)} — sem isso o Zabbix usa a credencial global.", "info")
     return _voltar_cftv()
 
 
