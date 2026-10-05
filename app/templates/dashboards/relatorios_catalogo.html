@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Relatórios — Governança de TI 360{% endblock %}
+{% block page_title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Relatórios de Governança de TI</h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+      Escolha um relatório pronto ou monte o seu. Todos podem ser impressos, salvos em PDF ou baixados em CSV (Excel).
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col">
+      <h2 class="font-semibold text-slate-800 dark:text-slate-100">Executivo</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 flex-1">Score global de governança, pilares COBIT e projetos do PMO — para a diretoria.</p>
+      <div class="mt-4">
+        <a href="{{ url_for('dashboards.relatorio_executivo') }}"
+           class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">Abrir</a>
+      </div>
+    </div>
+    {% for chave, (titulo, descricao, itens) in catalogo.items() %}
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col">
+      <h2 class="font-semibold text-slate-800 dark:text-slate-100">{{ titulo }}</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ descricao }}</p>
+      <ul class="text-xs text-slate-500 dark:text-slate-400 mt-2 flex-1 list-disc pl-4">
+        {% for s in itens %}<li>{{ secoes[s][0] }}</li>{% endfor %}
+      </ul>
+      <div class="mt-4 flex gap-2">
+        <a href="{{ url_for('dashboards.relatorio', chave=chave) }}"
+           class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">Abrir</a>
+        <a href="{{ url_for('dashboards.relatorio', chave=chave, formato='csv') }}"
+           class="inline-flex items-center border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">CSV</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <form method="get" action="{{ url_for('dashboards.relatorio', chave='personalizado') }}"
+        class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+    <h2 class="font-semibold text-slate-800 dark:text-slate-100">Relatório personalizado</h2>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Marque as seções que devem entrar, na ordem em que aparecem aqui.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
+      {% for chave, (titulo, descricao, itens) in catalogo.items() %}
+      <fieldset>
+        <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{{ titulo }}</legend>
+        {% for s in itens %}
+        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 py-0.5">
+          <input type="checkbox" name="secao" value="{{ s }}" class="rounded border-slate-300 dark:border-slate-600">
+          {{ secoes[s][0] }}
+        </label>
+        {% endfor %}
+      </fieldset>
+      {% endfor %}
+    </div>
+    <div class="mt-4 flex gap-2">
+      <button type="submit" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">Gerar relatório</button>
+      <button type="submit" name="formato" value="csv"
+              class="inline-flex items-center border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Baixar CSV</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

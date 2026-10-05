@@ -102,7 +102,7 @@
   {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
   {{ group_label('Gestao') }}
   {{ nav_item(url_for('dashboards.pmo_dashboard'), 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', 'PMO') }}
-  {{ nav_item(url_for('dashboards.relatorios'), 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'Relatorios') }}
+  {{ nav_item(url_for('dashboards.relatorios'), 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'Relatórios') }}
   {% endif %}
 
   {# Aprovações: todos veem os próprios pedidos; super admin vê a fila com contador #}

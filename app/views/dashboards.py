@@ -1123,12 +1123,46 @@ def pmo_dashboard() -> str:
 @login_required
 @require_role("admin", "gestor")
 def relatorios() -> str:
-    """Render Relatórios — resumo consolidado de governança."""
+    """Render o catálogo de relatórios (executivo, temáticos e personalizado)."""
+    from app.services.relatorios import CATALOGO, SECOES
+
+    return render_template("dashboards/relatorios_catalogo.html", catalogo=CATALOGO, secoes=SECOES)
+
+
+@bp.route("/relatorios/executivo")
+@login_required
+@require_role("admin", "gestor")
+def relatorio_executivo() -> str:
+    """Render o relatório executivo — score dos pilares e PMO."""
     from itgov.api.v1.pmo_clickup import get_cached_pmo
 
     pmo = get_cached_pmo()
     gov = _get_governance()
     return render_template("dashboards/relatorios.html", pmo=pmo, governance=gov)
+
+
+@bp.route("/relatorios/<chave>")
+@login_required
+@require_role("admin", "gestor")
+def relatorio(chave: str) -> str | Response:
+    """Render um relatório do catálogo ou o personalizado (``?secao=``); ``?formato=csv`` baixa o CSV."""
+    from app.services.relatorios import CATALOGO, SECOES, gerar_csv, montar_relatorio
+
+    secoes = request.args.getlist("secao")
+    if chave not in CATALOGO and chave != "personalizado":
+        abort(404)
+    if chave == "personalizado" and not any(s in SECOES for s in secoes):
+        flash("Escolha pelo menos uma seção para o relatório personalizado.", "error")
+        return redirect(url_for("dashboards.relatorios"))
+    rel = montar_relatorio(chave, secoes)
+    if request.args.get("formato") == "csv":
+        nome = f"relatorio-{chave}-{rel.gerado_em:%Y%m%d-%H%M}.csv"
+        return Response(
+            "\ufeff" + gerar_csv(rel),  # BOM: o Excel abre os acentos certos
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={nome}"},
+        )
+    return render_template("dashboards/relatorio.html", rel=rel, secoes_escolhidas=secoes)
 
 
 @bp.route("/licenses")
