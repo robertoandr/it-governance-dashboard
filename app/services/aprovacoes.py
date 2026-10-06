@@ -8,7 +8,8 @@ permissões da rota continuam valendo; se ela recusar, a solicitação fica
 como "falhou" com a mensagem.
 
 Senhas nunca são guardadas: ao aprovar a criação de usuário, uma senha nova
-é gerada e mostrada só ao super admin.
+é gerada e mostrada só ao super admin; credenciais SNMP de gravador ficam de
+fora e, na aprovação, a rota mantém as que já estão no Zabbix.
 
 Sem nenhum super admin ativo, o decorador não intercepta nada (o sistema
 não pode travar esperando quem não existe).
@@ -45,7 +46,9 @@ log = structlog.get_logger(__name__)
 SUPER_ADMIN_PADRAO = "roberto@grupogadens.com.br"
 
 # Nunca guardados na fila
-CAMPOS_SENSIVEIS = frozenset({"password", "confirm_password", "new_password"})
+CAMPOS_SENSIVEIS = frozenset(
+    {"password", "confirm_password", "new_password", "snmp_community", "snmp_auth_senha", "snmp_priv_senha"}
+)
 
 # Endpoints cuja senha é gerada na aprovação (campo → campos a preencher)
 _SENHA_GERADA: dict[str, tuple[str, ...]] = {"users.create_user": ("password", "confirm_password")}
