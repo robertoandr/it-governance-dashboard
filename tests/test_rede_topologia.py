@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from itgov.api.v1 import rede_monitoring
-from itgov.api.v1.rede_topologia import destino_do_sla, layout_geral, montar_topologia
+from itgov.api.v1.rede_topologia import destino_do_ipsec, destino_do_sla, layout_geral, montar_topologia
 from itgov.services import fortigate_api
 
 _NOMES = ["Sede", "Shopping", "Triunfo"]
@@ -120,3 +120,46 @@ def test_pagina_ativos_sem_fortigate(authed_client, monkeypatch: pytest.MonkeyPa
     ):
         html = authed_client.get("/gov/ativos-rede").get_data(as_text=True)
     assert "Nenhum FortiGate configurado" in html
+
+
+_NOMES = ["Sede", "Shopping", "Triunfo"]
+_WANS = {"189.112.100.49": "Sede", "170.254.107.16": "Triunfo"}
+
+
+@pytest.mark.parametrize(
+    ("nome", "remoto", "origem", "destino"),
+    [
+        ("TRF-GDS-MTZ", "189.112.100.49", "Triunfo", "Sede"),  # pelo IP da WAN da Sede
+        ("TRF-GDS-MTZ2", "45.166.249.159", "Triunfo", "Sede"),  # IP desconhecido: pela sigla
+        ("GDS-STS-TRF2", "143.105.25.215", "Sede", "Triunfo"),
+        ("MTZ-STS-SHOP", "179.109.122.11", "Sede", "Shopping"),  # pula a própria sigla (MTZ)
+        ("TRF-STS-OPS", "200.106.168.29", "Triunfo", "Opus Cloud"),
+        ("GDS-SHP-GSURF", "18.231.194.69", "Shopping", None),  # sigla desconhecida
+        ("GDS-STS-SEDE", "189.112.100.49", "Sede", None),  # aponta para si mesma
+    ],
+)
+def test_destino_do_ipsec(nome: str, remoto: str, origem: str, destino: str | None) -> None:
+    assert destino_do_ipsec({"nome": nome, "remoto": remoto}, origem, _WANS, _NOMES) == destino
+
+
+def test_tunel_ipsec_sem_sla_entra_na_topologia() -> None:
+    fortigates = [
+        {**_FORTIGATES[0], "wans": [{"iface": "internal3", "ip": "189.112.100.49"}]},
+        {
+            "unidade": "Triunfo", "name": "FGT60F-Triunfo", "api_up": True, "wans": [], "redes": [],
+            "sdwan": [{"sla": "Ping_Shopping", "members": [_membro("TRF-GDS-SHP", "up", 5.0)]}],
+            "ipsec": [
+                {"nome": "TRF-GDS-MTZ", "remoto": "189.112.100.49", "status": "up"},
+                {"nome": "TRF-GDS-MTZ2", "remoto": "45.166.249.159", "status": "down"},
+                {"nome": "TRF-GDS-SHP", "remoto": "1.2.3.4", "status": "up"},  # já medido pelo SLA
+            ],
+        },
+    ]  # fmt: skip
+    topo = montar_topologia(fortigates, [], [])
+    tuneis = {(t["de"], t["para"]): t for t in topo["tuneis"]}
+    matriz = tuneis[("Triunfo", "Sede")]
+    assert (matriz["iface"], matriz["status"], matriz["latency_ms"]) == ("TRF-GDS-MTZ", "up", None)
+    assert (matriz["membros"], matriz["caidos"]) == (2, 1)
+    assert tuneis[("Triunfo", "Shopping")]["membros"] == 1
+    rotulos = {a["rotulo"] for a in layout_geral(topo)["arestas"]}
+    assert "IPsec ativo" in rotulos

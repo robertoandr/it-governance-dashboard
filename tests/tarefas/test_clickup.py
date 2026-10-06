@@ -128,6 +128,11 @@ def test_carregar_sem_token(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_carregar_com_erro_e_sem_duplicadas(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLICKUP_TOKEN", "pk_teste")
 
+    async def _membros() -> set[str]:
+        return set()
+
+    monkeypatch.setattr(ck, "buscar_membros", _membros)
+
     async def _falha() -> list[dict[str, Any]]:
         raise httpx.ConnectError("sem rede")
 
@@ -141,6 +146,45 @@ def test_carregar_com_erro_e_sem_duplicadas(monkeypatch: pytest.MonkeyPatch) -> 
     r = ck._carregar()
     assert r.ok and [t.id for t in r.tarefas] == ["x", "y"]
     assert r.sem_responsavel == 1
+
+
+def test_carregar_tira_quem_nao_e_da_equipe(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLICKUP_TOKEN", "pk_teste")
+
+    async def _tarefas() -> list[dict[str, Any]]:
+        return [
+            _bruta("so_fora", pessoas=(("Alexandre", "alexandre@empresa.com"),)),
+            _bruta("misto", pessoas=(("Ana", "ana@empresa.com"), ("Marcelo", "marcelo@empresa.com"))),
+            _bruta("ninguem", pessoas=()),
+        ]
+
+    async def _membros() -> set[str]:
+        return {"ana@empresa.com"}
+
+    monkeypatch.setattr(ck, "buscar_tarefas", _tarefas)
+    monkeypatch.setattr(ck, "buscar_membros", _membros)
+    r = ck._carregar()
+    assert [t.id for t in r.tarefas] == ["misto", "ninguem"]
+    assert [p.nome for p in r.tarefas[0].responsaveis] == ["Ana"]
+    assert [g.nome for g in ck.agrupar_por_responsavel(r.tarefas)] == ["Ana"]
+
+
+def test_buscar_membros_le_os_emails_da_lista(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLICKUP_LIST_ID", "123")
+    pedidos: list[str] = []
+
+    def _resposta(req: httpx.Request) -> httpx.Response:
+        pedidos.append(str(req.url))
+        return httpx.Response(200, json={"members": [{"email": "Ana@Empresa.com"}, {"email": None}]})
+
+    real = httpx.AsyncClient
+
+    def _cliente(**kw: Any) -> httpx.AsyncClient:
+        return real(transport=httpx.MockTransport(_resposta), **kw)
+
+    monkeypatch.setattr(ck.httpx, "AsyncClient", _cliente)
+    assert asyncio.run(ck.buscar_membros()) == {"ana@empresa.com"}
+    assert pedidos == ["https://api.clickup.com/api/v2/list/123/member"]
 
 
 def test_so_admin_ve_todos() -> None:
