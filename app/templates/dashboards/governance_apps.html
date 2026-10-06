@@ -14,8 +14,10 @@
 
 <div class="mb-4">
   <h1 class="text-xl font-bold text-gray-800 dark:text-slate-100">Aplicativos — Microsoft 365</h1>
-  <p class="text-sm text-gray-500 dark:text-slate-400">App Registrations e governança de credenciais (secrets/certificados).</p>
+  <p class="text-sm text-gray-500 dark:text-slate-400">Uso dos apps do pacote 365, App Registrations e governança de credenciais (secrets/certificados).</p>
 </div>
+
+{% include "dashboards/_m365_uso.html" %}
 
 {% set da_empresa = summary.expirando | rejectattr('gerenciado_microsoft') | list %}
 {% set da_microsoft = summary.expirando | selectattr('gerenciado_microsoft') | list %}

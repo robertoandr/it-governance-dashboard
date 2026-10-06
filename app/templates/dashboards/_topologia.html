@@ -35,7 +35,7 @@
     {% if topologia.tuneis %}
     <ul class="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-5 gap-y-1">
       {% for t in topologia.tuneis %}
-      <li><span class="font-medium text-slate-600 dark:text-slate-300">{{ t.de }} → {{ t.para }}</span> via {{ t.iface }}: {{ '%.1f ms' % t.latency_ms if t.latency_ms is not none else 'sem resposta' }}{% if t.caidos %} · <span class="text-red-600 dark:text-red-400">{{ t.caidos }} de {{ t.membros }} caminhos fora</span>{% endif %}</li>
+      <li><span class="font-medium text-slate-600 dark:text-slate-300">{{ t.de }} → {{ t.para }}</span> via {{ t.iface }}: {{ '%.1f ms' % t.latency_ms if t.latency_ms is not none else ('IPsec ativo, sem SLA de latência' if t.status == 'up' else 'sem resposta') }}{% if t.caidos %} · <span class="text-red-600 dark:text-red-400">{{ t.caidos }} de {{ t.membros }} caminhos fora</span>{% endif %}</li>
       {% endfor %}
     </ul>
     {% endif %}

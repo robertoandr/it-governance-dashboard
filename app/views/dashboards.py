@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import structlog
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from werkzeug.exceptions import ServiceUnavailable
 
 from app.auth.rbac import require_role
 from app.integrations import graph_configured, zendesk_configured
@@ -237,16 +238,17 @@ def governance_devices() -> str:
 def governance_apps() -> str:
     """Render pilar Aplicativos (Governança M365)."""
     from itgov.api.v1.governance_apps import get_cached_app_summary
+    from itgov.services.m365_uso import obter_uso
 
     if not graph_configured():
         abort(404)
 
     try:
         summary = get_cached_app_summary()
-    except RuntimeError:
-        abort(503)
+    except RuntimeError as exc:
+        raise ServiceUnavailable() from exc
 
-    return render_template("dashboards/governance_apps.html", summary=summary)
+    return render_template("dashboards/governance_apps.html", summary=summary, uso_apps=obter_uso())
 
 
 @bp.route("/governance/compliance")
@@ -1348,7 +1350,7 @@ from(bucket: "{provider._bucket_raw}")
         mailbox=mailbox,
         security_alerts=security_alerts,
         dns_check=dns_check,
-        uso_apps=obter_uso() if graph_configured() else None,
+        uso_apps=obter_uso() if graph_configured() else False,
     )
 
 
