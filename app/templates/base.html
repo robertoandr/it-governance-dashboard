@@ -52,17 +52,17 @@
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans">
 
-<div class="flex h-screen overflow-hidden">
+<div class="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
 
   <!-- Sidebar -->
   <aside :class="sidebarClass"
-         class="bg-slate-800 dark:bg-slate-950 text-white flex-shrink-0 flex flex-col transition-all duration-200"
+         class="bg-slate-800 dark:bg-slate-950 text-white flex-shrink-0 flex flex-col transition-all duration-200 print:hidden"
          x-cloak>
     {% include "partials/sidebar.html" %}
   </aside>
 
   <!-- Main column -->
-  <div class="flex-1 flex flex-col overflow-hidden">
+  <div class="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible">
 
     <!-- Topbar -->
     {# O bloco fica aqui (e não no topbar.html): bloco de template incluído
@@ -71,7 +71,7 @@
     {% include "partials/topbar.html" %}
 
     <!-- Page content -->
-    <main class="flex-1 overflow-y-auto p-6">
+    <main class="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for cat, msg in messages %}
