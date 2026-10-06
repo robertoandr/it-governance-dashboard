@@ -78,8 +78,10 @@ def _buscar_cftv() -> dict:
         {
             "output": ["hostid", "host", "name", "maintenance_status"],
             "groupids": gids,
-            "selectInterfaces": ["ip"],
+            "selectInterfaces": ["type", "main", "ip", "port", "available", "error", "details"],
             "selectTags": ["tag", "value"],
+            # Só para o SNMP dos gravadores (cf7); o Zabbix não devolve valor de macro secreta
+            "selectMacros": ["macro", "value", "type"],
         },
     )
 
@@ -139,6 +141,8 @@ def _buscar_cftv() -> dict:
                 offline_desde[hid] = min(inicio, offline_desde.get(hid, inicio))
 
     # ── 4. Um registro por dispositivo, com status de ping ────────────────────
+    from itgov.services.cftv_snmp import status_snmp
+
     devices: list[dict] = []
     for h in hosts:
         tags = {tg["tag"]: tg["value"] for tg in h.get("tags", [])}
@@ -160,11 +164,14 @@ def _buscar_cftv() -> dict:
             {
                 "host": h["host"],
                 "name": h["name"],
-                "ip": (h.get("interfaces") or [{}])[0].get("ip", "?"),
+                "ip": _ip_principal(h.get("interfaces") or []),
                 "subcat": subcat,
                 "andar": tags.get("andar", "?"),
                 "gravador": gravador_do_dispositivo(h["host"], subcat, tags),
                 "is_gravador": subcat in SUBCATS_GRAVADOR,
+                "snmp": status_snmp(h.get("interfaces") or [], h.get("macros") or [])
+                if subcat in SUBCATS_GRAVADOR
+                else None,
                 "canal": tags.get("canal") or tags.get("canal_nvr") or "",
                 "loja": tags.get("loja", ""),
                 "vendor": tags.get("vendor", ""),
@@ -191,11 +198,18 @@ SEM_UNIDADE = "sem"
 STAND_ALONE = "Stand Alone"
 
 
+def _ip_principal(interfaces: list[dict]) -> str:
+    """IP da interface principal (prefere a de agente, a mais antiga nos hosts do CFTV)."""
+    principais = sorted((i for i in interfaces if i.get("main", "1") == "1"), key=lambda i: i.get("type", "1"))
+    return (principais or interfaces or [{}])[0].get("ip", "?")
+
+
 def gravador_do_dispositivo(host: str, subcat: str, tags: dict[str, str]) -> str:
     """Nome do gravador (DVR/NVR) ao qual o dispositivo pertence.
 
     O próprio gravador usa o nome do host (ex.: ``DVR-1``), que é o mesmo valor
-    da tag ``dvr`` das suas câmeras. Câmeras Hikvision apontam para o NVR via
+    da tag ``dvr`` das suas câmeras; o criado pelo dashboard (cf7) leva a tag
+    ``dvr`` porque o nome técnico não aceita acentos. Câmeras Hikvision apontam para o NVR via
     ``parent_nvr``. Dispositivos sem gravador (faciais, antenas) retornam "".
 
     Args:
@@ -207,7 +221,7 @@ def gravador_do_dispositivo(host: str, subcat: str, tags: dict[str, str]) -> str
         Chave do gravador, ou string vazia.
     """
     if subcat in SUBCATS_GRAVADOR:
-        return host
+        return tags.get("dvr") or host
     return tags.get("dvr") or tags.get("parent_nvr") or ""
 
 
@@ -502,3 +516,10 @@ def get_cached_cftv_summary() -> dict:
         _cache_data = dados
         _cache_ts = time.monotonic()
     return dados
+
+
+def invalidar_cache_cftv() -> None:
+    """Descarta o cache de dispositivos (após alterar um host no Zabbix pelo dashboard)."""
+    global _cache_data, _cache_ts
+    with _lock:
+        _cache_data, _cache_ts = None, 0.0
