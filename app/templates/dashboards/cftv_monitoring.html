@@ -4,6 +4,14 @@
 
 {% block page_title %}Monitoramento — CFTV{% endblock %}
 
+{% block head %}
+<style nonce="{{ csp_nonce() }}">
+  /* SNMP do gravador: mostra só os campos da versão escolhida (sem JS) */
+  .snmp-form:has(input[name="snmp_versao"][value="2"]:checked) .so-v3,
+  .snmp-form:has(input[name="snmp_versao"][value="3"]:checked) .so-v2 { display: none; }
+</style>
+{% endblock %}
+
 {% block content %}
 {% set pode_editar = current_user.role in ('admin', 'gestor') %}
 {% set eh_admin = current_user.role == 'admin' %}
@@ -171,6 +179,13 @@
         <div class="text-right flex-shrink-0">
           {{ status_badge(c.gravador_host.status) }}
           <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{ c.gravador_host.ip }}</p>
+          {% set sn = c.gravador_host.snmp %}
+          {% if sn %}
+          <p class="text-[10px] mt-0.5 {% if sn.status == 'ok' %}text-green-600{% elif sn.status == 'falha' %}text-red-600{% else %}text-slate-400{% endif %}"
+             title="{{ sn.erro or 'Interface SNMP no Zabbix' }}">
+            SNMP {{ 'v2c' if sn.versao == '2' else 'v' ~ sn.versao }} · {{ {'ok': 'ok', 'falha': 'falha', 'aguardando': 'aguardando'}[sn.status] }}
+          </p>
+          {% endif %}
         </div>
         {% elif c.gravador %}
         <span class="text-[10px] text-slate-400 flex-shrink-0" title="Gravador não cadastrado como host no Zabbix">gravador sem monitoramento</span>
@@ -284,6 +299,7 @@
           </form>
           {% endfor %}
           <p class="text-[10px] text-slate-400">Unir esconde o duplicado e soma os dispositivos dele aqui. Nada é apagado no Zabbix.</p>
+          {% include "dashboards/_cftv_snmp_form.html" %}
         </div>
       </details>
       {% endif %}
