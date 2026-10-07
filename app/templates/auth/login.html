@@ -5,12 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Login — Governança de TI 360</title>
   <script src="{{ url_for('static', filename='vendor/tailwind.js') }}" nonce="{{ csp_nonce() }}"></script>
-  <!-- A config só vale depois do script: definida antes, ela é
-       sobrescrita no carregamento e o dark mode caía no padrão "media" (tema do SO). -->
-  <script nonce="{{ csp_nonce() }}">
-    tailwind.config = { darkMode: 'class' };
-    if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
-  </script>
+  <!-- Tema Gadens Institucional (cores, fonte e dark mode) — depois do tailwind.js -->
+  {% include "partials/tema_gadens.html" %}
   <script defer src="{{ url_for('static', filename='vendor/alpine-csp.min.js') }}" nonce="{{ csp_nonce() }}"></script>
   <script nonce="{{ csp_nonce() }}">
   document.addEventListener('alpine:init', function () {
@@ -41,14 +37,12 @@
 
     <!-- Logo/brand -->
     <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4 shadow-lg">
-        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
-      </div>
+      <img src="{{ url_for('static', filename='img/gadens-logo.png') }}" alt="Grupo Gadens"
+           width="200" height="118" class="mx-auto mb-5 w-[200px] h-auto dark:hidden">
+      <img src="{{ url_for('static', filename='img/gadens-logo-escuro.png') }}" alt="Grupo Gadens"
+           width="200" height="118" class="mx-auto mb-5 w-[200px] h-auto hidden dark:block">
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Governança de TI 360</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Grupo Gadens</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Equipe de TI · Grupo Gadens</p>
     </div>
 
     <!-- Flash messages -->
@@ -75,7 +69,7 @@
                  class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
                         placeholder-slate-400 dark:placeholder-slate-500
-                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        focus:outline-none focus:ring-2 focus:ring-gadens-500 focus:border-transparent
                         text-sm transition"
                  placeholder="admin@ti.local"/>
         </div>
@@ -85,7 +79,7 @@
           <input id="password" name="password" type="password" required autocomplete="current-password"
                  class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        focus:outline-none focus:ring-2 focus:ring-gadens-500 focus:border-transparent
                         text-sm transition"
                  placeholder="••••••••"/>
         </div>
@@ -98,7 +92,7 @@
         </div>
 
         <button type="submit"
-                class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+                class="w-full py-2.5 bg-gadens-600 hover:bg-gadens-700 active:bg-gadens-800
                        text-white font-semibold rounded-lg text-sm transition shadow-sm">
           Entrar
         </button>

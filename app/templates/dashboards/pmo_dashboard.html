@@ -181,7 +181,7 @@
         {# Responsáveis #}
         <div class="hidden sm:flex items-center gap-1 flex-shrink-0">
           {% for a in t.assignees[:2] %}
-          <span class="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center"
+          <span class="w-6 h-6 rounded-full bg-gadens-600 text-white text-[10px] font-bold flex items-center justify-center"
                 title="{{ a }}">{{ a[0] | upper }}</span>
           {% endfor %}
           {% if t.assignees | length > 2 %}

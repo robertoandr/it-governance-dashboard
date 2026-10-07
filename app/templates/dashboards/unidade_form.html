@@ -2,7 +2,7 @@
 {% block title %}{{ 'Editar' if unidade else 'Nova' }} Unidade — Governança de TI 360{% endblock %}
 
 {% block content %}
-{% set campo = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500' %}
+{% set campo = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gadens-500' %}
 {% set f = request.form if request.method == 'POST' else {} %}
 <div class="max-w-2xl mx-auto space-y-6">
 
@@ -114,7 +114,7 @@
         <a href="{{ url_for('dashboards.unidades_list') }}"
            class="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-600 transition-colors">Cancelar</a>
         <button type="submit" name="action" value="save"
-                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+                class="bg-gadens-600 hover:bg-gadens-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
           {{ 'Salvar alterações' if unidade else 'Criar unidade' }}
         </button>
       </div>
