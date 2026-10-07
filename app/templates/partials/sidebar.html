@@ -1,21 +1,9 @@
 <!-- Brand -->
 <div class="px-4 py-4 border-b border-slate-700 dark:border-slate-800 flex items-center gap-2 flex-shrink-0">
-  <div class="w-8 h-8 flex items-center justify-center flex-shrink-0">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" fill="none">
-      <defs>
-        <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#1e3a5f"/>
-          <stop offset="100%" stop-color="#3b82f6"/>
-        </linearGradient>
-      </defs>
-      <path d="M20 3 L35 9 L35 20 C35 29 20 37 20 37 C20 37 5 29 5 20 L5 9 Z"
-            fill="url(#sg)" stroke="#60a5fa" stroke-width="1.5"/>
-      <circle cx="20" cy="20" r="5" fill="white" opacity="0.9"/>
-      <path d="M20 12 L21.5 15.5 L25 16 L22.5 18.5 L23 22 L20 20.5 L17 22 L17.5 18.5 L15 16 L18.5 15.5 Z"
-            fill="#60a5fa" opacity="0.85"/>
-    </svg>
+  <div class="w-9 h-8 flex items-center justify-center flex-shrink-0">
+    <img src="{{ url_for('static', filename='img/gadens-simbolo-escuro.png') }}" alt="Grupo Gadens" width="36" height="25" class="w-9 h-auto">
   </div>
-  <span class="font-bold text-sm text-white truncate" x-show="sidebarOpen">Governança de TI 360</span>
+  <span class="leading-tight truncate" x-show="sidebarOpen"><span class="block font-bold text-sm text-white">Governança de TI 360</span><span class="block text-[11px] text-slate-400">Grupo Gadens</span></span>
 </div>
 
 <nav class="flex-1 py-3 overflow-y-auto">
@@ -24,7 +12,7 @@
   <a href="{{ href if not soon else '#' }}"
      class="flex items-center gap-3 mx-2 px-3 py-2 rounded-lg transition-colors
             {% if not soon and (request.path == href or request.path.startswith(href ~ '/')) %}
-              bg-blue-600 text-white
+              bg-gadens-600 text-white
             {% elif soon %}
               text-slate-500 cursor-default
             {% else %}
@@ -45,10 +33,10 @@
      x-show="sidebarOpen">{{ label }}</p>
   {% endmacro %}
 
-  {# Grupo 1: Governanca (admin, gestor, visualizador) #}
+  {# Grupo 1: Governança (admin, gestor, visualizador) #}
   {% if current_user.is_authenticated and current_user.role in ('admin','gestor','visualizador') %}
-  {{ group_label('Governanca') }}
-  {{ nav_item(url_for('dashboards.overview'), 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', 'Visao Geral') }}
+  {{ group_label('Governança') }}
+  {{ nav_item(url_for('dashboards.overview'), 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', 'Visão Geral') }}
   {{ nav_item(url_for('dashboards.pillars'), 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', 'Pilares COBIT') }}
   {% endif %}
 
@@ -61,8 +49,8 @@
   {# Grupo 2: Microsoft 365 (admin, gestor) #}
   {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
   {{ group_label('Microsoft 365') }}
-  {{ nav_item(url_for('dashboards.m365_overview'), 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z', 'Governanca M365') }}
-  {{ nav_item(url_for('dashboards.m365_licenses'), 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z', 'Licencas') }}
+  {{ nav_item(url_for('dashboards.m365_overview'), 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z', 'Governança M365') }}
+  {{ nav_item(url_for('dashboards.m365_licenses'), 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z', 'Licenças') }}
   {{ nav_item(url_for('dashboards.governance_devices'), 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', 'Dispositivos', soon=not graph_on) }}
   {{ nav_item(url_for('dashboards.governance_apps'), 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', 'Aplicativos', soon=not graph_on) }}
   {{ nav_item(url_for('dashboards.governance_compliance'), 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'Compliance', soon=not graph_on) }}
@@ -90,11 +78,11 @@
   {{ nav_item(url_for('dashboards.unidades_list'), 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', 'Unidades') }}
   {% endif %}
 
-  {# Grupo 5: Seguranca (admin, gestor) #}
+  {# Grupo 5: Segurança (admin, gestor) #}
   {% if current_user.is_authenticated and current_user.role in ('admin','gestor') %}
-  {{ group_label('Seguranca') }}
+  {{ group_label('Segurança') }}
   {# 'Vulnerabilidades' removida — soon=true, href="#", nenhum blueprint/rota/collector por trás (ver docs/SPRINT-14.md SEG-01) #}
-  {{ nav_item(url_for('dashboards.mapa_cameras'), 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z', 'Mapa de Cameras') }}
+  {{ nav_item(url_for('dashboards.mapa_cameras'), 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z', 'Mapa de Câmeras') }}
   {{ nav_item(url_for('dashboards.acronis_backup'), 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', 'Cibersegurança') }}
   {% endif %}
 
@@ -118,7 +106,7 @@
   {# Usuarios: admin only #}
   {% if current_user.is_authenticated and current_user.role == 'admin' %}
   <div class="mx-2 mt-4 mb-1 border-t border-slate-700"></div>
-  {{ nav_item(url_for('users.list_users'), 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', 'Usuarios') }}
+  {{ nav_item(url_for('users.list_users'), 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', 'Usuários') }}
   {% endif %}
 
 

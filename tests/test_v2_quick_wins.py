@@ -44,7 +44,9 @@ def test_ultima_atualizacao_sem_dados_ou_invalida() -> None:
 def test_tailwind_configurado_depois_do_script_no_login(factory_app) -> None:
     html = factory_app.test_client().get("/gov/login").get_data(as_text=True)
     assert "tailwind = {" not in html
-    assert html.index("vendor/tailwind.js") < html.index("tailwind.config = { darkMode: 'class' }")
+    # config (tema Gadens) depois do script, com dark mode por classe
+    assert html.index("vendor/tailwind.js") < html.index("tailwind.config = {")
+    assert "darkMode: 'class'" in html
 
 
 def test_home_mostra_ultima_atualizacao_e_nome(authed_client) -> None:
@@ -52,4 +54,4 @@ def test_home_mostra_ultima_atualizacao_e_nome(authed_client) -> None:
     assert "Última atualização em" in html
     assert "Calculado em" not in html
     assert "Governança de TI 360" in html
-    assert "tailwind.config = { darkMode: 'class' }" in html
+    assert "tailwind.config = {" in html and "darkMode: 'class'" in html
