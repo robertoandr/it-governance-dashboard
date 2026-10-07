@@ -1,0 +1,72 @@
+{% extends "tv/_base.html" %}
+{% block title %}v2 · Mural Executivo{% endblock %}
+{% block estilo %}
+<style>
+  .M { background: #0B1220; color: #F1F5F9; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 28px; padding: 28px 40px 32px; display: grid; grid-template-columns: 480px minmax(0, 1fr) 520px; grid-template-rows: 104px minmax(0, 1fr); gap: 24px 28px; }
+  .M .g { font-family: 'Space Grotesk', system-ui, sans-serif; }
+  .M .n { font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .M .mut { color: #B8C4D6; }
+  .M .topo { grid-column: 1 / 4; display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1E2A44; padding-bottom: 18px; }
+  .M .topo h1 { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 44px; font-weight: 600; }
+  .M .topo h1 span { color: #22D3EE; }
+  .M .selo { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; font-size: 30px; padding: 10px 22px; border-radius: 14px; border: 3px solid; }
+  .M .painel { background: #111A2E; border-radius: 22px; padding: 26px 30px; }
+  .M h2 { margin: 0 0 16px; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 30px; font-weight: 600; color: #22D3EE; letter-spacing: .5px; }
+  .M .esq { display: flex; flex-direction: column; gap: 24px; min-height: 0; }
+  .M .pil { display: flex; flex-direction: column; gap: 8px; }
+  .M .pil .lin { display: flex; justify-content: space-between; align-items: baseline; }
+  .M .trilho { position: relative; height: 20px; background: #1E2A44; border-radius: 10px; }
+  .M .trilho i { display: block; height: 100%; border-radius: 10px; }
+  .M .meta { position: absolute; left: 85%; top: -7px; bottom: -7px; width: 4px; background: #F1F5F9; border-radius: 2px; }
+  .M .centro { display: flex; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; }
+  .M .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .M .kpi { display: flex; flex-direction: column; gap: 6px; padding: 20px 24px; min-width: 0; }
+  .M .kpi .n { font-size: 100px; }
+  .M .est { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; }
+  .M .falhas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 120px; gap: 14px; }
+  .M .fal { background: #3B1219; border: 3px solid #F87171; border-radius: 18px; padding: 12px 18px; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+  .M .fal .nome { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .M .dir { display: flex; flex-direction: column; gap: 24px; min-height: 0; }
+  .M .barra { display: grid; grid-template-columns: 210px minmax(0, 1fr) 90px; gap: 14px; align-items: center; padding: 5px 0; }
+  .M .barra .t { height: 24px; display: flex; gap: 2px; }
+  .M .al { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid #1E2A44; }
+  .M .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+{% endblock %}
+{% block render %}
+window.PainelTV = {
+  render: function (d) {
+    const T = window.TV;
+    const C = { ok: "#34D399", warn: "#FBBF24", crit: "#F87171", none: "#94A3B8" };
+    const est = (k, tam) => '<span class="est" style="color:' + C[k] + '">' + T.icone(k, tam || 30) + T.TEXTO[k] + "</span>";
+    const sc = d.score || {}, z = d.zabbix || {}, p = z.problemas || {}, sla = d.sla || {}, ss = d.secure_score || {};
+    const fx = sc.faixa || "none";
+    const pil = d.pilares.map(x => '<div class="pil"><div class="lin"><span>' + T.esc(x.nome.replace("Mensuração de ", "").replace("Gestão de ", "")) + '</span><span class="n" style="font-size:36px;color:' + C[x.faixa] + '">' + T.num(x.score, 1) + '</span></div><div class="trilho"><i style="width:' + (x.score || 0) + "%;background:" + C[x.faixa] + '"></i><span class="meta" title="meta 85"></span></div></div>').join("");
+    const alertasK = p.total ? (p.alto || p.desastre ? "crit" : "warn") : "ok";
+    const kpis = [
+      ["Alertas ativos", T.num(p.total), alertasK, T.num(p.alto) + " altos"],
+      ["Disponibilidade", T.num(z.disponibilidade, 1) + "%", T.faixa(z.disponibilidade), T.num(z.hosts_fora) + " fora"],
+      ["Secure Score M365", T.num(ss.pct, 1) + "%", T.faixa(ss.pct), ss.variacao_30d === null || ss.variacao_30d === undefined ? "" : (ss.variacao_30d >= 0 ? "+" : "") + T.num(ss.variacao_30d, 1) + " p.p. 30 d"],
+      ["Tickets no SLA", T.num(sla.cumprido, 1) + "%", T.faixa(sla.cumprido), T.num(sla.vencidos) + " vencidos"],
+    ].map(k => '<div class="painel kpi"><span class="mut">' + k[0] + '</span><span class="n" style="color:' + C[k[2]] + '">' + k[1] + "</span>" + '<div style="display:flex;gap:16px;align-items:center;min-width:0">' + est(k[2], 30) + '<span class="mut ell" style="font-size:28px">' + T.esc(k[3]) + "</span></div></div>").join("");
+    const comFalha = d.unidades.filter(u => u.falhas > 0);
+    const cards = comFalha.slice(0, 6).map(u => '<div class="fal"><div class="nome">' + T.esc(u.nome) + '</div><div style="display:flex;align-items:baseline;gap:12px"><span class="n" style="font-size:56px;color:#FCA5A5">' + u.falhas + '</span><span class="mut">de ' + u.ativos + "</span></div></div>").join("") +
+      (comFalha.length > 6 ? '<div class="fal" style="display:flex;align-items:center;justify-content:center"><span class="n" style="font-size:44px">+' + (comFalha.length - 6) + " outras</span></div>" : "");
+    const maxAt = Math.max(1, ...d.unidades.map(u => u.ativos));
+    const barras = d.unidades.slice().sort((a, b) => b.ativos - a.ativos).map(u => '<div class="barra"><span class="ell">' + T.esc(u.nome) + '</span><div class="t">' +
+      (u.ativos ? '<i style="width:' + ((u.ativos - u.falhas) / maxAt * 100) + '%;background:#22D3EE;border-radius:5px 0 0 5px"></i><i style="width:' + Math.max(u.falhas / maxAt * 100, u.falhas ? 1 : 0) + '%;background:#F87171;border-radius:0 5px 5px 0"></i>' : '<i style="width:100%;border:2px dashed #334155;border-radius:5px"></i>') +
+      '</div><span class="n" style="font-size:32px;text-align:right">' + (u.ativos || "—") + "</span></div>").join("");
+    const al = d.alertas.slice(0, 3).map(a => { const k = a.sev >= 4 ? "crit" : "warn"; return '<div class="al"><span style="color:' + C[k] + '">' + T.icone(k, 34) + '</span><div style="flex:1;min-width:0"><div class="ell" style="font-weight:600">' + T.esc(a.host) + '</div><div class="mut ell" style="font-size:28px">' + T.esc(a.sev_rotulo.toLowerCase()) + " · " + T.esc(a.problema) + '</div></div><span class="n" style="font-size:34px;white-space:nowrap">' + T.desde(a.desde) + "</span></div>"; }).join("");
+    return '<div class="tv M">' +
+      '<div class="topo"><h1>Governança de TI · <span>Mural Executivo</span></h1><div style="display:flex;align-items:center;gap:32px">' +
+      '<span class="selo" style="color:' + C[fx] + ";border-color:" + C[fx] + '">' + T.icone(fx, 34) + T.TEXTO[fx] + "</span>" +
+      '<span class="mut" data-atualizacao></span><span class="n" style="font-size:56px">' + T.esc(d.hora) + '</span><span class="mut">' + T.esc(d.data) + "</span></div></div>" +
+      '<div class="esq"><div class="painel" style="display:flex;flex-direction:column;gap:10px"><span class="mut">Score global de governança</span><span class="n" style="font-size:200px;color:' + C[fx] + '">' + T.num(sc.valor, 1) + "</span>" + est(fx, 40).replace('class="est"', 'class="est" style="font-size:40px"') + '<span class="mut">meta &gt; 85</span></div>' +
+      '<div class="painel" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><h2>Pilares COBIT <span class="mut" style="font-size:24px;font-weight:400">· traço = meta 85</span></h2>' + pil + "</div></div>" +
+      '<div class="centro"><div class="kpis">' + kpis + "</div>" +
+      '<div><h2 style="color:#FCA5A5">Unidades com falha</h2><div class="falhas">' + (cards || '<div class="mut">Nenhuma unidade com falha.</div>') + "</div></div></div>" +
+      '<div class="dir"><div class="painel"><h2>Ativos por unidade</h2>' + barras + '<div class="mut" style="font-size:24px;margin-top:8px"><b style="color:#22D3EE">■</b> em operação · <b style="color:#F87171">■</b> em falha</div></div>' +
+      '<div class="painel" style="flex:1;min-height:0;overflow:hidden"><h2>Últimos alertas</h2>' + (al || '<div class="mut">Nenhum alerta aberto.</div>') + "</div></div></div>";
+  }
+};
+{% endblock %}
