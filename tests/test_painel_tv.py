@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -122,3 +123,14 @@ def test_dados_em_json_sem_cache(authed_client) -> None:
     assert resp.status_code == 200
     assert resp.headers["Cache-Control"] == "no-store"
     assert resp.get_json()["score"]["valor"] == 60.7
+
+
+def test_licencas_alertam_quando_perto_de_esgotar() -> None:
+    """Uso de licenças alto é alerta (≥ 85% atenção, ≥ 95% crítico), não "verde"."""
+    raiz = Path(__file__).resolve().parent.parent / "app"
+    js = (raiz / "static/js/painel_tv.js").read_text(encoding="utf-8")
+    assert 'v >= 95 ? "crit" : v >= 85 ? "warn" : "ok"' in js
+    for versao in (4, 6):
+        tela = (raiz / f"templates/tv/v{versao}.html").read_text(encoding="utf-8")
+        assert "T.faixaUso(lic.uso_pct)" in tela
+        assert "T.faixa(lic.uso_pct)" not in tela

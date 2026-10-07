@@ -49,6 +49,12 @@
     return v > 85 ? "ok" : v >= 60 ? "warn" : "crit";
   }
 
+  /** Faixa de uso de um recurso que esgota (licenças): crit ≥ 95%, warn ≥ 85%, ok abaixo. */
+  function faixaUso(v) {
+    if (v === null || v === undefined) return "none";
+    return v >= 95 ? "crit" : v >= 85 ? "warn" : "ok";
+  }
+
   const TEXTO = { ok: "Operacional", warn: "Atenção", crit: "Crítico", none: "Sem dados" };
 
   /** Tempo desde um ISO: "17 min", "1 h 05", "6 d 21 h". */
@@ -102,7 +108,7 @@
     desenhar();
   }
 
-  window.TV = { icone: icone, esc: esc, num: num, faixa: faixa, TEXTO: TEXTO, desde: desde, horas: horas };
+  window.TV = { icone: icone, esc: esc, num: num, faixa: faixa, faixaUso: faixaUso, TEXTO: TEXTO, desde: desde, horas: horas };
 
   window.addEventListener("resize", escala);
   document.addEventListener("DOMContentLoaded", function () {

@@ -42,7 +42,7 @@ window.PainelTV = {
       kpi("Ativos em falha", String(totF), totF ? "crit" : "ok", "de " + totAt) +
       kpi("SLA atendimento", T.num(sla.cumprido, 1) + "%", T.faixa(sla.cumprido), T.TEXTO[T.faixa(sla.cumprido)]) +
       kpi("Chamados vencidos", T.num(sla.vencidos), sla.vencidos ? "crit" : "ok", "de " + T.num(sla.abertos) + " abertos") +
-      kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixa(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total));
+      kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixaUso(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total) + " · " + T.num((lic.total || 0) - (lic.usadas || 0)) + " livres");
     const itens = d.alertas.map(a => '<span><b style="color:' + (a.sev >= 4 ? C.crit : C.warn) + '">' + T.esc(a.sev_rotulo) + "</b>" + T.esc(a.host) + " — " + T.esc(a.problema) + " · " + T.esc(a.unidade) + " · há " + T.desde(a.desde) + "</span>")
       .concat(((d.links && d.links.fora) || []).map(l => '<span><b style="color:' + C.warn + '">LINK</b>' + T.esc(l.unidade) + ": " + T.esc(l.texto) + "</span>")).join("");
     return '<div class="tv Bt">' +

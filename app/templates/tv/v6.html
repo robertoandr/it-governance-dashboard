@@ -97,7 +97,7 @@ window.PainelTV = {
       kpi("SLA atendimento", T.num(sla.cumprido, 1) + "%", T.faixa(sla.cumprido), "meta 90% · " + T.num(sla.dias) + " dias") +
       kpi("Chamados vencidos", T.num(sla.vencidos), sla.vencidos ? "crit" : "ok", "de " + T.num(sla.abertos) + " em aberto") +
       kpi("Links e túneis", String(links.length), links.length ? "warn" : "ok", links.length ? links.length + " fora do ar" : "todos no ar") +
-      kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixa(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total));
+      kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixaUso(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total) + " · " + T.num((lic.total || 0) - (lic.usadas || 0)) + " livres");
 
     const pil = d.pilares.map(x => '<div class="pil"><div><span class="ell">' + T.esc(x.nome.replace("Gestão de ", "").replace("Mensuração de ", "").replace(" Estratégico", "")) + '</span><b style="color:' + C[x.faixa] + '">' + T.num(x.score, 1) + '</b></div><div class="barra"><i style="width:' + (x.score || 0) + "%;background:" + C[x.faixa] + '"></i></div></div>').join("");
 
