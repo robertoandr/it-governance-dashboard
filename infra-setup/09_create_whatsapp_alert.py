@@ -179,17 +179,20 @@ def _somar_operacao(operations: list[dict], mediatypeid: str, userid: str) -> li
 
     def _limpa(op: dict) -> dict:
         nova = {
-            k: op[k]
-            for k in ("operationid", "operationtype", "esc_period", "esc_step_from", "esc_step_to", "evaltype")
-            if k in op
+            k: op[k] for k in ("operationtype", "esc_period", "esc_step_from", "esc_step_to", "evaltype") if k in op
         }
         if "opmessage" in op:
-            nova["opmessage"] = {
-                k: v for k, v in op["opmessage"].items() if k in ("default_msg", "subject", "message", "mediatypeid")
-            }
+            # subject/message só são aceitos com default_msg=0 (mensagem própria).
+            campos = ("default_msg", "mediatypeid")
+            if op["opmessage"].get("default_msg") == "0":
+                campos += ("subject", "message")
+            nova["opmessage"] = {k: v for k, v in op["opmessage"].items() if k in campos}
+        # Zabbix 7.4 recusa operationid/actionid em qualquer nível da escrita.
         for chave in ("opmessage_usr", "opmessage_grp", "opconditions"):
             if op.get(chave):
-                nova[chave] = op[chave]
+                nova[chave] = [
+                    {k: v for k, v in item.items() if k not in ("operationid", "actionid")} for item in op[chave]
+                ]
         return nova
 
     resultado = [_limpa(op) for op in operations]

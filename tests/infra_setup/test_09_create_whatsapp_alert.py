@@ -62,7 +62,7 @@ def test_operacao_somada_no_mesmo_passo_mantendo_zendesk() -> None:
     assert r is not None
     assert len(r) == 2
     zendesk, whats = r
-    assert zendesk["operationid"] == "25"
+    assert "operationid" not in zendesk  # Zabbix 7.4 recusa na escrita
     assert "actionid" not in zendesk
     assert "opmessage_grp" not in zendesk  # lista vazia não é reenviada
     assert zendesk["opmessage"]["mediatypeid"] == "101"
@@ -80,3 +80,22 @@ def test_operacao_ja_existente_nao_altera_acao() -> None:
 def test_templates_cobrem_problema_resolucao_e_atualizacao() -> None:
     assert {t["recovery"] for t in wa.MESSAGE_TEMPLATES} == {"0", "1", "2"}
     assert all(t["eventsource"] == "0" for t in wa.MESSAGE_TEMPLATES)
+
+
+def test_operacao_remove_ids_aninhados() -> None:
+    op = dict(_ZENDESK_OP, opmessage_usr=[{"operationid": "25", "userid": "3"}])
+
+    r = wa._somar_operacao([op], "110", "3")
+
+    assert r is not None
+    assert r[0]["opmessage_usr"] == [{"userid": "3"}]
+
+
+def test_operacao_so_reenvia_assunto_com_mensagem_propria() -> None:
+    propria = dict(_ZENDESK_OP, opmessage={"default_msg": "0", "subject": "S", "message": "M", "mediatypeid": "101"})
+
+    r = wa._somar_operacao([_ZENDESK_OP, propria], "110", "3")
+
+    assert r is not None
+    assert r[0]["opmessage"] == {"default_msg": "1", "mediatypeid": "101"}
+    assert r[1]["opmessage"]["subject"] == "S"
