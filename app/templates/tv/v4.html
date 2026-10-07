@@ -1,0 +1,57 @@
+{% extends "tv/_base.html" %}
+{% block title %}v4 · NOC Bento{% endblock %}
+{% block estilo %}
+<style>
+  .Bt { background: #0B1220; color: #F1F5F9; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 28px; padding: 30px 40px 0; display: grid; grid-template-columns: 420px minmax(0, 1fr) 560px; grid-template-rows: 76px 560px 210px minmax(0, 1fr); gap: 22px; }
+  .Bt .n { font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .Bt .mut { color: #B8C4D6; }
+  .Bt .painel { background: #111A2E; border-radius: 20px; }
+  .Bt h2 { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 32px; font-weight: 600; }
+  .Bt .est { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .Bt .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .Bt .ch { grid-column: 1 / 4; display: flex; justify-content: space-between; align-items: center; }
+  .Bt .tiles { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .Bt .tile { border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; background: #18243B; border: 3px solid transparent; min-width: 0; }
+  .Bt .tile.crit { border-color: #F87171; animation: tv-pulso 2s ease-in-out infinite; }
+  @keyframes tv-pulso { 0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); } 50% { box-shadow: 0 0 0 10px rgba(248, 113, 113, .3); } }
+  .Bt .rec .lin { display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid #1E2A44; }
+  .Bt .kp { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+  .Bt .kp > div { padding: 18px 20px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+  .Bt .tk { grid-column: 1 / 4; margin: 0 -40px; background: #070C16; border-top: 3px solid #22D3EE; display: flex; align-items: center; overflow: hidden; }
+  .Bt .tk .rot { flex-shrink: 0; background: #22D3EE; color: #0B1220; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 2px; padding: 0 28px; height: 100%; display: flex; align-items: center; }
+  .Bt .tk .trilho { flex: 1; overflow: hidden; height: 100%; display: flex; align-items: center; }
+  .Bt .tk .faixa { display: flex; white-space: nowrap; animation: tv-corre 90s linear infinite; }
+  .Bt .tk .faixa span { font-size: 30px; padding: 0 40px; display: inline-flex; align-items: center; gap: 14px; }
+  @keyframes tv-corre { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+</style>
+{% endblock %}
+{% block render %}
+window.PainelTV = {
+  render: function (d) {
+    const T = window.TV;
+    const C = { ok: "#34D399", warn: "#FBBF24", crit: "#F87171", none: "#94A3B8" };
+    const est = (k, tam, estilo) => '<span class="est" style="color:' + C[k] + ";" + (estilo || "") + '">' + T.icone(k, tam || 32) + T.TEXTO[k] + "</span>";
+    const sc = d.score || {}, fx = sc.faixa || "none", z = d.zabbix || {}, p = z.problemas || {}, sla = d.sla || {}, lic = d.licencas || {};
+    const totAt = d.unidades.reduce((a, u) => a + u.ativos, 0), totF = d.unidades.reduce((a, u) => a + u.falhas, 0);
+    const tiles = d.unidades.slice(0, 7).map(u => '<div class="tile ' + (u.faixa === "crit" ? "crit" : "") + '"><div style="font-weight:600;line-height:1.1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + T.esc(u.nome) + '</div><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><span><span class="n" style="font-size:64px;color:' + C[u.faixa] + '">' + (u.ativos ? u.falhas : "—") + '</span><span class="mut" style="display:block">' + (u.ativos ? "de " + u.ativos : "sem dados") + '</span></span><span style="color:' + C[u.faixa] + '" title="' + T.TEXTO[u.faixa] + '">' + T.icone(u.faixa, 44) + "</span></div></div>").join("") +
+      '<div class="tile"><div style="font-weight:600">Total</div><div><span class="n" style="font-size:64px">' + totF + '</span><span class="mut" style="display:block">de ' + totAt + "</span></div></div>";
+    const rec = d.alertas.slice(0, 5).map(a => { const k = a.sev >= 4 ? "crit" : "warn"; return '<div class="lin"><span style="color:' + C[k] + ';padding-top:4px">' + T.icone(k, 36) + '</span><div style="flex:1;min-width:0"><div class="ell" style="font-weight:600">' + T.esc(a.host) + '</div><div class="mut ell">' + T.esc(a.sev_rotulo.toLowerCase()) + " · " + T.esc(a.unidade) + '</div></div><span class="n" style="font-size:36px;white-space:nowrap">' + T.desde(a.desde) + "</span></div>"; }).join("");
+    const kpi = (rot, val, k, sub) => '<div class="painel"><div class="mut ell">' + rot + '</div><div style="display:flex;align-items:center;gap:12px"><span class="n" style="font-size:72px;color:' + C[k] + '">' + val + '</span><span style="color:' + C[k] + '">' + T.icone(k, 34) + '</span></div><div class="mut ell">' + T.esc(sub) + "</div></div>";
+    const kp = kpi("Disponibilidade", T.num(z.disponibilidade, 1) + "%", T.faixa(z.disponibilidade), T.TEXTO[T.faixa(z.disponibilidade)]) +
+      kpi("Problemas", T.num(p.total), p.total ? "crit" : "ok", T.num(p.alto) + " altos") +
+      kpi("Ativos em falha", String(totF), totF ? "crit" : "ok", "de " + totAt) +
+      kpi("SLA atendimento", T.num(sla.cumprido, 1) + "%", T.faixa(sla.cumprido), T.TEXTO[T.faixa(sla.cumprido)]) +
+      kpi("Chamados vencidos", T.num(sla.vencidos), sla.vencidos ? "crit" : "ok", "de " + T.num(sla.abertos) + " abertos") +
+      kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixa(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total));
+    const itens = d.alertas.map(a => '<span><b style="color:' + (a.sev >= 4 ? C.crit : C.warn) + '">' + T.esc(a.sev_rotulo) + "</b>" + T.esc(a.host) + " — " + T.esc(a.problema) + " · " + T.esc(a.unidade) + " · há " + T.desde(a.desde) + "</span>")
+      .concat(((d.links && d.links.fora) || []).map(l => '<span><b style="color:' + C.warn + '">LINK</b>' + T.esc(l.unidade) + ": " + T.esc(l.texto) + "</span>")).join("");
+    return '<div class="tv Bt">' +
+      '<div class="ch"><span style="font-family:Space Grotesk,sans-serif;font-size:40px;font-weight:600">Governança de TI · <span style="color:#22D3EE">NOC</span></span><span style="display:flex;gap:28px;align-items:baseline"><span class="mut" data-atualizacao></span><span class="mut">' + T.esc(d.data) + '</span><span class="n" style="font-size:52px">' + T.esc(d.hora) + "</span></span></div>" +
+      '<div class="painel" style="padding:30px;display:flex;flex-direction:column;justify-content:space-between"><span class="mut">Status geral</span><span class="n" style="font-size:160px;color:' + C[fx] + '">' + T.num(sc.valor, 1) + "</span>" + est(fx, 44, "font-size:40px") + '<span class="mut">score global · meta &gt; 85</span></div>' +
+      '<div class="painel" style="padding:24px 26px;display:flex;flex-direction:column;gap:16px;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Unidades</h2><span class="mut">falhas no topo</span></div><div class="tiles">' + tiles + "</div></div>" +
+      '<div class="painel rec" style="grid-column:3;grid-row:2;padding:24px 26px;min-width:0;overflow:hidden"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><h2>Alertas recentes</h2><span class="mut">' + T.num(p.total) + " abertos</span></div>" + (rec || '<div class="mut">Nenhum alerta aberto.</div>') + "</div>" +
+      '<div class="kp">' + kp + "</div>" +
+      '<div class="tk"><span class="rot">AO VIVO</span><div class="trilho"><div class="faixa">' + (itens ? itens + itens : '<span>Nenhum alerta ativo.</span>') + "</div></div></div></div>";
+  }
+};
+{% endblock %}

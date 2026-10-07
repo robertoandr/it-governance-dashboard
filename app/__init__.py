@@ -199,6 +199,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.auth import bp as auth_bp
     from app.views.aprovacoes import bp as aprovacoes_bp
     from app.views.dashboards import bp as dashboards_bp
+    from app.views.painel_tv import bp as painel_tv_bp
     from app.views.tarefas import bp as tarefas_bp
     from app.views.users import bp as users_bp
 
@@ -207,6 +208,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     app.register_blueprint(dashboards_bp, url_prefix=_gov_prefix)
     app.register_blueprint(users_bp, url_prefix=_gov_prefix)
     app.register_blueprint(aprovacoes_bp, url_prefix=_gov_prefix)
+    app.register_blueprint(painel_tv_bp, url_prefix=_gov_prefix)
     app.register_blueprint(tarefas_bp, url_prefix=f"{_gov_prefix}/tarefas")
 
     # Situação das fontes (Visão Geral): primeira checagem em segundo plano.

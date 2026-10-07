@@ -1,0 +1,119 @@
+{% extends "tv/_base.html" %}
+{% block title %}v3 · Três Camadas{% endblock %}
+{% block estilo %}
+<style>
+  .B { background: #0B1220; color: #F1F5F9; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 28px; padding: 36px 48px 24px; display: flex; flex-direction: column; }
+  .B .n { font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .B .mut { color: #B8C4D6; }
+  .B .ac { color: #22D3EE; }
+  .B .painel { background: #111A2E; border-radius: 22px; }
+  .B h2 { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 34px; font-weight: 600; }
+  .B .est { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .B .bh { height: 70px; display: flex; justify-content: space-between; align-items: center; }
+  .B .telas { flex: 1; position: relative; margin-top: 18px; }
+  .B .tela { position: absolute; inset: 0; opacity: 0; transition: opacity .5s ease; }
+  .B .tela.on { opacity: 1; }
+  .B .bf { height: 56px; display: flex; justify-content: space-between; align-items: center; }
+  .B .pontos { display: flex; gap: 18px; align-items: center; }
+  .B .pontos span { width: 20px; height: 20px; border-radius: 50%; border: 3px solid #22D3EE; }
+  .B .pontos span.on { background: #22D3EE; }
+  .B .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .B .t1 { display: grid; grid-template-columns: 640px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 310px; gap: 28px; }
+  .B .t1 .heroi { grid-row: 1 / 3; padding: 40px; display: flex; flex-direction: column; justify-content: center; gap: 24px; }
+  .B .pils { padding: 30px 36px; display: flex; flex-direction: column; justify-content: space-between; }
+  .B .pl { display: grid; grid-template-columns: 380px minmax(0, 1fr) 110px 230px; gap: 24px; align-items: center; }
+  .B .trilho { position: relative; height: 22px; border-radius: 11px; background: #1E2A44; }
+  .B .trilho i { display: block; height: 100%; border-radius: 11px; }
+  .B .t2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 300px minmax(0, 1fr); gap: 28px; }
+  .B .sevc { padding: 30px 36px; display: flex; flex-direction: column; justify-content: space-between; }
+  .B .lin { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1E2A44; padding: 8px 0; gap: 16px; }
+  .B .t3 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+  .B .bar { display: grid; grid-template-columns: 330px minmax(0, 1fr) 260px; gap: 20px; align-items: center; }
+</style>
+{% endblock %}
+{% block render %}
+(function () {
+  const C = { ok: "#34D399", warn: "#FBBF24", crit: "#F87171", none: "#94A3B8" };
+  let idx = 0, validas = [], timer = null;
+  const nomes = ["Executiva", "Operação", "Capacidade"];
+
+  function est(k, tam, estilo) { const T = window.TV; return '<span class="est" style="color:' + C[k] + ";" + (estilo || "") + '">' + T.icone(k, tam || 32) + T.TEXTO[k] + "</span>"; }
+
+  function tela1(d) {
+    const T = window.TV, sc = d.score || {}, fx = sc.faixa || "none";
+    const pil = d.pilares.map(x => '<div class="pl"><span>' + T.esc(x.nome) + '</span><div class="trilho"><i style="width:' + (x.score || 0) + "%;background:" + C[x.faixa] + '"></i></div><span class="n" style="font-size:44px;text-align:right">' + T.num(x.score, 1) + "</span>" + est(x.faixa, 30) + "</div>").join("");
+    const s = d.dispo_7d || [];
+    let graf = '<div class="mut">Sem histórico.</div>';
+    if (s.length > 1) {
+      const vals = s.map(p => p.valor), lo = Math.floor(Math.min(...vals)), hi = Math.max(lo + 1, Math.ceil(Math.max(...vals)));
+      const W = 1000, H = 190, x0 = 80, y0 = 12;
+      const px = i => x0 + i * (W - x0 - 40) / (s.length - 1), py = v => y0 + (hi - v) / (hi - lo) * (H - y0 - 34);
+      const grade = [lo, (lo + hi) / 2, hi].map(v => '<line x1="' + x0 + '" x2="' + (W - 40) + '" y1="' + py(v) + '" y2="' + py(v) + '" stroke="#1E2A44" stroke-width="2"></line><text x="' + (x0 - 12) + '" y="' + (py(v) + 9) + '" fill="#B8C4D6" font-size="26" text-anchor="end">' + T.num(v, 1) + "</text>").join("");
+      const rot = s.map((p, i) => '<text x="' + px(i) + '" y="' + H + '" fill="#B8C4D6" font-size="24" text-anchor="middle">' + T.esc(p.dia) + "</text>").join("");
+      const u = s[s.length - 1];
+      graf = '<svg viewBox="0 0 ' + W + " " + (H + 8) + '" width="100%" style="flex:1;margin-top:8px" font-family="IBM Plex Sans, sans-serif">' + grade +
+        '<polyline points="' + s.map((p, i) => px(i).toFixed(1) + "," + py(p.valor).toFixed(1)).join(" ") + '" fill="none" stroke="#22D3EE" stroke-width="5" stroke-linejoin="round"></polyline>' +
+        '<circle cx="' + px(s.length - 1) + '" cy="' + py(u.valor) + '" r="10" fill="#22D3EE"></circle><text x="' + (px(s.length - 1) - 18) + '" y="' + (py(u.valor) - 18) + '" fill="#F1F5F9" font-size="30" font-weight="700" text-anchor="end">' + T.num(u.valor, 1) + "%</text>" + rot + "</svg>";
+    }
+    return '<div class="tela t1"><div class="painel heroi"><span class="mut">Score global de governança</span><span class="n" style="font-size:230px;color:' + C[fx] + '">' + T.num(sc.valor, 1) + "</span>" + est(fx, 48, "font-size:44px") + '<span class="mut">meta &gt; 85 · tendência ' + ({ up: "em alta", down: "em queda", stable: "estável" }[sc.tendencia] || "—") + "</span></div>" +
+      '<div class="painel pils"><h2>Pilares COBIT</h2>' + pil + "</div>" +
+      '<div class="painel" style="padding:24px 36px;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Disponibilidade · últimos 7 dias</h2><span class="mut">média diária dos hosts</span></div>' + graf + "</div></div>";
+  }
+
+  function tela2(d) {
+    const T = window.TV, p = (d.zabbix || {}).problemas || {};
+    const sev = [["Alto e desastre", (p.alto || 0) + (p.desastre || 0), "crit"], ["Médio", p.medio || 0, "warn"], ["Aviso", p.aviso || 0, "warn"]];
+    const maisAntigo = {};
+    d.alertas.forEach(a => { if (!maisAntigo[a.unidade] || a.desde < maisAntigo[a.unidade]) maisAntigo[a.unidade] = a.desde; });
+    const uf = d.unidades.filter(u => u.falhas > 0).slice(0, 5).map(u => '<div class="lin"><div style="min-width:0"><div class="ell" style="font-weight:600">' + T.esc(u.nome) + '</div><div class="mut">mais antigo aberto há ' + T.desde(maisAntigo[u.nome]) + '</div></div><span class="est" style="color:' + C[u.faixa] + '">' + T.icone(u.faixa, 34) + '<span class="n" style="font-size:72px">' + u.falhas + "</span></span></div>").join("");
+    const top = d.alertas.filter(a => a.sev >= 4).slice().sort((a, b) => (a.desde < b.desde ? -1 : 1)).slice(0, 5);
+    const top5 = top.map(a => '<div class="lin"><span class="est" style="width:190px;color:' + C.crit + '">' + T.icone("crit", 30) + T.esc(a.sev_rotulo) + '</span><div style="flex:1;min-width:0"><div class="ell" style="font-weight:600">' + T.esc(a.host) + '</div><div class="mut ell">' + T.esc(a.unidade) + " · " + T.esc(a.problema) + '</div></div><span class="n" style="font-size:44px;white-space:nowrap">' + T.desde(a.desde) + "</span></div>").join("");
+    return '<div class="tela t2">' + sev.map(s => '<div class="painel sevc"><span class="est" style="color:' + C[s[2]] + ';font-size:34px">' + window.TV.icone(s[2], 40) + s[0] + '</span><span class="n" style="font-size:170px;color:' + (s[1] ? C[s[2]] : C.ok) + '">' + s[1] + '</span><span class="mut">problemas abertos</span></div>').join("") +
+      '<div class="painel" style="padding:28px 32px"><h2>Unidades com falha</h2>' + (uf || '<div class="mut">Nenhuma.</div>') + "</div>" +
+      '<div class="painel" style="grid-column:2/4;padding:28px 32px"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Top 5 incidentes Zabbix · mais antigos</h2><span class="mut">' + T.num(p.total) + " abertos</span></div>" + (top5 || '<div class="mut">Nenhum incidente alto.</div>') + "</div></div>";
+  }
+
+  function tela3(d) {
+    const T = window.TV, lic = d.licencas, dev = d.dispositivos;
+    const max = Math.max(1, ...d.unidades.map(u => u.ativos));
+    const barras = d.unidades.map(u => '<div class="bar"><span class="ell" style="font-weight:600">' + T.esc(u.nome) + '</span><div style="height:34px;display:flex;gap:3px">' +
+      (u.ativos ? '<i style="width:' + ((u.ativos - u.falhas) / max * 100) + '%;background:#22D3EE;border-radius:6px 0 0 6px"></i><i style="width:' + (u.falhas / max * 100) + '%;background:#F87171;border-radius:0 6px 6px 0"></i>' : '<i style="width:100%;border:3px dashed #334155;border-radius:6px"></i>') +
+      '</div><span class="est" style="color:' + C[u.faixa] + ';font-size:26px;text-transform:none;letter-spacing:0">' + T.icone(u.faixa, 28) + (u.ativos ? (u.ativos - u.falhas) + " ok · " + u.falhas + " falha" : "sem dados") + "</span></div>").join("");
+    const licHtml = lic ? '<div style="display:flex;gap:36px;align-items:baseline"><span class="n" style="font-size:96px">' + T.num(lic.uso_pct, 1) + '%</span><span class="mut">em uso · ' + T.num(lic.usadas) + " de " + T.num(lic.total) + "<br>R$ " + T.num(lic.custo_mensal) + " por mês</span></div>" +
+      '<div style="display:flex;flex-direction:column;gap:12px">' + lic.anomalias.slice(0, 3).map(a => '<span class="est" style="text-transform:none;letter-spacing:0;font-weight:600;color:' + C[a.tipo === "vencida" ? "crit" : "warn"] + '">' + T.icone(a.tipo === "vencida" ? "crit" : "warn", 30) + T.esc(a.texto) + "</span>").join("") + "</div>" : '<div class="mut">Sem dados de licenças.</div>';
+    const pctAtivo = dev ? Math.round((1 - dev.inativos / dev.total) * 100) : 0;
+    const devHtml = dev ? '<div style="display:flex;gap:36px;align-items:baseline"><span class="n" style="font-size:150px;color:' + C[T.faixa(pctAtivo)] + '">' + T.num(dev.inativos) + '</span><span class="mut">de ' + T.num(dev.total) + " dispositivos<br>sem contato há 45+ dias</span></div>" +
+      '<div style="height:26px;border-radius:13px;background:#1E2A44;overflow:hidden"><i style="display:block;height:100%;width:' + pctAtivo + '%;background:#22D3EE"></i></div><span class="mut">' + pctAtivo + "% ativos nos últimos 45 dias · Entra ID</span>" : '<div class="mut">Sem dados de dispositivos.</div>';
+    return '<div class="tela t3"><div class="painel" style="grid-row:1/3;padding:30px 36px;display:flex;flex-direction:column;gap:14px"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Ativos por unidade</h2><span class="mut"><b class="ac">■</b> operação · <b style="color:#F87171">■</b> falha</span></div><div style="flex:1;display:flex;flex-direction:column;justify-content:space-around">' + barras + "</div></div>" +
+      '<div class="painel" style="padding:28px 32px;display:flex;flex-direction:column;gap:14px"><h2>Licenças M365</h2>' + licHtml + "</div>" +
+      '<div class="painel" style="padding:28px 32px;display:flex;flex-direction:column;gap:14px"><h2>Dispositivos inativos</h2>' + devHtml + "</div></div>";
+  }
+
+  function mostrar(i) {
+    idx = i;
+    document.querySelectorAll(".B .tela").forEach(t => t.classList.toggle("on", Number(t.dataset.i) === i));
+    document.querySelectorAll(".B .pontos span").forEach((p, j) => p.classList.toggle("on", j === i));
+    const n = document.getElementById("tv-nome"); if (n) n.textContent = nomes[i];
+  }
+
+  window.PainelTV = {
+    render: function (d) {
+      const T = window.TV;
+      // Watchdog: tela que falha ao montar fica de fora da rotação.
+      const html = [tela1, tela2, tela3].map((f, i) => { try { return f(d).replace('<div class="tela ', '<div data-i="' + i + '" class="tela '); } catch (e) { return ""; } });
+      validas = html.map((h, i) => (h ? i : -1)).filter(i => i >= 0);
+      if (!validas.includes(idx)) idx = validas[0] || 0;
+      return '<div class="tv B"><div class="bh"><span style="font-family:Space Grotesk,sans-serif;font-size:40px;font-weight:600">Governança de TI · <span class="ac" id="tv-nome">' + nomes[idx] + '</span></span><span style="display:flex;gap:28px;align-items:baseline"><span class="mut" data-atualizacao></span><span class="n" style="font-size:52px">' + T.esc(d.hora) + "</span></span></div>" +
+        '<div class="telas">' + html.join("") + '</div><div class="bf"><span class="mut">' + T.esc(d.data) + " · Zabbix, Zendesk, InfluxDB, Microsoft 365</span>" +
+        '<div class="pontos">' + [0, 1, 2].map(i => '<span class="' + (validas.includes(i) ? "" : "") + '"></span>').join("") + '<b style="font-family:Space Grotesk,sans-serif;margin-left:8px">troca a cada 30 s</b></div></div></div>';
+    },
+    depois: function () {
+      mostrar(idx);
+      if (!timer) timer = setInterval(function () {
+        if (!validas.length) return;
+        mostrar(validas[(validas.indexOf(idx) + 1) % validas.length]);
+      }, 30000);
+    }
+  };
+})();
+{% endblock %}

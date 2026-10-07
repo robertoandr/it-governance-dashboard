@@ -1,0 +1,94 @@
+{% extends "tv/_base.html" %}
+{% block title %}v1 · Sala de Controle{% endblock %}
+{% block estilo %}
+<style>
+  .A { background: #0A1120; color: #EAF0FA; font-family: Barlow, system-ui, sans-serif; padding: 36px 40px; display: flex; flex-direction: column; gap: 24px; }
+  .A .cond { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; }
+  .A header { height: 72px; display: flex; align-items: center; justify-content: space-between; }
+  .A .marca { display: flex; align-items: center; gap: 20px; }
+  .A .logo { width: 56px; height: 56px; border-radius: 14px; background: #16223A; display: flex; align-items: center; justify-content: center; color: #45C6FF; }
+  .A .tit { font-size: 40px; font-weight: 700; line-height: 1; }
+  .A .sub { font-size: 22px; color: #9AA8BF; margin-top: 4px; }
+  .A .fontes { display: flex; gap: 18px; font-size: 22px; color: #C7D2E3; }
+  .A .fontes span { display: flex; align-items: center; gap: 8px; }
+  .A .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+  .A .hora { font-size: 56px; font-weight: 600; line-height: 1; text-align: right; font-variant-numeric: tabular-nums; }
+  .A .data { font-size: 20px; color: #9AA8BF; text-align: right; }
+  .A .l1 { height: 280px; display: flex; gap: 24px; }
+  .A .heroi { width: 500px; flex-shrink: 0; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; justify-content: space-between; border: 3px solid; }
+  .A .eyebrow { font-size: 24px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: #C7D2E3; }
+  .A .score { font-size: 136px; font-weight: 700; line-height: .9; font-variant-numeric: tabular-nums; }
+  .A .kpis { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; }
+  .A .kpi { background: #121B2E; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; justify-content: space-between; border-top: 8px solid; }
+  .A .kpi .r { font-size: 23px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #B4C0D3; line-height: 1.2; }
+  .A .kpi .v { font-size: 80px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .A .kpi .s { font-size: 22px; color: #C7D2E3; line-height: 1.25; }
+  .A .l2 { flex: 1; min-height: 0; display: flex; gap: 24px; }
+  .A .unids { width: 1150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+  .A h2 { margin: 0; font-family: 'Barlow Condensed', Barlow, sans-serif; font-size: 36px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .A .cab { display: flex; align-items: baseline; justify-content: space-between; }
+  .A .cab span { font-size: 24px; color: #9AA8BF; }
+  .A .grade { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .A .un { border: 2px solid #22304A; border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; justify-content: space-between; background: #121B2E; min-width: 0; }
+  .A .un .n { font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .A .selo { font-size: 18px; font-weight: 700; letter-spacing: 1px; padding: 4px 10px; border-radius: 8px; color: #0A1120; white-space: nowrap; }
+  .A .un .f { font-size: 72px; font-weight: 700; line-height: 1; }
+  .A .un .lg { font-size: 22px; color: #C7D2E3; }
+  .A .barra { height: 12px; border-radius: 6px; background: #22304A; overflow: hidden; }
+  .A .barra i { display: block; height: 100%; border-radius: 6px; }
+  .A .alertas { flex: 1; min-width: 0; overflow: hidden; background: #121B2E; border-radius: 20px; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px; }
+  .A .al { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid #22304A; }
+  .A .sev { width: 110px; flex-shrink: 0; text-align: center; font-size: 18px; font-weight: 700; letter-spacing: 1px; padding: 6px 0; border-radius: 8px; color: #0A1120; }
+  .A .al .h { font-size: 26px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .A .al .p { font-size: 20px; color: #9AA8BF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .A .al .t { font-family: 'Barlow Condensed', Barlow, sans-serif; font-size: 30px; font-weight: 600; white-space: nowrap; }
+  .A footer { height: 86px; display: flex; align-items: center; gap: 28px; background: #121B2E; border-radius: 18px; padding: 0 28px; }
+  .A .pil { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .A .pil div:first-child { display: flex; justify-content: space-between; font-size: 22px; color: #C7D2E3; }
+</style>
+{% endblock %}
+{% block render %}
+window.PainelTV = {
+  render: function (d) {
+    const T = window.TV;
+    const C = { crit: "#FF6B6E", warn: "#FFB547", ok: "#45C6FF", none: "#5B6B85" };
+    const z = d.zabbix || {}, p = z.problemas || {}, sla = d.sla || {};
+    const sc = d.score || {};
+    const fx = sc.faixa || "none";
+    const fundoHeroi = { crit: "#2A1418", warn: "#2A1E0B", ok: "#0C2233", none: "#121B2E" }[fx];
+    const links = (d.links && d.links.fora) || [];
+    const kpis = [
+      ["Disponibilidade", T.num(z.disponibilidade, 1) + "%", "meta 99% · " + T.num(z.hosts_fora) + " hosts fora", T.faixa(z.disponibilidade)],
+      ["Problemas abertos", T.num(p.total), T.num(p.alto) + " altos · " + T.num(p.medio) + " médios", p.total ? "crit" : "ok"],
+      ["SLA atendimento", T.num(sla.cumprido, 1) + "%", "meta 90% · " + T.num(sla.dias) + " dias", T.faixa(sla.cumprido)],
+      ["Chamados vencidos", T.num(sla.vencidos), "de " + T.num(sla.abertos) + " em aberto", sla.vencidos ? "crit" : "ok"],
+      ["Links e túneis", String(links.length), links.length ? links[0].unidade + ": " + links[0].texto + (links.length > 1 ? " +" + (links.length - 1) : "") : "todos no ar", links.length ? "warn" : "ok"],
+    ];
+    const totAt = d.unidades.reduce((a, u) => a + u.ativos, 0), totF = d.unidades.reduce((a, u) => a + u.falhas, 0);
+    const un = d.unidades.slice(0, 7).map(u => {
+      const k = u.faixa;
+      return '<div class="un"' + (k === "crit" ? ' style="background:#2A1418;border-color:' + C.crit + '"' : "") + '>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="n">' + T.esc(u.nome) + '</span><span class="selo" style="background:' + C[k] + '">' + { ok: "OK", warn: "ATENÇÃO", crit: "CRÍTICO", none: "SEM DADOS" }[k] + "</span></div>" +
+        '<div style="display:flex;align-items:baseline;gap:10px"><span class="f cond" style="color:' + C[k] + '">' + (u.ativos ? u.falhas : "—") + '</span><span class="lg">' + (u.ativos ? "em falha de " + u.ativos : "sem monitoramento") + "</span></div>" +
+        '<div class="barra"><i style="width:' + (u.ativos ? Math.round((1 - u.falhas / u.ativos) * 100) : 0) + "%;background:" + C[k] + '"></i></div></div>';
+    }).join("") +
+      '<div class="un" style="background:#16223A;border-color:#2E3F5E"><div style="display:flex;justify-content:space-between;align-items:center"><span class="n">Total</span><span class="selo" style="background:#EAF0FA">' + (totAt ? Math.round((1 - totF / totAt) * 100) : 0) + '% OK</span></div><div style="display:flex;align-items:baseline;gap:10px"><span class="f cond">' + totF + '</span><span class="lg">em falha de ' + totAt + '</span></div><div class="barra"><i style="width:' + (totAt ? Math.round((1 - totF / totAt) * 100) : 0) + '%;background:#EAF0FA"></i></div></div>';
+    const al = d.alertas.slice(0, 5).map(a => {
+      const k = a.sev >= 4 ? "crit" : "warn";
+      return '<div class="al"><span class="sev" style="background:' + C[k] + '">' + T.esc(a.sev_rotulo) + '</span><div style="flex:1;min-width:0"><div class="h">' + T.esc(a.host) + '</div><div class="p">' + T.esc(a.unidade) + " · " + T.esc(a.problema) + (a.reconhecido ? " · reconhecido" : "") + '</div></div><span class="t">há ' + T.desde(a.desde) + "</span></div>";
+    }).join("");
+    const pil = d.pilares.map(x => '<div class="pil"><div><span>' + T.esc(x.nome.replace("Gestão de ", "").replace("Mensuração de ", "").replace(" Estratégico", "")) + '</span><b style="color:' + C[x.faixa] + '">' + T.num(x.score, 1) + '</b></div><div class="barra" style="height:10px"><i style="width:' + (x.score || 0) + "%;background:" + C[x.faixa] + '"></i></div></div>').join("");
+    const fontes = d.fontes.slice(0, 5).map(f => '<span><i class="dot" style="background:' + (f.estado === "online" ? C.ok : C.crit) + '"></i>' + T.esc(f.nome) + "</span>").join("");
+    return '<div class="tv A">' +
+      '<header><div class="marca"><div class="logo">' + T.icone("pulso", 32) + '</div><div><div class="tit cond">Governança de TI · NOC</div><div class="sub" data-atualizacao></div></div></div>' +
+      '<div style="display:flex;align-items:center;gap:36px"><div class="fontes">' + fontes + '</div><div><div class="hora cond">' + T.esc(d.hora) + '</div><div class="data">' + T.esc(d.data) + "</div></div></div></header>" +
+      '<section class="l1"><div class="heroi" style="background:' + fundoHeroi + ";border-color:" + C[fx] + '"><div class="eyebrow">Situação geral</div><div style="display:flex;align-items:baseline;gap:14px"><span class="score cond">' + T.num(sc.valor, 1) + '</span><span style="font-size:34px;color:#C7D2E3">/ 100</span></div>' +
+      '<div style="display:flex;align-items:center;gap:14px;color:' + C[fx] + '">' + T.icone(fx, 34) + '<span class="cond" style="font-size:44px;font-weight:700;letter-spacing:1px;text-transform:uppercase">' + T.TEXTO[fx] + '</span><span style="font-size:22px;color:#C7D2E3">meta &gt; 85</span></div></div>' +
+      '<div class="kpis">' + kpis.map(k => '<div class="kpi" style="border-top-color:' + C[k[3]] + '"><div class="r">' + k[0] + '</div><div class="v cond" style="color:' + C[k[3]] + '">' + k[1] + '</div><div class="s">' + T.esc(k[2]) + "</div></div>").join("") + "</div></section>" +
+      '<section class="l2"><div class="unids"><div class="cab"><h2>Ativos por unidade</h2><span>' + totAt + ' ativos · <b style="color:' + C.crit + '">' + totF + ' em falha</b></span></div><div class="grade">' + un + "</div></div>" +
+      '<div class="alertas"><div class="cab"><h2>Alertas ativos</h2><span style="font-size:22px">mais recentes primeiro</span></div>' + (al || '<div class="p" style="font-size:26px">Nenhum alerta aberto.</div>') +
+      '<div style="margin-top:auto;font-size:22px;color:#C7D2E3">' + T.num(p.total) + ' abertos · <b style="color:' + C.crit + '">' + T.num(p.alto) + ' altos</b> · <b style="color:' + C.warn + '">' + T.num(p.medio) + " médios</b> · " + T.num(p.aviso) + " avisos · " + T.num(p.reconhecidos) + " reconhecidos</div></div></section>" +
+      '<footer><span class="cond" style="font-size:28px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9AA8BF">Pilares</span>' + pil + "</footer></div>";
+  }
+};
+{% endblock %}

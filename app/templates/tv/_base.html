@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Painel TV{% endblock %} — Governança de TI</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/tv/fonts.css') }}">
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    #palco { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: center center; overflow: hidden; }
+    .tv { position: absolute; inset: 0; box-sizing: border-box; }
+    .tv * { box-sizing: border-box; }
+    .ic { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+    .tv-velho { color: #FFB547 !important; font-weight: 700; }
+    .tv-erro { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #F1F5F9; font: 600 40px system-ui, sans-serif; background: #0B1220; }
+    .tv-nav { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 6px; opacity: 0; transition: opacity .3s; z-index: 10; }
+    body:hover .tv-nav, .tv-nav:focus-within { opacity: 1; }
+    .tv-nav a { font: 600 14px system-ui, sans-serif; color: #E2E8F0; background: rgba(15, 23, 42, .9); border: 1px solid #334155; border-radius: 8px; padding: 8px 12px; text-decoration: none; }
+    .tv-nav a[aria-current="page"] { border-color: #22D3EE; color: #22D3EE; }
+    .tv-nav a:focus-visible { outline: 3px solid #22D3EE; outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+  {% block estilo %}{% endblock %}
+</head>
+<body>
+  <div id="palco" data-url="{{ url_for('painel_tv.dados') }}" role="main" aria-live="polite"></div>
+  <nav class="tv-nav" aria-label="Modelos do painel">
+    {% for m in modelos %}<a href="{{ url_for('painel_tv.tela', versao=m.versao) }}"{% if m.versao == versao %} aria-current="page"{% endif %}>v{{ m.versao }} · {{ m.nome }}</a>{% endfor %}
+  </nav>
+  <script type="application/json" id="dados-painel">{{ painel | tojson }}</script>
+  <script nonce="{{ csp_nonce() }}">{% block render %}{% endblock %}</script>
+  <script src="{{ url_for('static', filename='js/painel_tv.js') }}" nonce="{{ csp_nonce() }}"></script>
+</body>
+</html>

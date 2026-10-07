@@ -1,0 +1,77 @@
+{% extends "tv/_base.html" %}
+{% block title %}v5 · KIT ExStart{% endblock %}
+{% block estilo %}
+<style>
+  /* KIT ExStart: paleta curta com papéis — principal, destaque, neutra escura,
+     neutra clara e alerta. Gráfico pela pergunta: ranking → barras, evolução →
+     linha, meta → barra-bala. Título de cada bloco diz a conclusão. */
+  .K { --principal: #4CB5E0; --destaque: #FF8A3D; --escura: #0E1318; --clara: #E9EEF2; --alerta: #FF5A5F;
+       --painel: #161D24; --linha: #26313B; --mut: #AEB9C4;
+       background: var(--escura); color: var(--clara); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 28px;
+       padding: 32px 44px; display: grid; grid-template-columns: minmax(0, 1fr) 720px; grid-template-rows: 84px 236px minmax(0, 1fr); gap: 24px 28px; }
+  .K .n { font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .K .mut { color: var(--mut); }
+  .K .painel { background: var(--painel); border-radius: 18px; padding: 24px 28px; min-width: 0; }
+  .K h2 { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 34px; font-weight: 600; line-height: 1.2; }
+  .K .eyebrow { font-size: 24px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--mut); display: flex; align-items: center; gap: 10px; }
+  .K .topo { grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center; }
+  .K .chip { display: inline-flex; align-items: center; gap: 8px; font-size: 24px; color: var(--mut); border: 2px solid var(--linha); border-radius: 999px; padding: 6px 14px; }
+  .K .kpis { grid-column: 1 / 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  .K .kpi { display: flex; flex-direction: column; justify-content: space-between; }
+  .K .bala { position: relative; height: 18px; background: var(--linha); border-radius: 9px; }
+  .K .bala i { display: block; height: 100%; border-radius: 9px; }
+  .K .bala b { position: absolute; top: -8px; bottom: -8px; width: 5px; background: var(--clara); border-radius: 2px; }
+  .K .est { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 28px; }
+  .K .rank { display: grid; grid-template-columns: 330px minmax(0, 1fr) 150px; gap: 20px; align-items: center; }
+  .K .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .K .al { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--linha); }
+</style>
+{% endblock %}
+{% block render %}
+window.PainelTV = {
+  render: function (d) {
+    const T = window.TV;
+    const COR = { ok: "var(--principal)", warn: "var(--destaque)", crit: "var(--alerta)", none: "var(--mut)" };
+    const est = k => '<span class="est" style="color:' + COR[k] + '">' + T.icone(k, 28) + T.TEXTO[k] + "</span>";
+    const sc = d.score || {}, z = d.zabbix || {}, sla = d.sla || {}, ss = d.secure_score || {};
+    const bala = (v, meta, k) => '<div class="bala"><i style="width:' + Math.min(100, v || 0) + "%;background:" + COR[k] + '"></i><b style="left:calc(' + meta + '% - 2px)"></b></div>';
+    const kpi = (icone, rot, v, meta, unidade) => {
+      const k = T.faixa(v);
+      return '<div class="painel kpi"><div style="display:flex;justify-content:space-between;align-items:center"><span class="eyebrow">' + T.icone(icone, 26) + rot + "</span>" + est(k) + '</div><span class="n" style="font-size:84px">' + T.num(v, 1) + '<span style="font-size:40px">' + unidade + "</span></span>" + bala(v, meta, k) + '<span class="mut" style="font-size:24px">meta ' + meta + unidade + " · faltam " + T.num(Math.max(0, meta - (v || 0)), 1) + "</span></div>";
+    };
+    const totAt = d.unidades.reduce((a, u) => a + u.ativos, 0), totF = d.unidades.reduce((a, u) => a + u.falhas, 0);
+    const ranking = d.unidades.filter(u => u.ativos).slice().sort((a, b) => b.falhas - a.falhas || b.ativos - a.ativos);
+    const lider = ranking[0];
+    const titulo = totF && lider && lider.falhas ? T.esc(lider.nome) + " concentra " + lider.falhas + " das " + totF + " falhas" : "Nenhum ativo em falha agora";
+    const maxF = Math.max(1, ...ranking.map(u => u.falhas));
+    const barras = ranking.map((u, i) => '<div class="rank"><span class="ell" style="font-weight:' + (i === 0 ? 700 : 400) + '">' + T.esc(u.nome) + '</span><div style="height:40px;background:var(--linha);border-radius:8px;overflow:hidden"><i style="display:block;height:100%;width:' + (u.falhas / maxF * 100) + "%;background:" + (i === 0 && u.falhas ? "var(--alerta)" : "var(--destaque)") + '"></i></div><span style="text-align:right"><b class="n" style="font-size:44px">' + u.falhas + '</b> <span class="mut" style="font-size:24px">/ ' + u.ativos + "</span></span></div>").join("");
+    const semMon = d.unidades.filter(u => !u.ativos).map(u => T.esc(u.nome)).join(", ");
+    const s = d.dispo_7d || [];
+    let linha = '<div class="mut">Sem histórico.</div>', resumo = "";
+    if (s.length > 1) {
+      const meta = 99, vals = s.map(p => p.valor), lo = Math.floor(Math.min(...vals)) - 1, hi = 100;
+      const W = 640, H = 215, x0 = 70, y0 = 14;
+      const px = i => x0 + i * (W - x0 - 20) / (s.length - 1), py = v => y0 + (hi - v) / (hi - lo) * (H - y0 - 40);
+      const grade = [lo, Math.round((lo + hi) / 2), hi].map(v => '<line x1="' + x0 + '" x2="' + (W - 20) + '" y1="' + py(v) + '" y2="' + py(v) + '" stroke="#26313B" stroke-width="2"></line><text x="' + (x0 - 10) + '" y="' + (py(v) + 9) + '" fill="#AEB9C4" font-size="24" text-anchor="end">' + v + "</text>").join("");
+      const u = s[s.length - 1];
+      linha = '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" font-family="IBM Plex Sans, sans-serif">' + grade +
+        '<line x1="' + x0 + '" x2="' + (W - 20) + '" y1="' + py(meta) + '" y2="' + py(meta) + '" stroke="#E9EEF2" stroke-width="3" stroke-dasharray="10 8"></line><text x="' + (W - 20) + '" y="' + (py(meta) - 12) + '" fill="#E9EEF2" font-size="24" text-anchor="end">meta 99%</text>' +
+        '<polyline points="' + s.map((p, i) => px(i).toFixed(1) + "," + py(p.valor).toFixed(1)).join(" ") + '" fill="none" stroke="#4CB5E0" stroke-width="6" stroke-linejoin="round"></polyline>' +
+        '<circle cx="' + px(s.length - 1) + '" cy="' + py(u.valor) + '" r="10" fill="#4CB5E0"></circle>' +
+        s.map((p, i) => (i % 2 === 0 || i === s.length - 1) ? '<text x="' + px(i) + '" y="' + (H - 6) + '" fill="#AEB9C4" font-size="22" text-anchor="' + (i === s.length - 1 ? "end" : i === 0 ? "start" : "middle") + '">' + T.esc(p.dia) + "</text>" : "").join("") + "</svg>";
+      const vmin = Math.min(...vals), vmax = Math.max(...vals);
+      resumo = vmax - vmin < 0.5 ? "Disponibilidade estável em " + T.num(u.valor, 1) + "%, " + T.num(meta - u.valor, 1) + (meta - u.valor >= 2 ? " pontos" : " ponto") + " abaixo da meta" : "Disponibilidade variou de " + T.num(vmin, 1) + "% a " + T.num(vmax, 1) + "% na semana";
+    }
+    const al = d.alertas.slice(0, 2).map(a => { const k = a.sev >= 4 ? "crit" : "warn"; return '<div class="al"><span style="color:' + COR[k] + '">' + T.icone("sino", 30) + '</span><div style="flex:1;min-width:0"><div class="ell" style="font-weight:600">' + T.esc(a.host) + '</div><div class="mut ell" style="font-size:24px">' + T.esc(a.unidade) + " · " + T.esc(a.problema) + '</div></div><span class="n" style="font-size:32px;white-space:nowrap">' + T.desde(a.desde) + "</span></div>"; }).join("");
+    const fontes = d.fontes.slice(0, 4).map(f => '<span class="chip"><span style="width:12px;height:12px;border-radius:50%;background:' + (f.estado === "online" ? "var(--principal)" : "var(--alerta)") + '"></span>' + T.esc(f.nome) + "</span>").join(" ");
+    return '<div class="tv K">' +
+      '<div class="topo"><div><div class="n" style="font-size:44px;font-weight:600">Governança de TI <span style="color:var(--destaque)">·</span> o que importa agora</div><div class="mut" style="font-size:24px;margin-top:6px" data-atualizacao></div></div>' +
+      '<div style="display:flex;align-items:center;gap:14px">' + fontes + '<span class="n" style="font-size:52px;margin-left:16px">' + T.esc(d.hora) + '</span><span class="mut">' + T.esc(d.data) + "</span></div></div>" +
+      '<div class="kpis">' + kpi("pulso", "Governança", sc.valor, 85, "") + kpi("servidor", "Disponibilidade", z.disponibilidade, 99, "%") + kpi("chamado", "Atendimento", sla.cumprido, 90, "%") + kpi("escudo", "Secure Score", ss.pct, 70, "%") + "</div>" +
+      '<div class="painel" style="display:flex;flex-direction:column;gap:18px"><span class="eyebrow">' + T.icone("predio", 26) + "Ativos em falha por unidade</span><h2>" + titulo + '</h2><div style="flex:1;display:flex;flex-direction:column;justify-content:space-around">' + barras + "</div>" +
+      (semMon ? '<span class="mut" style="font-size:24px">Sem monitoramento: ' + semMon + "</span>" : "") + "</div>" +
+      '<div style="display:flex;flex-direction:column;gap:24px;min-height:0"><div class="painel" style="display:flex;flex-direction:column;gap:10px"><span class="eyebrow">' + T.icone("servidor", 26) + "Disponibilidade · 7 dias</span><h2 style=\"font-size:30px\">" + resumo + "</h2>" + linha + "</div>" +
+      '<div class="painel" style="flex:1;min-height:0;overflow:hidden"><span class="eyebrow">' + T.icone("sino", 26) + "Alertas mais recentes · " + T.num((z.problemas || {}).total) + " abertos</span>" + (al || '<div class="mut">Nenhum alerta aberto.</div>') + "</div></div></div>";
+  }
+};
+{% endblock %}
