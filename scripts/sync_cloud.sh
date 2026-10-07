@@ -26,6 +26,12 @@ BACKUP_FILE_PATTERN="${BACKUP_FILE_PATTERN:-*.gz *.gpg}"
 # arquivos desses padrões com mais de N dias. 0 desliga. (`rclone copy` nunca
 # apaga nada, então sem isto o remoto só cresce.)
 REMOTE_RETENTION_DAYS="${REMOTE_RETENTION_DAYS:-30}"
+# Aviso ao Zabbix depois de cada upload bem-sucedido: o item trapper
+# backup.externo.ultimo_ok recebe o horário e a trigger "Backup externo sem
+# upload bem-sucedido há mais de 26 h" (nodata) dispara se o aviso parar —
+# a ação 12 então abre chamado no Zendesk e avisa no WhatsApp.
+ZABBIX_BACKUP_HOST="${ZABBIX_BACKUP_HOST:-Backup externo itgov-dev}"
+ZABBIX_SENDER_CONTAINER="${ZABBIX_SENDER_CONTAINER:-zabbix_server}"
 
 mkdir -p "$LOG_DIR"
 
@@ -78,5 +84,14 @@ if [ "$REMOTE_RETENTION_DAYS" -gt 0 ]; then
         log "ERRO" "rclone delete falhou ao aplicar a retenção em $RCLONE_REMOTE (upload já concluído)"
         exit 1
     fi
+fi
+
+# Falha no aviso não invalida o backup: só fica registrada no log (e, se
+# persistir, a própria trigger de 26 h acusa).
+if docker exec "$ZABBIX_SENDER_CONTAINER" zabbix_sender -z 127.0.0.1 -s "$ZABBIX_BACKUP_HOST" \
+    -k backup.externo.ultimo_ok -o "$(date +%s)" >>"$LOG_FILE" 2>&1; then
+    log "SUCESSO" "Zabbix avisado (host \"$ZABBIX_BACKUP_HOST\")"
+else
+    log "AVISO" "não consegui avisar o Zabbix via $ZABBIX_SENDER_CONTAINER — a trigger de 26 h pode disparar"
 fi
 exit 0

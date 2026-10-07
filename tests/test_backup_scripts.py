@@ -34,6 +34,9 @@ def _rodar_sync(tmp_path: Path, extra_env: dict[str, str] | None = None, falha_e
     bin_dir.mkdir()
     registro = tmp_path / "rclone.log"
     _rclone_falso(bin_dir, registro, falha_em)
+    docker = bin_dir / "docker"
+    docker.write_text(f'#!/usr/bin/env bash\necho "docker $*" >> "{registro}"\nexit 0\n')
+    docker.chmod(0o755)
     env = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
@@ -54,6 +57,8 @@ def test_sync_envia_dumps_e_pacote_criptografado_e_aplica_retencao_de_30_dias(tm
     assert "--include *.gz --include *.gpg" in chamadas[0]
     assert chamadas[1].startswith("delete remoto:Backups/teste --min-age 30d")
     assert "--include *.gz --include *.gpg" in chamadas[1]
+    assert chamadas[2].startswith("docker exec zabbix_server zabbix_sender")
+    assert "-s Backup externo itgov-dev -k backup.externo.ultimo_ok" in chamadas[2]
 
 
 def test_sync_nao_apaga_nada_no_remoto_quando_o_upload_falha(tmp_path: Path) -> None:
@@ -61,13 +66,14 @@ def test_sync_nao_apaga_nada_no_remoto_quando_o_upload_falha(tmp_path: Path) -> 
 
     assert rc == 1
     assert not any(c.startswith("delete") for c in chamadas)
+    assert not any(c.startswith("docker") for c in chamadas)  # sem upload, sem aviso
 
 
 def test_sync_sem_retencao_quando_desligada(tmp_path: Path) -> None:
     rc, chamadas = _rodar_sync(tmp_path, {"REMOTE_RETENTION_DAYS": "0"})
 
     assert rc == 0
-    assert [c.split()[0] for c in chamadas] == ["copy"]
+    assert [c.split()[0] for c in chamadas] == ["copy", "docker"]
 
 
 def _env_config(tmp_path: Path, senha: str | None) -> dict[str, str]:
