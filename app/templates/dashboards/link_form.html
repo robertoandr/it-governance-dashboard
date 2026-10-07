@@ -34,7 +34,7 @@
       <input type="text" name="name" required
              value="{{ link.name if link else '' }}"
              placeholder="Ex: Link Primario Claro — Sede"
-             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gadens-500">
     </div>
 
     {# IP + CIDR #}
@@ -45,7 +45,7 @@
                value="{{ link.ip if link else '' }}"
                placeholder="45.166.249.159"
                pattern="^(\d{1,3}\.){3}\d{1,3}$"
-               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gadens-500">
         <p class="text-xs text-slate-400 mt-1">IP que sera monitorado via ICMP ping</p>
       </div>
       <div>
@@ -53,7 +53,7 @@
         <input type="text" name="cidr"
                value="{{ link.cidr if link else '' }}"
                placeholder="45.166.249.159/32"
-               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gadens-500">
       </div>
     </div>
 
@@ -64,14 +64,14 @@
         <input type="text" name="provider"
                value="{{ link.provider if link else '' }}"
                placeholder="Claro, Vivo, TIM..."
-               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gadens-500">
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">ID do circuito</label>
         <input type="text" name="circuit_id"
                value="{{ link.circuit_id if link else '' }}"
                placeholder="CLR-12345-SP"
-               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gadens-500">
       </div>
     </div>
 
@@ -80,7 +80,7 @@
       <div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Tipo de link</label>
         <select name="link_type"
-                class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gadens-500">
           {% for t in ['fibra', 'mpls', 'dedicado', 'vdsl', 'vsat', '4g', 'outros'] %}
           <option value="{{ t }}" {{ 'selected' if link and link.link_type == t }}>{{ t|capitalize }}</option>
           {% endfor %}
@@ -91,7 +91,7 @@
         <input type="number" name="bandwidth_mbps" min="0" step="0.1"
                value="{{ link.bandwidth_mbps if link and link.bandwidth_mbps else '' }}"
                placeholder="100"
-               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gadens-500">
       </div>
     </div>
 
@@ -100,7 +100,7 @@
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Notas</label>
       <textarea name="notes" rows="3"
                 placeholder="SLA do contrato, contato do NOC do provedor..."
-                class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">{{ link.notes if link else '' }}</textarea>
+                class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gadens-500">{{ link.notes if link else '' }}</textarea>
     </div>
 
     {# Ativo #}
@@ -129,7 +129,7 @@
           Cancelar
         </a>
         <button type="submit" name="action" value="save"
-                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+                class="bg-gadens-600 hover:bg-gadens-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
           {{ 'Salvar alteracoes' if link else 'Adicionar link' }}
         </button>
       </div>

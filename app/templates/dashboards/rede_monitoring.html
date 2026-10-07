@@ -121,7 +121,7 @@
   {# ── Revisão dos hosts descobertos ─────────────────────────────────────────── #}
   {% set pode_editar = current_user.role in ('admin', 'gestor') %}
   {% set pill = 'text-xs font-medium px-3 py-1.5 rounded-full border transition-colors' %}
-  {% set on = 'bg-blue-600 border-blue-600 text-white' %}
+  {% set on = 'bg-gadens-600 border-gadens-600 text-white' %}
   {% set off = 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' %}
   <div class="{{ card }} p-5 space-y-4">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -193,7 +193,7 @@
               {% if h.ativo %}
                 <span class="text-green-700 dark:text-green-400" title="{{ tipo_labels.get(h.ativo.tipo, h.ativo.tipo) }}">✓ {{ h.ativo.nome }}</span>
               {% elif pode_editar %}
-                <a href="{{ url_for('dashboards.rede_cadastrar_ativo', ip=h.ip) }}" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium rounded px-2.5 py-1">Cadastrar</a>
+                <a href="{{ url_for('dashboards.rede_cadastrar_ativo', ip=h.ip) }}" class="inline-block bg-gadens-600 hover:bg-gadens-700 text-white font-medium rounded px-2.5 py-1">Cadastrar</a>
               {% else %}
                 <span class="text-slate-400">sem cadastro</span>
               {% endif %}

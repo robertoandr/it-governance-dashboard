@@ -7,20 +7,16 @@
   <!-- Tailwind dark mode via class strategy -->
   <!-- Empacotado localmente em app/static/vendor/ — sem dependência de CDN externo -->
   <script src="{{ url_for('static', filename='vendor/tailwind.js') }}" nonce="{{ csp_nonce() }}"></script>
-  <!-- A config só vale depois do script: definida antes, ela é
-       sobrescrita no carregamento e o dark mode caía no padrão "media" (tema do SO). -->
-  <script nonce="{{ csp_nonce() }}">
-    tailwind.config = { darkMode: 'class' };
-    if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
-  </script>
+  <!-- Tema Gadens Institucional (cores, fonte e dark mode) — depois do tailwind.js -->
+  {% include "partials/tema_gadens.html" %}
   <!-- Alpine CSP build — sem eval() -->
   <script defer src="{{ url_for('static', filename='vendor/alpine-csp.min.js') }}" nonce="{{ csp_nonce() }}"></script>
   <!-- Chart.js -->
   <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}" nonce="{{ csp_nonce() }}"></script>
   <style nonce="{{ csp_nonce() }}">
     [x-cloak] { display: none !important; }
-    .status-OPERACIONAL { color: #16a34a; }
-    .status-DEGRADADO   { color: #ca8a04; }
+    .status-OPERACIONAL { color: #1E7F55; }
+    .status-DEGRADADO   { color: #A85F00; }
   </style>
   <!-- Alpine "layout" — sidebar + dark mode sem eval() -->
   <script nonce="{{ csp_nonce() }}">

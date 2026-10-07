@@ -1,0 +1,49 @@
+{#
+  Tema "Gadens Institucional" — vale para todas as páginas (base.html) e para o login.
+  Só re-tematiza: a estrutura dos templates continua a mesma.
+
+  Paleta (KIT ExStart: cada cor com um papel)
+    grafite  (slate/gray)  menu, superfícies, texto e modo escuro — o cinza do logo, mais escuro
+    gadens   (#CC2027)     ação e moldura: botão principal, item ativo do menu, foco, avatar
+    aço      (blue)        informação e links: calmo, não compete com os status
+    status                 verde / âmbar / vermelho do Tailwind, sempre com ícone ou texto
+  Roxo, violeta, índigo e ciano viram aço: sem cores arbitrárias.
+
+  Deve vir logo DEPOIS do tailwind.js (definida antes, a config é sobrescrita).
+#}
+<link rel="stylesheet" href="{{ url_for('static', filename='fonts/app/fonts.css') }}">
+<script nonce="{{ csp_nonce() }}">
+  (function () {
+    var grafite = {
+      50: '#F6F7F8', 100: '#EEF0F2', 200: '#E1E4E8', 300: '#C9CDD3', 400: '#9EA3AA',
+      500: '#72777F', 600: '#565A61', 700: '#3D4045', 800: '#2B2D31', 900: '#1C1D20', 950: '#121315'
+    };
+    var aco = {
+      50: '#F1F5F8', 100: '#E1E9F0', 200: '#C5D3E0', 300: '#9DB4C9', 400: '#7A9AB6',
+      500: '#5A7E9C', 600: '#456582', 700: '#38536B', 800: '#2F4558', 900: '#293A4A', 950: '#1A2632'
+    };
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: grafite, gray: grafite,
+            blue: aco, indigo: aco, sky: aco, cyan: aco, purple: aco, violet: aco,
+            gadens: {
+              50: '#FEF2F2', 100: '#FCE4E4', 200: '#F9CBCC', 300: '#F3A3A6', 400: '#EC6F74',
+              500: '#DF3D44', 600: '#CC2027', 700: '#AA1A20', 800: '#8C181D', 900: '#74181C', 950: '#400809'
+            }
+          },
+          fontFamily: {
+            sans: ['"Source Sans 3"', 'ui-sans-serif', 'system-ui', 'sans-serif']
+          }
+        }
+      }
+    };
+  })();
+  if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
+</script>
+<style nonce="{{ csp_nonce() }}">
+  body { font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif; }
+  .tabular-nums, .font-mono { font-variant-numeric: tabular-nums; }
+</style>

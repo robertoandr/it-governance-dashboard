@@ -16,8 +16,8 @@
 <!-- Header -->
 <div class="bg-white rounded-2xl shadow p-8 mb-6 flex items-center gap-6 dark:bg-slate-800">
   <div class="w-16 h-16 rounded-2xl flex items-center justify-center"
-       style="background:{{ pillar.color }}22;">
-    <span class="text-3xl font-bold" style="color:{{ pillar.color }}">{{ pillar.score | round(0) | int }}</span>
+       style="background:{{ pillar | cor_pilar }}22;">
+    <span class="text-3xl font-bold" style="color:{{ pillar | cor_pilar }}">{{ pillar.score | round(0) | int }}</span>
   </div>
   <div>
     <h2 class="text-2xl font-bold text-gray-800 dark:text-slate-100">{{ pillar.label }}</h2>
@@ -126,7 +126,7 @@
       </div>
       <div class="h-3 bg-gray-100 rounded-full overflow-hidden dark:bg-slate-700">
         <div class="h-full rounded-full transition-all duration-700"
-             style="width:{{ 0 if excluded else c.value }}%; background:{{ 'transparent' if c.error else pillar.color }}"></div>
+             style="width:{{ 0 if excluded else c.value }}%; background:{{ 'transparent' if c.error else (pillar | cor_pilar) }}"></div>
       </div>
       <div class="flex justify-between text-xs text-gray-400 mt-0.5">
         <span>{% if excluded %}fora do cálculo{% else %}peso {{ c.weight }}{% endif %}</span>
@@ -174,8 +174,8 @@
       datasets: [{
         label: '{{ pillar.label }}',
         data,
-        borderColor: '{{ pillar.color }}',
-        backgroundColor: '{{ pillar.color }}22',
+        borderColor: '{{ pillar | cor_pilar }}',
+        backgroundColor: '{{ pillar | cor_pilar }}22',
         fill: true,
         tension: 0.4,
         pointRadius: 2,
