@@ -68,7 +68,7 @@ document.addEventListener('alpine:init', function () {
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ users|length }} usuario(s) cadastrado(s)</p>
     </div>
     <button @click="openCreate"
-            class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white
+            class="flex items-center gap-2 px-4 py-2 bg-gadens-600 hover:bg-gadens-700 text-white
                    rounded-lg text-sm font-semibold shadow-sm transition">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -98,7 +98,7 @@ document.addEventListener('alpine:init', function () {
             <!-- Nome -->
             <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">
               <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                <div class="w-7 h-7 rounded-full bg-gadens-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                   {{ u.name[0] | upper }}
                 </div>
                 {{ u.name }}
@@ -245,21 +245,21 @@ document.addEventListener('alpine:init', function () {
               <input name="name" type="text" required :value="editName"
                      class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                             bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm
-                            focus:outline-none focus:ring-2 focus:ring-blue-500 transition"/>
+                            focus:outline-none focus:ring-2 focus:ring-gadens-500 transition"/>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Email</label>
               <input name="email" type="email" required :value="editEmail"
                      class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                             bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm
-                            focus:outline-none focus:ring-2 focus:ring-blue-500 transition"/>
+                            focus:outline-none focus:ring-2 focus:ring-gadens-500 transition"/>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Perfil</label>
               <select name="role" :value="editRole"
                       class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                              bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                             focus:outline-none focus:ring-2 focus:ring-gadens-500 transition">
                 {% for r in roles %}
                 <option value="{{ r }}">{{ r | capitalize }}</option>
                 {% endfor %}
@@ -276,14 +276,14 @@ document.addEventListener('alpine:init', function () {
               <input name="password" type="password" required minlength="8"
                      class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                             bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm
-                            focus:outline-none focus:ring-2 focus:ring-blue-500 transition"/>
+                            focus:outline-none focus:ring-2 focus:ring-gadens-500 transition"/>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Confirmar senha</label>
               <input name="confirm_password" type="password" required minlength="8"
                      class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                             bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm
-                            focus:outline-none focus:ring-2 focus:ring-blue-500 transition"/>
+                            focus:outline-none focus:ring-2 focus:ring-gadens-500 transition"/>
             </div>
           </div>
         </template>
@@ -299,7 +299,7 @@ document.addEventListener('alpine:init', function () {
             <input name="new_password" type="password" minlength="8"
                    class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600
                           bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm
-                          focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                          focus:outline-none focus:ring-2 focus:ring-gadens-500 transition"
                    placeholder="Deixe vazio para gerar automaticamente"/>
           </div>
         </template>
@@ -313,7 +313,7 @@ document.addEventListener('alpine:init', function () {
             Cancelar
           </button>
           <button type="submit"
-                  class="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white
+                  class="flex-1 px-4 py-2 rounded-lg bg-gadens-600 hover:bg-gadens-700 text-white
                          text-sm font-semibold transition shadow-sm">
             <span x-text="modalMode === 'reset' ? 'Redefinir' : (modalMode === 'edit' ? 'Salvar' : 'Criar')"></span>
           </button>

@@ -302,6 +302,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         return _render_error("errors/403.html", 403)
 
     # Context processors
+    from app.ui.tema import cor_pilar
+
+    app.add_template_filter(cor_pilar, "cor_pilar")
+
     @app.context_processor
     def inject_globals() -> dict[str, Any]:
         from flask_login import current_user as cu

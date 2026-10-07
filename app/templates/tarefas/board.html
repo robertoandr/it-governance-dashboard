@@ -14,8 +14,8 @@
   /* classes de display do Tailwind (flex, block) venceriam o atributo hidden */
   #tarefas-board [hidden] { display: none !important; }
   .tarefas-card.sortable-ghost { opacity: .35; }
-  .tarefas-card.sortable-chosen { box-shadow: 0 0 0 2px #2563eb; }
-  .tarefas-lista.tarefas-alvo { outline: 2px dashed #2563eb; outline-offset: -2px; }
+  .tarefas-card.sortable-chosen { box-shadow: 0 0 0 2px #456582; }
+  .tarefas-lista.tarefas-alvo { outline: 2px dashed #456582; outline-offset: -2px; }
   .tarefas-card.tarefas-destaque { animation: tarefas-pisca 1s ease-out; }
   @keyframes tarefas-pisca { from { box-shadow: 0 0 0 3px #f59e0b; } to { box-shadow: 0 0 0 0 transparent; } }
   /* "Mover para" só aparece com o card em foco (teclado); com mouse, arrasta-se. */
@@ -32,8 +32,8 @@
   .tarefas-md h3, .tarefas-md h4 { font-size: 1.05em; font-weight: 600; }
   .tarefas-md ul { list-style: disc; padding-left: 1.4em; }
   .tarefas-md ol { list-style: decimal; padding-left: 1.4em; }
-  .tarefas-md a { color: #2563eb; text-decoration: underline; }
-  .dark .tarefas-md a { color: #60a5fa; }
+  .tarefas-md a { color: #456582; text-decoration: underline; }
+  .dark .tarefas-md a { color: #9DB4C9; }
   .tarefas-md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em;
                      background: rgba(100,116,139,.15); padding: .1em .35em; border-radius: 4px; }
   .tarefas-md pre { background: rgba(100,116,139,.12); padding: .8em 1em; border-radius: 6px; overflow-x: auto; }
@@ -117,9 +117,9 @@
         <form class="px-3 pb-2" data-criar="{{ status }}" hidden>
           <label for="tarefas-novo-{{ status }}" class="sr-only">Título do novo card em {{ rotulo }}</label>
           <textarea id="tarefas-novo-{{ status }}" rows="2" maxlength="200" placeholder="Título do card"
-                    class="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    class="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-gadens-500"></textarea>
           <div class="mt-1 flex gap-2">
-            <button type="submit" class="px-3 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium">Adicionar</button>
+            <button type="submit" class="px-3 py-1 text-xs rounded-md bg-gadens-600 hover:bg-gadens-700 text-white font-medium">Adicionar</button>
             <button type="button" data-cancelar class="px-3 py-1 text-xs rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">Cancelar</button>
           </div>
         </form>
@@ -157,7 +157,7 @@
       {% if pode_editar %}
       <label for="card-titulo" class="sr-only">Título do card</label>
       <input id="card-titulo" type="text" maxlength="200"
-             class="w-full bg-transparent text-xl font-semibold text-slate-800 dark:text-slate-100 rounded px-1 -mx-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+             class="w-full bg-transparent text-xl font-semibold text-slate-800 dark:text-slate-100 rounded px-1 -mx-1 focus:outline-none focus:ring-2 focus:ring-gadens-500">
       {% else %}
       <h2 id="card-titulo" class="text-xl font-semibold text-slate-800 dark:text-slate-100 break-words"></h2>
       {% endif %}
@@ -178,7 +178,7 @@
 
     <div class="flex border-b border-slate-200 dark:border-slate-700 px-5 text-sm" role="tablist" aria-label="Conteúdo do card">
       <button type="button" role="tab" id="aba-documento" data-aba="documento" aria-selected="true" aria-controls="card-aba-documento"
-              class="px-3 py-2 -mb-px border-b-2 border-blue-600 font-medium text-slate-800 dark:text-slate-100">Documento</button>
+              class="px-3 py-2 -mb-px border-b-2 border-gadens-600 font-medium text-slate-800 dark:text-slate-100">Documento</button>
       <button type="button" role="tab" id="aba-comentarios" data-aba="comentarios" aria-selected="false" aria-controls="card-aba-comentarios"
               class="px-3 py-2 -mb-px border-b-2 border-transparent text-slate-500 dark:text-slate-400">Comentários <span id="com-contagem" class="tabular-nums"></span></button>
     </div>
@@ -207,7 +207,7 @@
         <label for="doc-texto" class="sr-only">Documento do card em Markdown</label>
         <textarea id="doc-texto" rows="18" spellcheck="true"
                   placeholder="## Contexto&#10;&#10;## Decisão&#10;&#10;## Critérios de aceite&#10;- [ ] ..."
-                  class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-3 font-mono text-sm leading-relaxed text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                  class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-3 font-mono text-sm leading-relaxed text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-gadens-500"></textarea>
         <p id="doc-dica" class="text-[11px] text-slate-500 dark:text-slate-400">Markdown: ## título, **negrito**, - lista, - [ ] checklist, `código`, | tabela |. Salva sozinho 2 s depois que você para de digitar.</p>
 
         <details id="doc-descartado" hidden class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
@@ -225,8 +225,8 @@
         <form id="com-form" class="space-y-2">
           <label for="com-texto" class="sr-only">Novo comentário</label>
           <textarea id="com-texto" rows="3" maxlength="10000" placeholder="Escreva um comentário (Markdown). Ctrl+Enter envia."
-                    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-          <button type="submit" class="rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5">Comentar</button>
+                    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 p-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-gadens-500"></textarea>
+          <button type="submit" class="rounded-md bg-gadens-600 hover:bg-gadens-700 text-white text-xs font-medium px-3 py-1.5">Comentar</button>
         </form>
         {% endif %}
       </section>

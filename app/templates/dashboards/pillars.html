@@ -74,7 +74,7 @@ document.addEventListener('alpine:init', function () {
          title="Clique para ver os componentes e o que fazer"
          class="px-5 pt-5 pb-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40 transition">
       <div class="flex items-center gap-2.5 min-w-0">
-        <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ p.color }}"></span>
+        <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ p | cor_pilar }}"></span>
         <div class="min-w-0">
           <p class="font-bold text-slate-800 dark:text-slate-100 truncate">{{ p.label }}</p>
           <p class="text-[10px] text-slate-400">peso {{ (p.weight * 100)|int }}%</p>
@@ -122,7 +122,7 @@ document.addEventListener('alpine:init', function () {
       <div class="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
         {% if p.data_source != 'coming_soon' %}
         <div class="h-full rounded-full transition-all duration-700"
-             style="width:{{ p.score }}%; background:{{ p.color }}"></div>
+             style="width:{{ p.score }}%; background:{{ p | cor_pilar }}"></div>
         {% endif %}
       </div>
     </div>
@@ -307,8 +307,8 @@ document.addEventListener('alpine:init', function () {
                 <a href="{{ url_for('dashboards.pillar_detail', pillar_id=p.id) }}"
                    class="text-[10px] font-medium px-2 py-1 rounded-full inline-flex items-center gap-1
                           hover:opacity-80 transition"
-                   style="background:{{ p.color }}22; color:{{ p.color }}">
-                  <span class="w-1.5 h-1.5 rounded-full" style="background:{{ p.color }}"></span>
+                   style="background:{{ p | cor_pilar }}22; color:{{ p | cor_pilar }}">
+                  <span class="w-1.5 h-1.5 rounded-full" style="background:{{ p | cor_pilar }}"></span>
                   {{ p.label }}
                 </a>
                 {% endif %}
@@ -340,7 +340,7 @@ document.addEventListener('alpine:init', function () {
 (function () {
   var labels = {{ governance.pillars | map(attribute='label') | list | tojson }};
   var scores = {{ governance.pillars | map(attribute='score') | list | tojson }};
-  var colors = {{ governance.pillars | map(attribute='color') | list | tojson }};
+  var colors = {{ governance.pillars | map('cor_pilar') | list | tojson }};
 
   new Chart(document.getElementById('radarChart'), {
     type: 'radar',
@@ -350,7 +350,7 @@ document.addEventListener('alpine:init', function () {
         label: 'Score',
         data: scores,
         backgroundColor: 'rgba(59,130,246,0.1)',
-        borderColor: '#3B82F6',
+        borderColor: '#456582',
         borderWidth: 2,
         pointBackgroundColor: colors,
         pointRadius: 5,
