@@ -5,6 +5,11 @@
 #   - govti.db   (SQLite — vendors/contracts/assets/governança, mesmo volume)
 #   - MapaCameras (/var/lib/mapa-cameras — serviço systemd à parte, não é
 #     container: cameras.json, fotos, plantas e usuários do mapa)
+#   - InfluxDB   (séries temporais das métricas — `influx backup`)
+#   - /srv/compartilhado (pasta compartilhada: código-fonte do MapaCameras,
+#     plantas, pacotes de instalação)
+#   - Pacote de configuração CRIPTOGRAFADO (.env, certificados, Evolution,
+#     OmniRoute, systemd, MapaCameras) — ver backup_config.sh
 # Cada dump vai comprimido pra backups/, com retenção local, e então
 # sync_cloud.sh sobe tudo pro OneDrive. Uma falha aqui é grave (perdemos o
 # dump do dia), então -e; a falha do sync externo é tratada à parte por
@@ -30,6 +35,9 @@ ZABBIX_DB_USER="zabbix"
 # UMask=0027, então basta o usuário que roda este backup estar no grupo
 # mapacameras (sudo gpasswd -a zabbix mapacameras) para conseguir ler.
 MAPA_CAMERAS_DIR="${MAPA_CAMERAS_DIR:-/var/lib/mapa-cameras}"
+
+INFLUX_CONTAINER="itgov-influxdb"
+COMPARTILHADO_DIR="${COMPARTILHADO_DIR:-/srv/compartilhado}"
 
 log() {
     echo "[$(date '+%F %T')] $*"
@@ -102,15 +110,62 @@ else
     fi
 fi
 
-# ── 4. Retenção local ─────────────────────────────────────────────────────
+# ── 4. InfluxDB — `influx backup` dentro do container (o token do app
+#      basta: o teste de 07/10/2026 confirmou). Não é fatal. ─────────────
+INFLUX_TOKEN_VAL=""
+if [ -f "$ENV_FILE" ]; then
+    INFLUX_TOKEN_VAL="$(grep -m1 '^INFLUX_TOKEN=' "$ENV_FILE" | cut -d '=' -f2- || true)"
+fi
+if ! docker ps --format '{{.Names}}' | grep -qx "$INFLUX_CONTAINER"; then
+    log "AVISO: container $INFLUX_CONTAINER fora do ar — pulando InfluxDB."
+elif [ -z "$INFLUX_TOKEN_VAL" ]; then
+    log "AVISO: INFLUX_TOKEN ausente no .env — pulando InfluxDB."
+else
+    INFLUX_TMP="/tmp/influx_${TIMESTAMP}"
+    INFLUX_LOCAL="$BACKUP_DIR/influxdb_${TIMESTAMP}"
+    log "Backup InfluxDB: iniciando..."
+    if docker exec -e INFLUX_TOKEN="$INFLUX_TOKEN_VAL" "$INFLUX_CONTAINER" influx backup "$INFLUX_TMP" >/dev/null 2>&1 \
+        && docker cp "$INFLUX_CONTAINER:$INFLUX_TMP" "$INFLUX_LOCAL" \
+        && tar czf "$INFLUX_LOCAL.tar.gz" -C "$BACKUP_DIR" "influxdb_${TIMESTAMP}"; then
+        log "Backup InfluxDB: salvo em $INFLUX_LOCAL.tar.gz ($(du -h "$INFLUX_LOCAL.tar.gz" | cut -f1))"
+    else
+        rm -f "$INFLUX_LOCAL.tar.gz"
+        log "AVISO: Backup InfluxDB falhou — seguindo com os demais."
+    fi
+    rm -rf "$INFLUX_LOCAL"
+    docker exec "$INFLUX_CONTAINER" rm -rf "$INFLUX_TMP" || true
+fi
+
+# ── 5. Pasta compartilhada — tar simples. Não é fatal. ──────────────────
+if [ -d "$COMPARTILHADO_DIR" ] && [ -r "$COMPARTILHADO_DIR" ]; then
+    COMP_FILE="$BACKUP_DIR/compartilhado_${TIMESTAMP}.tar.gz"
+    log "Backup pasta compartilhada: iniciando..."
+    if tar czf "$COMP_FILE" --ignore-failed-read -C "$(dirname "$COMPARTILHADO_DIR")" "$(basename "$COMPARTILHADO_DIR")"; then
+        log "Backup pasta compartilhada: salvo em $COMP_FILE ($(du -h "$COMP_FILE" | cut -f1))"
+    else
+        rm -f "$COMP_FILE"
+        log "AVISO: Backup da pasta compartilhada falhou — seguindo com os demais."
+    fi
+else
+    log "Backup pasta compartilhada: $COMPARTILHADO_DIR ausente ou sem leitura — pulando."
+fi
+
+# ── 6. Pacote de configuração criptografado. Não é fatal; sem a senha o
+#      script filho recusa e nada sai em claro. ──────────────────────────
+log "Backup configuração: iniciando..."
+PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/backup_config.sh" "$BACKUP_DIR/config_${TIMESTAMP}.tar.gz.gpg" \
+    || log "AVISO: pacote de configuração não gerado — ver mensagem acima."
+
+# ── 7. Retenção local ─────────────────────────────────────────────────────
 log "Removendo backups com mais de $RETENTION_DAYS dias..."
 find "$BACKUP_DIR" \( -name 'zabbix_*.sql.gz' -o -name 'app_*.db.gz' -o -name 'govti_*.db.gz' \
-    -o -name 'mapacameras_*.tar.gz' \) \
+    -o -name 'mapacameras_*.tar.gz' -o -name 'influxdb_*.tar.gz' -o -name 'compartilhado_*.tar.gz' \
+    -o -name 'config_*.tar.gz.gpg' \) \
     -type f -mtime "+$RETENTION_DAYS" -print -delete
 
-# ── 5. Sync externo (OneDrive via rclone) — falha aqui não é fatal para
+# ── 8. Sync externo (OneDrive via rclone) — falha aqui não é fatal para
 #      este script; sync_cloud.sh já loga e retorna código próprio ────────
 log "Sincronizando com armazenamento externo..."
-BACKUP_FILE_PATTERN="*.gz" "$SCRIPT_DIR/sync_cloud.sh" || log "AVISO: sync externo falhou — ver logs/backup_external.log"
+BACKUP_FILE_PATTERN="*.gz *.gpg" "$SCRIPT_DIR/sync_cloud.sh" || log "AVISO: sync externo falhou — ver logs/backup_external.log"
 
 log "Backup diário concluído."

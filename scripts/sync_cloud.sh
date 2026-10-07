@@ -19,8 +19,13 @@ LOG_DIR="$PROJECT_ROOT/logs"
 LOG_FILE="$LOG_DIR/backup_external.log"
 ENV_FILE="$PROJECT_ROOT/.env"
 
-# Este projeto guarda 3 tipos de dump (zabbix_*.sql.gz, app_*.db.gz, govti_*.db.gz)
-BACKUP_FILE_PATTERN="${BACKUP_FILE_PATTERN:-*.gz}"
+# Padrões dos arquivos a sincronizar, separados por espaço (dumps .gz e o
+# pacote de configuração criptografado .gpg).
+BACKUP_FILE_PATTERN="${BACKUP_FILE_PATTERN:-*.gz *.gpg}"
+# Retenção no remoto: depois de um upload bem-sucedido, apaga do remoto os
+# arquivos desses padrões com mais de N dias. 0 desliga. (`rclone copy` nunca
+# apaga nada, então sem isto o remoto só cresce.)
+REMOTE_RETENTION_DAYS="${REMOTE_RETENTION_DAYS:-30}"
 
 mkdir -p "$LOG_DIR"
 
@@ -46,16 +51,32 @@ if [ -z "$RCLONE_REMOTE" ]; then
     exit 1
 fi
 
-LATEST_BACKUP="$(ls -t "$BACKUP_DIR"/$BACKUP_FILE_PATTERN 2>/dev/null | head -n1)"
+INCLUDES=()
+read -r -a PADROES <<<"$BACKUP_FILE_PATTERN"
+for padrao in "${PADROES[@]}"; do
+    INCLUDES+=(--include "$padrao")
+done
+
+LATEST_BACKUP="$(cd "$BACKUP_DIR" 2>/dev/null && ls -t $BACKUP_FILE_PATTERN 2>/dev/null | head -n1)"
 if [ -z "$LATEST_BACKUP" ]; then
     log "ERRO" "Nenhum backup ($BACKUP_FILE_PATTERN) encontrado em $BACKUP_DIR; upload cancelado."
     exit 1
 fi
 
-if rclone copy "$BACKUP_DIR" "$RCLONE_REMOTE" --include "$BACKUP_FILE_PATTERN" >>"$LOG_FILE" 2>&1; then
-    log "SUCESSO" "$(basename "$LATEST_BACKUP") e demais backups locais sincronizados para $RCLONE_REMOTE"
-    exit 0
-else
+if ! rclone copy "$BACKUP_DIR" "$RCLONE_REMOTE" "${INCLUDES[@]}" >>"$LOG_FILE" 2>&1; then
     log "ERRO" "rclone copy falhou ao sincronizar com $RCLONE_REMOTE"
     exit 1
 fi
+log "SUCESSO" "$LATEST_BACKUP e demais backups locais sincronizados para $RCLONE_REMOTE"
+
+# Retenção remota só depois de um upload bom: se o upload falhou, o remoto
+# fica como está (pode ser a única cópia restante).
+if [ "$REMOTE_RETENTION_DAYS" -gt 0 ]; then
+    if rclone delete "$RCLONE_REMOTE" --min-age "${REMOTE_RETENTION_DAYS}d" "${INCLUDES[@]}" >>"$LOG_FILE" 2>&1; then
+        log "SUCESSO" "Retenção remota aplicada: removidos arquivos com mais de $REMOTE_RETENTION_DAYS dias de $RCLONE_REMOTE"
+    else
+        log "ERRO" "rclone delete falhou ao aplicar a retenção em $RCLONE_REMOTE (upload já concluído)"
+        exit 1
+    fi
+fi
+exit 0

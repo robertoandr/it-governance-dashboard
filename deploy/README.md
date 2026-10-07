@@ -140,6 +140,9 @@ sudo systemctl daemon-reload
 sudo systemctl start governanca-ti-coleta.service   # teste manual; acompanhe com journalctl
 ```
 
+O que entra no backup, a senha do pacote de configuração criptografado, o teste de restauração e o
+roteiro de recuperação da VM estão em [`docs/runbooks/backup-e-restauracao.md`](../docs/runbooks/backup-e-restauracao.md).
+
 Atualizar o código em produção (depois do merge no `main`):
 
 ```bash
