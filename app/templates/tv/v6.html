@@ -1,0 +1,120 @@
+{% extends "tv/_base.html" %}
+{% block title %}v6 · Sala de Controle Bento{% endblock %}
+{#
+  Mistura da v1 (Sala de Controle) com a v4 (NOC Bento):
+    v1 → cabeçalho com marca, fontes e relógio; placar com moldura na cor do status;
+         cartões de unidade com barra de saúde; alertas com selo de severidade; faixa de pilares
+    v4 → grade bento; status sempre com ícone + texto; unidade crítica pulsando;
+         6 indicadores (com licenças); letreiro "AO VIVO" no rodapé
+#}
+{% block estilo %}
+<style>
+  .M { background: #0A1120; color: #EAF0FA; font-family: Barlow, system-ui, sans-serif; font-size: 26px; padding: 30px 40px 0; display: grid; grid-template-columns: 440px minmax(0, 1fr) 560px; grid-template-rows: 72px 540px 180px 76px minmax(0, 1fr); gap: 20px; }
+  .M .cond { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; }
+  .M .n { font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .M .mut { color: #B4C0D3; }
+  .M .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .M .painel { background: #121B2E; border-radius: 20px; min-width: 0; }
+  .M h2 { margin: 0; font-family: 'Barlow Condensed', Barlow, sans-serif; font-size: 34px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .M .cab { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  .M .cab span { font-size: 22px; color: #9AA8BF; }
+  .M .est { display: inline-flex; align-items: center; gap: 12px; font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .M header { grid-column: 1 / 4; display: flex; align-items: center; justify-content: space-between; }
+  .M .marca { display: flex; align-items: center; gap: 18px; }
+  .M .marca img { height: 60px; width: auto; }
+  .M .tit { font-size: 40px; font-weight: 700; line-height: 1; }
+  .M .sub { font-size: 20px; color: #9AA8BF; margin-top: 4px; }
+  .M .fontes { display: flex; gap: 18px; font-size: 21px; color: #C7D2E3; }
+  .M .fontes span { display: flex; align-items: center; gap: 8px; }
+  .M .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+  .M .hora { font-size: 56px; text-align: right; }
+  .M .data { font-size: 20px; color: #9AA8BF; text-align: right; }
+  .M .heroi { border: 3px solid; padding: 30px 32px; display: flex; flex-direction: column; justify-content: space-between; }
+  .M .eyebrow { font-size: 24px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: #C7D2E3; }
+  .M .unids { padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .M .grade { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .M .un { background: #16223A; border: 3px solid transparent; border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+  .M .un.crit { background: #2A1418; border-color: #FF6B6E; animation: tv-pulso 2s ease-in-out infinite; }
+  @keyframes tv-pulso { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 110, 0); } 50% { box-shadow: 0 0 0 10px rgba(255, 107, 110, .3); } }
+  .M .un .nome { font-size: 25px; font-weight: 700; line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .M .barra { height: 10px; border-radius: 5px; background: #22304A; overflow: hidden; }
+  .M .barra i { display: block; height: 100%; border-radius: 5px; }
+  .M .alertas { padding: 22px 26px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .M .al { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid #22304A; }
+  .M .sev { width: 104px; flex-shrink: 0; text-align: center; font-size: 17px; font-weight: 700; letter-spacing: 1px; padding: 6px 0; border-radius: 8px; color: #0A1120; }
+  .M .al .h { font-size: 25px; font-weight: 600; }
+  .M .al .p { font-size: 19px; color: #9AA8BF; }
+  .M .al .t { font-size: 30px; white-space: nowrap; }
+  .M .kp { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+  .M .kpi { border-top: 8px solid; padding: 16px 20px; display: flex; flex-direction: column; justify-content: space-between; }
+  .M .kpi .r { font-size: 21px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #B4C0D3; }
+  .M .kpi .s { font-size: 21px; color: #C7D2E3; }
+  .M .pils { grid-column: 1 / 4; display: flex; align-items: center; gap: 28px; padding: 0 28px; }
+  .M .pil { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .M .pil div:first-child { display: flex; justify-content: space-between; gap: 8px; font-size: 21px; color: #C7D2E3; }
+  .M .tk { grid-column: 1 / 4; margin: 0 -40px; background: #060B16; border-top: 3px solid #45C6FF; display: flex; align-items: center; overflow: hidden; }
+  .M .tk .rot { flex-shrink: 0; background: #45C6FF; color: #0A1120; font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 700; font-size: 30px; letter-spacing: 2px; padding: 0 28px; height: 100%; display: flex; align-items: center; }
+  .M .tk .trilho { flex: 1; overflow: hidden; height: 100%; display: flex; align-items: center; }
+  .M .tk .faixa { display: flex; white-space: nowrap; animation: tv-corre 90s linear infinite; }
+  .M .tk .faixa span { font-size: 28px; padding: 0 40px; display: inline-flex; align-items: center; gap: 14px; }
+  @keyframes tv-corre { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+</style>
+{% endblock %}
+{% block render %}
+window.PainelTV = {
+  render: function (d) {
+    const T = window.TV;
+    const LOGO = {{ url_for('static', filename='img/gadens-simbolo-escuro.png') | tojson }};
+    const C = { crit: "#FF6B6E", warn: "#FFB547", ok: "#34D399", none: "#5B6B85" };
+    const SELO = { ok: "OK", warn: "ATENÇÃO", crit: "CRÍTICO", none: "SEM DADOS" };
+    const est = (k, tam, estilo) => '<span class="est" style="color:' + C[k] + ";" + (estilo || "") + '">' + T.icone(k, tam || 32) + T.TEXTO[k] + "</span>";
+    const sc = d.score || {}, fx = sc.faixa || "none", z = d.zabbix || {}, p = z.problemas || {}, sla = d.sla || {}, lic = d.licencas || {};
+    const fundoHeroi = { crit: "#2A1418", warn: "#2A1E0B", ok: "#0C2A22", none: "#121B2E" }[fx];
+    const totAt = d.unidades.reduce((a, u) => a + u.ativos, 0), totF = d.unidades.reduce((a, u) => a + u.falhas, 0);
+    const saude = (at, f) => at ? Math.round((1 - f / at) * 100) : 0;
+
+    const fontes = d.fontes.slice(0, 5).map(f => '<span><i class="dot" style="background:' + (f.estado === "online" ? C.ok : C.crit) + '"></i>' + T.esc(f.nome) + "</span>").join("");
+
+    const un = d.unidades.slice(0, 7).map(u => {
+      const k = u.faixa;
+      return '<div class="un' + (k === "crit" ? " crit" : "") + '"><div class="nome">' + T.esc(u.nome) + "</div>" +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><span><span class="n" style="font-size:64px;color:' + C[k] + '">' + (u.ativos ? u.falhas : "—") + '</span><span class="mut" style="display:block;font-size:20px">' + (u.ativos ? "de " + u.ativos : "sem dados") + "</span></span>" +
+        '<span style="color:' + C[k] + '" title="' + SELO[k] + '">' + T.icone(k, 40) + "</span></div>" +
+        '<div class="barra"><i style="width:' + saude(u.ativos, u.falhas) + "%;background:" + C[k] + '"></i></div></div>';
+    }).join("") +
+      '<div class="un" style="border-color:#2E3F5E"><div class="nome">Total</div><div><span class="n" style="font-size:64px">' + totF + '</span><span class="mut" style="display:block;font-size:20px">de ' + totAt + "</span></div>" +
+      '<div class="barra"><i style="width:' + saude(totAt, totF) + '%;background:#EAF0FA"></i></div></div>';
+
+    const al = d.alertas.slice(0, 6).map(a => {
+      const k = a.sev >= 4 ? "crit" : "warn";
+      return '<div class="al"><span class="sev" style="background:' + C[k] + '">' + T.esc(a.sev_rotulo) + '</span><div style="flex:1;min-width:0"><div class="h ell">' + T.esc(a.host) + '</div><div class="p ell">' + T.esc(a.unidade) + " · " + T.esc(a.problema) + (a.reconhecido ? " · reconhecido" : "") + '</div></div><span class="t n">há ' + T.desde(a.desde) + "</span></div>";
+    }).join("");
+
+    const kpi = (rot, val, k, sub) => '<div class="painel kpi" style="border-top-color:' + C[k] + '"><div class="r ell">' + rot + '</div><div style="display:flex;align-items:center;gap:12px"><span class="n" style="font-size:68px;color:' + C[k] + '">' + val + '</span><span style="color:' + C[k] + '">' + T.icone(k, 32) + '</span></div><div class="s ell">' + T.esc(sub) + "</div></div>";
+    const links = (d.links && d.links.fora) || [];
+    const kp = kpi("Disponibilidade", T.num(z.disponibilidade, 1) + "%", T.faixa(z.disponibilidade), "meta 99% · " + T.num(z.hosts_fora) + " hosts fora") +
+      kpi("Problemas abertos", T.num(p.total), p.total ? "crit" : "ok", T.num(p.alto) + " altos · " + T.num(p.medio) + " médios") +
+      kpi("SLA atendimento", T.num(sla.cumprido, 1) + "%", T.faixa(sla.cumprido), "meta 90% · " + T.num(sla.dias) + " dias") +
+      kpi("Chamados vencidos", T.num(sla.vencidos), sla.vencidos ? "crit" : "ok", "de " + T.num(sla.abertos) + " em aberto") +
+      kpi("Links e túneis", String(links.length), links.length ? "warn" : "ok", links.length ? links.length + " fora do ar" : "todos no ar") +
+      kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixa(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total));
+
+    const pil = d.pilares.map(x => '<div class="pil"><div><span class="ell">' + T.esc(x.nome.replace("Gestão de ", "").replace("Mensuração de ", "").replace(" Estratégico", "")) + '</span><b style="color:' + C[x.faixa] + '">' + T.num(x.score, 1) + '</b></div><div class="barra"><i style="width:' + (x.score || 0) + "%;background:" + C[x.faixa] + '"></i></div></div>').join("");
+
+    const itens = d.alertas.map(a => '<span><b style="color:' + (a.sev >= 4 ? C.crit : C.warn) + '">' + T.esc(a.sev_rotulo) + "</b>" + T.esc(a.host) + " — " + T.esc(a.problema) + " · " + T.esc(a.unidade) + " · há " + T.desde(a.desde) + "</span>")
+      .concat(links.map(l => '<span><b style="color:' + C.warn + '">LINK</b>' + T.esc(l.unidade) + ": " + T.esc(l.texto) + "</span>")).join("");
+
+    return '<div class="tv M">' +
+      '<header><div class="marca"><img src="' + T.esc(LOGO) + '" alt="Grupo Gadens"><div><div class="tit cond">Governança de TI · NOC</div><div class="sub" data-atualizacao></div></div></div>' +
+      '<div style="display:flex;align-items:center;gap:36px"><div class="fontes">' + fontes + '</div><div><div class="hora n">' + T.esc(d.hora) + '</div><div class="data">' + T.esc(d.data) + "</div></div></div></header>" +
+      '<div class="painel heroi" style="background:' + fundoHeroi + ";border-color:" + C[fx] + '"><div class="eyebrow">Situação geral</div>' +
+      '<div style="display:flex;align-items:baseline;gap:14px;white-space:nowrap"><span class="n" style="font-size:150px;color:' + C[fx] + '">' + T.num(sc.valor, 1) + '</span><span style="font-size:34px;color:#C7D2E3">/ 100</span></div>' +
+      est(fx, 44, "font-size:46px") + '<span class="mut" style="font-size:22px">score global · meta &gt; 85</span></div>' +
+      '<div class="painel unids"><div class="cab"><h2>Ativos por unidade</h2><span>' + totAt + ' ativos · <b style="color:' + C.crit + '">' + totF + ' em falha</b></span></div><div class="grade">' + un + "</div></div>" +
+      '<div class="painel alertas"><div class="cab"><h2>Alertas ativos</h2><span>' + T.num(p.total) + " abertos · " + T.num(p.reconhecidos) + " reconhecidos</span></div>" + (al || '<div class="mut">Nenhum alerta aberto.</div>') + "</div>" +
+      '<div class="kp">' + kp + "</div>" +
+      '<div class="painel pils"><span class="cond" style="font-size:28px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9AA8BF">Pilares</span>' + pil + "</div>" +
+      '<div class="tk"><span class="rot">AO VIVO</span><div class="trilho"><div class="faixa">' + (itens ? itens + itens : "<span>Nenhum alerta ativo.</span>") + "</div></div></div></div>";
+  }
+};
+{% endblock %}

@@ -1,4 +1,4 @@
-"""Testes do painel de TV (/gov/v1 … /gov/v5 e /gov/painel/dados)."""
+"""Testes do painel de TV (/gov/v1 … /gov/v6 e /gov/painel/dados)."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_telas_exigem_login(factory_client) -> None:
     assert resp.status_code in (302, 401)
 
 
-@pytest.mark.parametrize("versao", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("versao", [1, 2, 3, 4, 5, 6])
 def test_cada_modelo_renderiza_com_dados_embutidos_e_escapados(authed_client, versao: int) -> None:
     with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
         resp = authed_client.get(f"/gov/v{versao}")

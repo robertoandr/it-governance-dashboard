@@ -1,4 +1,4 @@
-"""Painel de TV do NOC: modelos /gov/v1 … /gov/v5 com dados ao vivo.
+"""Painel de TV do NOC: modelos /gov/v1 … /gov/v6 com dados ao vivo.
 
 Cada versão é um layout diferente sobre os MESMOS dados
 (``app.services.painel_tv.get_painel``); a tela busca ``/gov/painel/dados`` a
@@ -32,6 +32,7 @@ MODELOS = [
     Modelo(3, "Três Camadas"),
     Modelo(4, "NOC Bento"),
     Modelo(5, "KIT ExStart"),
+    Modelo(6, "Sala de Controle Bento"),
 ]
 
 
