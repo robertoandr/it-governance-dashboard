@@ -84,6 +84,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         _unidade_model.garantir_colunas()
         _unidade_model.seed_unidades()
         _user_model.garantir_coluna_super_admin()
+        _user_model.garantir_coluna_painel_tv()
         from app.services.aprovacoes import super_admin_email
 
         _user_model.definir_super_admin(super_admin_email())

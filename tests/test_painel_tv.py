@@ -128,58 +128,52 @@ def test_dados_em_json_sem_cache(authed_client) -> None:
     assert resp.get_json()["score"]["valor"] == 60.7
 
 
-_TOKEN_TV = "tv-noc-" + "a" * 40
+def _logar(factory_app, client, email: str, role: str, ver_painel_tv: bool) -> None:
+    from app.extensions import db
+    from app.models.user import User
+
+    with factory_app.app_context():
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = User(name=email, email=email, role=role)
+            user.set_password("pytest-only-not-real")
+            db.session.add(user)
+        user.ver_painel_tv = ver_painel_tv
+        db.session.commit()
+        uid = user.id
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(uid)
+        sess["_fresh"] = True
 
 
-def test_tv_sem_token_configurado_nao_existe(factory_client, monkeypatch) -> None:
-    monkeypatch.delenv("PAINEL_TV_TOKENS", raising=False)
+@pytest.mark.parametrize("rota", ["/gov/tv", "/gov/v6", "/gov/painel/dados"])
+def test_painel_bloqueado_para_quem_nao_foi_liberado(factory_app, factory_client, rota: str) -> None:
+    _logar(factory_app, factory_client, "pytest-tv-bloqueado@test.local", "gestor", ver_painel_tv=False)
     with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
-        assert factory_client.get(f"/gov/tv/{_TOKEN_TV}").status_code == 404
-        assert factory_client.get(f"/gov/tv/{_TOKEN_TV}/dados").status_code == 404
+        assert factory_client.get(rota).status_code == 403
 
 
-def test_tv_com_token_abre_sem_login_no_modelo_escolhido(factory_client, monkeypatch) -> None:
-    monkeypatch.setenv("PAINEL_TV_TOKENS", f"outro-{'b' * 40}, {_TOKEN_TV}")
+@pytest.mark.parametrize("rota", ["/gov/tv", "/gov/v6", "/gov/painel/dados"])
+def test_painel_liberado_no_cadastro(factory_app, factory_client, rota: str) -> None:
+    _logar(factory_app, factory_client, "pytest-tv-liberado@test.local", "visualizador", ver_painel_tv=True)
     with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
-        resp = factory_client.get(f"/gov/tv/{_TOKEN_TV}")
+        assert factory_client.get(rota).status_code == 200
+
+
+def test_tv_exige_login(factory_client) -> None:
+    assert factory_client.get("/gov/tv").status_code in (302, 401)
+
+
+def test_tv_mostra_o_modelo_escolhido_sem_menu(authed_client) -> None:
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        resp = authed_client.get("/gov/tv")
 
     html = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    assert "<title>v6" in html or "Sala de Controle Bento" in html
-    assert f'data-url="/gov/tv/{_TOKEN_TV}/dados"' in html
+    assert "Sala de Controle Bento" in html
+    assert 'data-url="/gov/painel/dados"' in html
     assert "/gov/v1" not in html  # sem o menu de troca de modelo
     assert "<script>alert(1)</script>" not in html
-
-
-def test_tv_dados_com_token_em_json_sem_cache(factory_client, monkeypatch) -> None:
-    monkeypatch.setenv("PAINEL_TV_TOKENS", _TOKEN_TV)
-    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
-        resp = factory_client.get(f"/gov/tv/{_TOKEN_TV}/dados")
-
-    assert resp.status_code == 200
-    assert resp.headers["Cache-Control"] == "no-store"
-    assert resp.get_json()["score"]["valor"] == 60.7
-
-
-@pytest.mark.parametrize("token", ["errado-" + "c" * 40, _TOKEN_TV[:-1]])
-def test_tv_token_errado_404(factory_client, monkeypatch, token: str) -> None:
-    monkeypatch.setenv("PAINEL_TV_TOKENS", _TOKEN_TV)
-    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
-        assert factory_client.get(f"/gov/tv/{token}").status_code == 404
-        assert factory_client.get(f"/gov/tv/{token}/dados").status_code == 404
-
-
-def test_tv_token_curto_e_ignorado(factory_client, monkeypatch) -> None:
-    monkeypatch.setenv("PAINEL_TV_TOKENS", "1234")
-    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
-        assert factory_client.get("/gov/tv/1234").status_code == 404
-
-
-def test_versoes_com_login_buscam_dados_na_rota_normal(authed_client) -> None:
-    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
-        html = authed_client.get("/gov/v6").get_data(as_text=True)
-
-    assert 'data-url="/gov/painel/dados"' in html
 
 
 def test_v6_mostra_seguranca_controlados_e_cameras() -> None:

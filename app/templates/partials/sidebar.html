@@ -93,6 +93,11 @@
   {{ nav_item(url_for('dashboards.relatorios'), 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z', 'Relatórios') }}
   {% endif %}
 
+  {# Painel da TV: admin e quem foi liberado em Usuários #}
+  {% if current_user.is_authenticated and current_user.pode_ver_painel_tv %}
+  {{ nav_item(url_for('painel_tv.tv'), 'M3 5h18v12H3zM8 21h8M12 17v4', 'Painel TV') }}
+  {% endif %}
+
   {# Aprovações: todos veem os próprios pedidos; super admin vê a fila com contador #}
   {% if current_user.is_authenticated %}
   <div class="relative">
