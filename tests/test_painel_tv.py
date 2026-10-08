@@ -128,6 +128,67 @@ def test_dados_em_json_sem_cache(authed_client) -> None:
     assert resp.get_json()["score"]["valor"] == 60.7
 
 
+_TOKEN_TV = "tv-noc-" + "a" * 40
+
+
+def test_tv_sem_token_configurado_nao_existe(factory_client, monkeypatch) -> None:
+    monkeypatch.delenv("PAINEL_TV_TOKENS", raising=False)
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        assert factory_client.get(f"/gov/tv/{_TOKEN_TV}").status_code == 404
+        assert factory_client.get(f"/gov/tv/{_TOKEN_TV}/dados").status_code == 404
+
+
+def test_tv_com_token_abre_sem_login_no_modelo_escolhido(factory_client, monkeypatch) -> None:
+    monkeypatch.setenv("PAINEL_TV_TOKENS", f"outro-{'b' * 40}, {_TOKEN_TV}")
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        resp = factory_client.get(f"/gov/tv/{_TOKEN_TV}")
+
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "<title>v6" in html or "Sala de Controle Bento" in html
+    assert f'data-url="/gov/tv/{_TOKEN_TV}/dados"' in html
+    assert "/gov/v1" not in html  # sem o menu de troca de modelo
+    assert "<script>alert(1)</script>" not in html
+
+
+def test_tv_dados_com_token_em_json_sem_cache(factory_client, monkeypatch) -> None:
+    monkeypatch.setenv("PAINEL_TV_TOKENS", _TOKEN_TV)
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        resp = factory_client.get(f"/gov/tv/{_TOKEN_TV}/dados")
+
+    assert resp.status_code == 200
+    assert resp.headers["Cache-Control"] == "no-store"
+    assert resp.get_json()["score"]["valor"] == 60.7
+
+
+@pytest.mark.parametrize("token", ["errado-" + "c" * 40, _TOKEN_TV[:-1]])
+def test_tv_token_errado_404(factory_client, monkeypatch, token: str) -> None:
+    monkeypatch.setenv("PAINEL_TV_TOKENS", _TOKEN_TV)
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        assert factory_client.get(f"/gov/tv/{token}").status_code == 404
+        assert factory_client.get(f"/gov/tv/{token}/dados").status_code == 404
+
+
+def test_tv_token_curto_e_ignorado(factory_client, monkeypatch) -> None:
+    monkeypatch.setenv("PAINEL_TV_TOKENS", "1234")
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        assert factory_client.get("/gov/tv/1234").status_code == 404
+
+
+def test_versoes_com_login_buscam_dados_na_rota_normal(authed_client) -> None:
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        html = authed_client.get("/gov/v6").get_data(as_text=True)
+
+    assert 'data-url="/gov/painel/dados"' in html
+
+
+def test_v6_mostra_seguranca_controlados_e_cameras() -> None:
+    v6 = (Path(__file__).resolve().parent.parent / "app/templates/tv/v6.html").read_text(encoding="utf-8")
+
+    for campo in ("d.seguranca", "d.controlados", "d.cftv", "Dispositivos controlados", "Câmeras"):
+        assert campo in v6
+
+
 def test_licencas_alertam_quando_perto_de_esgotar() -> None:
     """Uso de licenças alto é alerta (≥ 85% atenção, ≥ 95% crítico), não "verde"."""
     raiz = Path(__file__).resolve().parent.parent / "app"

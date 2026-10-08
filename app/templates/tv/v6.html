@@ -6,10 +6,12 @@
          cartões de unidade com barra de saúde; alertas com selo de severidade; faixa de pilares
     v4 → grade bento; status sempre com ícone + texto; unidade crítica pulsando;
          6 indicadores (com licenças); letreiro "AO VIVO" no rodapé
+  Faixa de proteção (vinda da v5): segurança (Acronis + Defender), dispositivos
+  controlados (Acronis) e câmeras (CFTV do Zabbix).
 #}
 {% block estilo %}
 <style>
-  .M { background: #0A1120; color: #EAF0FA; font-family: Barlow, system-ui, sans-serif; font-size: 26px; padding: 30px 40px 0; display: grid; grid-template-columns: 440px minmax(0, 1fr) 560px; grid-template-rows: 72px 540px 180px 76px minmax(0, 1fr); gap: 20px; }
+  .M { background: #0A1120; color: #EAF0FA; font-family: Barlow, system-ui, sans-serif; font-size: 26px; padding: 30px 40px 0; display: grid; grid-template-columns: 440px minmax(0, 1fr) 560px; grid-template-rows: 72px 468px 112px 150px 64px minmax(0, 1fr); gap: 20px; }
   .M .cond { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; }
   .M .n { font-family: 'Barlow Condensed', Barlow, sans-serif; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
   .M .mut { color: #B4C0D3; }
@@ -45,8 +47,13 @@
   .M .al .h { font-size: 25px; font-weight: 600; }
   .M .al .p { font-size: 19px; color: #9AA8BF; }
   .M .al .t { font-size: 30px; white-space: nowrap; }
+  .M .prot { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .M .pr { border-left: 8px solid; padding: 12px 22px; display: flex; align-items: center; gap: 16px; }
+  .M .pr .ic { flex-shrink: 0; }
+  .M .pr .r { font-size: 21px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #B4C0D3; }
+  .M .pr .s { font-size: 21px; color: #C7D2E3; }
   .M .kp { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
-  .M .kpi { border-top: 8px solid; padding: 16px 20px; display: flex; flex-direction: column; justify-content: space-between; }
+  .M .kpi { border-top: 8px solid; padding: 12px 20px; display: flex; flex-direction: column; justify-content: space-between; }
   .M .kpi .r { font-size: 21px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #B4C0D3; }
   .M .kpi .s { font-size: 21px; color: #C7D2E3; }
   .M .pils { grid-column: 1 / 4; display: flex; align-items: center; gap: 28px; padding: 0 28px; }
@@ -85,12 +92,12 @@ window.PainelTV = {
       '<div class="un" style="border-color:#2E3F5E"><div class="nome">Total</div><div><span class="n" style="font-size:64px">' + totF + '</span><span class="mut" style="display:block;font-size:20px">de ' + totAt + "</span></div>" +
       '<div class="barra"><i style="width:' + saude(totAt, totF) + '%;background:#EAF0FA"></i></div></div>';
 
-    const al = d.alertas.slice(0, 6).map(a => {
+    const al = d.alertas.slice(0, 5).map(a => {
       const k = a.sev >= 4 ? "crit" : "warn";
       return '<div class="al"><span class="sev" style="background:' + C[k] + '">' + T.esc(a.sev_rotulo) + '</span><div style="flex:1;min-width:0"><div class="h ell">' + T.esc(a.host) + '</div><div class="p ell">' + T.esc(a.unidade) + " · " + T.esc(a.problema) + (a.reconhecido ? " · reconhecido" : "") + '</div></div><span class="t n">há ' + T.desde(a.desde) + "</span></div>";
     }).join("");
 
-    const kpi = (rot, val, k, sub) => '<div class="painel kpi" style="border-top-color:' + C[k] + '"><div class="r ell">' + rot + '</div><div style="display:flex;align-items:center;gap:12px"><span class="n" style="font-size:68px;color:' + C[k] + '">' + val + '</span><span style="color:' + C[k] + '">' + T.icone(k, 32) + '</span></div><div class="s ell">' + T.esc(sub) + "</div></div>";
+    const kpi = (rot, val, k, sub) => '<div class="painel kpi" style="border-top-color:' + C[k] + '"><div class="r ell">' + rot + '</div><div style="display:flex;align-items:center;gap:12px"><span class="n" style="font-size:60px;color:' + C[k] + '">' + val + '</span><span style="color:' + C[k] + '">' + T.icone(k, 32) + '</span></div><div class="s ell">' + T.esc(sub) + "</div></div>";
     const links = (d.links && d.links.fora) || [];
     const kp = kpi("Disponibilidade", T.num(z.disponibilidade, 1) + "%", T.faixa(z.disponibilidade), "meta 99% · " + T.num(z.hosts_fora) + " hosts fora") +
       kpi("Problemas abertos", T.num(p.total), p.total ? "crit" : "ok", T.num(p.alto) + " altos · " + T.num(p.medio) + " médios") +
@@ -98,6 +105,17 @@ window.PainelTV = {
       kpi("Chamados vencidos", T.num(sla.vencidos), sla.vencidos ? "crit" : "ok", "de " + T.num(sla.abertos) + " em aberto") +
       kpi("Links e túneis", String(links.length), links.length ? "warn" : "ok", links.length ? links.length + " fora do ar" : "todos no ar") +
       kpi("Uso de licenças", T.num(lic.uso_pct, 1) + "%", T.faixaUso(lic.uso_pct), T.num(lic.usadas) + " de " + T.num(lic.total) + " · " + T.num((lic.total || 0) - (lic.usadas || 0)) + " livres");
+
+    const seg = d.seguranca, ctl = d.controlados, cf = d.cftv;
+    const prot = (ic, rot, val, k, sub) => '<div class="painel pr" style="border-left-color:' + C[k] + '"><span style="color:' + C[k] + '">' + T.icone(ic, 44) + '</span><div style="flex:1;min-width:0"><div class="r ell">' + rot + '</div><div class="s ell">' + sub + '</div></div><span class="n" style="font-size:58px;white-space:nowrap;color:' + C[k] + '">' + val + "</span></div>";
+    const semDados = (ic, rot, fonte) => prot(ic, rot, "—", "none", T.esc(fonte) + " sem dados agora");
+    const kSeg = seg ? (seg.nao_mitigados ? "crit" : seg.invasoes || seg.defender_altos ? "warn" : "ok") : "none";
+    const pr = (seg ? prot("escudo", "Tentativas de invasão", T.num(seg.invasoes), kSeg,
+        T.num(seg.nao_mitigados) + " sem mitigação · Defender " + (seg.defender_abertos === null ? "—" : T.num(seg.defender_abertos)) + " · " + T.num(seg.patches_criticos) + " patches") : semDados("escudo", "Segurança", "Acronis")) +
+      (ctl ? prot("notebook", "Dispositivos protegidos", T.num(ctl.protegidos_pct, 1) + "%", T.faixa(ctl.protegidos_pct),
+        T.num(ctl.protegidos) + " de " + T.num(ctl.total) + " · " + T.num(ctl.offline) + " offline · " + T.num(ctl.sem_plano) + " sem plano") : semDados("notebook", "Dispositivos controlados", "Acronis")) +
+      (cf ? prot("camera", "Câmeras funcionando", T.num(cf.funcionando) + '<span style="font-size:30px;color:#9AA8BF"> /' + T.num(cf.cameras) + "</span>", cf.gravadores_fora ? "crit" : T.faixa(cf.funcionando_pct),
+        T.num(cf.fora) + " fora · " + (cf.gravadores_fora ? '<b style="color:' + C.crit + '">' + T.num(cf.gravadores_fora) + (cf.gravadores_fora === 1 ? " gravador fora" : " gravadores fora") + "</b>" : "gravadores ok")) : semDados("camera", "Câmeras", "CFTV"));
 
     const pil = d.pilares.map(x => '<div class="pil"><div><span class="ell">' + T.esc(x.nome.replace("Gestão de ", "").replace("Mensuração de ", "").replace(" Estratégico", "")) + '</span><b style="color:' + C[x.faixa] + '">' + T.num(x.score, 1) + '</b></div><div class="barra"><i style="width:' + (x.score || 0) + "%;background:" + C[x.faixa] + '"></i></div></div>').join("");
 
@@ -112,6 +130,7 @@ window.PainelTV = {
       est(fx, 44, "font-size:46px") + '<span class="mut" style="font-size:22px">score global · meta &gt; 85</span></div>' +
       '<div class="painel unids"><div class="cab"><h2>Ativos por unidade</h2><span>' + totAt + ' ativos · <b style="color:' + C.crit + '">' + totF + ' em falha</b></span></div><div class="grade">' + un + "</div></div>" +
       '<div class="painel alertas"><div class="cab"><h2>Alertas ativos</h2><span>' + T.num(p.total) + " abertos · " + T.num(p.reconhecidos) + " reconhecidos</span></div>" + (al || '<div class="mut">Nenhum alerta aberto.</div>') + "</div>" +
+      '<div class="prot">' + pr + "</div>" +
       '<div class="kp">' + kp + "</div>" +
       '<div class="painel pils"><span class="cond" style="font-size:28px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9AA8BF">Pilares</span>' + pil + "</div>" +
       '<div class="tk"><span class="rot">AO VIVO</span><div class="trilho"><div class="faixa">' + (itens ? itens + itens : "<span>Nenhum alerta ativo.</span>") + "</div></div></div></div>";

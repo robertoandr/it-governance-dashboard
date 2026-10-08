@@ -24,7 +24,7 @@
   {% block estilo %}{% endblock %}
 </head>
 <body>
-  <div id="palco" data-url="{{ url_for('painel_tv.dados') }}" role="main" aria-live="polite"></div>
+  <div id="palco" data-url="{{ url_dados }}" role="main" aria-live="polite"></div>
   <nav class="tv-nav" aria-label="Modelos do painel">
     {% for m in modelos %}<a href="{{ url_for('painel_tv.tela', versao=m.versao) }}"{% if m.versao == versao %} aria-current="page"{% endif %}>v{{ m.versao }} · {{ m.nome }}</a>{% endfor %}
   </nav>
