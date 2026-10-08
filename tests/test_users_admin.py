@@ -179,3 +179,69 @@ def test_excluir_protecoes(authed_client, factory_app, authed_user, monkeypatch)
     authed_client.post(f"/gov/users/{admin}/delete")
     assert any("único admin" in msg for _, msg in _flash(authed_client))
     assert _buscar(factory_app, admin) is not None
+
+
+def test_painel_tv_libera_e_bloqueia_pelo_estado_enviado(authed_client, factory_app) -> None:
+    uid = _criar(factory_app, "tv")
+    assert _buscar(factory_app, uid).ver_painel_tv is False
+
+    authed_client.post(f"/gov/users/{uid}/painel-tv", data={"ver_painel_tv": "1"})
+    assert _buscar(factory_app, uid).ver_painel_tv is True
+    authed_client.post(f"/gov/users/{uid}/painel-tv", data={"ver_painel_tv": "1"})  # repetir não inverte
+    assert _buscar(factory_app, uid).ver_painel_tv is True
+
+    authed_client.post(f"/gov/users/{uid}/painel-tv", data={"ver_painel_tv": "0"})
+    assert _buscar(factory_app, uid).ver_painel_tv is False
+
+
+def test_painel_tv_admin_sempre_ve(authed_client, factory_app) -> None:
+    uid = _criar(factory_app, "admin-tv", role="admin")
+
+    authed_client.post(f"/gov/users/{uid}/painel-tv", data={"ver_painel_tv": "0"})
+
+    assert any("Admin sempre vê" in msg for _, msg in _flash(authed_client))
+    assert _buscar(factory_app, uid).pode_ver_painel_tv is True
+
+
+def test_criar_usuario_ja_liberado_para_tv(authed_client, factory_app) -> None:
+    authed_client.post(
+        "/gov/users",
+        data={
+            "name": "TV NOC",
+            "email": _email("tv-noc"),
+            "role": "visualizador",
+            "password": "abc12345",
+            "confirm_password": "abc12345",
+            "ver_painel_tv": "1",
+        },
+    )
+
+    with factory_app.app_context():
+        user = User.query.filter_by(email=_email("tv-noc")).first()
+        assert user is not None and user.ver_painel_tv is True
+
+
+def test_listagem_mostra_coluna_painel_tv(authed_client, factory_app) -> None:
+    _criar(factory_app, "coluna-tv")
+
+    html = authed_client.get("/gov/users").get_data(as_text=True)
+
+    assert "Painel TV" in html
+    assert "Bloqueado" in html
+
+
+def test_garantir_coluna_painel_tv_em_banco_antigo(tmp_path) -> None:
+    from sqlalchemy import create_engine, inspect, text
+
+    from app.models.user import garantir_coluna_painel_tv
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'antigo.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, email VARCHAR(255))"))
+        conn.execute(text("INSERT INTO users (email) VALUES ('a@b')"))
+    garantir_coluna_painel_tv(engine)
+    garantir_coluna_painel_tv(engine)  # idempotente
+
+    assert "ver_painel_tv" in {c["name"] for c in inspect(engine).get_columns("users")}
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT ver_painel_tv FROM users")).scalar() == 0

@@ -22,7 +22,8 @@ def _alvo(user_id: int) -> str:
 
 
 def _resumo_criar() -> str:
-    return f"Usuários: criar {request.form.get('name', '').strip()} <{request.form.get('email', '').strip().lower()}> como {request.form.get('role', 'visualizador')}"
+    tv = " com painel da TV" if request.form.get("ver_painel_tv") else ""
+    return f"Usuários: criar {request.form.get('name', '').strip()} <{request.form.get('email', '').strip().lower()}> como {request.form.get('role', 'visualizador')}{tv}"
 
 
 def _resumo_editar(user_id: int) -> str:
@@ -36,6 +37,11 @@ def _resumo_toggle(user_id: int) -> str:
     user = db.session.get(User, user_id)
     acao = "desativar" if user and user.is_active else "ativar"
     return f"Usuários: {acao} {_alvo(user_id)}"
+
+
+def _resumo_painel_tv(user_id: int) -> str:
+    acao = "liberar" if request.form.get("ver_painel_tv") == "1" else "bloquear"
+    return f"Usuários: {acao} o painel da TV para {_alvo(user_id)}"
 
 
 def _count_active_admins() -> int:
@@ -77,7 +83,7 @@ def create_user():
         flash(f"Email '{email}' já está em uso.", "error")
         return redirect(url_for("users.list_users"))
 
-    user = User(name=name, email=email, role=role)
+    user = User(name=name, email=email, role=role, ver_painel_tv=bool(request.form.get("ver_painel_tv")))
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -173,6 +179,32 @@ def toggle_user(user_id: int):
     db.session.commit()
     state = "ativado" if user.is_active else "desativado"
     flash(f"Usuário '{user.name}' {state}.", "success")
+    return redirect(url_for("users.list_users"))
+
+
+@bp.route("/users/<int:user_id>/painel-tv", methods=["POST"])
+@login_required
+@require_role("admin")
+@requer_aprovacao(_resumo_painel_tv)
+def toggle_painel_tv(user_id: int):
+    """Libera (``ver_painel_tv=1``) ou bloqueia o painel da TV (/gov/tv) para o usuário.
+
+    O formulário leva o estado desejado, não "inverter": um pedido que espera
+    na fila de aprovação continua fazendo o que o resumo diz.
+    """
+    user = db.session.get(User, user_id)
+    if user is None:
+        flash("Usuário não encontrado.", "error")
+        return redirect(url_for("users.list_users"))
+
+    if user.role == "admin":
+        flash("Admin sempre vê o painel da TV.", "error")
+        return redirect(url_for("users.list_users"))
+
+    user.ver_painel_tv = request.form.get("ver_painel_tv") == "1"
+    db.session.commit()
+    estado = "liberado" if user.ver_painel_tv else "bloqueado"
+    flash(f"Painel da TV {estado} para '{user.name}'.", "success")
     return redirect(url_for("users.list_users"))
 
 

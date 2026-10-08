@@ -128,6 +128,61 @@ def test_dados_em_json_sem_cache(authed_client) -> None:
     assert resp.get_json()["score"]["valor"] == 60.7
 
 
+def _logar(factory_app, client, email: str, role: str, ver_painel_tv: bool) -> None:
+    from app.extensions import db
+    from app.models.user import User
+
+    with factory_app.app_context():
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = User(name=email, email=email, role=role)
+            user.set_password("pytest-only-not-real")
+            db.session.add(user)
+        user.ver_painel_tv = ver_painel_tv
+        db.session.commit()
+        uid = user.id
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(uid)
+        sess["_fresh"] = True
+
+
+@pytest.mark.parametrize("rota", ["/gov/tv", "/gov/v6", "/gov/painel/dados"])
+def test_painel_bloqueado_para_quem_nao_foi_liberado(factory_app, factory_client, rota: str) -> None:
+    _logar(factory_app, factory_client, "pytest-tv-bloqueado@test.local", "gestor", ver_painel_tv=False)
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        assert factory_client.get(rota).status_code == 403
+
+
+@pytest.mark.parametrize("rota", ["/gov/tv", "/gov/v6", "/gov/painel/dados"])
+def test_painel_liberado_no_cadastro(factory_app, factory_client, rota: str) -> None:
+    _logar(factory_app, factory_client, "pytest-tv-liberado@test.local", "visualizador", ver_painel_tv=True)
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        assert factory_client.get(rota).status_code == 200
+
+
+def test_tv_exige_login(factory_client) -> None:
+    assert factory_client.get("/gov/tv").status_code in (302, 401)
+
+
+def test_tv_mostra_o_modelo_escolhido_sem_menu(authed_client) -> None:
+    with patch("app.views.painel_tv.get_painel", return_value=_PAINEL):
+        resp = authed_client.get("/gov/tv")
+
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Sala de Controle Bento" in html
+    assert 'data-url="/gov/painel/dados"' in html
+    assert "/gov/v1" not in html  # sem o menu de troca de modelo
+    assert "<script>alert(1)</script>" not in html
+
+
+def test_v6_mostra_seguranca_controlados_e_cameras() -> None:
+    v6 = (Path(__file__).resolve().parent.parent / "app/templates/tv/v6.html").read_text(encoding="utf-8")
+
+    for campo in ("d.seguranca", "d.controlados", "d.cftv", "Dispositivos controlados", "Câmeras"):
+        assert campo in v6
+
+
 def test_licencas_alertam_quando_perto_de_esgotar() -> None:
     """Uso de licenças alto é alerta (≥ 85% atenção, ≥ 95% crítico), não "verde"."""
     raiz = Path(__file__).resolve().parent.parent / "app"
