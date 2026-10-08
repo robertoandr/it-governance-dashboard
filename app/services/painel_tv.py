@@ -1,4 +1,4 @@
-"""Dados do painel de TV do NOC (/gov/v1 … /gov/v5).
+"""Dados do painel de TV do NOC (/gov/v1 … /gov/v6).
 
 Junta, num único dicionário serializável em JSON, o que as telas de TV mostram:
 score e pilares, KPIs de operação, ativos e falhas por unidade, alertas
@@ -280,6 +280,103 @@ def _links() -> dict[str, Any]:
     return {"fora": itens}
 
 
+def _seguranca() -> dict[str, Any]:
+    """Tentativas de invasão e incidentes (Acronis) + alertas do Defender."""
+    from itgov.api.v1.acronis_backup import get_cached_acronis_summary
+    from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
+
+    a = get_cached_acronis_summary() or {}
+    if not a.get("total_agents"):
+        raise ValueError("Acronis sem dados")
+    try:
+        defender = get_cached_security_alerts_summary() or {}
+    except _ERROS_FONTE as exc:
+        log.warning("painel_tv.defender_falhou", erro=str(exc))
+        defender = {}
+    incidentes = [
+        {
+            "maquina": i.get("resource_name", "—"),
+            "tipo": i.get("alert_type", "—"),
+            "severidade": i.get("severity", "—"),
+            "mitigado": bool(i.get("mitigation")),
+        }
+        for i in (a.get("incidentes") or [])[:8]
+    ]
+    return {
+        "invasoes": a.get("intrusion_attempts", 0),
+        "invasoes_edr": a.get("intrusion_edr", 0),
+        "invasoes_url": a.get("intrusion_url", 0),
+        "invasoes_login": a.get("intrusion_login", 0),
+        "incidentes": a.get("incidents_total", 0),
+        "nao_mitigados": a.get("incidents_not_mitigated", 0),
+        "patches_criticos": a.get("patches_critical", 0),
+        "defender_abertos": defender.get("total_open") if defender.get("enabled") else None,
+        "defender_altos": defender.get("high") if defender.get("enabled") else None,
+        "defender_24h": defender.get("older_than_24h") if defender.get("enabled") else None,
+        "ultimos_incidentes": incidentes,
+    }
+
+
+def _controlados() -> dict[str, Any]:
+    """Endpoints sob controle (agente Acronis com plano de proteção)."""
+    from itgov.api.v1.acronis_backup import get_cached_acronis_summary
+
+    a = get_cached_acronis_summary() or {}
+    if not a.get("total_agents"):
+        raise ValueError("Acronis sem dados")
+    return {
+        "total": a["total_agents"],
+        "online": a.get("online", 0),
+        "offline": a.get("offline", 0),
+        "protegidos": a.get("protected", 0),
+        "protegidos_pct": a.get("protected_pct"),
+        "sem_plano": a.get("sem_plano_count", 0),
+        "offline_30d": a.get("offline_gt_30d_count", 0),
+        "desatualizados": a.get("outdated", 0),
+    }
+
+
+def _cftv(host_unidade: dict[str, str]) -> dict[str, Any]:
+    """Câmeras e gravadores do Zabbix: funcionando, fora e quais estão fora."""
+    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
+
+    devs = (get_cached_cftv_summary() or {}).get("devices") or []
+    if not devs:
+        raise ValueError("CFTV sem dados")
+    cameras = [d for d in devs if not d.get("is_gravador")]
+    gravadores = [d for d in devs if d.get("is_gravador")]
+
+    def conta(lista: list[dict[str, Any]], status: str) -> int:
+        return sum(1 for d in lista if d.get("status") == status)
+
+    ativas = [d for d in cameras if d.get("status") != "maint"]
+    fora = sorted(
+        (d for d in devs if d.get("status") == "down"),
+        key=lambda d: (not d.get("is_gravador"), -(d.get("offline_desde") or 0)),
+    )
+    return {
+        "cameras": len(cameras),
+        "funcionando": conta(cameras, "up"),
+        "fora": conta(cameras, "down"),
+        "sem_dados": conta(cameras, "nodata"),
+        "manutencao": conta(cameras, "maint"),
+        "funcionando_pct": round(conta(cameras, "up") / len(ativas) * 100, 1) if ativas else None,
+        "gravadores": len(gravadores),
+        "gravadores_fora": conta(gravadores, "down"),
+        "lista_fora": [
+            {
+                "nome": d.get("name", ""),
+                "unidade": host_unidade.get(d.get("name", ""), "—"),
+                "gravador": bool(d.get("is_gravador")),
+                "desde": datetime.fromtimestamp(d["offline_desde"], TZ_LOCAL).isoformat(timespec="seconds")
+                if d.get("offline_desde")
+                else "",
+            }
+            for d in fora[:40]
+        ],
+    }
+
+
 def _dispo_7d() -> list[dict[str, Any]]:
     from itgov.api.v1.rede_monitoring import _query_influx
 
@@ -327,6 +424,9 @@ def montar_painel() -> dict[str, Any]:
         "licencas": _bloco(erros, "licenças", _licencas),
         "dispositivos": _bloco(erros, "dispositivos", _dispositivos),
         "links": _bloco(erros, "fortigate", _links),
+        "seguranca": _bloco(erros, "segurança", _seguranca),
+        "controlados": _bloco(erros, "acronis", _controlados),
+        "cftv": _bloco(erros, "cftv", lambda: _cftv(host_unidade)),
         "dispo_7d": _bloco(erros, "histórico", _dispo_7d) or [],
         "fontes": _bloco(erros, "fontes", _fontes) or [],
         "erros": erros,
