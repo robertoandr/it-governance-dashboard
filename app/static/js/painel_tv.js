@@ -1,4 +1,4 @@
-/* Painel de TV do NOC — base comum às telas /gov/v1 … /gov/v5.
+/* Painel de TV do NOC — base comum às telas /gov/v1 … /gov/v6.
  *
  * Cada tela define window.PainelTV.render(dados) → HTML do palco 1920×1080.
  * Este arquivo cuida do resto: escala o palco para a tela, renderiza com os
@@ -23,6 +23,8 @@
     link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path>',
     licenca: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 10h6M7 14h4"></path><circle cx="17" cy="12" r="2"></circle>',
     notebook: '<rect x="4" y="5" width="16" height="11" rx="1.5"></rect><path d="M2 19h20"></path>',
+    camera: '<rect x="2.5" y="7" width="13" height="10" rx="2"></rect><path d="M15.5 10.5l6-3v9l-6-3"></path>',
+    alvo: '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path>',
   };
 
   function icone(nome, tam, extra) {

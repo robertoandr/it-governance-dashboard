@@ -59,13 +59,16 @@ def test_fonte_fora_do_ar_nao_derruba_o_painel(factory_app) -> None:
         raise RuntimeError("fora do ar")
 
     nomes = ["_governanca", "_zabbix", "_unidades_e_hosts", "_sla", "_secure_score", "_licencas"]
-    nomes += ["_dispositivos", "_links", "_dispo_7d", "_fontes"]
+    nomes += ["_dispositivos", "_links", "_dispo_7d", "_fontes", "_seguranca", "_controlados", "_cftv"]
     with factory_app.app_context(), patch.multiple(ptv, **dict.fromkeys(nomes, quebra)):
         painel = ptv.montar_painel()
 
     assert painel["score"] is None
     assert painel["unidades"] == [] and painel["alertas"] == []
-    assert {"governança", "zabbix", "unidades", "zendesk", "fortigate"} <= set(painel["erros"])
+    assert {"governança", "zabbix", "unidades", "zendesk", "fortigate", "segurança", "acronis", "cftv"} <= set(
+        painel["erros"]
+    )
+    assert painel["seguranca"] is None and painel["controlados"] is None and painel["cftv"] is None
     assert painel["hora"]  # o relógio aparece mesmo sem nenhuma fonte
 
 
@@ -134,3 +137,114 @@ def test_licencas_alertam_quando_perto_de_esgotar() -> None:
         tela = (raiz / f"templates/tv/v{versao}.html").read_text(encoding="utf-8")
         assert "T.faixaUso(lic.uso_pct)" in tela
         assert "T.faixa(lic.uso_pct)" not in tela
+
+
+_ACRONIS = {
+    "total_agents": 214,
+    "online": 187,
+    "offline": 27,
+    "outdated": 15,
+    "protected": 198,
+    "protected_pct": 92.5,
+    "sem_plano_count": 9,
+    "offline_gt_30d_count": 7,
+    "incidents_total": 12,
+    "incidents_not_mitigated": 3,
+    "intrusion_attempts": 37,
+    "intrusion_edr": 4,
+    "intrusion_url": 29,
+    "intrusion_login": 4,
+    "patches_critical": 18,
+    "incidentes": [
+        {"resource_name": "NB-01", "alert_type": "Ransomware", "severity": "high", "mitigation": "", "time": None},
+        {"resource_name": "NB-02", "alert_type": "URL", "severity": "low", "mitigation": "blocked", "time": None},
+    ],
+}
+
+
+def test_seguranca_traz_invasoes_incidentes_e_defender() -> None:
+    defender = {"enabled": True, "total_open": 6, "high": 2, "older_than_24h": 4}
+    with (
+        patch("itgov.api.v1.acronis_backup.get_cached_acronis_summary", return_value=_ACRONIS),
+        patch("itgov.api.v1.governance_security_alerts.get_cached_security_alerts_summary", return_value=defender),
+    ):
+        seg = ptv._seguranca()
+
+    assert seg["invasoes"] == 37 and seg["invasoes_url"] == 29
+    assert seg["nao_mitigados"] == 3 and seg["patches_criticos"] == 18
+    assert seg["defender_abertos"] == 6 and seg["defender_24h"] == 4
+    assert [i["mitigado"] for i in seg["ultimos_incidentes"]] == [False, True]
+
+
+def test_seguranca_sem_defender_continua_com_acronis() -> None:
+    with (
+        patch("itgov.api.v1.acronis_backup.get_cached_acronis_summary", return_value=_ACRONIS),
+        patch(
+            "itgov.api.v1.governance_security_alerts.get_cached_security_alerts_summary",
+            side_effect=RuntimeError("influx fora"),
+        ),
+    ):
+        seg = ptv._seguranca()
+
+    assert seg["invasoes"] == 37 and seg["defender_abertos"] is None
+
+
+def test_controlados_sem_acronis_vira_erro_do_bloco() -> None:
+    with patch("itgov.api.v1.acronis_backup.get_cached_acronis_summary", return_value={}), pytest.raises(ValueError):
+        ptv._controlados()
+    with patch("itgov.api.v1.acronis_backup.get_cached_acronis_summary", return_value=_ACRONIS):
+        ctl = ptv._controlados()
+    assert ctl == {
+        "total": 214,
+        "online": 187,
+        "offline": 27,
+        "protegidos": 198,
+        "protegidos_pct": 92.5,
+        "sem_plano": 9,
+        "offline_30d": 7,
+        "desatualizados": 15,
+    }
+
+
+def test_cftv_conta_cameras_e_lista_fora_com_gravador_primeiro() -> None:
+    devs = [
+        {"name": "Cam 1", "is_gravador": False, "status": "up"},
+        {"name": "Cam 2", "is_gravador": False, "status": "up"},
+        {"name": "Cam 3", "is_gravador": False, "status": "down", "offline_desde": 1791400000},
+        {"name": "Cam 4", "is_gravador": False, "status": "maint"},
+        {"name": "Cam 5", "is_gravador": False, "status": "nodata"},
+        {"name": "NVR 1", "is_gravador": True, "status": "down", "offline_desde": 1791300000},
+        {"name": "NVR 2", "is_gravador": True, "status": "up"},
+    ]
+    with patch("itgov.api.v1.cftv_monitoring.get_cached_cftv_summary", return_value={"devices": devs}):
+        cf = ptv._cftv({"Cam 3": "Shopping"})
+
+    assert (cf["cameras"], cf["funcionando"], cf["fora"], cf["sem_dados"], cf["manutencao"]) == (5, 2, 1, 1, 1)
+    assert cf["funcionando_pct"] == 50.0  # manutenção não conta como ativa
+    assert (cf["gravadores"], cf["gravadores_fora"]) == (2, 1)
+    assert [c["nome"] for c in cf["lista_fora"]] == ["NVR 1", "Cam 3"]
+    assert cf["lista_fora"][1]["unidade"] == "Shopping" and cf["lista_fora"][1]["desde"].startswith("2026-10-")
+
+
+def test_cftv_sem_dispositivos_vira_erro_do_bloco() -> None:
+    with (
+        patch("itgov.api.v1.cftv_monitoring.get_cached_cftv_summary", return_value={"devices": []}),
+        pytest.raises(ValueError),
+    ):
+        ptv._cftv({})
+
+
+def test_v5_tem_seis_paginas_e_coluna_ao_vivo() -> None:
+    """v5 roda 6 páginas (cada uma com KPIs de controle + bloco de alerta) e o "Ao vivo" fixo."""
+    tela = (Path(__file__).resolve().parent.parent / "app/templates/tv/v5.html").read_text(encoding="utf-8")
+    assert "const NPG = 6;" in tela
+    for nome in (
+        "Visão geral",
+        "Alertas críticos",
+        "Segurança",
+        "Dispositivos controlados",
+        "Câmeras",
+        "Rede e atendimento",
+    ):
+        assert f'pagina("{nome}"' in tela
+    assert "Ao vivo" in tela and "T.faixaUso(lic.uso_pct)" in tela
