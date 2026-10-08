@@ -5,7 +5,9 @@ Liga o alerta WhatsApp (Evolution API) à ação 12 "Governança — Chamado Zen
 Cria/reaproveita (idempotente):
   - Macros globais {$EVO.URL} e {$EVO.APIKEY} (secreta)
   - Media type webhook "WhatsApp (Evolution)" — POST /message/sendText na
-    instância `alertas-zabbix` (chip 41 98903-8337)
+    instância `alertas-zabbix` (chip 41 98903-8337). O texto é montado em
+    português simples por whatsapp/alerta.js; fora das 08:00–19:00 o envio
+    fica para o resumo da manhã (10_create_whatsapp_resumo.py)
   - Mídia no usuário `alertas-integracao` apontando para o grupo de destino
   - Operação na ação 12 (mesmo passo 2 do Zendesk, ou seja, só alerta se o
     problema durar >= 5 min). Recovery/update já são "notificar todos os
@@ -73,33 +75,15 @@ ESC_STEP = 2  # mesmo passo da operação Zendesk (esc_period 5m na ação)
 
 MEDIATYPE_TYPE_WEBHOOK = "4"
 
+# Janela de envio (horário de Brasília, sem horário de verão). Fora dela o
+# webhook não envia e o alerta entra no resumo das 08:00 (script 10).
+JANELA_INICIO = "08:00"
+JANELA_FIM = "19:00"
+FUSO_HORAS = "-3"
+
 # Sandbox JS do Zabbix Server — `value` é o JSON dos `parameters` abaixo.
-WEBHOOK_SCRIPT = """\
-try {
-    var params = JSON.parse(value);
-    if (!params.to || params.to.indexOf('{ALERT') === 0) {
-        throw 'destino vazio (preencha "Enviar para" com o JID do grupo)';
-    }
-
-    var req = new HttpRequest();
-    req.addHeader('Content-Type: application/json');
-    req.addHeader('apikey: ' + params.evo_apikey);
-
-    var texto = params.subject ? '*' + params.subject + '*\\n\\n' + params.message : params.message;
-    var resp = req.post(
-        params.evo_url + '/message/sendText/' + encodeURIComponent(params.instance),
-        JSON.stringify({number: params.to, text: texto})
-    );
-
-    if (req.getStatus() >= 300) {
-        throw 'Evolution respondeu HTTP ' + req.getStatus() + ': ' + resp;
-    }
-    return 'OK';
-} catch (error) {
-    Zabbix.log(3, '[WhatsApp webhook] ' + error);
-    throw 'WhatsApp webhook falhou: ' + error;
-}
-"""
+_JS = Path(__file__).resolve().parent / "whatsapp"
+WEBHOOK_SCRIPT = "\n".join((_JS / nome).read_text(encoding="utf-8") for nome in ("comum.js", "alerta.js"))
 
 LINK_EVENTO = "{$ZABBIX.URL}/tr_events.php?triggerid={TRIGGER.ID}&eventid={EVENT.ID}"
 
@@ -248,8 +232,22 @@ def main() -> None:
             {"name": "evo_apikey", "value": "{$EVO.APIKEY}"},
             {"name": "instance", "value": EVO_INSTANCIA},
             {"name": "to", "value": "{ALERT.SENDTO}"},
-            {"name": "subject", "value": "{ALERT.SUBJECT}"},
-            {"name": "message", "value": "{ALERT.MESSAGE}"},
+            {"name": "severity", "value": "{EVENT.NSEVERITY}"},
+            {"name": "event_name", "value": "{EVENT.NAME}"},
+            {"name": "host", "value": "{HOST.NAME}"},
+            {"name": "event_value", "value": "{EVENT.VALUE}"},
+            {"name": "update_status", "value": "{EVENT.UPDATE.STATUS}"},
+            {"name": "update_user", "value": "{USER.FULLNAME}"},
+            {"name": "update_action", "value": "{EVENT.UPDATE.ACTION}"},
+            {"name": "update_message", "value": "{EVENT.UPDATE.MESSAGE}"},
+            {"name": "opdata", "value": "{EVENT.OPDATA}"},
+            {"name": "start_time", "value": "{EVENT.TIME}"},
+            {"name": "recovery_time", "value": "{EVENT.RECOVERY.TIME}"},
+            {"name": "duration", "value": "{EVENT.DURATION}"},
+            {"name": "link", "value": LINK_EVENTO},
+            {"name": "janela_inicio", "value": JANELA_INICIO},
+            {"name": "janela_fim", "value": JANELA_FIM},
+            {"name": "fuso_horas", "value": FUSO_HORAS},
         ],
         "message_templates": MESSAGE_TEMPLATES,
     }
