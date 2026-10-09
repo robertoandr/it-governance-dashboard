@@ -77,6 +77,12 @@ class CacheSWR(Generic[T]):  # noqa: UP046 — o CI também roda em Python 3.11 
             self._guardar(valor)
             return valor
 
+    @property
+    def carregado(self) -> bool:
+        """Já houve alguma carga (boa ou não)? Útil para não bloquear a tela."""
+        with self._lock:
+            return self._carregado
+
     def aquecer(self, carregar: Callable[[], T]) -> None:
         """Faz a carga inicial em segundo plano (ex.: na subida do worker)."""
 

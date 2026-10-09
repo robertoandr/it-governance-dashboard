@@ -346,14 +346,39 @@ def acronis_backup() -> str:
 @require_role("admin", "gestor", "operador", pagina="zabbix")
 def zabbix_monitoring() -> str:
     """Render painel de monitoramento Zabbix."""
-    from itgov.api.v1.zabbix_monitoring import get_cached_problems, get_cached_zabbix_summary
+    from itgov.api.v1.zabbix_monitoring import get_cached_hosts_por_tipo, get_cached_problems, get_cached_zabbix_summary
+    from itgov.services import acronis_inventario
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
 
     summary = get_cached_zabbix_summary()
     problems = get_cached_problems()
-    return render_template("dashboards/zabbix_monitoring.html", summary=summary, problems=problems)
+    inventario = acronis_inventario.obter_inventario()
+    tipo = request.args.get("tipo", "")
+    if tipo not in acronis_inventario.TIPOS_COMPUTADOR:
+        tipo = ""
+    busca = (request.args.get("q") or "").strip().lower()
+    computadores = [
+        c
+        for c in (inventario.computadores if inventario else [])
+        if (not tipo or c.tipo == tipo)
+        and (not busca or busca in f"{c.nome} {c.usuario} {c.modelo} {c.fabricante} {c.cpu} {c.so}".lower())
+    ]
+    return render_template(
+        "dashboards/zabbix_monitoring.html",
+        summary=summary,
+        problems=problems,
+        hosts_tipo=get_cached_hosts_por_tipo(),
+        inventario=inventario,
+        inventario_lido_em=inventario.atualizado_em.astimezone(_TZ_LOCAL).strftime("%d/%m %H:%M") if inventario else "",
+        inventario_carregando=acronis_inventario.carregando(),
+        inventario_configurado=acronis_inventario.configurado(),
+        tipos_computador=acronis_inventario.TIPOS_COMPUTADOR,
+        computadores=computadores,
+        tipo=tipo,
+        busca=request.args.get("q", ""),
+    )
 
 
 @bp.route("/infra")
