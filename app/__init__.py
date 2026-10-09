@@ -247,6 +247,12 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         aquecer_m365_uso()
         aquecer_compliance()
 
+    # Inventário de hardware dos computadores (Acronis), usado na página Zabbix
+    if not settings.app.testing:
+        from itgov.services.acronis_inventario import aquecer as aquecer_inventario
+
+        aquecer_inventario()
+
     # CLI commands
     from app.commands import register_commands
 

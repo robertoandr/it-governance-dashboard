@@ -14,6 +14,8 @@ from typing import Any
 import requests
 import structlog
 
+from itgov.utils.cache_swr import CacheSWR
+
 log = structlog.get_logger(__name__)
 
 _CACHE_TTL = 300  # 5 minutos
@@ -208,3 +210,60 @@ def get_cached_problems() -> list[dict]:
         _cache_problems = dados
         _cache_problems_ts = time.monotonic()
     return dados
+
+
+# ── Hosts por tipo (zb2) ──────────────────────────────────────────────────────
+
+# Grupo do Zabbix → tipo exibido; o primeiro grupo da lista que o host tiver vale
+TIPOS_POR_GRUPO: tuple[tuple[str, str], ...] = (
+    ("CFTV/Cameras", "Câmeras"),
+    ("CFTV/Controle de acesso", "Controle de acesso"),
+    ("CFTV/DVRs", "Gravadores (DVR/NVR)"),
+    ("CFTV/NVRs", "Gravadores (DVR/NVR)"),
+    ("Links WAN", "Links WAN"),
+    ("Hypervisors", "Servidores"),
+    ("Linux servers", "Servidores"),
+    ("Windows servers", "Servidores"),
+    ("Zabbix servers", "Servidores"),
+    ("Virtual machines", "Máquinas virtuais"),
+    ("Sensores IoT", "Sensores IoT"),
+)
+_GRUPOS_DE_CHECAGEM = frozenset({"Certificados SSL", "Backup", "Governança — PMO"})
+TIPO_CHECAGEM = "Checagens de serviço"
+TIPO_OUTROS = "Outros"
+
+
+def hosts_por_tipo(hosts: list[dict[str, Any]]) -> dict[str, int]:
+    """Conta os hosts habilitados do Zabbix por tipo, a partir dos grupos.
+
+    Args:
+        hosts: ``host.get`` com ``selectHostGroups: ["name"]``.
+
+    Returns:
+        Tipo → quantidade, do maior para o menor.
+    """
+    contagem: dict[str, int] = {}
+    for h in hosts:
+        grupos = {g.get("name", "") for g in h.get("hostgroups") or h.get("groups") or []}
+        tipo = next((t for g, t in TIPOS_POR_GRUPO if g in grupos), None)
+        if tipo is None:
+            tipo = TIPO_CHECAGEM if grupos & _GRUPOS_DE_CHECAGEM else TIPO_OUTROS
+        contagem[tipo] = contagem.get(tipo, 0) + 1
+    return dict(sorted(contagem.items(), key=lambda kv: -kv[1]))
+
+
+def _buscar_hosts_por_tipo() -> dict[str, int]:
+    try:
+        hosts = _zbx("host.get", {"output": ["hostid"], "selectHostGroups": ["name"], "filter": {"status": 0}})
+    except (requests.RequestException, RuntimeError, ValueError) as exc:
+        log.warning("zabbix.hosts_por_tipo_falhou", erro=str(exc)[:200])
+        return {}
+    return hosts_por_tipo(hosts)
+
+
+_cache_tipos: CacheSWR[dict[str, int]] = CacheSWR("zabbix.hosts_por_tipo", ttl=_CACHE_TTL, valido=bool)
+
+
+def get_cached_hosts_por_tipo() -> dict[str, int]:
+    """Hosts do Zabbix por tipo (cache de 5 min; vazio se a API falhar)."""
+    return _cache_tipos.get(_buscar_hosts_por_tipo)
