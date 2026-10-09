@@ -150,4 +150,98 @@
     {% endif %}
   </div>
 </div>
+
+{# --- zb2: hosts por tipo (grupos do Zabbix + computadores do Acronis) --- #}
+<div class="bg-white rounded-xl shadow p-5 mt-6 dark:bg-slate-800" id="tipos">
+  <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">Equipamentos por tipo</p>
+  <p class="text-xs text-gray-400 mb-4">Câmeras, gravadores, links e servidores pelos grupos do Zabbix; computadores pelo inventário do agente Acronis.</p>
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    {% for nome, n in hosts_tipo.items() %}
+    <div class="rounded-lg border border-gray-100 dark:border-slate-700 px-3 py-2">
+      <p class="text-[11px] text-gray-500 dark:text-slate-400">{{ nome }}</p>
+      <p class="text-xl font-bold text-gray-800 dark:text-slate-100 tabular-nums">{{ n }}</p>
+      <p class="text-[10px] text-gray-400">Zabbix</p>
+    </div>
+    {% endfor %}
+    {% if inventario %}
+    {% for chave, n in inventario.por_tipo.items() %}
+    <a href="{{ url_for('dashboards.zabbix_monitoring', tipo=chave) }}#computadores" class="rounded-lg border px-3 py-2 hover:border-gadens-400 {{ 'border-gadens-500 bg-gadens-50 dark:bg-slate-700' if tipo == chave else 'border-gray-100 dark:border-slate-700' }}">
+      <p class="text-[11px] text-gray-500 dark:text-slate-400">{{ tipos_computador[chave] }}</p>
+      <p class="text-xl font-bold text-gray-800 dark:text-slate-100 tabular-nums">{{ n }}</p>
+      <p class="text-[10px] text-gray-400">Acronis</p>
+    </a>
+    {% endfor %}
+    {% endif %}
+  </div>
+  {% if not hosts_tipo %}<p class="text-xs text-gray-400 mt-2">Não foi possível ler os grupos de hosts do Zabbix agora.</p>{% endif %}
+</div>
+
+{# --- zb3: hardware dos computadores --- #}
+<div class="bg-white rounded-xl shadow p-5 mt-6 dark:bg-slate-800" id="computadores">
+  <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+    <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">
+      Computadores — modelo, sistema e hardware
+      {% if inventario %}<span class="ml-1 text-xs font-normal text-gray-400">{{ computadores|length }} de {{ inventario.computadores|length }}</span>{% endif %}
+    </p>
+    {% if inventario %}
+    <p class="text-[11px] text-gray-400">Inventário do Acronis lido em {{ inventario_lido_em }}{% if inventario.sem_inventario %} · {{ inventario.sem_inventario }} máquina{{ 's' if inventario.sem_inventario != 1 }} sem inventário de hardware{% endif %}</p>
+    {% endif %}
+  </div>
+  {% if not inventario_configurado %}
+    <p class="text-sm text-gray-500">Integração com o Acronis não configurada (ACRONIS_BASE_URL, ACRONIS_CLIENT_ID e ACRONIS_CLIENT_SECRET).</p>
+  {% elif inventario_carregando %}
+    <p class="text-sm text-gray-500">Lendo o inventário do Acronis… recarregue a página em alguns segundos.</p>
+  {% elif not inventario %}
+    <p class="text-sm text-amber-600">O Acronis não respondeu agora. Uma nova tentativa é feita sozinha em alguns minutos.</p>
+  {% else %}
+  <form method="get" action="{{ url_for('dashboards.zabbix_monitoring') }}#computadores" class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+    {% set chip = 'rounded px-2 py-0.5 border' %}
+    <a href="{{ url_for('dashboards.zabbix_monitoring', q=busca or None) }}#computadores" class="{{ chip }} {{ 'bg-gadens-600 text-white border-gadens-600' if not tipo else 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300' }}">Todos</a>
+    {% for chave, rotulo in tipos_computador.items() if chave in inventario.por_tipo %}
+    <a href="{{ url_for('dashboards.zabbix_monitoring', tipo=chave, q=busca or None) }}#computadores" class="{{ chip }} {{ 'bg-gadens-600 text-white border-gadens-600' if tipo == chave else 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300' }}">{{ rotulo }}: {{ inventario.por_tipo[chave] }}</a>
+    {% endfor %}
+    {% if tipo %}<input type="hidden" name="tipo" value="{{ tipo }}">{% endif %}
+    <input type="search" name="q" value="{{ busca }}" placeholder="Buscar nome, usuário, modelo, CPU…" class="ml-auto rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1 w-56">
+  </form>
+  <div class="overflow-x-auto max-h-[560px] overflow-y-auto">
+    <table class="w-full text-xs">
+      <thead class="sticky top-0 bg-white dark:bg-slate-800">
+        <tr class="border-b text-[10px] text-gray-400 uppercase text-left">
+          <th class="py-1 pr-3 font-medium">Computador</th>
+          <th class="py-1 pr-3 font-medium">Tipo</th>
+          <th class="py-1 pr-3 font-medium">Fabricante / modelo</th>
+          <th class="py-1 pr-3 font-medium">Sistema</th>
+          <th class="py-1 pr-3 font-medium">Processador</th>
+          <th class="py-1 pr-3 font-medium text-right">Memória</th>
+          <th class="py-1 font-medium">Disco</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50 dark:divide-slate-700/50">
+        {% for c in computadores %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/50 align-top">
+          <td class="py-1.5 pr-3">
+            <span class="inline-block w-1.5 h-1.5 rounded-full mr-1 {{ 'bg-green-500' if c.online else 'bg-gray-300' }}" title="{{ 'agente online' if c.online else 'agente offline' }}"></span>
+            <span class="font-medium text-gray-800 dark:text-slate-100">{{ c.nome }}</span>
+            {% if c.usuario %}<div class="text-[10px] text-gray-400 truncate max-w-[180px]" title="{{ c.usuario }}">{{ c.usuario }}</div>{% endif %}
+          </td>
+          <td class="py-1.5 pr-3 whitespace-nowrap">{{ tipos_computador[c.tipo] }}</td>
+          <td class="py-1.5 pr-3">{{ c.fabricante or '—' }}<div class="text-[10px] text-gray-400">{{ c.modelo }}{% if c.serie %} · S/N {{ c.serie }}{% endif %}</div></td>
+          <td class="py-1.5 pr-3">{{ c.so|replace('Microsoft ', '') or '—' }}</td>
+          <td class="py-1.5 pr-3">{{ c.cpu or '—' }}{% if c.nucleos %}<div class="text-[10px] text-gray-400">{{ c.nucleos }} núcleos</div>{% endif %}</td>
+          <td class="py-1.5 pr-3 text-right tabular-nums whitespace-nowrap {{ 'text-amber-600' if c.ram_gb and c.ram_gb < 7 }}">{{ '%.0f'|format(c.ram_gb) if c.ram_gb else '—' }} GB</td>
+          <td class="py-1.5 whitespace-nowrap tabular-nums">
+            {% if c.disco_gb %}
+            {{ '%.0f'|format(c.disco_gb) }} GB {{ c.disco_tipo }}
+            <div class="text-[10px] {{ 'text-red-600' if c.disco_uso_pct >= 90 else 'text-amber-600' if c.disco_uso_pct >= 80 else 'text-gray-400' }}">{{ c.disco_uso_pct }}% usado</div>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="py-4 text-center text-gray-400">Nenhum computador neste filtro.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}
