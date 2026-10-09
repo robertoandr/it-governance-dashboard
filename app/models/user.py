@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 import structlog
@@ -9,6 +11,7 @@ from flask_login import UserMixin
 from sqlalchemy import Engine, inspect, text
 from sqlalchemy.exc import OperationalError
 
+from app import permissoes as perm
 from app.extensions import bcrypt, db
 
 log = structlog.get_logger(__name__)
@@ -31,6 +34,8 @@ class User(UserMixin, db.Model):
     super_admin: bool = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     # Liberado para abrir o painel da TV (/gov/tv e /gov/v1…v6). Admin sempre pode.
     ver_painel_tv: bool = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
+    # Ajustes de permissão que fogem do perfil: {"cftv": "alterar", "zendesk": "nenhum"}
+    permissoes_json: str = db.Column("permissoes", db.Text, nullable=False, default="{}", server_default="{}")
     created_at: datetime = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -52,23 +57,77 @@ class User(UserMixin, db.Model):
         """Admin sempre vê o painel da TV; os demais só se liberados no cadastro."""
         return self.role == "admin" or bool(self.ver_painel_tv)
 
+    @property
+    def permissoes(self) -> dict[str, str]:
+        """Ajustes de permissão por página (só o que foge do perfil)."""
+        try:
+            dados = json.loads(self.permissoes_json or "{}")
+        except ValueError:
+            return {}
+        return dados if isinstance(dados, dict) else {}
+
+    @permissoes.setter
+    def permissoes(self, ajustes: dict[str, str]) -> None:
+        self.permissoes_json = json.dumps(perm.limpar(ajustes, self.role), sort_keys=True)
+
+    def nivel(self, pagina: str) -> str:
+        """Nível efetivo na página: ajuste do usuário, senão o padrão do perfil.
+
+        Args:
+            pagina: Chave em ``app.permissoes.PAGINAS``.
+
+        Returns:
+            ``nenhum``, ``ver`` ou ``alterar``.
+        """
+        if self.super_admin:
+            return perm.ALTERAR
+        ajuste = self.permissoes.get(pagina)
+        if ajuste in perm.NIVEIS:
+            return ajuste
+        conhecida = perm.POR_CHAVE.get(pagina)
+        return conhecida.padrao(self.role) if conhecida else perm.NENHUM
+
+    def pode(self, pagina: str, nivel: str = perm.VER, padrao: Iterable[str] | None = None) -> bool:
+        """O usuário tem ``nivel`` na página?
+
+        Com ajuste para a página, vale o ajuste. Sem ajuste, vale o perfil:
+        ``padrao`` (os perfis que a rota aceita) ou, sem ele, o catálogo.
+
+        Args:
+            pagina: Chave da página.
+            nivel: ``ver`` ou ``alterar``.
+            padrao: Perfis aceitos pela ação quando não há ajuste.
+
+        Returns:
+            True se pode.
+        """
+        if self.super_admin:
+            return True
+        ajuste = self.permissoes.get(pagina)
+        if ajuste in perm.NIVEIS:
+            return perm.basta(ajuste, nivel)
+        if padrao is not None:
+            return self.role in tuple(padrao)
+        return perm.basta(self.nivel(pagina), nivel)
+
     def __repr__(self) -> str:
         return f"<User {self.email} ({self.role})>"
 
 
-def _garantir_coluna(nome: str, engine: Engine | None = None) -> None:
-    """Cria a coluna booleana ``users.<nome>`` (padrão falso) se ainda não existir.
+def _garantir_coluna(nome: str, engine: Engine | None = None, ddl: str = "BOOLEAN NOT NULL DEFAULT 0") -> None:
+    """Cria a coluna ``users.<nome>`` se ainda não existir.
 
     Args:
         nome: Nome da coluna.
         engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+        ddl: Tipo e padrão da coluna (booleana falsa, se omitido).
     """
     engine = engine or db.engine
     if nome in {c["name"] for c in inspect(engine).get_columns(User.__tablename__)}:
         return
     try:
         with engine.begin() as conn:
-            conn.execute(text(f"ALTER TABLE {User.__tablename__} ADD COLUMN {nome} BOOLEAN NOT NULL DEFAULT 0"))
+            conn.execute(text(f"ALTER TABLE {User.__tablename__} ADD COLUMN {nome} {ddl}"))
         log.info("users.coluna_adicionada", coluna=nome)
     except OperationalError as exc:
         # Outro worker criou a coluna entre a inspeção e o ALTER
@@ -92,6 +151,15 @@ def garantir_coluna_painel_tv(engine: Engine | None = None) -> None:
         engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
     """
     _garantir_coluna("ver_painel_tv", engine)
+
+
+def garantir_coluna_permissoes(engine: Engine | None = None) -> None:
+    """Cria a coluna ``users.permissoes`` (sem ajustes) em bancos anteriores a ela.
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    _garantir_coluna("permissoes", engine, "TEXT NOT NULL DEFAULT '{}'")
 
 
 def definir_super_admin(email: str) -> None:

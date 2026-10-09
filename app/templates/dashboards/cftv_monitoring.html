@@ -13,8 +13,8 @@
 {% endblock %}
 
 {% block content %}
-{% set pode_editar = current_user.role in ('admin', 'gestor') %}
-{% set eh_admin = current_user.role == 'admin' %}
+{% set pode_editar = pode('cftv', 'alterar', ('admin', 'gestor')) %}
+{% set eh_admin = pode('cftv', 'alterar', ('admin',)) %}
 
 {% macro stat_card(label, value, color, sub) %}
 <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">

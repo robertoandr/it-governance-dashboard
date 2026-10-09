@@ -8,6 +8,7 @@ import string
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from app import permissoes as perm
 from app.auth.rbac import require_role
 from app.extensions import db
 from app.models.user import ROLES, User
@@ -42,6 +43,28 @@ def _resumo_toggle(user_id: int) -> str:
 def _resumo_painel_tv(user_id: int) -> str:
     acao = "liberar" if request.form.get("ver_painel_tv") == "1" else "bloquear"
     return f"Usuários: {acao} o painel da TV para {_alvo(user_id)}"
+
+
+_PADRAO = "padrao"
+
+
+def _ajustes_do_form() -> dict[str, str]:
+    """``{chave: nível}`` do formulário de permissões (``padrao`` fica de fora)."""
+    ajustes = {}
+    for pagina in perm.PAGINAS:
+        valor = request.form.get(f"p_{pagina.chave}", _PADRAO)
+        if valor in perm.NIVEIS:
+            ajustes[pagina.chave] = valor
+    return ajustes
+
+
+def _resumo_permissoes(user_id: int) -> str:
+    user = db.session.get(User, user_id)
+    ajustes = perm.limpar(_ajustes_do_form(), user.role if user else "")
+    if not ajustes:
+        return f"Usuários: permissões de {_alvo(user_id)} → tudo pelo perfil"
+    partes = "; ".join(f"{perm.POR_CHAVE[k].nome}: {perm.ROTULO_NIVEL[v].lower()}" for k, v in ajustes.items())
+    return f"Usuários: permissões de {_alvo(user_id)} → {partes}"
 
 
 def _count_active_admins() -> int:
@@ -235,3 +258,38 @@ def delete_user(user_id: int):
     db.session.commit()
     flash(f"Usuário '{name}' excluído.", "success")
     return redirect(url_for("users.list_users"))
+
+
+@bp.route("/users/<int:user_id>/permissoes", methods=["GET", "POST"])
+@login_required
+@require_role("admin")
+@requer_aprovacao(_resumo_permissoes)
+def permissoes(user_id: int):
+    """O que o usuário vê e altera em cada página (ajustes sobre o perfil).
+
+    O formulário manda o estado de todas as páginas, não só o que mudou: um
+    pedido que espera na fila de aprovação aplica exatamente o que o resumo diz.
+    """
+    user = db.session.get(User, user_id)
+    if user is None:
+        flash("Usuário não encontrado.", "error")
+        return redirect(url_for("users.list_users"))
+
+    if request.method == "POST":
+        if user.super_admin:
+            flash("O super admin sempre vê e altera tudo.", "error")
+            return redirect(url_for("users.list_users"))
+        user.permissoes = _ajustes_do_form()
+        db.session.commit()
+        n = len(user.permissoes)
+        detalhe = f"{n} ajuste{'s' if n != 1 else ''} sobre o perfil" if n else "tudo pelo perfil"
+        flash(f"Permissões de '{user.name}' salvas ({detalhe}).", "success")
+        return redirect(url_for("users.list_users"))
+
+    return render_template(
+        "users/permissoes.html",
+        alvo=user,
+        grupos=perm.grupos(),
+        rotulo=perm.ROTULO_NIVEL,
+        niveis=perm.NIVEIS,
+    )

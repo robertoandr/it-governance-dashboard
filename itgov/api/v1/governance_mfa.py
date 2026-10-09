@@ -128,7 +128,7 @@ class MFASummaryResource(Resource):
 
     @ns.doc("get_mfa_summary")
     @ns.marshal_with(mfa_summary_model, code=200)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="m365")
     def get(self) -> dict:
         """Retorna adoção de MFA e métricas de identidade do Entra ID."""
         return _obter_dados()

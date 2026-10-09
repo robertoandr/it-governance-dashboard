@@ -40,7 +40,7 @@ class IntunePatchComplianceResource(Resource):
             503: "InfluxDB indisponível",
         },
     )
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="dispositivos")
     def get(self):
         """Compliance de patches Intune: global + por OS."""
         try:

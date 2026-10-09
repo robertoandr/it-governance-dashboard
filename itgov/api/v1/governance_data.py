@@ -95,7 +95,7 @@ def get_cached_data_summary() -> dict:
 @ns.route("/data")
 class GovernancaDados(Resource):
     @ns.marshal_with(data_summary_model)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="dados")
     def get(self):
         """Retorna o resumo de governança de dados (sensitivity labels)."""
         try:

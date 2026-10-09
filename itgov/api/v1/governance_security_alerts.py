@@ -115,7 +115,7 @@ class SecurityAlertsSummaryResource(Resource):
 
     @ns.doc("get_security_alerts_summary")
     @ns.marshal_with(security_alerts_model, code=200)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="alertas_defender")
     def get(self) -> dict:
         """Retorna alertas de segurança abertos no Microsoft Defender (KPI-END-01)."""
         return _obter_dados()

@@ -247,6 +247,15 @@ class FakeAuthUser:
     def get_id(self) -> str:
         return "1"
 
+    def pode(self, pagina: str, nivel: str = "ver", padrao=None) -> bool:
+        """Sem ajustes de permissão: vale o perfil (como ``User.pode``)."""
+        from app.permissoes import POR_CHAVE, basta
+
+        if padrao is not None:
+            return self.role in tuple(padrao)
+        conhecida = POR_CHAVE.get(pagina)
+        return bool(conhecida) and basta(conhecida.padrao(self.role), nivel)
+
 
 @pytest.fixture
 def login_manager_factory():

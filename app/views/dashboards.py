@@ -17,6 +17,7 @@ from werkzeug.exceptions import ServiceUnavailable
 
 from app.auth.rbac import require_role
 from app.integrations import graph_configured, zendesk_configured
+from app.permissoes import primeira_pagina
 from app.services.aprovacoes import requer_aprovacao
 from app.services.metrics_aggregator import MetricsAggregator
 
@@ -125,7 +126,7 @@ def _get_governance() -> dict:
 
 @bp.route("/dashboard")
 @login_required
-@require_role("admin", "gestor", "visualizador")
+@require_role("admin", "gestor", "visualizador", pagina="visao_geral")
 def dashboard_redirect():
     from flask import redirect, url_for
 
@@ -134,14 +135,18 @@ def dashboard_redirect():
 
 @bp.route("/")
 @login_required
-@require_role("admin", "gestor", "visualizador")
 def overview() -> str | Response:
     """Render governance overview dashboard.
 
     ``?atualizar=1`` (botão "Atualizar") confere as fontes na hora e volta para
-    a página limpa — recarregar depois não força a checagem de novo.
+    a página limpa — recarregar depois não força a checagem de novo. Quem não
+    vê a Visão Geral (é a página de entrada após o login) vai para a primeira
+    página do menu que pode ver.
     """
     from app.services import fontes_status
+
+    if not current_user.pode("visao_geral", "ver", ("admin", "gestor", "visualizador")):
+        return redirect(url_for(primeira_pagina(current_user)))
 
     if request.args.get("atualizar"):
         fontes_status.atualizar_agora()
@@ -158,7 +163,7 @@ def overview() -> str | Response:
 
 @bp.route("/pillars")
 @login_required
-@require_role("admin", "gestor", "visualizador")
+@require_role("admin", "gestor", "visualizador", pagina="pilares")
 def pillars() -> str:
     """Render all pillars detail page."""
     from app.services.plano_melhoria import montar_plano
@@ -179,7 +184,7 @@ def pilares_redirect():
 
 @bp.route("/sla")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="sla")
 def sla_chamados() -> str:
     """Render painel SLA / Chamados (Zendesk)."""
     from itgov.api.v1.zendesk import get_cached_historico, get_cached_sla_detail
@@ -193,7 +198,7 @@ def sla_chamados() -> str:
 
 @bp.route("/zendesk")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="zendesk")
 def zendesk_mttr() -> str:
     """Render Zendesk MTTR / suporte dashboard."""
     from itgov.api.v1.zendesk import get_cached_historico, get_cached_mttr_summary, get_cached_volume_by_status
@@ -214,7 +219,7 @@ def zendesk_mttr() -> str:
 
 @bp.route("/governance/devices")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="dispositivos")
 def governance_devices() -> str:
     """Render pilar Dispositivos (Governança M365)."""
     from app.config import get_settings
@@ -234,7 +239,7 @@ def governance_devices() -> str:
 
 @bp.route("/governance/apps")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="aplicativos")
 def governance_apps() -> str:
     """Render pilar Aplicativos (Governança M365)."""
     from itgov.api.v1.governance_apps import get_cached_app_summary
@@ -253,7 +258,7 @@ def governance_apps() -> str:
 
 @bp.route("/governance/compliance")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="compliance")
 def governance_compliance() -> str:
     """Render pilar Compliance (Secure Score) — Governança M365."""
     from itgov.api.v1.governance_compliance import get_cached_compliance_summary
@@ -276,7 +281,7 @@ def governance_compliance() -> str:
 
 @bp.route("/governance/data")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="dados")
 def governance_data() -> str:
     """Render pilar Dados (Sensitivity Labels) — Governança M365."""
     from itgov.api.v1.governance_data import get_cached_data_summary
@@ -290,7 +295,7 @@ def governance_data() -> str:
 
 @bp.route("/governance/security-alerts")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="alertas_defender")
 def governance_security_alerts() -> str:
     """Render pilar Endpoint — Alertas de Segurança (Defender, KPI-END-01)."""
     from itgov.api.v1.governance_security_alerts import get_cached_security_alerts_summary
@@ -304,7 +309,7 @@ def governance_security_alerts() -> str:
 
 @bp.route("/governance/service-health")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="m365")
 def governance_service_health() -> str:
     """Render Service Health M365 — status dos serviços do tenant."""
     from itgov.api.v1.governance_service_health import get_cached_service_health_summary
@@ -324,7 +329,7 @@ def backup_redirect() -> Response:
 
 @bp.route("/ciberseguranca")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="ciberseguranca")
 def acronis_backup() -> str:
     """Render painel de Cibersegurança (proteção/backup Acronis)."""
     from itgov.api.v1.acronis_backup import get_cached_acronis_summary
@@ -338,7 +343,7 @@ def acronis_backup() -> str:
 
 @bp.route("/zabbix")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="zabbix")
 def zabbix_monitoring() -> str:
     """Render painel de monitoramento Zabbix."""
     from itgov.api.v1.zabbix_monitoring import get_cached_problems, get_cached_zabbix_summary
@@ -353,7 +358,7 @@ def zabbix_monitoring() -> str:
 
 @bp.route("/infra")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="infra")
 def infra_monitoring() -> str:
     """Render painel de Infraestrutura (servidores, VMs, firewall, etc.)."""
     from itgov.api.v1.infra_monitoring import get_cached_infra_summary
@@ -367,7 +372,7 @@ def infra_monitoring() -> str:
 
 @bp.route("/infra/temperatura-diaria.json")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="infra")
 def infra_temperatura_diaria():
     """Resumo diário da temperatura do datacenter (JSON, carregado pela página /infra)."""
     from flask import jsonify
@@ -380,7 +385,7 @@ def infra_temperatura_diaria():
 
 @bp.route("/cftv")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="cftv")
 def cftv_monitoring() -> str:
     """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
     from app.models.unidade import DvrUnidade, Unidade
@@ -462,7 +467,7 @@ def _vinculo_dvr(gravador: str) -> DvrUnidade:
 
 @bp.route("/cftv/gravador/nome", methods=["POST"])
 @login_required
-@require_role("admin")
+@require_role("admin", pagina="cftv")
 @requer_aprovacao(
     lambda: (
         f"CFTV: renomear gravador {request.form.get('gravador', '')} para “{request.form.get('apelido', '').strip() or 'nome do Zabbix'}”"
@@ -494,7 +499,7 @@ def _resumo_snmp() -> str:
 
 @bp.route("/cftv/gravador/snmp", methods=["POST"])
 @login_required
-@require_role("admin")
+@require_role("admin", pagina="cftv")
 @requer_aprovacao(_resumo_snmp)
 def cftv_gravador_snmp() -> object:
     """Grava IP e SNMP (v2c/v3) de um gravador no Zabbix; cria o host se não existir (só admin).
@@ -548,7 +553,7 @@ def cftv_gravador_snmp() -> object:
 
 @bp.route("/cftv/gravador/duplicado", methods=["POST"])
 @login_required
-@require_role("admin")
+@require_role("admin", pagina="cftv")
 @requer_aprovacao(
     lambda: (
         f"CFTV: unir gravador {request.form.get('gravador', '')} a {request.form.get('duplicado_de')}"
@@ -590,7 +595,7 @@ def cftv_gravador_duplicado() -> object:
 
 @bp.route("/cftv/gravador", methods=["POST"])
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="cftv")
 @requer_aprovacao(_resumo_gravador_unidade)
 def cftv_gravador_unidade() -> object:
     """Define a unidade de um gravador (DVR/NVR) a partir do card na página /cftv."""
@@ -621,7 +626,7 @@ def cftv_gravador_unidade() -> object:
 
 @bp.route("/unidades")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="unidades")
 def unidades_list() -> str:
     """Lista as unidades (sites) em árvore, com CNPJ, endereço e faixas de IP."""
     from app.models.unidade import Unidade
@@ -633,7 +638,7 @@ def unidades_list() -> str:
 @bp.route("/unidades/nova", methods=["GET", "POST"])
 @bp.route("/unidades/<int:unidade_id>/editar", methods=["GET", "POST"])
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="unidades", nivel="alterar")
 @requer_aprovacao(_resumo_unidade)
 def unidade_form(unidade_id: int | None = None) -> object:
     """Formulário de criação/edição de unidade (nome, pai, faixas de IP, endereço e logo)."""
@@ -728,7 +733,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
 
 @bp.route("/unidades/<int:unidade_id>/logo")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="unidades")
 def unidade_logo(unidade_id: int) -> Response:
     """Serve o logo da unidade guardado no banco (404 quando não há)."""
     from app.extensions import db
@@ -751,7 +756,7 @@ MAPA_CAMERAS_PROXY_PATH = "/mapa-cameras/"
 
 @bp.route("/cameras")
 @login_required
-@require_role(*MAPA_CAMERAS_ROLES)
+@require_role(*MAPA_CAMERAS_ROLES, pagina="mapa_cameras")
 def mapa_cameras() -> str:
     """Render o Mapa de Câmeras embutido (iframe) na dashboard."""
     return render_template("dashboards/mapa_cameras.html", mapa_url=MAPA_CAMERAS_PROXY_PATH)
@@ -766,12 +771,12 @@ def mapa_cameras_auth() -> tuple[str, int]:
     vira 500 no nginx). Por isso o status é devolvido direto.
 
     Returns:
-        204 quando o usuário logado tem perfil permitido, 401 sem sessão,
-        403 com perfil negado.
+        204 quando o usuário logado pode ver o Mapa de Câmeras (perfil ou
+        ajuste de permissão), 401 sem sessão, 403 sem permissão.
     """
     if not current_user.is_authenticated:
         return "", 401
-    if current_user.role not in MAPA_CAMERAS_ROLES:
+    if not current_user.pode("mapa_cameras", "ver", MAPA_CAMERAS_ROLES):
         log.warning("mapa_cameras_access_denied", user_id=current_user.get_id(), role=current_user.role)
         return "", 403
     return "", 204
@@ -825,7 +830,7 @@ def _listar_ativos() -> list[dict]:
 
 @bp.route("/rede")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="rede")
 def rede_monitoring() -> str:
     """Render painel de rede: fila de revisão dos hosts descobertos pelo nmap."""
     from app.models.unidade import Unidade
@@ -886,7 +891,7 @@ def rede_monitoring() -> str:
 
 @bp.route("/rede/cadastrar", methods=["GET", "POST"])
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
 @requer_aprovacao(lambda: f"Rede: cadastrar ativo {request.form.get('ip') or request.args.get('ip', '')}")
 def rede_cadastrar_ativo() -> object:
     """Cadastra um host descoberto como ativo de rede, já com tipo e unidade sugeridos."""
@@ -989,7 +994,7 @@ def rede_cadastrar_ativo() -> object:
 
 @bp.route("/ativos-rede")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="ativos_rede")
 def ativos_rede() -> str:
     """Topologia da rede e ativos do inventário separados por unidade, com filtro por unidade e tipo."""
     from app.models.unidade import Unidade
@@ -1038,7 +1043,7 @@ def ativos_rede() -> str:
 
 @bp.route("/ativos-rede/<uuid:ativo_id>/remover", methods=["POST"])
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="ativos_rede")
 @requer_aprovacao(lambda ativo_id: f"Rede: remover ativo {ativo_id}")
 def ativo_rede_remover(ativo_id: UUID) -> object:
     """Remove (soft delete) um ativo do inventário."""
@@ -1057,7 +1062,7 @@ def ativo_rede_remover(ativo_id: UUID) -> object:
 
 @bp.route("/links")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="links")
 def links_manager() -> str:
     """Render gerenciador de links WAN/Internet."""
     from itgov.api.v1.links_manager import get_cached_links
@@ -1080,7 +1085,7 @@ def links_manager() -> str:
 @bp.route("/links/novo", methods=["GET", "POST"])
 @bp.route("/links/<int:link_id>/editar", methods=["GET", "POST"])
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="links", nivel="alterar")
 @requer_aprovacao(_resumo_link)
 def link_form(link_id: int | None = None) -> str:
     """Formulario de criacao e edicao de links WAN."""
@@ -1151,7 +1156,7 @@ def link_form(link_id: int | None = None) -> str:
 
 @bp.route("/pillars/<string:pillar_id>")
 @login_required
-@require_role("admin", "gestor", "visualizador")
+@require_role("admin", "gestor", "visualizador", pagina="pilares")
 def pillar_detail(pillar_id: str) -> str:
     """Render drill-down page for a single pillar.
 
@@ -1176,7 +1181,7 @@ def pillar_detail(pillar_id: str) -> str:
 
 @bp.route("/pmo")
 @login_required
-@require_role("admin", "gestor", "visualizador")
+@require_role("admin", "gestor", "visualizador", pagina="pmo")
 def pmo_dashboard() -> str:
     """Render PMO — Projetos de TI (ClickUp + score manual)."""
     from itgov.api.v1.pmo_clickup import get_cached_pmo
@@ -1187,7 +1192,7 @@ def pmo_dashboard() -> str:
 
 @bp.route("/relatorios")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="relatorios")
 def relatorios() -> str:
     """Render o catálogo de relatórios (executivo, temáticos e personalizado)."""
     from app.services.relatorios import CATALOGO, SECOES
@@ -1197,7 +1202,7 @@ def relatorios() -> str:
 
 @bp.route("/relatorios/executivo")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="relatorios")
 def relatorio_executivo() -> str:
     """Render o relatório executivo — score dos pilares e PMO."""
     from itgov.api.v1.pmo_clickup import get_cached_pmo
@@ -1209,7 +1214,7 @@ def relatorio_executivo() -> str:
 
 @bp.route("/relatorios/<chave>")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="relatorios")
 def relatorio(chave: str) -> str | Response:
     """Render um relatório do catálogo ou o personalizado (``?secao=``); ``?formato=csv`` baixa o CSV."""
     from app.services.relatorios import CATALOGO, SECOES, gerar_csv, montar_relatorio
@@ -1233,7 +1238,7 @@ def relatorio(chave: str) -> str | Response:
 
 @bp.route("/licenses")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="licencas")
 def m365_licenses() -> str:
     """Render painel de Licenças M365 — uso vs disponível + custos manuais."""
     from itgov.api.v1.m365_licenses import get_licenses_summary
@@ -1244,7 +1249,7 @@ def m365_licenses() -> str:
 
 @bp.route("/licenses/update", methods=["POST"])
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="licencas")
 @requer_aprovacao(
     lambda: f"Licenças: alterar custo/dados de {(request.get_json(silent=True) or {}).get('sku_name', '?')}"
 )
@@ -1278,7 +1283,7 @@ def m365_licenses_update():
 
 @bp.route("/triggers")
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="triggers")
 def zabbix_triggers() -> str:
     """Render painel de Triggers Zabbix — abas Em aberto e Resolvidos."""
     from itgov.api.v1.zabbix_triggers import get_cached_resolved, get_cached_triggers
@@ -1346,7 +1351,7 @@ def _triggers_abas(data: dict, resolved: list[dict]) -> dict:
 
 @bp.route("/m365")
 @login_required
-@require_role("admin", "gestor")
+@require_role("admin", "gestor", pagina="m365")
 def m365_overview() -> str:
     """Render painel de Governança M365 — KPIs, pilares, checklist e consoles."""
     from app.services.influxdb_provider import InfluxDBMetricsProvider
@@ -1420,7 +1425,7 @@ from(bucket: "{provider._bucket_raw}")
 
 @bp.route("/triggers/<string:eventid>/ack", methods=["POST"])
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="triggers")
 def zabbix_trigger_ack(eventid: str):
     """Acknowledge um problema no Zabbix."""
     from flask import jsonify, request
@@ -1434,7 +1439,7 @@ def zabbix_trigger_ack(eventid: str):
 
 @bp.route("/triggers/<string:eventid>/resolve", methods=["POST"])
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="triggers")
 def zabbix_trigger_resolve(eventid: str) -> tuple[Response, int]:
     """Marca um problema ativo como resolvido.
 
@@ -1488,7 +1493,7 @@ def zabbix_trigger_resolve(eventid: str) -> tuple[Response, int]:
 
 @bp.route("/triggers/<string:eventid>/reopen", methods=["POST"])
 @login_required
-@require_role("admin", "gestor", "operador")
+@require_role("admin", "gestor", "operador", pagina="triggers")
 def zabbix_trigger_reopen(eventid: str) -> tuple[Response, int]:
     """Desfaz a marca local de resolvido (volta para Em aberto se ainda ativo)."""
     from flask import jsonify

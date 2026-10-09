@@ -100,7 +100,7 @@ def get_cached_app_summary() -> dict:
 @ns.route("/apps")
 class GovernancaApps(Resource):
     @ns.marshal_with(app_summary_model)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="aplicativos")
     def get(self):
         """Retorna o resumo de governança de App Registrations."""
         try:

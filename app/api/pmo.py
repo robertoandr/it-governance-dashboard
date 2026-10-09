@@ -55,7 +55,7 @@ class PmoManualResource(Resource):
 
     @ns.doc("get_pmo_manual")
     @ns.marshal_with(_pmo_model, code=200)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="pmo")
     def get(self) -> dict[str, Any]:
         """Return the current PMO manual score, or 404 if never set."""
         pmo = _read_pmo()
@@ -66,7 +66,7 @@ class PmoManualResource(Resource):
     @ns.doc("put_pmo_manual")
     @ns.expect(_pmo_model, validate=True)
     @ns.marshal_with(_pmo_model, code=200)
-    @require_role("admin", "gestor")
+    @require_role("admin", "gestor", pagina="pmo")
     def put(self) -> dict[str, Any]:
         """Set or update the PMO manual score (manager action)."""
         body = request.get_json() or {}
