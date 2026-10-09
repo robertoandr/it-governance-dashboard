@@ -18,7 +18,9 @@ from app.services.aprovacoes import (
     aprovacao_ativa,
     aprovar,
     eh_super_admin,
+    marcar_ciente,
     rejeitar,
+    voltar,
 )
 
 bp = Blueprint("aprovacoes", __name__)
@@ -45,6 +47,8 @@ def lista() -> str:
     consulta = Solicitacao.query
     if not eh_super_admin(current_user):
         consulta = consulta.filter_by(solicitante_id=current_user.id)
+    # Abrir a lista conta como ter visto as decisões (o aviso some do topo)
+    novas = set(marcar_ciente(current_user))
     pendentes = consulta.filter_by(status=PENDENTE).order_by(Solicitacao.criado_em).all()
     historico = (
         consulta.filter(Solicitacao.status != PENDENTE)
@@ -60,6 +64,7 @@ def lista() -> str:
         ativa=aprovacao_ativa(),
         rotulo=STATUS_ROTULO,
         sensiveis=CAMPOS_SENSIVEIS,
+        novas=novas,
     )
 
 
@@ -95,3 +100,12 @@ def rejeitar_solicitacao(sol_id: int) -> Response:
         rejeitar(sol, current_user, request.form.get("motivo", ""))
         flash(f"#{sol.id} rejeitada.", "success")
     return redirect(url_for("aprovacoes.lista"))
+
+
+@bp.route("/aprovacoes/ciente", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", "operador", "visualizador")
+def ciente() -> Response:
+    """Fecha o aviso de decisão: marca como vistos os pedidos decididos do usuário."""
+    marcar_ciente(current_user)
+    return redirect(voltar())

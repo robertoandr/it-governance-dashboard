@@ -6,7 +6,14 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
+
 from app.extensions import db
+
+log = structlog.get_logger(__name__)
 
 PENDENTE = "pendente"
 APROVADA = "aprovada"
@@ -39,6 +46,8 @@ class Solicitacao(db.Model):
     decidido_por: str = db.Column(db.String(120), nullable=False, default="")
     criado_em: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     decidido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Quem pediu já viu a situação atual? Volta a falso quando o super admin decide
+    ciente: bool = db.Column(db.Boolean, nullable=False, default=True)
 
     @property
     def view_args(self) -> dict[str, Any]:
@@ -62,3 +71,26 @@ class Solicitacao(db.Model):
 
     def __repr__(self) -> str:
         return f"<Solicitacao {self.id} {self.endpoint} {self.status}>"
+
+
+def garantir_coluna_ciente(engine: Engine | None = None) -> None:
+    """Cria a coluna ``aprovacoes.ciente`` em bancos anteriores a ela (idempotente).
+
+    As solicitações antigas entram como vistas: ninguém recebe aviso de
+    decisões tomadas antes do aviso existir.
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    engine = engine or db.engine
+    tabela = Solicitacao.__tablename__
+    if "ciente" in {c["name"] for c in inspect(engine).get_columns(tabela)}:
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN ciente BOOLEAN NOT NULL DEFAULT 1"))
+        log.info("aprovacoes.coluna_adicionada", coluna="ciente")
+    except OperationalError as exc:
+        # Outro worker criou a coluna entre a inspeção e o ALTER
+        if "duplicate column" not in str(exc).lower():
+            raise

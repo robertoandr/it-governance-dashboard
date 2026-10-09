@@ -68,9 +68,20 @@
 
     <!-- Page content -->
     <main class="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
+      {% include "partials/aviso_aprovacoes.html" %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for cat, msg in messages %}
+            {% if cat == 'aprovacao' %}
+            <div role="status" class="mb-4 p-4 rounded-lg text-sm border-l-4 border border-amber-300 border-l-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800 dark:border-l-amber-400 flex flex-wrap items-start gap-x-4 gap-y-2">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <div class="flex-1 min-w-[12rem]">
+                <p class="font-semibold">Enviado para aprovação</p>
+                <p>{{ msg }}</p>
+              </div>
+              <a href="{{ url_for('aprovacoes.lista') }}" class="text-xs font-semibold underline whitespace-nowrap self-center">Acompanhar em Aprovações</a>
+            </div>
+            {% else %}
             <div class="mb-4 p-3 rounded-lg text-sm border
               {% if cat == 'error' %}
                 bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800
@@ -81,6 +92,7 @@
               {% endif %}">
               {{ msg }}
             </div>
+            {% endif %}
           {% endfor %}
         {% endif %}
       {% endwith %}

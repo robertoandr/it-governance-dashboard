@@ -72,7 +72,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # Use "from ... import" — plain "import app.models.user" would rebind the
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
-        from app.models import aprovacao as _aprovacao_model  # noqa: F401
+        from app.models import aprovacao as _aprovacao_model
         from app.models import link as _link_model  # noqa: F401
         from app.models import rede as _rede_model  # noqa: F401
         from app.models import tarefas as _tarefas_model  # noqa: F401
@@ -85,6 +85,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         _unidade_model.seed_unidades()
         _user_model.garantir_coluna_super_admin()
         _user_model.garantir_coluna_painel_tv()
+        _aprovacao_model.garantir_coluna_ciente()
         from app.services.aprovacoes import super_admin_email
 
         _user_model.definir_super_admin(super_admin_email())
@@ -322,6 +323,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             "graph_on": graph_configured(),
             "zendesk_on": zendesk_configured(),
             "aprovacoes_pendentes": _aprovacoes_pendentes(cu),
+            "minhas_aprovacoes": _minhas_aprovacoes(cu),
         }
 
     def _aprovacoes_pendentes(cu: Any) -> int:
@@ -331,6 +333,14 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         from app.services.aprovacoes import contar_pendentes
 
         return contar_pendentes()
+
+    def _minhas_aprovacoes(cu: Any) -> dict[str, Any]:
+        """Pedidos do próprio usuário: quantos esperam e decisões ainda não vistas."""
+        if not getattr(cu, "is_authenticated", False) or getattr(cu, "super_admin", False):
+            return {"pendentes": 0, "decididas": []}
+        from app.services.aprovacoes import minhas_aprovacoes
+
+        return minhas_aprovacoes(cu)
 
     # LIC-01: garantir que o arquivo de custos de licenças exista no volume persistente,
     # populando a partir do seed versionado no primeiro boot

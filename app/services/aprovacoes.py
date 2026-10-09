@@ -76,6 +76,62 @@ def contar_pendentes() -> int:
     return Solicitacao.query.filter_by(status=PENDENTE).count()
 
 
+def mensagem_enviada(sol: Solicitacao) -> str:
+    """Aviso para quem pediu: a alteração ainda não vale.
+
+    Args:
+        sol: Solicitação recém-registrada.
+
+    Returns:
+        Texto mostrado na tela (e no JSON das rotas que respondem JSON).
+    """
+    return (
+        f"Sua alteração foi enviada para aprovação (pedido #{sol.id}) e só passa a valer depois que "
+        "o super admin aprovar. Você será avisado aqui quando ele decidir."
+    )
+
+
+def minhas_aprovacoes(user: Any, limite: int = 5) -> dict[str, Any]:
+    """Pedidos do usuário para os avisos da tela.
+
+    Args:
+        user: Usuário autenticado.
+        limite: Máximo de decisões não vistas devolvidas.
+
+    Returns:
+        ``{"pendentes": int, "decididas": [Solicitacao, ...]}`` — decisões
+        ainda não vistas, mais recentes primeiro.
+    """
+    minhas = Solicitacao.query.filter_by(solicitante_id=user.id)
+    pendentes = minhas.filter_by(status=PENDENTE).count()
+    decididas = (
+        minhas.filter(Solicitacao.status != PENDENTE, Solicitacao.ciente.is_(False))
+        .order_by(Solicitacao.decidido_em.desc())
+        .limit(limite)
+        .all()
+    )
+    return {"pendentes": pendentes, "decididas": decididas}
+
+
+def marcar_ciente(user: Any) -> list[int]:
+    """Marca como vistas as decisões dos pedidos do usuário.
+
+    Args:
+        user: Quem pediu.
+
+    Returns:
+        Ids que estavam sem ver (para destacar na lista).
+    """
+    novas = (
+        Solicitacao.query.filter_by(solicitante_id=user.id, ciente=False).filter(Solicitacao.status != PENDENTE).all()
+    )
+    for sol in novas:
+        sol.ciente = True
+    if novas:
+        db.session.commit()
+    return [sol.id for sol in novas]
+
+
 def requer_aprovacao(resumo: Resumo) -> Callable:
     """Faz o POST de quem não é super admin virar solicitação pendente.
 
@@ -94,11 +150,11 @@ def requer_aprovacao(resumo: Resumo) -> Callable:
                 return fn(*args, **kwargs)
             texto = resumo(**kwargs) if callable(resumo) else resumo
             sol = registrar(texto, kwargs)
-            msg = "Alteração enviada para aprovação do super admin."
+            msg = mensagem_enviada(sol)
             if request.is_json:
                 return jsonify({"ok": True, "pendente": True, "mensagem": msg, "solicitacao": sol.id}), 202
-            flash(msg, "info")
-            return redirect(_voltar())
+            flash(msg, "aprovacao")
+            return redirect(voltar())
 
         return wrapper
 
@@ -145,7 +201,7 @@ def registrar(resumo: str, view_args: dict[str, Any]) -> Solicitacao:
     return sol
 
 
-def _voltar() -> str:
+def voltar() -> str:
     """Página de onde o pedido veio (mesmo site), senão a fila de aprovações.
 
     A URL é remontada com ``url_for`` a partir da rota casada, nunca devolvida
@@ -190,6 +246,7 @@ def aprovar(sol: Solicitacao, aprovador: User) -> tuple[bool, str]:
     sol.resultado = mensagem
     sol.decidido_por = aprovador.name
     sol.decidido_em = datetime.now(UTC)
+    sol.ciente = False
     db.session.commit()
     log.info("aprovacoes.aprovada", id=sol.id, ok=ok, aprovador=aprovador.email)
     return ok, f"{mensagem} {segredo}".strip()
@@ -207,6 +264,7 @@ def rejeitar(sol: Solicitacao, aprovador: User, motivo: str) -> None:
     sol.resultado = motivo.strip()[:1000]
     sol.decidido_por = aprovador.name
     sol.decidido_em = datetime.now(UTC)
+    sol.ciente = False
     db.session.commit()
     log.info("aprovacoes.rejeitada", id=sol.id, aprovador=aprovador.email)
 
