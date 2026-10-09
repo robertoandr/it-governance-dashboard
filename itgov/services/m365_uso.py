@@ -35,6 +35,9 @@ _REPORTS = "https://graph.microsoft.com/v1.0/reports"
 _URL_SERVICOS = f"{_REPORTS}/getOffice365ServicesUserCounts(period='D30')"
 _URL_APPS = f"{_REPORTS}/getM365AppUserDetail(period='D30')"
 _URL_HISTORICO = f"{_REPORTS}/getOffice365ActiveUserCounts(period='D180')"
+# Contas que usaram cada app, por dia (o CSV do relatório acima às vezes não baixa:
+# o servidor de download da Microsoft derruba a conexão; este continua saindo)
+_URL_HISTORICO_APPS = f"{_REPORTS}/getM365AppUserCounts(period='D180')"
 
 # Coluna do relatório → nome na tela. Skype for Business foi descontinuado.
 SERVICOS = {
@@ -84,6 +87,8 @@ class UsoM365(BaseModel):
     contas_apps: int
     meses: list[MesUso]
     colunas_historico: list[str]
+    meses_apps: list[MesUso] = []
+    colunas_historico_apps: list[str] = []
 
     @property
     def pct_ativas(self) -> float:
@@ -137,15 +142,19 @@ def resumir_apps(linhas: list[dict[str, str]]) -> tuple[list[UsoItem], list[UsoI
     return apps, plataformas
 
 
-def resumir_historico(linhas: list[dict[str, str]]) -> list[MesUso]:
+def resumir_historico(linhas: list[dict[str, str]], colunas: list[str] | None = None) -> list[MesUso]:
     """Média de contas ativas por dia útil, mês a mês, do mais antigo ao mais novo.
 
     Fim de semana fica de fora: com ele a média cai pela metade e esconde a
     tendência. O primeiro e o último mês costumam vir incompletos (o relatório
     cobre 180 dias corridos), e ficam marcados como parciais; o último sai
     se tiver menos de três dias úteis.
+
+    Args:
+        linhas: Linhas do CSV com ``Report Date``.
+        colunas: Colunas a resumir; padrão: "Office 365" e os serviços.
     """
-    colunas = ["Office 365", *SERVICOS]
+    colunas = colunas or ["Office 365", *SERVICOS]
     por_mes: dict[tuple[int, int], list[dict[str, str]]] = defaultdict(list)
     for linha in linhas:
         try:
@@ -179,25 +188,53 @@ def resumir_historico(linhas: list[dict[str, str]]) -> list[MesUso]:
     return meses
 
 
+_TENTATIVAS = 3
+_ESPERA_MAX = 20.0
+
+
 async def _baixar(client: httpx.AsyncClient, token: str, url: str) -> list[dict[str, str]]:
-    # O Graph responde 302 para o arquivo CSV em outro host
-    resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+    # O Graph responde 302 para o arquivo CSV em outro host; 429 = limite de
+    # consultas aos relatórios do tenant: espera o Retry-After e tenta de novo
+    for tentativa in range(_TENTATIVAS):
+        resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+        if resp.status_code != 429 or tentativa == _TENTATIVAS - 1:
+            break
+        try:
+            espera = min(float(resp.headers.get("Retry-After", "5")), _ESPERA_MAX)
+        except ValueError:
+            espera = 5.0
+        log.info("m365_uso.limite_graph", relatorio=url.rsplit("/", 1)[-1], espera=espera)
+        await asyncio.sleep(espera)
     resp.raise_for_status()
     return ler_csv(resp.text)
+
+
+async def _historico(client: httpx.AsyncClient, token: str, url: str) -> list[dict[str, str]]:
+    """Baixa um relatório de histórico; falha vira lista vazia (não derruba o uso atual)."""
+    try:
+        return await _baixar(client, token, url)
+    except httpx.HTTPError as exc:
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        log.warning(
+            "m365_uso.historico_falhou", relatorio=url.rsplit("/", 1)[-1], erro=type(exc).__name__, status=status
+        )
+        return []
 
 
 async def _buscar() -> UsoM365:
     async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
         token = await _fetch_token(client)
-        servicos, apps, historico = await asyncio.gather(
-            _baixar(client, token, _URL_SERVICOS),
-            _baixar(client, token, _URL_APPS),
-            _baixar(client, token, _URL_HISTORICO),
-        )
+        # Um de cada vez: em paralelo o Graph devolve 429 para os relatórios do tenant
+        servicos = await _baixar(client, token, _URL_SERVICOS)
+        apps = await _baixar(client, token, _URL_APPS)
+        historico_apps = await _historico(client, token, _URL_HISTORICO_APPS)
+        historico = await _historico(client, token, _URL_HISTORICO)
     itens, contas, ativas, atualizado = resumir_servicos(servicos)
     lista_apps, plataformas = resumir_apps(apps)
     meses = resumir_historico(historico)
     usadas = [c for c in ["Office 365", *SERVICOS] if any(c in m.medias for m in meses)]
+    meses_apps = resumir_historico(historico_apps, APPS)
+    usadas_apps = [c for c in APPS if any(c in m.medias for m in meses_apps)]
     return UsoM365(
         atualizado_em=atualizado,
         contas=contas,
@@ -208,6 +245,8 @@ async def _buscar() -> UsoM365:
         contas_apps=len(apps),
         meses=meses,
         colunas_historico=usadas,
+        meses_apps=meses_apps,
+        colunas_historico_apps=usadas_apps,
     )
 
 
