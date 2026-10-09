@@ -105,6 +105,10 @@
   {% if aprovacoes_pendentes %}
   <span class="absolute top-1 right-4 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center" title="{{ aprovacoes_pendentes }} aguardando aprovação">{{ aprovacoes_pendentes }}</span>
   {% endif %}
+  {% set _meus = minhas_aprovacoes.pendentes if minhas_aprovacoes is defined else 0 %}
+  {% if _meus %}
+  <span class="absolute top-1 right-4 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center" title="{{ _meus }} {{ 'alteração sua aguardando' if _meus == 1 else 'alterações suas aguardando' }} aprovação">{{ _meus }}</span>
+  {% endif %}
   </div>
   {% endif %}
 

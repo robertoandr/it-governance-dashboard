@@ -104,8 +104,8 @@
         </thead>
         <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
           {% for s in historico %}
-          <tr>
-            <td class="py-1.5 pr-3 text-slate-400 font-mono">{{ s.id }}</td>
+          <tr{% if s.id in novas %} class="bg-amber-50 dark:bg-amber-900/20"{% endif %}>
+            <td class="py-1.5 pr-3 text-slate-400 font-mono">{{ s.id }}{% if s.id in novas %} <span class="ml-1 px-1 rounded bg-amber-500 text-white text-[9px] font-sans font-semibold uppercase">novo</span>{% endif %}</td>
             <td class="py-1.5 pr-3 text-slate-700 dark:text-slate-200">{{ s.resumo }}</td>
             <td class="py-1.5 pr-3 text-slate-500">{{ s.solicitante_nome }}</td>
             <td class="py-1.5 pr-3">{{ selo(s.status) }}</td>

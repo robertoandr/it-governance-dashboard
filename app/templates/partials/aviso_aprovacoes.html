@@ -1,0 +1,28 @@
+{# Decisões do super admin sobre pedidos do usuário que ele ainda não viu.
+   Some ao clicar em "Ok" ou ao abrir a página Aprovações. #}
+{% set _decididas = minhas_aprovacoes.decididas if minhas_aprovacoes is defined else [] %}
+{% if _decididas %}
+{% set _cores = {
+  'aprovada': 'border-l-green-500 bg-green-50 text-green-900 dark:bg-green-900/20 dark:text-green-200 dark:border-l-green-400',
+  'rejeitada': 'border-l-slate-500 bg-slate-50 text-slate-800 dark:bg-slate-800 dark:text-slate-200 dark:border-l-slate-400',
+  'falhou': 'border-l-red-500 bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-200 dark:border-l-red-400',
+} %}
+{% set _verbo = {'aprovada': 'foi aprovada', 'rejeitada': 'foi recusada', 'falhou': 'foi aprovada, mas não pôde ser aplicada'} %}
+<section aria-label="Decisões sobre seus pedidos" class="mb-4 space-y-2">
+  {% for s in _decididas %}
+  <div role="status" class="p-3 rounded-lg text-sm border border-slate-200 dark:border-slate-700 border-l-4 {{ _cores.get(s.status, '') }}">
+    <p><span class="font-semibold">Sua alteração #{{ s.id }} {{ _verbo.get(s.status, s.status) }}</span>
+      {%- if s.decidido_por %} por {{ s.decidido_por }}{% endif %}
+      {%- if s.decidido_em %} em {{ s.decidido_em | data_local }}{% endif %}.</p>
+    <p class="text-xs opacity-80 mt-0.5">{{ s.resumo }}</p>
+    {% if s.resultado and s.status != 'aprovada' %}
+    <p class="text-xs mt-1"><span class="font-medium">{{ 'Motivo' if s.status == 'rejeitada' else 'Erro' }}:</span> {{ s.resultado }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <form method="POST" action="{{ url_for('aprovacoes.ciente') }}" class="flex items-center gap-3 text-xs">
+    <button type="submit" class="font-semibold px-3 py-1.5 rounded-lg bg-slate-700 text-white hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500">Ok, entendi</button>
+    <a href="{{ url_for('aprovacoes.lista') }}" class="underline text-slate-500 dark:text-slate-400">Ver todos os meus pedidos</a>
+  </form>
+</section>
+{% endif %}

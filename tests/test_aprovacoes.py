@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 
 from app.extensions import db
-from app.models.aprovacao import APROVADA, FALHOU, PENDENTE, REJEITADA, Solicitacao
+from app.models.aprovacao import APROVADA, FALHOU, PENDENTE, REJEITADA, Solicitacao, garantir_coluna_ciente
 from app.models.unidade import Unidade
 from app.models.user import User, definir_super_admin, garantir_coluna_super_admin
 
@@ -239,7 +239,10 @@ def test_so_super_admin_decide_e_cada_um_ve_os_seus(
 def test_menu_mostra_contador_so_para_super_admin(gestor_client, super_client, factory_app, super_id: int) -> None:
     gestor_client.post("/gov/unidades/nova", data={"nome": "Aprov Contador"})
     assert 'title="1 aguardando aprovação"' in super_client.get("/gov/aprovacoes").get_data(as_text=True)
-    assert "aguardando aprovação" not in gestor_client.get("/gov/aprovacoes").get_data(as_text=True)
+    # Quem pediu vê só os próprios pedidos no contador
+    html = gestor_client.get("/gov/aprovacoes").get_data(as_text=True)
+    assert 'title="1 aguardando aprovação"' not in html
+    assert "1 alteração sua aguardando aprovação" in html
 
 
 def test_get_de_formulario_nao_e_interceptado(gestor_client, super_id: int) -> None:
@@ -335,3 +338,76 @@ def test_pendente_volta_so_para_rota_do_proprio_app(
     )
     assert resp.status_code == 302
     assert resp.headers["Location"].removeprefix("http://localhost") == destino
+
+
+# ── Avisos para quem pediu ───────────────────────────────────────────────────
+
+
+def test_quem_pede_ve_aviso_de_envio_com_numero(admin_client, factory_app, super_id: int) -> None:
+    resp = _criar_usuario(admin_client, "pytest-novo-aprov@test.local")
+    html = admin_client.get(resp.headers["Location"]).get_data(as_text=True)
+    (sol,) = _pendentes(factory_app)
+    assert "Enviado para aprovação" in html
+    assert f"pedido #{sol.id}" in html
+    assert "Acompanhar em Aprovações" in html
+
+
+def test_rota_json_devolve_mensagem_com_numero(gestor_client, factory_app, super_id: int) -> None:
+    corpo = gestor_client.post("/gov/licenses/update", json={"sku_name": "SPB", "custo_mensal": 10}).get_json()
+    assert f"pedido #{corpo['solicitacao']}" in corpo["mensagem"]
+
+
+def test_menu_mostra_pedidos_proprios_pendentes(admin_client, factory_app, super_id: int) -> None:
+    _criar_usuario(admin_client, "pytest-novo-aprov@test.local")
+    html = admin_client.get("/gov/users").get_data(as_text=True)
+    assert "1 alteração sua aguardando aprovação" in html
+
+
+def test_recusa_avisa_quem_pediu_ate_dar_ok(admin_client, super_client, factory_app, super_id: int) -> None:
+    _criar_usuario(admin_client, "pytest-novo-aprov@test.local")
+    (sol,) = _pendentes(factory_app)
+    super_client.post(f"/gov/aprovacoes/{sol.id}/rejeitar", data={"motivo": "já existe conta"})
+
+    html = admin_client.get("/gov/users").get_data(as_text=True)
+    assert f"Sua alteração #{sol.id} foi recusada</span>" in html
+    assert "já existe conta" in html
+    # Continua aparecendo até a pessoa fechar
+    assert f"Sua alteração #{sol.id}" in admin_client.get("/gov/users").get_data(as_text=True)
+
+    resp = admin_client.post("/gov/aprovacoes/ciente", headers={"Referer": "http://localhost/gov/users"})
+    assert resp.headers["Location"].endswith("/gov/users")
+    assert f"Sua alteração #{sol.id}" not in admin_client.get("/gov/users").get_data(as_text=True)
+
+
+def test_aprovacao_avisa_e_lista_marca_como_vista(admin_client, super_client, factory_app, super_id: int) -> None:
+    _criar_usuario(admin_client, "pytest-novo-aprov@test.local")
+    (sol,) = _pendentes(factory_app)
+    super_client.post(f"/gov/aprovacoes/{sol.id}/aprovar")
+
+    html = admin_client.get("/gov/users").get_data(as_text=True)
+    assert f"Sua alteração #{sol.id} foi aprovada</span> por pytest-super" in html
+    # Senha gerada nunca aparece para quem pediu
+    assert "Senha gerada" not in html
+
+    lista = admin_client.get("/gov/aprovacoes").get_data(as_text=True)
+    assert ">novo</span>" in lista
+    assert _sol(factory_app, sol.id).ciente is True
+    assert f"Sua alteração #{sol.id}" not in admin_client.get("/gov/users").get_data(as_text=True)
+
+
+def test_super_admin_nao_recebe_aviso_de_pedido_alheio(admin_client, super_client, factory_app, super_id: int) -> None:
+    _criar_usuario(admin_client, "pytest-novo-aprov@test.local")
+    (sol,) = _pendentes(factory_app)
+    super_client.post(f"/gov/aprovacoes/{sol.id}/rejeitar")
+    assert "Sua alteração" not in super_client.get("/gov/users").get_data(as_text=True)
+
+
+def test_garantir_coluna_ciente_marca_antigas_como_vistas(tmp_path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'antigo.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE aprovacoes (id INTEGER PRIMARY KEY, status VARCHAR(12))"))
+        conn.execute(text("INSERT INTO aprovacoes (status) VALUES ('aprovada')"))
+    garantir_coluna_ciente(engine)
+    garantir_coluna_ciente(engine)
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT ciente FROM aprovacoes")).scalar() == 1
