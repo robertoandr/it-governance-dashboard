@@ -1,21 +1,39 @@
-{# SNMP do gravador (cf7). Variáveis do card: c, loop, filtro. Senhas nunca voltam do Zabbix: em branco = mantém. #}
-{% set sn = c.gravador_host.snmp if c.gravador_host else None %}
+{# SNMP do gravador (cf7). Variáveis do card: c, loop, filtro. Senhas nunca voltam do Zabbix: em branco = mantém.
+   Com novo=true (formulário "Cadastrar novo gravador" no topo), pede nome e unidade em vez de vir do card. #}
+{% set novo = novo is defined and novo %}
+{% set fid = 'novo' if novo else loop.index %}
+{% set sn = c.gravador_host.snmp if not novo and c.gravador_host else None %}
 {% set v = sn.versao if sn and sn.versao in ('2', '3') else '3' %}
 {% set cls = "min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs" %}
 <form method="POST" action="{{ url_for('dashboards.cftv_gravador_snmp') }}" autocomplete="off"
       class="snmp-form space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-  <input type="hidden" name="gravador" value="{{ c.gravador }}">
   <input type="hidden" name="filtro" value="{{ filtro }}">
+  {% if novo %}
+  <input type="hidden" name="novo" value="1">
+  <div class="flex items-center gap-2">
+    <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="snome-{{ fid }}">Nome</label>
+    <input id="snome-{{ fid }}" name="gravador" required maxlength="120" placeholder="Ex.: DVR Shopping 2º andar" class="flex-1 {{ cls }}">
+  </div>
+  <div class="flex items-center gap-2">
+    <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="sun-{{ fid }}">Unidade</label>
+    <select id="sun-{{ fid }}" name="unidade_id" class="flex-1 {{ cls }}">
+      <option value="">Sem unidade</option>
+      {% for u in unidades %}<option value="{{ u.id }}">{{ u.caminho }}</option>{% endfor %}
+    </select>
+  </div>
+  {% else %}
+  <input type="hidden" name="gravador" value="{{ c.gravador }}">
   <p class="text-[11px] font-medium text-slate-600 dark:text-slate-300">
     SNMP {% if not c.gravador_host %}<span class="font-normal text-slate-400">— gravador ainda não está no Zabbix: salvar cadastra o host</span>{% endif %}
   </p>
+  {% endif %}
   {% if sn and sn.status == 'falha' and sn.erro %}
   <p class="text-[10px] text-red-600 dark:text-red-400 break-words">Zabbix: {{ sn.erro }}</p>
   {% endif %}
   <div class="flex items-center gap-2">
-    <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="sip-{{ loop.index }}">IP</label>
-    <input id="sip-{{ loop.index }}" name="snmp_ip" required inputmode="decimal" placeholder="172.29.11.17"
-           value="{{ c.gravador_host.ip if c.gravador_host and c.gravador_host.ip != '?' else '' }}" class="flex-1 font-mono {{ cls }}">
+    <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="sip-{{ fid }}">IP</label>
+    <input id="sip-{{ fid }}" name="snmp_ip" required inputmode="decimal" placeholder="172.29.11.17"
+           value="{{ c.gravador_host.ip if not novo and c.gravador_host and c.gravador_host.ip != '?' else '' }}" class="flex-1 font-mono {{ cls }}">
     <input name="snmp_porta" type="number" min="1" max="65535" value="{{ sn.porta if sn else 161 }}" aria-label="Porta" class="w-16 {{ cls }}">
   </div>
   <div class="flex items-center gap-3 text-[11px] text-slate-600 dark:text-slate-300">
@@ -24,39 +42,39 @@
     <label class="flex items-center gap-1"><input type="radio" name="snmp_versao" value="3" {{ 'checked' if v == '3' }}> v3</label>
   </div>
   <div class="so-v2 flex items-center gap-2">
-    <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="scom-{{ loop.index }}">Community</label>
-    <input id="scom-{{ loop.index }}" name="snmp_community" type="password" maxlength="64" autocomplete="new-password"
+    <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="scom-{{ fid }}">Community</label>
+    <input id="scom-{{ fid }}" name="snmp_community" type="password" maxlength="64" autocomplete="new-password"
            placeholder="{{ 'definida — em branco mantém' if sn and '{$SNMP_COMMUNITY}' in sn.macros_host else '' }}" class="flex-1 {{ cls }}">
   </div>
   <div class="so-v3 space-y-2">
     <div class="flex items-center gap-2">
-      <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="susr-{{ loop.index }}">Usuário</label>
-      <input id="susr-{{ loop.index }}" name="snmp_usuario" maxlength="64" value="{{ sn.usuario if sn else '' }}" class="flex-1 {{ cls }}">
+      <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="susr-{{ fid }}">Usuário</label>
+      <input id="susr-{{ fid }}" name="snmp_usuario" maxlength="64" value="{{ sn.usuario if sn else '' }}" class="flex-1 {{ cls }}">
       <select name="snmp_nivel" aria-label="Nível de segurança" class="{{ cls }}">
-        {% for rotulo in niveis_snmp %}<option value="{{ loop.index0 }}" {{ 'selected' if (sn.nivel if sn else 2) == loop.index0 }}>{{ rotulo }}</option>{% endfor %}
+        {% for rotulo in niveis_snmp %}<option value="{{ fid0 }}" {{ 'selected' if (sn.nivel if sn else 2) == fid0 }}>{{ rotulo }}</option>{% endfor %}
       </select>
     </div>
     <div class="flex items-center gap-2">
-      <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="sauth-{{ loop.index }}">Autenticação</label>
+      <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="sauth-{{ fid }}">Autenticação</label>
       <select name="snmp_auth_protocolo" aria-label="Protocolo de autenticação" class="{{ cls }}">
-        {% for rotulo in auth_snmp %}<option value="{{ loop.index0 }}" {{ 'selected' if (sn.auth_protocolo if sn else 1) == loop.index0 }}>{{ rotulo }}</option>{% endfor %}
+        {% for rotulo in auth_snmp %}<option value="{{ fid0 }}" {{ 'selected' if (sn.auth_protocolo if sn else 1) == fid0 }}>{{ rotulo }}</option>{% endfor %}
       </select>
-      <input id="sauth-{{ loop.index }}" name="snmp_auth_senha" type="password" maxlength="64" autocomplete="new-password"
+      <input id="sauth-{{ fid }}" name="snmp_auth_senha" type="password" maxlength="64" autocomplete="new-password"
              placeholder="{{ 'definida — em branco mantém' if sn and '{$CFTV.SNMPV3.AUTHPASS}' in sn.macros_host else 'senha (mín. 8)' }}" class="flex-1 {{ cls }}">
     </div>
     <div class="flex items-center gap-2">
-      <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="spriv-{{ loop.index }}">Privacidade</label>
+      <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="spriv-{{ fid }}">Privacidade</label>
       <select name="snmp_priv_protocolo" aria-label="Protocolo de privacidade" class="{{ cls }}">
-        {% for rotulo in priv_snmp %}<option value="{{ loop.index0 }}" {{ 'selected' if (sn.priv_protocolo if sn else 1) == loop.index0 }}>{{ rotulo }}</option>{% endfor %}
+        {% for rotulo in priv_snmp %}<option value="{{ fid0 }}" {{ 'selected' if (sn.priv_protocolo if sn else 1) == fid0 }}>{{ rotulo }}</option>{% endfor %}
       </select>
-      <input id="spriv-{{ loop.index }}" name="snmp_priv_senha" type="password" maxlength="64" autocomplete="new-password"
+      <input id="spriv-{{ fid }}" name="snmp_priv_senha" type="password" maxlength="64" autocomplete="new-password"
              placeholder="{{ 'definida — em branco mantém' if sn and '{$CFTV.SNMPV3.PRIVPASS}' in sn.macros_host else 'senha (mín. 8)' }}" class="flex-1 {{ cls }}">
     </div>
   </div>
   <div class="flex items-center justify-between gap-2">
     <p class="text-[10px] text-slate-400">As senhas vão só para o Zabbix (macros secretas do host); não ficam no dashboard nem na fila de aprovação.</p>
     <button type="submit" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 px-2 py-1 flex-shrink-0">
-      {{ 'Salvar SNMP' if c.gravador_host else 'Cadastrar no Zabbix' }}
+      {{ 'Cadastrar gravador' if novo else ('Salvar SNMP' if c.gravador_host else 'Cadastrar no Zabbix') }}
     </button>
   </div>
 </form>

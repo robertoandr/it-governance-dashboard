@@ -135,3 +135,20 @@ def test_limpar_esquece_valor() -> None:
     cache.get(origem)
     cache.limpar()
     assert cache.get(origem) == "b"
+
+
+def test_falha_que_devolve_none_nao_faz_cada_pedido_esperar() -> None:
+    # m365_uso devolve None quando o Graph recusa: a falha tem de valer por
+    # ttl_falha, senão toda página espera a origem de novo (lentidão do g4)
+    origem = Origem([None, None, "ok"])
+    cache: CacheSWR[object] = CacheSWR("t", ttl=60, valido=lambda v: v is not None, ttl_falha=60)
+    assert cache.get(origem) is None
+    assert cache.get(origem) is None
+    assert origem.chamadas == 1
+    # Vencida a falha, tenta de novo em segundo plano e quem pede não espera
+    _vencer(cache)
+    assert cache.get(origem) is None
+    _esperar(lambda: origem.chamadas == 2 and not cache._atualizando)
+    _vencer(cache)
+    cache.get(origem)
+    _esperar(lambda: cache.get(origem) == "ok")

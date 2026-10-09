@@ -47,9 +47,11 @@ def limpar_cache():
 
     mod._cache_dados = None
     mod._cache_ts = 0.0
+    mod._atualizando = False
     yield
     mod._cache_dados = None
     mod._cache_ts = 0.0
+    mod._atualizando = False
 
 
 class TestEndpointCompliance:
@@ -81,15 +83,24 @@ class TestCacheCompliance:
 
         assert mock_graph.call_count == 1
 
-    def test_cache_expirado_busca_novamente(self, cliente, monkeypatch) -> None:
+    def test_cache_expirado_responde_na_hora_e_atualiza_em_fundo(self, cliente, monkeypatch) -> None:
         import itgov.api.v1.governance_compliance as mod
 
-        with patch("itgov.api.v1.governance_compliance._buscar_do_graph", return_value=_DADOS_FAKE) as mock_graph:
+        novos = {**_DADOS_FAKE, "pct": 50.0}
+        with patch(
+            "itgov.api.v1.governance_compliance._buscar_do_graph", side_effect=[_DADOS_FAKE, novos]
+        ) as mock_graph:
             cliente.get("/api/v1/governance/compliance")
             monkeypatch.setattr(mod, "_cache_ts", time.monotonic() - mod._CACHE_TTL - 1)
-            cliente.get("/api/v1/governance/compliance")
+            # Vencido: devolve o anterior sem esperar o Graph
+            assert cliente.get("/api/v1/governance/compliance").json["pct"] == 42.8
+            fim = time.monotonic() + 2
+            while mod._atualizando or mod._cache_dados["pct"] != 50.0:
+                assert time.monotonic() < fim
+                time.sleep(0.01)
 
         assert mock_graph.call_count == 2
+        assert cliente.get("/api/v1/governance/compliance").json["pct"] == 50.0
 
 
 class TestAuth:

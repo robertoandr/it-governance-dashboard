@@ -328,3 +328,70 @@ def test_pagina_mostra_status_e_formulario(authed_client, monkeypatch: pytest.Mo
     assert "SNMP v3 · falha" in html and "Zabbix: Authentication failure" in html
     assert "Salvar SNMP" in html and "Cadastrar no Zabbix" in html
     assert "definida — em branco mantém" in html and ".snmp-form:has(" in html
+
+
+# ── Cadastro de gravador novo (topo da página) ─────────────────────────────────
+
+
+def test_novo_nao_sobrescreve_gravador_existente() -> None:
+    zbx = FakeZabbix([{"hostid": "77", "host": "DVR-1", "interfaces": [], "macros": []}])
+    with patch.object(sn, "_zbx", zbx), pytest.raises(sn.GravadorJaExisteError):
+        sn.aplicar("DVR-1", ConfigSnmp(**V3), so_criar=True)
+    assert "host.update" not in zbx.metodos() and "hostinterface.update" not in zbx.metodos()
+
+
+def test_rota_cadastra_gravador_novo_com_unidade(authed_client, factory_app) -> None:
+    from app.models.unidade import DvrUnidade, Unidade
+
+    with factory_app.app_context():
+        unidade = Unidade(nome="Novo DVR Teste")
+        db.session.add(unidade)
+        db.session.commit()
+        uid = unidade.id
+    res = sn.Resultado(hostid="999", criado=True, itens_verificados=0, senhas_faltando=[])
+    try:
+        with patch.object(sn, "aplicar", return_value=res) as aplicar:
+            resp = authed_client.post(
+                "/gov/cftv/gravador/snmp",
+                data={**_FORM, "gravador": "DVR Novo", "novo": "1", "unidade_id": str(uid)},
+                follow_redirects=True,
+            )
+        assert aplicar.call_args.kwargs == {"so_criar": True}
+        assert "DVR Novo cadastrado no Zabbix" in resp.get_data(as_text=True)
+        with factory_app.app_context():
+            assert DvrUnidade.query.filter_by(dvr="DVR Novo").one().unidade_id == uid
+    finally:
+        with factory_app.app_context():
+            DvrUnidade.query.filter_by(dvr="DVR Novo").delete()
+            Unidade.query.filter_by(nome="Novo DVR Teste").delete()
+            db.session.commit()
+
+
+def test_rota_novo_avisa_nome_repetido_e_nome_vazio(authed_client) -> None:
+    with patch.object(sn, "aplicar", side_effect=sn.GravadorJaExisteError("DVR-1")):
+        html = authed_client.post(
+            "/gov/cftv/gravador/snmp", data={**_FORM, "gravador": "DVR-1", "novo": "1"}, follow_redirects=True
+        ).get_data(as_text=True)
+    assert "Já existe um gravador DVR-1" in html
+    with patch.object(sn, "aplicar") as aplicar:
+        html = authed_client.post(
+            "/gov/cftv/gravador/snmp", data={**_FORM, "gravador": "", "novo": "1"}, follow_redirects=True
+        ).get_data(as_text=True)
+    assert "Informe o nome do gravador novo" in html
+    aplicar.assert_not_called()
+
+
+def _pagina_cftv(client, monkeypatch) -> str:
+    monkeypatch.setenv("ZABBIX_URL", "https://zabbix.test")
+    monkeypatch.setattr(cftv_monitoring, "get_cached_historico_quedas", lambda: {})
+    with patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value={"enabled": True, "devices": []}):
+        return client.get("/gov/cftv").get_data(as_text=True)
+
+
+def test_pagina_mostra_cadastro_novo_para_admin(authed_client, monkeypatch) -> None:
+    html = _pagina_cftv(authed_client, monkeypatch)
+    assert "Cadastrar novo gravador" in html and 'name="novo" value="1"' in html
+
+
+def test_pagina_nao_mostra_cadastro_novo_para_gestor(gestor_client, monkeypatch) -> None:
+    assert "Cadastrar novo gravador" not in _pagina_cftv(gestor_client, monkeypatch)

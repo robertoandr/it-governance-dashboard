@@ -45,6 +45,9 @@ class CacheSWR(Generic[T]):  # noqa: UP046 — o CI também roda em Python 3.11 
         self._lock = threading.Lock()
         self._carga_inicial = threading.Lock()
         self._valor: T | None = None
+        # Já houve uma carga (mesmo que o resultado tenha sido None/inválido)?
+        # Não dá para usar "_valor is not None": a falha guardada pode ser None.
+        self._carregado = False
         self._expira = 0.0
         self._bom = False
         self._atualizando = False
@@ -59,16 +62,16 @@ class CacheSWR(Generic[T]):  # noqa: UP046 — o CI também roda em Python 3.11 
             O valor novo, ou o anterior enquanto a atualização roda.
         """
         with self._lock:
-            if self._valor is not None:
+            if self._carregado:
                 if time.monotonic() >= self._expira and not self._atualizando:
                     self._atualizando = True
                     threading.Thread(target=self._atualizar, args=(carregar,), daemon=True).start()
-                return self._valor
+                return self._valor  # type: ignore[return-value]
         # Sem valor ainda: uma única carga; quem chega junto espera por ela.
         with self._carga_inicial:
             with self._lock:
-                if self._valor is not None:
-                    return self._valor
+                if self._carregado:
+                    return self._valor  # type: ignore[return-value]
             log.info("cache_swr.carga_inicial", cache=self.nome)
             valor = carregar()
             self._guardar(valor)
@@ -100,6 +103,7 @@ class CacheSWR(Generic[T]):  # noqa: UP046 — o CI também roda em Python 3.11 
         """Esquece o valor guardado (usado em testes)."""
         with self._lock:
             self._valor, self._expira, self._bom, self._atualizando = None, 0.0, False, False
+            self._carregado = False
 
     def _atualizar(self, carregar: Callable[[], T]) -> None:
         try:
@@ -115,6 +119,7 @@ class CacheSWR(Generic[T]):  # noqa: UP046 — o CI também roda em Python 3.11 
 
     def _guardar(self, valor: T) -> None:
         with self._lock:
+            self._carregado = True
             if self._valido(valor):
                 self._valor, self._bom = valor, True
                 self._expira = time.monotonic() + self.ttl

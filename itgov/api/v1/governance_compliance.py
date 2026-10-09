@@ -12,10 +12,12 @@ import asyncio
 import threading
 import time
 
+import httpx
 import structlog
 from flask_restx import Namespace, Resource, fields
 
 from app.auth.rbac import require_role
+from itgov.services.graph_client import GraphRateLimitError
 
 log = structlog.get_logger(__name__)
 
@@ -151,16 +153,58 @@ def _buscar_do_graph() -> dict:
     ).model_dump()
 
 
+_atualizando = False
+# O que a busca no Graph lança: sem configuração (RuntimeError), HTTP/limite de
+# taxa (httpx.HTTPError, GraphRateLimitError) e resposta fora do esperado
+_FALHAS_GRAPH = (RuntimeError, httpx.HTTPError, GraphRateLimitError, ValueError, KeyError, OSError)
+
+
+def _atualizar_em_fundo() -> None:
+    global _atualizando
+    try:
+        _gravar_cache(_buscar_do_graph())
+        log.info("gov_compliance.cache.atualizado")
+    except _FALHAS_GRAPH as exc:
+        # Em fundo: a falha só mantém o dado anterior
+        log.warning("gov_compliance.cache.atualizacao_falhou", error=str(exc))
+    finally:
+        with _cache_lock:
+            _atualizando = False
+
+
 def _obter_dados() -> dict:
-    cached = _ler_cache()
-    if cached is not None:
-        log.debug("gov_compliance.cache.hit")
-        return cached
+    """Dados do cache; vencidos, devolve os anteriores e atualiza em segundo plano.
+
+    A busca (Graph + histórico de 90 dias no InfluxDB) leva ~3 s: só a
+    primeira carga do worker espera por ela.
+    """
+    global _atualizando
+    with _cache_lock:
+        dados, fresco = _cache_dados, _cache_valido()
+        if dados is not None and not fresco and not _atualizando:
+            _atualizando = True
+            threading.Thread(target=_atualizar_em_fundo, daemon=True).start()
+    if dados is not None:
+        log.debug("gov_compliance.cache.hit", fresco=fresco)
+        return dados
 
     log.info("gov_compliance.cache.miss")
     dados = _buscar_do_graph()
     _gravar_cache(dados)
     return dados
+
+
+def aquecer() -> None:
+    """Primeira carga em segundo plano, na subida do worker."""
+
+    def _rodar() -> None:
+        try:
+            _obter_dados()
+        except _FALHAS_GRAPH as exc:
+            # Aquecimento nunca derruba a subida
+            log.warning("gov_compliance.aquecer_falhou", error=str(exc))
+
+    threading.Thread(target=_rodar, daemon=True).start()
 
 
 def get_cached_compliance_summary() -> dict:
