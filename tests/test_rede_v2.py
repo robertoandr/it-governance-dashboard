@@ -466,3 +466,102 @@ def test_primeira_leitura_do_fortigate_vira_baseline(factory_app) -> None:
             RedeVisto.query.filter(RedeVisto.ip.like("198.51.100.%")).delete(synchronize_session=False)
             RedeVisto.query.filter(RedeVisto.ip == "fortigate:Teste").delete()
             db.session.commit()
+
+
+# ── r3: filtro por tipo e classificações próprias ───────────────────────────
+
+
+@pytest.fixture
+def sem_classificacoes(factory_app) -> Iterator[None]:
+    from app.models.rede import ClassificacaoDispositivo
+    from itgov.models.ativo import definir_tipos_extras
+
+    yield
+    with factory_app.app_context():
+        ClassificacaoDispositivo.query.delete()
+        db.session.commit()
+    definir_tipos_extras({})
+
+
+def test_aplicar_classificacoes_respeita_zabbix_e_primeira_regra() -> None:
+    from itgov.api.v1.rede_descoberta import RegraClassificacao, aplicar_classificacoes
+
+    hosts = [
+        {"ip": "1", "hostname": "REP-HENRY-01", "tipo_sugerido": "outro", "motivo": ""},
+        {"ip": "2", "vendor": "Control iD", "tipo_sugerido": "outro", "motivo": ""},
+        {"ip": "3", "hostname": "henry-srv", "zabbix_grupos": ["Servers"], "tipo_sugerido": "servidor"},
+        {"ip": "4", "hostname": "DESKTOP-1", "tipo_sugerido": "endpoint"},
+    ]
+    regras = [
+        RegraClassificacao("relogio_ponto", "Relógio de ponto", ("henry", "control id")),
+        RegraClassificacao("outra", "Outra", ("rep",)),
+        RegraClassificacao("vazia", "Vazia", ()),
+    ]
+    saida = {h["ip"]: h for h in aplicar_classificacoes(hosts, regras)}
+    assert saida["1"]["tipo_sugerido"] == "relogio_ponto" and '"henry"' in saida["1"]["motivo"]
+    assert saida["2"]["tipo_sugerido"] == "relogio_ponto"
+    assert saida["3"]["tipo_sugerido"] == "servidor"  # monitorado no Zabbix: não muda
+    assert saida["4"]["tipo_sugerido"] == "endpoint"
+    assert hosts[0]["tipo_sugerido"] == "outro"  # entrada intacta
+    assert aplicar_classificacoes(hosts, []) is hosts
+
+
+def test_tipo_extra_vale_para_ativo_e_nome() -> None:
+    from itgov.models.ativo import AtivoFilters, definir_tipos_extras, rotulos_tipo, tipo_valido
+
+    assert not tipo_valido("relogio_ponto")
+    definir_tipos_extras({"relogio_ponto": "Relógio de ponto", "camera": "ignorado"})
+    try:
+        assert tipo_valido("relogio_ponto")
+        assert rotulos_tipo()["camera"] == "Câmera / DVR"
+        assert list(rotulos_tipo())[-1] == "outro"
+        assert AtivoFilters(tipo="RELOGIO_PONTO").tipo == "relogio_ponto"
+    finally:
+        definir_tipos_extras({})
+    assert sugerir_nome("relogio_ponto", "SHO", [], {"relogio_ponto": "PON"}) == "SHO-PON-001"
+    assert sugerir_nome("camera", "SHO", ["SHO-CAM-004"], {"relogio_ponto": "PON"}) == "SHO-CAM-005"
+
+
+def test_chave_e_validacao_da_classificacao() -> None:
+    from types import SimpleNamespace as NS
+
+    from app.services.classificacoes import chave_de, validar
+
+    assert chave_de("Relógio de ponto") == "relogio_de_ponto"
+    assert chave_de("  Smart TV!! ") == "smart_tv"
+    existentes = [NS(chave="smart_tv", sigla="TV")]
+    assert validar("Nobreak", "NBK", existentes) is None
+    assert "3 a 60" in validar("TV", "TVX", existentes)
+    assert "sigla" in validar("Nobreak", "N", existentes)
+    assert "Já existe" in validar("Smart TV", "STV", existentes)
+    assert "Já existe" in validar("Câmera", "CMX", [])  # chave "camera" é nativa
+    assert "em uso" in validar("Nobreak", "TV", existentes)
+    assert "em uso" in validar("Nobreak", "CAM", [])
+
+
+def test_pagina_rede_filtra_por_tipo(authed_client, pagina) -> None:
+    html = authed_client.get("/gov/rede?tipo=impressora").get_data(as_text=True)
+    assert "172.29.1.5" in html and "10.41.1.7" not in html
+    assert "Access point: 1" in html  # contagem do recorte inteiro continua visível
+    html = authed_client.get("/gov/rede?tipo=inexistente").get_data(as_text=True)
+    assert "172.29.1.5" in html and "10.41.1.7" in html
+
+
+def test_cadastrar_classificacao_reclassifica_e_remove(authed_client, pagina, sem_classificacoes) -> None:
+    resp = authed_client.post(
+        "/gov/rede/classificacoes", data={"rotulo": "Impressora Ricoh", "sigla": "ric", "palavras": "ricoh, , lexmark"}
+    )
+    assert resp.status_code == 302 and "tipo=impressora_ricoh" in resp.headers["Location"]
+    html = authed_client.get("/gov/rede?tipo=impressora_ricoh").get_data(as_text=True)
+    assert "172.29.1.5" in html and "10.41.1.7" not in html
+    assert "ricoh, lexmark" in html and "RIC" in html
+    assert "Impressora Ricoh: 1" in html
+
+    repetida = authed_client.post("/gov/rede/classificacoes", data={"rotulo": "Impressora Ricoh", "sigla": "RX"})
+    assert repetida.status_code == 302
+    assert "Já existe" in authed_client.get("/gov/rede").get_data(as_text=True)
+
+    assert authed_client.post("/gov/rede/classificacoes/impressora_ricoh/remover").status_code == 302
+    assert authed_client.post("/gov/rede/classificacoes/impressora_ricoh/remover").status_code == 404
+    html = authed_client.get("/gov/rede").get_data(as_text=True)
+    assert "Impressora: 1" in html

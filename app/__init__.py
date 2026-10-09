@@ -90,6 +90,9 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         from app.services.aprovacoes import super_admin_email
 
         _user_model.definir_super_admin(super_admin_email())
+        from app.services import classificacoes
+
+        classificacoes.carregar()
 
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db

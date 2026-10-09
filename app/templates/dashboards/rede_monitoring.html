@@ -142,19 +142,29 @@
     {% endif %}
 
     <nav class="flex flex-wrap gap-2" aria-label="Filtrar por unidade">
-      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
       {% for u in unidades %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
       {% endfor %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
     </nav>
     <nav class="flex flex-wrap items-center gap-2" aria-label="Filtrar por status">
       {% for valor, rotulo in [('', 'Todos'), ('recentes', 'Novos na rede'), ('novos', 'Sem cadastro'), ('cadastrados', 'Cadastrados')] %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
       {% endfor %}
+    </nav>
+    <nav class="flex flex-wrap items-center gap-1.5" aria-label="Filtrar por tipo de dispositivo">
+      <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">Tipo:</span>
+      {% set chip = 'text-[11px] rounded px-2 py-0.5 border' %}
+      {% set chip_off = 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border-transparent hover:border-slate-300 dark:hover:border-slate-500' %}
+      {% set chip_on = 'bg-gadens-600 text-white border-gadens-600' %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None) }}" class="{{ chip }} {{ chip_on if not tipo else chip_off }}">Todos</a>
       {% for t, n in revisao.por_tipo.items() %}
-      <span class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded px-2 py-0.5">{{ tipo_labels.get(t, t) }}: {{ n }}</span>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=None if tipo == t else t) }}" class="{{ chip }} {{ chip_on if tipo == t else chip_off }}" {% if tipo == t %}aria-current="true"{% endif %}>{{ tipo_labels.get(t, t) }}: {{ n }}</a>
       {% endfor %}
+      {% if tipo and tipo not in revisao.por_tipo %}
+      <span class="{{ chip }} {{ chip_on }}">{{ tipo_labels.get(tipo, tipo) }}: 0</span>
+      {% endif %}
     </nav>
 
     {% if revisao.hosts %}
@@ -233,6 +243,52 @@
       </div>
     </details>
   </div>
+
+  {# ── r3: classificações próprias ────────────────────────────────────────── #}
+  {% set pode_classificar = pode('rede', 'alterar', ('admin', 'gestor')) %}
+  <details class="{{ card }} p-5" {% if classificacoes %}open{% endif %} id="classificacoes">
+    <summary class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Classificações de dispositivo ({{ classificacoes|length }} própria{{ 's' if classificacoes|length != 1 }})</summary>
+    <div class="text-xs text-slate-600 dark:text-slate-300 mt-3 space-y-3">
+      <p>Além dos tipos nativos, cadastre classificações próprias (ex.: Relógio de ponto, Smart TV, Nobreak). Cada uma ganha sigla para o padrão de nomes e aparece no cadastro do ativo e no filtro acima. Com palavras-chave, os hosts descobertos que tiverem o trecho no nome, fabricante, descrição SNMP ou MAC passam para ela sozinhos (quem já é monitorado no Zabbix continua com o tipo do grupo).</p>
+      {% if classificacoes %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-[11px]">
+          <thead><tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
+            <th class="pb-1.5 pr-3 font-medium">Classificação</th><th class="pb-1.5 pr-3 font-medium">Sigla</th><th class="pb-1.5 pr-3 font-medium">Palavras-chave</th><th class="pb-1.5 pr-3 font-medium text-right">Hosts</th><th class="pb-1.5"></th>
+          </tr></thead>
+          <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+            {% for c in classificacoes %}
+            <tr>
+              <td class="py-1.5 pr-3 font-medium"><a href="{{ url_for('dashboards.rede_monitoring', tipo=c.chave) }}" class="hover:underline">{{ c.rotulo }}</a></td>
+              <td class="pr-3"><code class="bg-slate-100 dark:bg-slate-700 rounded px-1">{{ c.sigla }}</code></td>
+              <td class="pr-3">{{ c.lista_palavras|join(', ') or '— (só manual, no cadastro)' }}</td>
+              <td class="pr-3 text-right tabular-nums">{{ revisao.por_tipo.get(c.chave, 0) }}</td>
+              <td class="text-right">
+                {% if pode_classificar %}
+                <form method="POST" action="{{ url_for('dashboards.rede_classificacao_remover', chave=c.chave) }}">
+                  <button type="submit" data-confirm="Remover a classificação {{ c.rotulo }}? Ativos já cadastrados continuam com ela." class="text-red-500 hover:text-red-700">Remover</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% if pode_classificar %}
+      <form method="POST" action="{{ url_for('dashboards.rede_classificacao_criar') }}" class="grid grid-cols-1 sm:grid-cols-[1fr_6rem_2fr_auto] gap-2 items-end pt-2 border-t border-slate-100 dark:border-slate-700">
+        <label class="grid gap-1"><span class="font-medium">Nome</span>
+          <input name="rotulo" required minlength="3" maxlength="60" placeholder="Relógio de ponto" class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1"></label>
+        <label class="grid gap-1"><span class="font-medium">Sigla</span>
+          <input name="sigla" required pattern="[A-Za-z0-9]{2,4}" maxlength="4" placeholder="PON" class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1 uppercase"></label>
+        <label class="grid gap-1"><span class="font-medium">Palavras-chave <span class="font-normal text-slate-400">(separadas por vírgula, opcional)</span></span>
+          <input name="palavras" maxlength="500" placeholder="henry, controlid, REP-" class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1"></label>
+        <button type="submit" class="bg-gadens-600 hover:bg-gadens-700 text-white font-medium rounded px-3 py-1.5">Cadastrar</button>
+      </form>
+      {% endif %}
+    </div>
+  </details>
 
   {# ── r5: avaliação de ferramentas ───────────────────────────────────────── #}
   <details class="{{ card }} p-5">

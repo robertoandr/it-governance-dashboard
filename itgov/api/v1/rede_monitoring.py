@@ -356,6 +356,7 @@ def montar_descobertos(
     unidades: dict[int, str],
     filtro_unidade: set[int] | str | None = None,
     filtro_status: str = "",
+    filtro_tipo: str = "",
 ) -> dict[str, Any]:
     """Prepara a fila de revisão da página Rede.
 
@@ -367,6 +368,8 @@ def montar_descobertos(
         filtro_unidade: Ids aceitos, ``SEM_UNIDADE`` ou None para todas.
         filtro_status: ``STATUS_NOVO`` (sem cadastro), ``STATUS_CADASTRADO``,
             ``STATUS_RECENTE`` (apareceu na rede há pouco) ou "" para todos.
+        filtro_tipo: Só hosts com este ``tipo_sugerido``; "" para todos. Não
+            entra em ``por_tipo``, que conta o recorte inteiro para servir de filtro.
 
     Returns:
         ``hosts`` enriquecidos e filtrados, mais contagens do recorte por unidade.
@@ -387,10 +390,12 @@ def montar_descobertos(
             continue
         linhas.append({**h, "unidade_id": uid, "unidade": unidades.get(uid, "") if uid else "", "ativo": ativo})
 
-    novos = sum(1 for linha in linhas if not linha["ativo"])
     por_tipo: dict[str, int] = {}
     for linha in linhas:
         por_tipo[linha["tipo_sugerido"]] = por_tipo.get(linha["tipo_sugerido"], 0) + 1
+    if filtro_tipo:
+        linhas = [linha for linha in linhas if linha["tipo_sugerido"] == filtro_tipo]
+    novos = sum(1 for linha in linhas if not linha["ativo"])
     return {
         "hosts": sorted(
             linhas,

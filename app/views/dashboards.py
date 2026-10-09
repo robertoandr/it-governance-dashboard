@@ -855,7 +855,14 @@ def _listar_ativos() -> list[dict]:
 def rede_monitoring() -> str:
     """Render painel de rede: fila de revisão dos hosts descobertos pelo nmap."""
     from app.models.unidade import Unidade
-    from itgov.api.v1.rede_descoberta import SIGLA_TIPO, faixas_fora_da_varredura, resumo_por_unidade, sigla_unidade
+    from app.services import classificacoes
+    from itgov.api.v1.rede_descoberta import (
+        SIGLA_TIPO,
+        aplicar_classificacoes,
+        faixas_fora_da_varredura,
+        resumo_por_unidade,
+        sigla_unidade,
+    )
     from itgov.api.v1.rede_monitoring import (
         SEM_UNIDADE,
         STATUS_CADASTRADO,
@@ -865,7 +872,7 @@ def rede_monitoring() -> str:
         get_latencia,
         montar_descobertos,
     )
-    from itgov.models.ativo import TIPO_LABELS
+    from itgov.models.ativo import rotulos_tipo
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
@@ -877,35 +884,44 @@ def rede_monitoring() -> str:
     status = request.args.get("status", "")
     if status not in (STATUS_NOVO, STATUS_CADASTRADO, STATUS_RECENTE):
         status = ""
+    classes = classificacoes.carregar()
+    labels = rotulos_tipo()
+    tipo = request.args.get("tipo", "")
+    if tipo not in labels:
+        tipo = ""
 
     data = get_cached_rede_summary()
+    hosts = aplicar_classificacoes(data.get("hosts", []), classificacoes.regras(classes))
     ativos_por_ip = {a["metadata"]["ip"]: a for a in _listar_ativos() if a["metadata"].get("ip")}
     faixas = [(u.id, f) for u in unidades for f in u.faixas]
     nomes = {u.id: u.caminho for u in todas}
     revisao = montar_descobertos(
-        data.get("hosts", []),
+        hosts,
         faixas=faixas,
         ativos_por_ip=ativos_por_ip,
         unidades=nomes,
         filtro_unidade=filtro,
         filtro_status=status,
+        filtro_tipo=tipo,
     )
     return render_template(
         "dashboards/rede_monitoring.html",
         data=data,
         revisao=revisao,
-        cards=resumo_por_unidade(data.get("hosts", []), faixas, nomes, set(ativos_por_ip)),
+        cards=resumo_por_unidade(hosts, faixas, nomes, set(ativos_por_ip)),
         latencia=get_latencia(faixas, nomes),
         faixas_fora=faixas_fora_da_varredura(
             [(u.caminho, f) for u in unidades for f in u.faixas],
             [r for dr in data.get("active_drules", []) for r in dr["ranges"]],
         ),
         siglas=[(u.nome, sigla_unidade(u.nome)) for u in unidades if u.parent_id is None],
-        sigla_tipo=SIGLA_TIPO,
+        sigla_tipo={**SIGLA_TIPO, **classificacoes.siglas(classes)},
         unidades=sorted(unidades, key=lambda u: u.caminho),
         filtro=filtro_raw if filtro is not None else "",
         status=status,
-        tipo_labels=TIPO_LABELS,
+        tipo=tipo,
+        tipo_labels=labels,
+        classificacoes=classes,
         sem_faixas=not any(u.faixas for u in unidades),
     )
 
@@ -919,10 +935,11 @@ def rede_cadastrar_ativo() -> object:
     from sqlalchemy import select
 
     from app.models.unidade import Unidade
-    from itgov.api.v1.rede_descoberta import sigla_unidade, sugerir_nome
+    from app.services import classificacoes
+    from itgov.api.v1.rede_descoberta import aplicar_classificacoes, sigla_unidade, sugerir_nome
     from itgov.api.v1.rede_monitoring import host_descoberto, unidade_do_ip
     from itgov.db.session import get_session
-    from itgov.models.ativo import AMBIENTES_VALIDOS, CRITICIDADES_VALIDAS, TIPO_LABELS
+    from itgov.models.ativo import AMBIENTES_VALIDOS, CRITICIDADES_VALIDAS, rotulos_tipo
     from itgov.models.db.ativo import AtivoDB
     from itgov.services.ativo_service import AtivoDuplicateError, AtivoService
 
@@ -930,20 +947,23 @@ def rede_cadastrar_ativo() -> object:
     host = host_descoberto(ip) if ip else None
     if host is None:
         abort(404)
+    classes = classificacoes.carregar()
+    host = aplicar_classificacoes([host], classificacoes.regras(classes))[0]
+    labels = rotulos_tipo()
     ativos = _listar_ativos()
     if any(a["metadata"].get("ip") == ip for a in ativos):
         flash(f"{ip} já está cadastrado como ativo.", "error")
         return redirect(url_for("dashboards.ativos_rede"))
 
     unidades = sorted((u for u in Unidade.query.all() if u.ativo), key=lambda u: u.caminho)
-    tipo = host["tipo_sugerido"] if host["tipo_sugerido"] in TIPO_LABELS else "outro"
+    tipo = host["tipo_sugerido"] if host["tipo_sugerido"] in labels else "outro"
     unidade_id = unidade_do_ip(ip, [(u.id, f) for u in unidades for f in u.faixas])
     unidade_ip = next((u for u in unidades if u.id == unidade_id), None)
     # Nome no padrão SIGLA-TIPO-NNN (sigla da unidade raiz); o nome visto na rede vai para a descrição
     raiz = unidade_ip.caminho.split(" / ")[0] if unidade_ip else ""
     visto = host.get("ia_nome") or (host["hostname"] if host["hostname"] != ip else "")
     sugestao = {
-        "nome": sugerir_nome(tipo, sigla_unidade(raiz), (a["nome"] for a in ativos)),
+        "nome": sugerir_nome(tipo, sigla_unidade(raiz), (a["nome"] for a in ativos), classificacoes.siglas(classes)),
         "tipo": tipo,
         "unidade_id": unidade_id,
         "criticidade": "media",
@@ -957,7 +977,7 @@ def rede_cadastrar_ativo() -> object:
             host=host,
             valores=valores,
             unidades=unidades,
-            tipo_labels=TIPO_LABELS,
+            tipo_labels=labels,
             criticidades=sorted(CRITICIDADES_VALIDAS),
             ambientes=sorted(AMBIENTES_VALIDOS),
         )
@@ -1013,15 +1033,80 @@ def rede_cadastrar_ativo() -> object:
     return redirect(url_for("dashboards.rede_monitoring", status="novos"))
 
 
+@bp.route("/rede/classificacoes", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
+@requer_aprovacao(lambda: f"Rede: nova classificação {request.form.get('rotulo', '').strip()}")
+def rede_classificacao_criar() -> object:
+    """Cadastra uma classificação de dispositivo (tipo novo, sigla e palavras-chave)."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.extensions import db
+    from app.models.rede import ClassificacaoDispositivo
+    from app.services import classificacoes
+
+    rotulo = (request.form.get("rotulo") or "").strip()
+    sigla = (request.form.get("sigla") or "").strip().upper()
+    palavras = ", ".join(p.strip() for p in (request.form.get("palavras") or "").split(",") if p.strip())[:500]
+    erro = classificacoes.validar(rotulo, sigla, classificacoes.carregar())
+    if erro:
+        flash(erro, "error")
+        return redirect(url_for("dashboards.rede_monitoring"))
+    chave = classificacoes.chave_de(rotulo)
+    db.session.add(
+        ClassificacaoDispositivo(
+            chave=chave, rotulo=rotulo, sigla=sigla, palavras=palavras, criado_por=current_user.email
+        )
+    )
+    try:
+        db.session.commit()
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        log.warning("rede.classificacao_falhou", erro=str(exc))
+        flash("Não foi possível salvar a classificação.", "error")
+        return redirect(url_for("dashboards.rede_monitoring"))
+    log.info("rede.classificacao_criada", chave=chave, sigla=sigla, user=current_user.email)
+    flash(f"Classificação {rotulo} ({sigla}) cadastrada.", "success")
+    return redirect(url_for("dashboards.rede_monitoring", tipo=chave))
+
+
+@bp.route("/rede/classificacoes/<chave>/remover", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
+@requer_aprovacao(lambda chave: f"Rede: remover classificação {chave}")
+def rede_classificacao_remover(chave: str) -> object:
+    """Remove uma classificação; ativos já cadastrados com ela continuam com o tipo."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.extensions import db
+    from app.models.rede import ClassificacaoDispositivo
+
+    item = db.session.get(ClassificacaoDispositivo, chave)
+    if item is None:
+        abort(404)
+    db.session.delete(item)
+    try:
+        db.session.commit()
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        log.warning("rede.classificacao_remocao_falhou", chave=chave, erro=str(exc))
+        flash("Não foi possível remover a classificação.", "error")
+        return redirect(url_for("dashboards.rede_monitoring"))
+    log.info("rede.classificacao_removida", chave=chave, user=current_user.email)
+    flash(f"Classificação {item.rotulo} removida.", "success")
+    return redirect(url_for("dashboards.rede_monitoring"))
+
+
 @bp.route("/ativos-rede")
 @login_required
 @require_role("admin", "gestor", "operador", pagina="ativos_rede")
 def ativos_rede() -> str:
     """Topologia da rede e ativos do inventário separados por unidade, com filtro por unidade e tipo."""
     from app.models.unidade import Unidade
+    from app.services import classificacoes
     from itgov.api.v1.rede_monitoring import SEM_UNIDADE, get_cached_rede_summary
     from itgov.api.v1.rede_topologia import layout_geral, montar_topologia
-    from itgov.models.ativo import TIPO_LABELS
+    from itgov.models.ativo import rotulos_tipo
     from itgov.services.fortigate_api import configurados, get_cached_fortigates
 
     todas = Unidade.query.all()
@@ -1030,6 +1115,7 @@ def ativos_rede() -> str:
     filtro_raw = request.args.get("unidade", "")
     filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
     tipo = request.args.get("tipo", "")
+    classificacoes.carregar()
 
     grupos: dict[str, list[dict]] = {}
     for a in _listar_ativos():
@@ -1058,7 +1144,7 @@ def ativos_rede() -> str:
         unidades=sorted(unidades, key=lambda u: u.caminho),
         filtro=filtro_raw if filtro is not None else "",
         tipo=tipo,
-        tipo_labels=TIPO_LABELS,
+        tipo_labels=rotulos_tipo(),
     )
 
 

@@ -60,6 +60,34 @@ TIPO_LABELS: dict[str, str] = {
     "outro": "Outro",
 }
 TIPOS_VALIDOS: frozenset[str] = frozenset(TIPO_LABELS)
+
+# Classificações cadastradas no dashboard (Rede → Classificações): chave → rótulo.
+# O app recarrega a partir do banco (``app.services.classificacoes``); fica aqui
+# para os validadores aceitarem os tipos novos sem depender do Flask.
+_TIPOS_EXTRAS: dict[str, str] = {}
+
+
+def definir_tipos_extras(extras: dict[str, str]) -> None:
+    """Troca as classificações extras aceitas como tipo de ativo.
+
+    Args:
+        extras: Chave → rótulo; chaves que já são tipos nativos são ignoradas.
+    """
+    global _TIPOS_EXTRAS
+    _TIPOS_EXTRAS = {k: v for k, v in extras.items() if k not in TIPO_LABELS}
+
+
+def rotulos_tipo() -> dict[str, str]:
+    """Tipos nativos mais as classificações extras, com "Outro" por último."""
+    nativos = {k: v for k, v in TIPO_LABELS.items() if k != "outro"}
+    return {**nativos, **_TIPOS_EXTRAS, "outro": TIPO_LABELS["outro"]}
+
+
+def tipo_valido(tipo: str) -> bool:
+    """True se ``tipo`` é nativo ou uma classificação extra cadastrada."""
+    return tipo in TIPOS_VALIDOS or tipo in _TIPOS_EXTRAS
+
+
 AMBIENTES_VALIDOS: frozenset[str] = frozenset({"prod", "hml", "dev"})
 CRITICIDADES_VALIDAS: frozenset[str] = frozenset({"alta", "media", "baixa"})
 
@@ -81,8 +109,8 @@ class AtivoBase(BaseModel):
     def validate_tipo(cls, v: str) -> str:
         """Normaliza para minusculo e valida contra o enum de tipos."""
         normalizado = v.strip().lower()
-        if normalizado not in TIPOS_VALIDOS:
-            raise ValueError(f"tipo '{v}' invalido. Valores aceitos: {sorted(TIPOS_VALIDOS)}")
+        if not tipo_valido(normalizado):
+            raise ValueError(f"tipo '{v}' invalido. Valores aceitos: {sorted(rotulos_tipo())}")
         return normalizado
 
     @field_validator("ambiente")
@@ -245,8 +273,8 @@ class AtivoFilters(BaseModel):
         if v is None:
             return v
         normalizado = v.strip().lower()
-        if normalizado not in TIPOS_VALIDOS:
-            raise ValueError(f"tipo '{v}' invalido. Valores aceitos: {sorted(TIPOS_VALIDOS)}")
+        if not tipo_valido(normalizado):
+            raise ValueError(f"tipo '{v}' invalido. Valores aceitos: {sorted(rotulos_tipo())}")
         return normalizado
 
     @field_validator("ambiente")
