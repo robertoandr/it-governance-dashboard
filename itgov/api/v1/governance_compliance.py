@@ -153,14 +153,14 @@ def _buscar_do_graph() -> dict:
     ).model_dump()
 
 
-_atualizando = False
+# Preso enquanto uma atualização em segundo plano roda (no máximo uma por vez)
+_atualizacao = threading.Lock()
 # O que a busca no Graph lança: sem configuração (RuntimeError), HTTP/limite de
 # taxa (httpx.HTTPError, GraphRateLimitError) e resposta fora do esperado
 _FALHAS_GRAPH = (RuntimeError, httpx.HTTPError, GraphRateLimitError, ValueError, KeyError, OSError)
 
 
 def _atualizar_em_fundo() -> None:
-    global _atualizando
     try:
         _gravar_cache(_buscar_do_graph())
         log.info("gov_compliance.cache.atualizado")
@@ -168,8 +168,7 @@ def _atualizar_em_fundo() -> None:
         # Em fundo: a falha só mantém o dado anterior
         log.warning("gov_compliance.cache.atualizacao_falhou", error=str(exc))
     finally:
-        with _cache_lock:
-            _atualizando = False
+        _atualizacao.release()
 
 
 def _obter_dados() -> dict:
@@ -178,12 +177,10 @@ def _obter_dados() -> dict:
     A busca (Graph + histórico de 90 dias no InfluxDB) leva ~3 s: só a
     primeira carga do worker espera por ela.
     """
-    global _atualizando
     with _cache_lock:
         dados, fresco = _cache_dados, _cache_valido()
-        if dados is not None and not fresco and not _atualizando:
-            _atualizando = True
-            threading.Thread(target=_atualizar_em_fundo, daemon=True).start()
+    if dados is not None and not fresco and _atualizacao.acquire(blocking=False):
+        threading.Thread(target=_atualizar_em_fundo, daemon=True).start()
     if dados is not None:
         log.debug("gov_compliance.cache.hit", fresco=fresco)
         return dados

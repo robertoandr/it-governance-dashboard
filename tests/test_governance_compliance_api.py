@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -47,11 +48,11 @@ def limpar_cache():
 
     mod._cache_dados = None
     mod._cache_ts = 0.0
-    mod._atualizando = False
+    mod._atualizacao = threading.Lock()
     yield
     mod._cache_dados = None
     mod._cache_ts = 0.0
-    mod._atualizando = False
+    mod._atualizacao = threading.Lock()
 
 
 class TestEndpointCompliance:
@@ -95,7 +96,7 @@ class TestCacheCompliance:
             # Vencido: devolve o anterior sem esperar o Graph
             assert cliente.get("/api/v1/governance/compliance").json["pct"] == 42.8
             fim = time.monotonic() + 2
-            while mod._atualizando or mod._cache_dados["pct"] != 50.0:
+            while mod._atualizacao.locked() or mod._cache_dados["pct"] != 50.0:
                 assert time.monotonic() < fim
                 time.sleep(0.01)
 
