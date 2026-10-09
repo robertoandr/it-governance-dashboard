@@ -106,7 +106,7 @@ def _svc() -> ZabbixService:
 class HostListResource(Resource):
     @ns.marshal_list_with(host_model)
     @ns.doc(description="Lista hosts monitorados com status de disponibilidade")
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="zabbix")
     def get(self) -> list[dict]:
         """Retorna todos os hosts monitorados."""
         with _svc() as svc:
@@ -118,7 +118,7 @@ class HostListResource(Resource):
 class HostSummaryResource(Resource):
     @ns.marshal_with(host_summary_model)
     @ns.doc(description="Resumo de disponibilidade dos hosts (up/down/unknown)")
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="zabbix")
     def get(self) -> dict:
         """Resumo de hosts por disponibilidade."""
         with _svc() as svc:
@@ -133,7 +133,7 @@ class ProblemListResource(Resource):
         description="Lista problemas ativos ordenados por severidade decrescente",
         params={"limit": "Máximo de resultados (default: 50, max: 200)"},
     )
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="zabbix")
     def get(self) -> list[dict]:
         """Retorna problemas ativos recentes."""
         limit = min(int(request.args.get("limit", 50)), 200)
@@ -153,7 +153,7 @@ class ProblemListResource(Resource):
 class SeverityDistributionResource(Resource):
     @ns.marshal_with(severity_dist_model)
     @ns.doc(description="Distribuição de problemas por nível de severidade")
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="zabbix")
     def get(self) -> dict:
         """Contagem de problemas ativos por severidade."""
         with _svc() as svc:
@@ -168,7 +168,7 @@ class AcknowledgeResource(Resource):
         description="Reconhece um evento no Zabbix. Rate limit: 10/min por IP. Requer autenticação SSO.",
         security="bearer",
     )
-    @require_role("admin", "gestor")
+    @require_role("admin", "gestor", pagina="triggers")
     def post(self, eventid: str) -> dict:
         """Reconhece (acknowledge) um evento Zabbix."""
         payload = ns.payload or {}

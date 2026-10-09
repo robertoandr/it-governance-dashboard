@@ -89,7 +89,7 @@ class OverviewResource(Resource):
 
     @ns.doc("get_overview")
     @ns.marshal_with(_overview_model, code=200)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="visao_geral")
     def get(self) -> dict[str, Any]:
         """Return current global governance score with all pillar details."""
         return _get_cached_or_compute()

@@ -93,7 +93,7 @@ def get_cached_device_summary() -> dict:
 @ns.route("/devices")
 class GovernancaDevices(Resource):
     @ns.marshal_with(device_summary_model)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="dispositivos")
     def get(self):
         """Retorna o resumo de governança de dispositivos."""
         try:

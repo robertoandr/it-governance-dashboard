@@ -66,6 +66,7 @@ document.addEventListener('alpine:init', function () {
 {% endmacro %}
 
 {% block content %}
+{% set pode_alterar = pode('triggers', 'alterar', ('admin', 'gestor', 'operador')) %}
 <div x-data="triggersPage">
 
 {% if not data.enabled %}
@@ -150,6 +151,7 @@ document.addEventListener('alpine:init', function () {
         </td>
         <td class="px-4 py-3">
           <div class="flex items-center gap-2">
+            {% if pode_alterar %}
             {% if not p.acknowledged %}
             <button type="button" data-eventid="{{ p.eventid }}" @click="ack" :disabled="busy"
                     title="Reconhecer no Zabbix (o problema continua em aberto)"
@@ -162,6 +164,7 @@ document.addEventListener('alpine:init', function () {
                     class="text-xs px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800">
               Resolvido
             </button>
+            {% endif %}
             <a href="{{ p.zabbix_url }}" target="_blank" rel="noopener" title="Abrir o evento no Zabbix"
                class="text-xs px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700">
               Zabbix
@@ -223,7 +226,7 @@ document.addEventListener('alpine:init', function () {
         </td>
         <td class="px-4 py-3">
           <div class="flex items-center gap-2">
-            {% if r.still_active and not r.manual_close %}
+            {% if pode_alterar and r.still_active and not r.manual_close %}
             <button type="button" data-eventid="{{ r.eventid }}" @click="reopen" :disabled="busy"
                     class="text-xs px-2 py-1 bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700">
               Reabrir

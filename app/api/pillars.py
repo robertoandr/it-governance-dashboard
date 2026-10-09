@@ -28,7 +28,7 @@ class PillarListResource(Resource):
     """GET /api/pillars — list all pillar scores."""
 
     @ns.doc("list_pillars")
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="pilares")
     def get(self) -> list[dict[str, Any]]:
         """Return a list of all five governance pillars."""
         data = _get_cached_or_compute()
@@ -41,7 +41,7 @@ class PillarDetailResource(Resource):
     """GET /api/pillars/<pillar_id> — single pillar detail."""
 
     @ns.doc("get_pillar")
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="pilares")
     def get(self, pillar_id: str) -> tuple[dict[str, Any], int]:
         """Return a single pillar by its ID.
 

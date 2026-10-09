@@ -2,7 +2,7 @@
 {% block title %}Unidades — Governança de TI 360{% endblock %}
 
 {% block content %}
-{% set pode_editar = current_user.role in ('admin', 'gestor') %}
+{% set pode_editar = pode('unidades', 'alterar', ('admin', 'gestor')) %}
 
 {% macro linha(u, filha=false) %}
 <tr class="{{ 'opacity-50' if not u.ativo }}">

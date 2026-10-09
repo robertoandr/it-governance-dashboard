@@ -231,10 +231,12 @@ document.addEventListener('alpine:init', function () {
           {% else %}—{% endif %}
         </td>
         <td class="px-4 py-3">
+          {% if pode('licencas', 'alterar', ('admin', 'gestor')) %}
           <button type="button" @click="openEdit" data-sku='{{ sku | tojson }}'
                   class="text-blue-600 hover:text-blue-800 text-xs underline">
             Editar
           </button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

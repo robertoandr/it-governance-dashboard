@@ -102,7 +102,7 @@ def get_cached_service_health_summary() -> dict:
 @ns.route("/service-health")
 class GovernancaServiceHealth(Resource):
     @ns.marshal_with(summary_model)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="m365")
     def get(self):
         """Retorna o status atual dos serviços Microsoft 365."""
         try:

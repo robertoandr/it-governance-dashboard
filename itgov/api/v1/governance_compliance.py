@@ -171,7 +171,7 @@ def get_cached_compliance_summary() -> dict:
 @ns.route("/compliance")
 class GovernancaCompliance(Resource):
     @ns.marshal_with(compliance_summary_model)
-    @require_role("admin", "gestor", "visualizador")
+    @require_role("admin", "gestor", "visualizador", pagina="compliance")
     def get(self):
         """Retorna o resumo de governança de Compliance (Secure Score)."""
         try:

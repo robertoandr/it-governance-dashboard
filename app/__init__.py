@@ -85,6 +85,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         _unidade_model.seed_unidades()
         _user_model.garantir_coluna_super_admin()
         _user_model.garantir_coluna_painel_tv()
+        _user_model.garantir_coluna_permissoes()
         _aprovacao_model.garantir_coluna_ciente()
         from app.services.aprovacoes import super_admin_email
 
@@ -324,6 +325,9 @@ def create_app(settings: AppSettings | None = None) -> Flask:
             "zendesk_on": zendesk_configured(),
             "aprovacoes_pendentes": _aprovacoes_pendentes(cu),
             "minhas_aprovacoes": _minhas_aprovacoes(cu),
+            "pode": lambda pagina, nivel="ver", padrao=None: bool(
+                getattr(cu, "is_authenticated", False) and cu.pode(pagina, nivel, padrao)
+            ),
         }
 
     def _aprovacoes_pendentes(cu: Any) -> int:
