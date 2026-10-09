@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import httpx
+import pytest
 
 from itgov.services import m365_uso as mu
 from itgov.services.m365_uso import ler_csv, resumir_apps, resumir_historico, resumir_servicos
@@ -32,6 +33,10 @@ def _hist(*linhas: str) -> list[dict[str, str]]:
 
 
 _SETEMBRO = _hist(*[f"200,190,100,120,,,110,2026-09-0{d}" for d in (2, 3, 4)])
+_APPS_DIA = ler_csv(
+    "Report Refresh Date,Report Period,Report Date,Outlook,Word,Excel,PowerPoint,OneNote,Teams\n"
+    + "\n".join(f"2026-09-29,180,2026-09-0{d},3,1,2,0,0,2" for d in (2, 3, 4))
+)
 
 
 def test_servicos_percentual_sobre_ativos_mais_inativos() -> None:
@@ -109,6 +114,7 @@ def test_buscar_monta_o_resumo_dos_tres_relatorios() -> None:
         mu._URL_SERVICOS: ler_csv(_SERVICOS),
         mu._URL_APPS: ler_csv(_APPS),
         mu._URL_HISTORICO: _SETEMBRO,
+        mu._URL_HISTORICO_APPS: _APPS_DIA,
     }
 
     async def baixar(_client: httpx.AsyncClient, _token: str, url: str) -> list[dict[str, str]]:
@@ -123,6 +129,55 @@ def test_buscar_monta_o_resumo_dos_tres_relatorios() -> None:
     assert uso.contas == 366 and uso.pct_ativas == 77.9
     assert uso.contas_apps == 4
     assert uso.colunas_historico == ["Office 365", "Exchange", "OneDrive", "SharePoint", "Teams"]
+    assert uso.colunas_historico_apps == ["Outlook", "Word", "Excel", "PowerPoint", "OneNote", "Teams"]
+    assert uso.meses_apps[0].medias["Outlook"] == 3.0
+
+
+def test_historico_que_nao_baixa_nao_derruba_o_uso() -> None:
+    async def baixar(_client: httpx.AsyncClient, _token: str, url: str) -> list[dict[str, str]]:
+        if url == mu._URL_HISTORICO:
+            raise httpx.ReadError("conexão derrubada")
+        return {mu._URL_SERVICOS: ler_csv(_SERVICOS), mu._URL_APPS: ler_csv(_APPS), mu._URL_HISTORICO_APPS: _APPS_DIA}[
+            url
+        ]
+
+    with (
+        patch.object(mu, "_fetch_token", AsyncMock(return_value="tok")),
+        patch.object(mu, "_baixar", side_effect=baixar),
+    ):
+        uso = mu._carregar()
+    assert uso is not None and uso.contas == 366
+    assert uso.meses == [] and uso.colunas_historico == []
+    assert uso.meses_apps and uso.colunas_historico_apps
+
+
+def test_baixar_espera_o_limite_do_graph_e_tenta_de_novo() -> None:
+    import asyncio
+
+    respostas = [
+        httpx.Response(429, headers={"Retry-After": "0"}, request=httpx.Request("GET", "https://g")),
+        httpx.Response(200, text="A,B\n1,2", request=httpx.Request("GET", "https://g")),
+    ]
+
+    class _Cliente:
+        def __init__(self) -> None:
+            self.chamadas = 0
+
+        async def get(self, _url: str, headers: dict) -> httpx.Response:
+            self.chamadas += 1
+            return respostas.pop(0)
+
+    cliente = _Cliente()
+    linhas = asyncio.run(mu._baixar(cliente, "tok", "https://graph/reports/x"))  # type: ignore[arg-type]
+    assert linhas == [{"A": "1", "B": "2"}] and cliente.chamadas == 2
+
+    sempre_429 = _Cliente()
+    respostas.extend(
+        httpx.Response(429, headers={"Retry-After": "x"}, request=httpx.Request("GET", "https://g")) for _ in range(3)
+    )
+    with patch.object(mu.asyncio, "sleep", AsyncMock()), pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(mu._baixar(sempre_429, "tok", "https://graph/reports/x"))  # type: ignore[arg-type]
+    assert sempre_429.chamadas == 3
 
 
 def test_falha_do_graph_vira_none() -> None:
@@ -143,6 +198,7 @@ def test_pagina_m365_mostra_o_uso_dos_apps(authed_client) -> None:
                 mu._URL_SERVICOS: ler_csv(_SERVICOS),
                 mu._URL_APPS: ler_csv(_APPS),
                 mu._URL_HISTORICO: _SETEMBRO,
+                mu._URL_HISTORICO_APPS: _APPS_DIA,
             }[url],
         ),
         patch("app.views.dashboards.graph_configured", return_value=True),
@@ -161,6 +217,7 @@ def test_pagina_m365_mostra_o_uso_dos_apps(authed_client) -> None:
     assert "Uso dos apps — últimos 30 dias" in html
     assert "285 de 366 contas" in html
     assert "set/2026" in html
+    assert "Histórico dos apps" in html
 
 
 def test_pagina_m365_sem_graph_nao_mostra_o_bloco(authed_client) -> None:
@@ -194,6 +251,7 @@ def test_pagina_aplicativos_mostra_o_uso_dos_apps(authed_client) -> None:
                 mu._URL_SERVICOS: ler_csv(_SERVICOS),
                 mu._URL_APPS: ler_csv(_APPS),
                 mu._URL_HISTORICO: _SETEMBRO,
+                mu._URL_HISTORICO_APPS: _APPS_DIA,
             }[url],
         ),
         patch("app.views.dashboards.graph_configured", return_value=True),
