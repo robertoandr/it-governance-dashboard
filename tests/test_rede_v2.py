@@ -523,13 +523,11 @@ def test_tipo_extra_vale_para_ativo_e_nome() -> None:
 
 
 def test_chave_e_validacao_da_classificacao() -> None:
-    from types import SimpleNamespace as NS
-
     from app.services.classificacoes import chave_de, validar
 
     assert chave_de("Relógio de ponto") == "relogio_de_ponto"
     assert chave_de("  Smart TV!! ") == "smart_tv"
-    existentes = [NS(chave="smart_tv", sigla="TV")]
+    existentes = [SimpleNamespace(chave="smart_tv", sigla="TV")]
     assert validar("Nobreak", "NBK", existentes) is None
     assert "3 a 60" in validar("TV", "TVX", existentes)
     assert "sigla" in validar("Nobreak", "N", existentes)
