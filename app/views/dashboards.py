@@ -904,10 +904,22 @@ def rede_monitoring() -> str:
         filtro_status=status,
         filtro_tipo=tipo,
     )
+    from app.services import rede_zabbix
+    from itgov.services.zabbix_templates import templates_disponiveis
+
+    feitas = rede_zabbix.decisoes()
+    zbx = {h["ip"]: rede_zabbix.situacao(h, feitas.get(h["ip"])) for h in revisao["hosts"]}
+    estados = [z["estado"] for z in zbx.values()]
     return render_template(
         "dashboards/rede_monitoring.html",
         data=data,
         revisao=revisao,
+        zbx=zbx,
+        zbx_auto=rede_zabbix.auto_ligado(),
+        zbx_contagem={"auto": estados.count("auto"), "sugestao": estados.count("sugestao")},
+        zbx_templates=templates_disponiveis()
+        if any(e != "monitorado" and e != "nao_se_aplica" for e in estados)
+        else [],
         cards=resumo_por_unidade(hosts, faixas, nomes, set(ativos_por_ip)),
         latencia=get_latencia(faixas, nomes),
         faixas_fora=faixas_fora_da_varredura(
@@ -1095,6 +1107,77 @@ def rede_classificacao_remover(chave: str) -> object:
     log.info("rede.classificacao_removida", chave=chave, user=current_user.email)
     flash(f"Classificação {item.rotulo} removida.", "success")
     return redirect(url_for("dashboards.rede_monitoring"))
+
+
+@bp.route("/rede/zabbix/auto", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
+@requer_aprovacao(
+    lambda: f"Rede: {'ligar' if request.form.get('ligar') == '1' else 'desligar'} monitoramento automático no Zabbix"
+)
+def rede_zabbix_auto() -> object:
+    """Liga ou desliga a criação automática de hosts no Zabbix."""
+    from app.services import rede_zabbix
+
+    ligar = request.form.get("ligar") == "1"
+    rede_zabbix.definir_auto(ligar)
+    log.info("rede.zabbix_auto", ligado=ligar, user=current_user.email)
+    flash(
+        "Monitoramento automático ligado: os dispositivos com template certo entram no Zabbix na próxima atualização."
+        if ligar
+        else "Monitoramento automático desligado.",
+        "success",
+    )
+    return redirect(url_for("dashboards.rede_monitoring"))
+
+
+@bp.route("/rede/zabbix/<ip>/monitorar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
+@requer_aprovacao(lambda ip: f"Rede: monitorar {ip} no Zabbix com {request.form.get('template', '')}")
+def rede_zabbix_monitorar(ip: str) -> object:
+    """Cria o host no Zabbix com o template escolhido (ou troca o template de um host do dashboard)."""
+    import requests as _requests
+
+    from app.services import classificacoes, rede_zabbix
+    from itgov.api.v1.rede_descoberta import aplicar_classificacoes
+    from itgov.api.v1.rede_monitoring import host_descoberto
+    from itgov.services.zabbix_templates import sugerir, templates_disponiveis
+
+    host = host_descoberto(ip)
+    if host is None:
+        abort(404)
+    host = aplicar_classificacoes([host], classificacoes.regras(classificacoes.carregar()))[0]
+    template = (request.form.get("template") or "").strip()
+    sugestao = sugerir(host)
+    if template not in templates_disponiveis():
+        flash(f"Template {template or '(vazio)'} não existe no Zabbix.", "error")
+        return redirect(url_for("dashboards.rede_monitoring", tipo=request.form.get("tipo") or None))
+    usa_sugestao = sugestao is not None and sugestao.template == template
+    grupo = sugestao.grupo if sugestao else "Dispositivos de rede"
+    interface = (sugestao.interface if usa_sugestao else None) or ("snmp" if "snmp" in template.lower() else "agente")
+    try:
+        rede_zabbix.monitorar(host, template, grupo, interface, "confirmado", current_user.email)
+    except (_requests.RequestException, RuntimeError, ValueError, KeyError) as exc:
+        flash(f"Zabbix recusou: {exc}", "error")
+        return redirect(url_for("dashboards.rede_monitoring", tipo=request.form.get("tipo") or None))
+    log.info("rede.zabbix_monitorar", ip=ip, template=template, user=current_user.email)
+    flash(f"{ip} monitorado no Zabbix com {template}.", "success")
+    return redirect(url_for("dashboards.rede_monitoring", tipo=request.form.get("tipo") or None))
+
+
+@bp.route("/rede/zabbix/<ip>/recusar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
+@requer_aprovacao(lambda ip: f"Rede: não monitorar {ip} no Zabbix")
+def rede_zabbix_recusar(ip: str) -> object:
+    """Marca o IP como "não monitorar": não volta a ser sugerido nem criado sozinho."""
+    from app.services import rede_zabbix
+
+    rede_zabbix.registrar(ip, "recusado", por=current_user.email)
+    log.info("rede.zabbix_recusar", ip=ip, user=current_user.email)
+    flash(f"{ip} não será monitorado no Zabbix.", "success")
+    return redirect(url_for("dashboards.rede_monitoring", tipo=request.form.get("tipo") or None))
 
 
 @bp.route("/ativos-rede")

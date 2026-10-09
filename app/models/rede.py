@@ -53,3 +53,31 @@ class ClassificacaoDispositivo(db.Model):
     def lista_palavras(self) -> tuple[str, ...]:
         """Palavras-chave sem espaços extras e sem itens vazios."""
         return tuple(p.strip() for p in self.palavras.split(",") if p.strip())
+
+
+class RedeMonitoramento(db.Model):
+    """Decisão sobre monitorar no Zabbix um IP descoberto (item r2).
+
+    ``decisao``: ``auto`` (criado sozinho), ``confirmado`` (alguém escolheu o
+    template), ``recusado`` (não monitorar) ou ``erro`` (a criação falhou;
+    tenta de novo depois de um tempo).
+    """
+
+    __tablename__ = "rede_monitoramento"
+
+    ip: str = db.Column(db.String(45), primary_key=True)
+    decisao: str = db.Column(db.String(12), nullable=False)
+    template: str = db.Column(db.String(120), nullable=False, default="")
+    hostid: str = db.Column(db.String(20), nullable=False, default="")
+    erro: str = db.Column(db.String(255), nullable=False, default="")
+    por: str = db.Column(db.String(255), nullable=False, default="")
+    em: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
+class RedeConfig(db.Model):
+    """Preferências da página Rede (chave → valor)."""
+
+    __tablename__ = "rede_config"
+
+    chave: str = db.Column(db.String(40), primary_key=True)
+    valor: str = db.Column(db.String(255), nullable=False, default="")
