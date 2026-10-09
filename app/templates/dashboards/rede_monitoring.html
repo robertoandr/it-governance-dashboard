@@ -167,6 +167,18 @@
       {% endif %}
     </nav>
 
+    <div class="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs">
+      <span class="font-medium text-slate-700 dark:text-slate-200">Zabbix:</span>
+      <span class="text-slate-500 dark:text-slate-400">{{ zbx_contagem.auto }} com template certo{{ ' (entram sozinhos, até 20 a cada 5 min)' if zbx_auto }} · {{ zbx_contagem.sugestao }} para confirmar</span>
+      {% if pode_editar %}
+      <form method="POST" action="{{ url_for('dashboards.rede_zabbix_auto') }}" class="ml-auto">
+        <input type="hidden" name="ligar" value="{{ '0' if zbx_auto else '1' }}">
+        <button type="submit" {% if not zbx_auto %}data-confirm="Ligar o monitoramento automático? Os {{ zbx_contagem.auto }} dispositivos com template certo viram host no Zabbix."{% endif %} class="rounded px-2.5 py-1 font-medium {{ 'bg-green-600 text-white hover:bg-green-700' if zbx_auto else 'border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-gadens-500' }}">Monitorar sozinho no Zabbix: {{ 'ligado' if zbx_auto else 'desligado' }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if zbx_templates %}<datalist id="zbx-templates">{% for t in zbx_templates %}<option value="{{ t }}">{% endfor %}</datalist>{% endif %}
+
     {% if revisao.hosts %}
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
@@ -178,6 +190,7 @@
             <th class="pb-2 pr-3 font-medium">Portas</th>
             <th class="pb-2 pr-3 font-medium">Tipo sugerido</th>
             <th class="pb-2 pr-3 font-medium">Unidade</th>
+            <th class="pb-2 pr-3 font-medium">Zabbix</th>
             <th class="pb-2 font-medium text-right">Inventário</th>
           </tr>
         </thead>
@@ -199,6 +212,40 @@
               {% if h.motivo %}<span class="block text-[10px] text-slate-400 mt-0.5">{{ h.motivo }}</span>{% endif %}
             </td>
             <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{% if h.unidade %}{{ h.unidade }}{% else %}<span class="text-amber-600 dark:text-amber-400">Sem unidade</span>{% endif %}</td>
+            {% set z = zbx.get(h.ip, {}) %}
+            <td class="py-2 pr-3 text-[11px] min-w-[180px]">
+              {% if z.estado == 'monitorado' %}
+                <span class="text-green-700 dark:text-green-400">✓ monitorado</span>
+              {% elif z.estado == 'nao_se_aplica' or not z %}
+                <span class="text-slate-400">—</span>
+              {% else %}
+                {% if z.estado == 'pelo_dashboard' %}
+                  <span class="text-green-700 dark:text-green-400 block">✓ {{ z.template }}</span>
+                {% elif z.estado == 'auto' %}
+                  <span class="block text-blue-700 dark:text-blue-300" title="{{ z.sugestao.motivo }}">{{ 'Entra sozinho' if zbx_auto else 'Pronto para entrar' }}: {{ z.sugestao.template }}</span>
+                {% elif z.estado == 'sugestao' %}
+                  <span class="block text-amber-700 dark:text-amber-400" title="{{ z.sugestao.motivo }}">Confirmar: {{ z.sugestao.template }}</span>
+                  <span class="block text-[10px] text-slate-400">{{ z.sugestao.motivo }}</span>
+                {% elif z.estado == 'recusado' %}
+                  <span class="block text-slate-400">não monitorar</span>
+                {% elif z.estado == 'erro' %}
+                  <span class="block text-red-600" title="{{ z.erro }}">falhou: {{ z.erro[:60] }}</span>
+                {% endif %}
+                {% if pode_editar %}
+                <form method="POST" action="{{ url_for('dashboards.rede_zabbix_monitorar', ip=h.ip) }}" class="flex items-center gap-1 mt-1">
+                  <input type="hidden" name="tipo" value="{{ tipo }}">
+                  <input name="template" list="zbx-templates" value="{{ z.template or (z.sugestao.template if z.sugestao else '') }}" aria-label="Template do Zabbix para {{ h.ip }}" class="w-40 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-1 py-0.5">
+                  <button type="submit" class="text-gadens-700 dark:text-gadens-300 font-medium hover:underline">{{ 'Trocar' if z.estado == 'pelo_dashboard' else 'Monitorar' }}</button>
+                </form>
+                {% if z.estado in ('sugestao', 'auto', 'erro') %}
+                <form method="POST" action="{{ url_for('dashboards.rede_zabbix_recusar', ip=h.ip) }}">
+                  <input type="hidden" name="tipo" value="{{ tipo }}">
+                  <button type="submit" class="text-[10px] text-slate-400 hover:text-red-600">Não monitorar</button>
+                </form>
+                {% endif %}
+                {% endif %}
+              {% endif %}
+            </td>
             <td class="py-2 text-right whitespace-nowrap">
               {% if h.ativo %}
                 <span class="text-green-700 dark:text-green-400" title="{{ tipo_labels.get(h.ativo.tipo, h.ativo.tipo) }}">✓ {{ h.ativo.nome }}</span>

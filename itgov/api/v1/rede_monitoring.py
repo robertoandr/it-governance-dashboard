@@ -543,7 +543,11 @@ def _buscar_rede() -> dict:
     aplicar_clientes(hosts, clientes)
     _enriquecer(hosts, _registrar_vistos(hosts), datetime.now(UTC))
     if has_app_context():
-        processar_em_segundo_plano(current_app._get_current_object(), hosts)  # type: ignore[attr-defined]
+        from app.services import rede_zabbix
+
+        app = current_app._get_current_object()  # type: ignore[attr-defined]
+        processar_em_segundo_plano(app, hosts)
+        rede_zabbix.processar_em_segundo_plano(app, hosts)
 
     all_ranges: list[str] = []
     for dr in drules:
