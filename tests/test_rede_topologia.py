@@ -92,7 +92,7 @@ def test_layout_une_ida_e_volta_e_posiciona_externos() -> None:
     mapa = layout_geral(montar_topologia(_FORTIGATES, ["Triunfo"], _HOSTS))
     nos = {n["nome"]: n for n in mapa["nos"]}
     assert nos["Triunfo"]["tipo"] == "pendente" and nos["Opus Cloud"]["tipo"] == "externo"
-    assert nos["Opus Cloud"]["y"] == mapa["altura"] - 22
+    assert nos["Opus Cloud"]["y"] == mapa["altura"] - 26
     assert len(mapa["arestas"]) == 3  # Sede↔Shopping vira uma só
     rotulos = sorted(a["rotulo"] for a in mapa["arestas"])
     assert rotulos == ["2 ms", "2 ms", "sem resposta"]

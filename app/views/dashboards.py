@@ -494,6 +494,8 @@ def cftv_gravador_nome() -> object:
 def _resumo_snmp() -> str:
     f = request.form
     versao = "v2c" if f.get("snmp_versao") == "2" else "v3"
+    if f.get("novo"):
+        return f"CFTV: cadastrar gravador novo {f.get('gravador', '')} — {f.get('snmp_ip', '')}, {versao}"
     return f"CFTV: SNMP do gravador {f.get('gravador', '')} — {f.get('snmp_ip', '')}, {versao}"
 
 
@@ -505,18 +507,31 @@ def cftv_gravador_snmp() -> object:
     """Grava IP e SNMP (v2c/v3) de um gravador no Zabbix; cria o host se não existir (só admin).
 
     As senhas vão direto para macros secretas do host no Zabbix; em branco,
-    mantém as que já estão lá.
+    mantém as que já estão lá. Com ``novo`` (formulário "Cadastrar novo
+    gravador"), recusa nome que já existe e grava a unidade escolhida.
     """
     import requests
     from pydantic import ValidationError
 
+    from app.extensions import db
+    from app.models.unidade import Unidade
     from itgov.api.v1.cftv_monitoring import invalidar_cache_cftv
-    from itgov.services.cftv_snmp import ConfigSnmp, aplicar
+    from itgov.services.cftv_snmp import ConfigSnmp, GravadorJaExisteError, aplicar
 
     f = request.form
     gravador = f.get("gravador", "").strip()
+    novo = bool(f.get("novo"))
+    if novo and not gravador:
+        flash("Informe o nome do gravador novo.", "error")
+        return _voltar_cftv()
     if not gravador or len(gravador) > 120:
         abort(400)
+    unidade_raw = f.get("unidade_id", "").strip()
+    unidade_id = int(unidade_raw) if novo and unidade_raw.isdigit() else None
+    if unidade_id is not None:
+        alvo = db.session.get(Unidade, unidade_id)
+        if alvo is None or not alvo.ativo:
+            abort(400)
     try:
         cfg = ConfigSnmp(
             ip=f.get("snmp_ip", "").strip(),
@@ -535,11 +550,17 @@ def cftv_gravador_snmp() -> object:
         flash(f"SNMP de {gravador} não foi salvo: {motivos}.", "error")
         return _voltar_cftv()
     try:
-        res = aplicar(gravador, cfg)
+        res = aplicar(gravador, cfg, so_criar=novo)
+    except GravadorJaExisteError:
+        flash(f"Já existe um gravador {gravador} no Zabbix: ajuste o SNMP no card dele.", "error")
+        return _voltar_cftv()
     except (RuntimeError, requests.RequestException) as exc:
         log.warning("cftv.gravador_snmp_falhou", gravador=gravador, erro=str(exc)[:200])
         flash(f"O Zabbix recusou o SNMP de {gravador}: {exc}", "error")
         return _voltar_cftv()
+    if unidade_id is not None:
+        _vinculo_dvr(gravador).unidade_id = unidade_id
+        db.session.commit()
     invalidar_cache_cftv()
     log.info("cftv.gravador_snmp", gravador=gravador, criado=res.criado, versao=cfg.versao, user=current_user.email)
     msg = f"{gravador} {'cadastrado no Zabbix' if res.criado else 'atualizado no Zabbix'} ({cfg.ip}, SNMP v{'2c' if cfg.versao == '2' else '3'})."

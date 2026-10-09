@@ -200,8 +200,12 @@ def montar_topologia(
     }
 
 
-def layout_geral(topologia: dict[str, Any], largura: int = 760, altura: int = 360) -> dict[str, Any]:
-    """Posições do mapa geral (SVG): unidades num círculo, destinos externos por fora.
+def layout_geral(topologia: dict[str, Any], largura: int = 1200, altura: int = 520) -> dict[str, Any]:
+    """Posições do mapa geral (SVG): unidades num arco no alto, destinos externos embaixo.
+
+    O arco ocupa a largura toda da área. Como as unidades ficam só na metade
+    de cima, nenhuma linha (túnel entre unidades ou para um destino externo)
+    passa por cima de outro nó.
 
     Returns:
         ``nos`` (nome, x, y, tipo: unidade|pendente|externo, ok) e ``arestas``
@@ -209,17 +213,18 @@ def layout_geral(topologia: dict[str, Any], largura: int = 760, altura: int = 36
     """
     unidades = [u["nome"] for u in topologia["unidades"]] + topologia["pendentes"]
     externos = sorted({t["para"] for t in topologia["tuneis"]} - set(unidades))
-    cx, cy = largura / 2, altura / 2
-    raio = min(largura, altura) / 2 - 60
+    # Centro do arco perto da base; folga para o nó (raio 46) e os rótulos
+    cx, cy = largura / 2, altura - 110
+    rx, ry = largura / 2 - 120, altura - 170
     nos: dict[str, dict[str, Any]] = {}
     ok = {u["nome"]: u["ok"] for u in topologia["unidades"]}
     for i, nome in enumerate(unidades):
-        ang = -math.pi / 2 + 2 * math.pi * i / max(len(unidades), 1)
-        nos[nome] = {"nome": nome, "x": round(cx + raio * math.cos(ang)), "y": round(cy + raio * math.sin(ang)),
+        ang = math.pi + math.pi * (i + 0.5) / max(len(unidades), 1)
+        nos[nome] = {"nome": nome, "x": round(cx + rx * math.cos(ang)), "y": round(cy + ry * math.sin(ang)),
                      "tipo": "unidade" if nome in ok else "pendente", "ok": ok.get(nome, False)}  # fmt: skip
     for i, nome in enumerate(externos):
         x = round(largura * (i + 1) / (len(externos) + 1))
-        nos[nome] = {"nome": nome, "x": x, "y": altura - 22, "tipo": "externo", "ok": True}
+        nos[nome] = {"nome": nome, "x": x, "y": altura - 26, "tipo": "externo", "ok": True}
 
     # Ida e volta (Sede→Shopping e Shopping→Sede) viram uma aresta só, com o pior status
     pares: dict[frozenset[str], list[dict[str, Any]]] = {}

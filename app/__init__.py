@@ -241,9 +241,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.integrations import graph_configured
 
     if not settings.app.testing and graph_configured():
+        from itgov.api.v1.governance_compliance import aquecer as aquecer_compliance
         from itgov.services.m365_uso import aquecer as aquecer_m365_uso
 
         aquecer_m365_uso()
+        aquecer_compliance()
 
     # CLI commands
     from app.commands import register_commands

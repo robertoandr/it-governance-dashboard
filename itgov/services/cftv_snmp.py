@@ -108,6 +108,10 @@ class Resultado(BaseModel):
     senhas_faltando: list[str] = []
 
 
+class GravadorJaExisteError(Exception):
+    """Cadastro de gravador novo com um nome que já está no Zabbix."""
+
+
 def nome_tecnico(gravador: str) -> str:
     """Nome técnico de host aceito pelo Zabbix (sem acento; só letras, números, espaço, ``.``, ``-`` e ``_``)."""
     sem_acento = unicodedata.normalize("NFKD", gravador).encode("ascii", "ignore").decode()
@@ -226,20 +230,25 @@ def verificar_agora(hostid: str) -> int:
     return len(itens)
 
 
-def aplicar(gravador: str, cfg: ConfigSnmp) -> Resultado:
+def aplicar(gravador: str, cfg: ConfigSnmp, so_criar: bool = False) -> Resultado:
     """Grava IP e SNMP do gravador no Zabbix, criando o host se ele ainda não existir.
 
     Args:
         gravador: Nome do gravador (nome técnico do host ou valor da tag ``dvr`` das câmeras).
         cfg: IP e credenciais validados.
+        so_criar: Cadastro de gravador novo: recusa se já houver um com o nome,
+            em vez de sobrescrever o SNMP dele.
 
     Returns:
         Host afetado, se foi criado, itens agendados e credenciais que ficaram faltando.
 
     Raises:
+        GravadorJaExisteError: ``so_criar`` e o gravador já está no Zabbix.
         RuntimeError: O Zabbix recusou a operação ou falta grupo/template.
     """
     host = _host_do_gravador(gravador)
+    if host is not None and so_criar:
+        raise GravadorJaExisteError(gravador)
     if host is None:
         hostid, criado, macros_do_host = _criar_host(gravador, cfg), True, set()
     else:

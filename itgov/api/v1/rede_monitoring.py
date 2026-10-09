@@ -15,6 +15,7 @@ específica) e com o ativo já cadastrado no inventário (pelo IP em metadata).
 
 from __future__ import annotations
 
+import functools
 import ipaddress
 import os
 import threading
@@ -315,6 +316,15 @@ STATUS_CADASTRADO = "cadastrados"
 STATUS_RECENTE = "recentes"
 
 
+@functools.lru_cache(maxsize=2048)
+def _rede(cidr: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+    """Faixa já convertida: a página Rede testa ~1700 IPs contra as mesmas faixas."""
+    try:
+        return ipaddress.ip_network(cidr, strict=False)
+    except ValueError:
+        return None
+
+
 def unidade_do_ip(ip: str, faixas: list[tuple[int, str]]) -> int | None:
     """Unidade cuja faixa contém ``ip``; com sobreposição, vence a mais específica.
 
@@ -331,9 +341,8 @@ def unidade_do_ip(ip: str, faixas: list[tuple[int, str]]) -> int | None:
         return None
     melhor: tuple[int, int] | None = None  # (prefixlen, unidade_id)
     for unidade_id, cidr in faixas:
-        try:
-            rede = ipaddress.ip_network(cidr, strict=False)
-        except ValueError:
+        rede = _rede(cidr)
+        if rede is None:
             continue
         if endereco.version == rede.version and endereco in rede and (melhor is None or rede.prefixlen > melhor[0]):
             melhor = (rede.prefixlen, unidade_id)

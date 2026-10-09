@@ -67,6 +67,17 @@
     </div>
   </div>
 
+  {# ── Cadastrar gravador novo (cf7): DVR/NVR que ainda não está no Zabbix ──── #}
+  {% if eh_admin %}
+  <details class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+    <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">+ Cadastrar novo gravador (DVR/NVR)</summary>
+    <div class="px-4 pb-4 max-w-xl">
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Cria o host no Zabbix (grupo CFTV/DVRs) com o SNMP informado; o card aparece aqui em até 2 minutos.</p>
+      {% with novo = true %}{% include "dashboards/_cftv_snmp_form.html" %}{% endwith %}
+    </div>
+  </details>
+  {% endif %}
+
 
   {% if not data.enabled %}
   <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6 text-center">
