@@ -103,7 +103,8 @@ def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> Lei
     titulos = {
         int(m.group(1)) + 1: m.group(2).strip() for m in re.finditer(r"ChannelTitle\[(\d+)\]\.Name=(.*)", titulos_txt)
     }
-    canais = int(coleta) if coleta.isdigit() else (len(titulos) or capacidade_do_modelo(modelo))
+    # NVR responde 0 em getCollect (canais IP): usa os nomes de canal ou o modelo
+    canais = int(coleta) if coleta.isdigit() and int(coleta) > 0 else (len(titulos) or capacidade_do_modelo(modelo))
     return LeituraGravador(
         modelo=modelo, serie=serie.text.partition("=")[2].strip(), canais=canais, sem_video=sem_video, titulos=titulos
     )
