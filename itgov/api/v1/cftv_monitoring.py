@@ -275,7 +275,12 @@ def montar_visao(
     principal = {g: resolver_principal(g, duplicado_de or {}) for g in (duplicado_de or {})}
     quedas = quedas or {}
     devices = [
-        {**d, "gravador": principal.get(d["gravador"], d["gravador"]), "historico": quedas.get(d["host"])}
+        {
+            **d,
+            "gravador": principal.get(d["gravador"], d["gravador"]),
+            "gravador_proprio": d["gravador"],
+            "historico": quedas.get(d["host"]),
+        }
         for d in dados.get("devices", [])
     ]
     unidos: dict[str, list[str]] = {}
@@ -311,7 +316,10 @@ def montar_visao(
     for (gravador, uid), devs in grupos.items():
         # O host do próprio gravador vai no cabeçalho; o de um duplicado unido
         # aparece como mais um dispositivo do card.
-        host_gravador = next((d for d in devs if d["is_gravador"] and d["host"] == gravador), None)
+        # (pelo nome do host, ou pela tag ``dvr`` quando o nome técnico é outro — ex.: ``dvr-adm_hauer``)
+        host_gravador = next((d for d in devs if d["is_gravador"] and d["host"] == gravador), None) or next(
+            (d for d in devs if d["is_gravador"] and d["gravador_proprio"] == gravador), None
+        )
         itens = sorted((d for d in devs if d is not host_gravador), key=_canal_key)
         vendors = sorted({d["vendor"] for d in devs if d["vendor"]})
         nome_zabbix = host_gravador["name"] if host_gravador else (gravador or STAND_ALONE)

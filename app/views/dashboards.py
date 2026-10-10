@@ -448,6 +448,17 @@ def cftv_monitoring() -> str:
         sede_por_unidade=sede_por_unidade,
         quedas=get_cached_historico_quedas(),
     )
+    _canais_dos_gravadores(visao, vinculos, nomes, sede_por_unidade)
+    nuvem = [
+        {"dvr": v.dvr, "unidade": nomes.get(v.unidade_id, ""), "modelo": v.modelo, "serie": v.serie}
+        for v in sorted(vinculos, key=lambda v: v.dvr.lower())
+        if v.acesso == ACESSO_NUVEM
+        and (
+            filtro is None
+            or (filtro == SEM_UNIDADE and v.unidade_id is None)
+            or (isinstance(filtro, set) and v.unidade_id in filtro)
+        )
+    ]
     selecionada = next((u for u in todas if filtro_raw == str(u.id)), None)
     sede = (selecionada.parent or selecionada) if selecionada else None
     # Sem filtro: só os cards de sede, a não ser que peça todos os gravadores
@@ -465,12 +476,107 @@ def cftv_monitoring() -> str:
         niveis_snmp=NIVEIS,
         auth_snmp=AUTH_PROTOCOLOS,
         priv_snmp=PRIV_PROTOCOLOS,
-        gravadores=sorted({c["gravador"] for c in visao["cards"] if c["gravador"]} | {v.dvr for v in vinculos}),
+        gravadores=sorted(
+            {c["gravador"] for c in visao["cards"] if c["gravador"]}
+            | {v.dvr for v in vinculos if v.acesso != ACESSO_NUVEM}
+        ),
+        nuvem=nuvem,
         filtro=filtro_raw if filtro is not None else "",
         dias_historico=DIAS_HISTORICO,
         agora=time.time(),
         duracao=formatar_duracao,
     )
+
+
+def _canais_dos_gravadores(
+    visao: dict, vinculos: list[DvrUnidade], nomes: dict[int, str], sede_por_unidade: dict[int, int]
+) -> None:
+    """Põe em cada card ``canais`` (capacidade, livres, sem vídeo) e nas sedes os canais livres.
+
+    Dispara a leitura dos gravadores pela API Intelbras em segundo plano; a tela
+    usa a última leitura guardada.
+    """
+    from flask import current_app
+
+    from app.services import cftv_gravadores
+
+    manual = {v.dvr: v.canais for v in vinculos if v.canais}
+    alvos = []
+    for c in visao["cards"]:
+        host = c.get("gravador_host") or {}
+        if host.get("ip"):
+            alvos.append(
+                cftv_gravadores.Alvo(
+                    host["ip"], (c.get("unidade") or "").lower().startswith("sede centro"), c.get("titulo", "")
+                )
+            )
+    cftv_gravadores.disparar(current_app._get_current_object(), alvos)  # type: ignore[attr-defined]
+    acessos = cftv_gravadores.leituras()
+    livres_por_sede: dict[int | None, int] = {}
+    for c in visao["cards"]:
+        ip = (c.get("gravador_host") or {}).get("ip", "")
+        c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(c["gravador"]))
+        if c["canais"]:
+            sede = sede_por_unidade.get(c["unidade_id"], c["unidade_id"]) if c["unidade_id"] is not None else None
+            livres_por_sede[sede] = livres_por_sede.get(sede, 0) + c["canais"]["livres"]
+    for s in visao["sedes"]:
+        s["canais_livres"] = livres_por_sede.get(s["id"])
+    visao["canais_livres"] = sum(livres_por_sede.values()) if livres_por_sede else None
+    visao["canais_sem_video"] = sum(len(c["canais"]["sem_video"]) for c in visao["cards"] if c.get("canais"))
+
+
+ACESSO_NUVEM = "nuvem"
+
+
+def _resumo_gravador_nuvem() -> str:
+    f = request.form
+    nome = f.get("nome", "").strip()
+    if f.get("remover"):
+        return f"CFTV: remover gravador pela nuvem {nome}"
+    return f"CFTV: gravador pela nuvem {nome} ({f.get('modelo', '').strip() or 'sem modelo'}, série {f.get('serie', '').strip() or '—'})"
+
+
+@bp.route("/cftv/gravador/nuvem", methods=["POST"])
+@login_required
+@require_role("admin", pagina="cftv")
+@requer_aprovacao(_resumo_gravador_nuvem)
+def cftv_gravador_nuvem() -> object:
+    """Cadastra, altera ou remove um gravador acessado pelo Intelbras Cloud (fora das faixas de rede)."""
+    from app.extensions import db
+    from app.models.unidade import DvrUnidade, Unidade
+
+    f = request.form
+    nome = " ".join(f.get("nome", "").split())
+    if not nome or len(nome) > 120:
+        abort(400)
+    vinculo = DvrUnidade.query.filter_by(dvr=nome).first()
+    if f.get("remover"):
+        if vinculo is None or vinculo.acesso != ACESSO_NUVEM:
+            abort(404)
+        db.session.delete(vinculo)
+        db.session.commit()
+        log.info("cftv.gravador_nuvem_removido", gravador=nome, user=current_user.email)
+        flash(f"{nome} removido.", "success")
+        return _voltar_cftv()
+    unidade_raw = f.get("unidade_id", "").strip()
+    unidade_id = int(unidade_raw) if unidade_raw.isdigit() else None
+    if unidade_id is not None:
+        alvo = db.session.get(Unidade, unidade_id)
+        if alvo is None or not alvo.ativo:
+            abort(400)
+    if vinculo is not None and vinculo.acesso != ACESSO_NUVEM:
+        flash(f"{nome} já é um gravador da rede (com host no Zabbix).", "error")
+        return _voltar_cftv()
+    if vinculo is None:
+        vinculo = DvrUnidade(dvr=nome, acesso=ACESSO_NUVEM)
+        db.session.add(vinculo)
+    vinculo.unidade_id = unidade_id
+    vinculo.modelo = f.get("modelo", "").strip()[:80]
+    vinculo.serie = f.get("serie", "").strip()[:40]
+    db.session.commit()
+    log.info("cftv.gravador_nuvem", gravador=nome, unidade_id=unidade_id, user=current_user.email)
+    flash(f"{nome} salvo como gravador pela nuvem.", "success")
+    return _voltar_cftv()
 
 
 def _voltar_cftv() -> object:
@@ -513,6 +619,30 @@ def cftv_gravador_nome() -> object:
     flash(
         f"{gravador} agora aparece como “{apelido}”." if apelido else f"{gravador} voltou ao nome do Zabbix.", "success"
     )
+    return _voltar_cftv()
+
+
+@bp.route("/cftv/gravador/canais", methods=["POST"])
+@login_required
+@require_role("admin", pagina="cftv")
+@requer_aprovacao(
+    lambda: (
+        f"CFTV: gravador {request.form.get('gravador', '')} com {request.form.get('canais', '').strip() or 'canais lidos do gravador'}"
+    )
+)
+def cftv_gravador_canais() -> object:
+    """Informa à mão quantos canais o gravador tem (vazio volta a ler do gravador)."""
+    from app.extensions import db
+
+    gravador = request.form.get("gravador", "").strip()
+    bruto = request.form.get("canais", "").strip()
+    if not gravador or (bruto and (not bruto.isdigit() or not 0 < int(bruto) <= 256)):
+        abort(400)
+    vinculo = _vinculo_dvr(gravador)
+    vinculo.canais = int(bruto) if bruto else None
+    db.session.commit()
+    log.info("cftv.gravador_canais", gravador=gravador, canais=vinculo.canais, user=current_user.email)
+    flash(f"{gravador}: {bruto} canais." if bruto else f"{gravador}: canais voltam a ser lidos do gravador.", "success")
     return _voltar_cftv()
 
 

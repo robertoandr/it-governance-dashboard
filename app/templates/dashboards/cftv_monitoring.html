@@ -78,6 +78,64 @@
   </details>
   {% endif %}
 
+  {# ── Gravadores fora das faixas de rede: acesso pelo Intelbras Cloud ───────── #}
+  {% if nuvem or eh_admin %}
+  <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-3">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Gravadores pela nuvem (Intelbras Cloud)</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Fora das faixas de rede das unidades: o acesso é pelo app/SIM Next com o número de série. Sem status ao vivo aqui.</p>
+    </div>
+    {% if nuvem %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="text-left text-slate-500 dark:text-slate-400">
+          <tr><th class="py-1 pr-3 font-medium">Gravador</th><th class="py-1 pr-3 font-medium">Unidade</th><th class="py-1 pr-3 font-medium">Modelo</th><th class="py-1 pr-3 font-medium">Série / Cloud</th>{% if eh_admin %}<th></th>{% endif %}</tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
+          {% for g in nuvem %}
+          <tr>
+            <td class="py-1.5 pr-3 font-medium">{{ g.dvr }}</td>
+            <td class="py-1.5 pr-3">{{ g.unidade or '—' }}</td>
+            <td class="py-1.5 pr-3">{{ g.modelo or '—' }}</td>
+            <td class="py-1.5 pr-3 font-mono">{{ g.serie or '—' }}</td>
+            {% if eh_admin %}
+            <td class="py-1.5 text-right">
+              <form method="POST" action="{{ url_for('dashboards.cftv_gravador_nuvem') }}">
+                <input type="hidden" name="nome" value="{{ g.dvr }}">
+                <input type="hidden" name="remover" value="1">
+                <input type="hidden" name="filtro" value="{{ filtro }}">
+                <button type="submit" data-confirm="Remover {{ g.dvr }}?" class="text-xs text-red-600 dark:text-red-400 hover:underline">Remover</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-xs text-slate-400">Nenhum gravador pela nuvem{{ ' neste filtro' if filtro }}.</p>
+    {% endif %}
+    {% if eh_admin %}
+    <details>
+      <summary class="cursor-pointer text-xs font-medium text-blue-600 dark:text-blue-400">+ Cadastrar ou alterar gravador pela nuvem</summary>
+      <form method="POST" action="{{ url_for('dashboards.cftv_gravador_nuvem') }}" class="mt-2 grid gap-2 sm:grid-cols-2 max-w-2xl">
+        <input type="hidden" name="filtro" value="{{ filtro }}">
+        <input name="nome" required maxlength="120" placeholder="Nome (ex.: Casa_Praia)" aria-label="Nome do gravador" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+        <select name="unidade_id" aria-label="Unidade" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+          <option value="">— sem unidade —</option>
+          {% for u in unidades %}<option value="{{ u.id }}">{{ u.caminho }}</option>{% endfor %}
+        </select>
+        <input name="modelo" maxlength="80" placeholder="Modelo (ex.: MHDX 1108)" aria-label="Modelo" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+        <input name="serie" maxlength="40" placeholder="Nº de série / Cloud" aria-label="Número de série" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+        <div class="sm:col-span-2"><button type="submit" class="text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md px-3 py-1.5">Salvar</button>
+          <span class="text-[10px] text-slate-400 ml-2">Mesmo nome = altera o cadastro.</span></div>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}
+
 
   {% if not data.enabled %}
   <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6 text-center">
@@ -161,6 +219,9 @@
         {% if s.nodata %}· {{ s.nodata }} sem dados{% endif %}
         {% if s.maint %}· {{ s.maint }} em manutenção{% endif %}
       </p>
+      {% if s.canais_livres is not none %}
+      <p class="text-xs text-slate-500 dark:text-slate-400"><span class="font-semibold text-slate-700 dark:text-slate-200">{{ s.canais_livres }}</span> cana{{ 'is' if s.canais_livres != 1 else 'l' }} livre{{ 's' if s.canais_livres != 1 }} nos gravadores</p>
+      {% endif %}
       <p class="text-xs font-medium text-blue-600 dark:text-blue-400">Ver gravadores →</p>
     </a>
     {% endfor %}
@@ -215,6 +276,27 @@
         </div>
         {{ barra(c) }}
       </div>
+
+      {% set k = c.canais %}
+      {% if k %}
+      <div class="rounded-lg bg-slate-50 dark:bg-slate-700/40 px-3 py-2 text-xs space-y-1">
+        <p class="text-slate-600 dark:text-slate-300">
+          <span class="font-semibold text-slate-800 dark:text-slate-100">{{ k.total }}</span> canais
+          · {{ k.usados }} em uso
+          · <span class="font-semibold {{ 'text-green-700 dark:text-green-400' if k.livres else 'text-amber-700 dark:text-amber-400' }}">{{ k.livres }} livre{{ 's' if k.livres != 1 }}</span>
+          <span class="text-[10px] text-slate-400" title="De onde veio a quantidade de canais">({{ {'gravador': 'lido do gravador', 'modelo': 'pelo modelo ' ~ k.modelo, 'informado': 'informado pelo admin'}[k.fonte] }})</span>
+        </p>
+        {% if k.sem_video %}
+        <p class="text-red-700 dark:text-red-400 font-medium">{{ k.sem_video | length }} cana{{ 'is' if k.sem_video | length != 1 else 'l' }} sem vídeo:</p>
+        <ul class="text-red-700 dark:text-red-400 flex flex-wrap gap-x-3 gap-y-0.5">
+          {% for x in k.sem_video %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if k.erro %}<p class="text-[10px] text-amber-600 dark:text-amber-400">Gravador não respondeu à API: {{ k.erro }}</p>{% endif %}
+      </div>
+      {% elif c.gravador_host %}
+      <p class="text-[11px] text-slate-400">Canais livres: ainda sem leitura do gravador{% if eh_admin %} — informe a quantidade em "Editar gravador"{% endif %}.</p>
+      {% endif %}
 
       {% if c.dispositivos %}
       <details class="group" {% if c.down > 0 and visao.cards | length == 1 %}open{% endif %}>
@@ -285,6 +367,15 @@
             <input id="nome-{{ loop.index }}" name="apelido" maxlength="120" value="{{ c.apelido }}" placeholder="{{ c.nome_zabbix }}"
                    class="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
             <button type="submit" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 px-2 py-1">Renomear</button>
+          </form>
+          <form method="POST" action="{{ url_for('dashboards.cftv_gravador_canais') }}" class="flex items-center gap-2">
+            <input type="hidden" name="gravador" value="{{ c.gravador }}">
+            <input type="hidden" name="filtro" value="{{ filtro }}">
+            <label class="text-[11px] text-slate-500 dark:text-slate-400 w-16" for="canais-{{ loop.index }}">Canais</label>
+            <input id="canais-{{ loop.index }}" name="canais" type="number" min="0" max="256" value="{{ c.canais.total if c.canais and c.canais.fonte == 'informado' else '' }}" placeholder="{{ c.canais.total if c.canais else 'ex.: 32' }}"
+                   class="w-20 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+            <span class="flex-1 text-[10px] text-slate-400">vazio = ler do gravador</span>
+            <button type="submit" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 px-2 py-1">Salvar</button>
           </form>
           <form method="POST" action="{{ url_for('dashboards.cftv_gravador_duplicado') }}" class="flex items-center gap-2">
             <input type="hidden" name="gravador" value="{{ c.gravador }}">
@@ -423,4 +514,14 @@
 
   {% endif %}{# /enabled #}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+  document.querySelectorAll('[data-confirm]').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      if (!window.confirm(btn.dataset.confirm)) ev.preventDefault();
+    });
+  });
+</script>
 {% endblock %}
