@@ -30,7 +30,7 @@ import structlog
 from flask import Flask
 
 from itgov.api.v1.rede_descoberta import precisa_ia
-from itgov.models.ativo import TIPO_LABELS
+from itgov.models.ativo import rotulos_tipo
 
 log = structlog.get_logger(__name__)
 
@@ -92,7 +92,7 @@ def classificar_lote(hosts: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
             "model": os.getenv("REDE_IA_MODEL", "principal"),
             "temperature": 0,
             "messages": [
-                {"role": "system", "content": _PROMPT % {"tipos": ", ".join(sorted(TIPO_LABELS))}},
+                {"role": "system", "content": _PROMPT % {"tipos": ", ".join(sorted(rotulos_tipo()))}},
                 {"role": "user", "content": json.dumps([_sinais(h) for h in hosts], ensure_ascii=False)},
             ],
         },
@@ -107,7 +107,7 @@ def classificar_lote(hosts: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     resultado: dict[str, dict[str, str]] = {}
     for item in json.loads(achado.group(0)).get("hosts", []):
         ip, tipo = str(item.get("ip", "")), str(item.get("tipo", ""))
-        if ip in pedidos and tipo in TIPO_LABELS:
+        if ip in pedidos and tipo in rotulos_tipo():
             resultado[ip] = {
                 "tipo": tipo,
                 "nome": str(item.get("nome", ""))[:60].strip(),

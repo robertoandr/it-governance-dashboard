@@ -17,6 +17,7 @@ import re
 import statistics
 import unicodedata
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 # Tipos de check do Zabbix (dcheck.type) que viram porta TCP conhecida
@@ -250,6 +251,58 @@ def aplicar_clientes(hosts: list[dict[str, Any]], clientes: list[dict[str, Any]]
     return hosts
 
 
+@dataclass(frozen=True)
+class RegraClassificacao:
+    """Classificação cadastrada no dashboard, com as palavras que a reconhecem.
+
+    Attributes:
+        tipo: Chave do tipo (vai para ``tipo_sugerido``).
+        rotulo: Nome exibido.
+        palavras: Trechos procurados, sem diferenciar maiúsculas, no nome de
+            host, fabricante, descrição SNMP, MAC e nome sugerido pela IA.
+    """
+
+    tipo: str
+    rotulo: str
+    palavras: tuple[str, ...]
+
+
+def aplicar_classificacoes(hosts: list[dict[str, Any]], regras: Iterable[RegraClassificacao]) -> list[dict[str, Any]]:
+    """Reclassifica os hosts que batem com alguma classificação cadastrada.
+
+    Vem antes das regras nativas, mas não passa por cima de quem já é
+    monitorado no Zabbix (grupo do host é o sinal mais forte). A primeira
+    regra que bate vale.
+
+    Args:
+        hosts: Hosts da descoberta (não são alterados).
+        regras: Classificações com palavras-chave.
+
+    Returns:
+        Lista nova; só os hosts reclassificados são copiados.
+    """
+    regras = [r for r in regras if r.palavras]
+    if not regras:
+        return hosts
+    saida = []
+    for h in hosts:
+        if not h.get("zabbix_grupos"):
+            campos = " ".join(
+                str(h.get(c) or "") for c in ("hostname", "vendor", "snmp_descr", "mac", "ia_nome")
+            ).lower()
+            regra = next((r for r in regras if any(p.lower() in campos for p in r.palavras)), None)
+            if regra:
+                achou = next(p for p in regra.palavras if p.lower() in campos)
+                h = {
+                    **h,
+                    "tipo_sugerido": regra.tipo,
+                    "motivo": f'classificação {regra.rotulo} ("{achou}")',
+                    "por_ia": False,
+                }
+        saida.append(h)
+    return saida
+
+
 def precisa_ia(host: dict[str, Any]) -> bool:
     """Host que as regras não classificaram mas tem algum sinal para a IA analisar."""
     if host.get("tipo_sugerido") != "outro" or host.get("zabbix_grupos"):
@@ -277,15 +330,17 @@ def sigla_unidade(nome: str) -> str:
     return sigla.upper()
 
 
-def sugerir_nome(tipo: str, sigla: str, existentes: Iterable[str]) -> str:
+def sugerir_nome(tipo: str, sigla: str, existentes: Iterable[str], siglas_extras: dict[str, str] | None = None) -> str:
     """Próximo nome livre no padrão ``SIGLA-TIPO-NNN`` (ex.: ``SHO-CAM-012``).
 
     Args:
         tipo: Tipo do ativo.
         sigla: Sigla da unidade (``sigla_unidade``).
         existentes: Nomes de ativos já cadastrados.
+        siglas_extras: Tipo → sigla das classificações cadastradas no dashboard.
     """
-    prefixo = f"{sigla}-{SIGLA_TIPO.get(tipo, 'DSP')}-"
+    sigla_tipo = (siglas_extras or {}).get(tipo) or SIGLA_TIPO.get(tipo, "DSP")
+    prefixo = f"{sigla}-{sigla_tipo}-"
     usados = [int(n[len(prefixo) :]) for n in existentes if n.startswith(prefixo) and n[len(prefixo) :].isdigit()]
     return f"{prefixo}{max(usados, default=0) + 1:03d}"
 
