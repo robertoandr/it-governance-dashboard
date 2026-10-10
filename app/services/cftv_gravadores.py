@@ -270,3 +270,48 @@ def canais_do_card(card: dict[str, Any], acesso: dict[str, Any] | None, manual: 
         "modelo": modelo,
         "erro": (acesso or {}).get("erro", "") if not leitura else "",
     }
+
+
+def inventario_do_card(card: dict[str, Any], acesso: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Câmeras em uso de um card de gravador, canal a canal.
+
+    Junta o que o gravador informou (tipo, modelo, IP e MAC da câmera IP, nome
+    do canal, vídeo) com a câmera do Zabbix no mesmo canal (nome e status).
+    Entra o canal que tem câmera IP cadastrada, câmera no Zabbix, vídeo ou nome
+    dado no gravador.
+
+    Args:
+        card: Card de ``montar_visao``.
+        acesso: Item de ``leituras()`` do IP do gravador (ou None).
+
+    Returns:
+        ``[{"canal", "nome", "tipo", "modelo", "ip", "mac", "sem_video", "status"}]`` em ordem de canal.
+    """
+    leitura: LeituraGravador | None = (acesso or {}).get("leitura")
+    no_zabbix: dict[int, dict[str, Any]] = {
+        int(d["canal"]): d for d in card["dispositivos"] if str(d.get("canal", "")).isdigit()
+    }
+    cameras = {c.canal: c for c in leitura.cameras} if leitura else {}
+    canais = set(no_zabbix) | {c for c, cam in cameras.items() if cam.tipo == "ip"}
+    if leitura:
+        for canal in range(1, leitura.canais + 1):
+            if not titulo_padrao(leitura.titulos.get(canal, "")) or canal not in leitura.sem_video:
+                canais.add(canal)
+    linhas = []
+    for canal in sorted(canais):
+        cam = cameras.get(canal)
+        zbx = no_zabbix.get(canal, {})
+        titulo = leitura.titulos.get(canal, "") if leitura else ""
+        linhas.append(
+            {
+                "canal": canal,
+                "nome": zbx.get("name") or ("" if titulo_padrao(titulo) else titulo),
+                "tipo": cam.tipo if cam else "",
+                "modelo": (cam.modelo if cam else "") or zbx.get("model", ""),
+                "ip": (cam.ip if cam else "") or zbx.get("ip", ""),
+                "mac": cam.mac if cam else "",
+                "sem_video": leitura is not None and canal in leitura.sem_video,
+                "status": zbx.get("status", ""),
+            }
+        )
+    return linhas

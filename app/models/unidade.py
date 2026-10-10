@@ -107,6 +107,8 @@ class Unidade(db.Model):
     cep: str = db.Column(db.String(9), nullable=False, default="", server_default="")
     cidade: str = db.Column(db.String(120), nullable=False, default="", server_default="")
     uf: str = db.Column(db.String(2), nullable=False, default="", server_default="")
+    # Nome da unidade no MapaCameras, quando difere (vazio = o próprio nome)
+    nome_mapa: str = db.Column(db.String(120), nullable=False, default="", server_default="")
     # deferred: a listagem não precisa carregar os bytes de todos os logos
     logo: Mapped[bytes | None] = mapped_column(db.LargeBinary, nullable=True, deferred=True)
     logo_mime: str | None = db.Column(db.String(32), nullable=True)
@@ -307,6 +309,7 @@ _COLUNAS_NOVAS: tuple[tuple[str, str], ...] = (
     ("uf", "VARCHAR(2) NOT NULL DEFAULT ''"),
     ("logo", "BLOB"),
     ("logo_mime", "VARCHAR(32)"),
+    ("nome_mapa", "VARCHAR(120) NOT NULL DEFAULT ''"),
 )
 
 

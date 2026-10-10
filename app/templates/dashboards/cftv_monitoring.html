@@ -169,6 +169,7 @@
   {% endif %}
 
   {# ── Trilha do drill-down ─────────────────────────────────────────────────── #}
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
   <p class="text-xs text-slate-500 dark:text-slate-400">
     <a href="{{ url_for('dashboards.cftv_monitoring') }}" class="text-blue-600 dark:text-blue-400 hover:underline">Todas as sedes</a>
     {% if filtro == 'sem' %} › Sem unidade
@@ -178,6 +179,10 @@
     {% elif ver_gravadores %} › todos os gravadores
     {% endif %}
   </p>
+  <a href="{{ url_for('dashboards.cftv_inventario_csv', unidade=filtro) if filtro else url_for('dashboards.cftv_inventario_csv') }}"
+     class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+     title="Câmeras por canal com modelo, IP e MAC lidos dos gravadores">Exportar inventário (CSV)</a>
+  </div>
 
   {# ── KPIs do recorte ─────────────────────────────────────────────────────── #}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -246,6 +251,11 @@
           </p>
           {% if c.apelido %}<p class="text-[10px] text-slate-400 mt-0.5" title="Nome no Zabbix">Zabbix: {{ c.nome_zabbix }}</p>{% endif %}
           {% if c.unidos %}<p class="text-[10px] text-slate-400 mt-0.5">Unido com: {{ c.unidos | join(', ') }}</p>{% endif %}
+          {% if c.mapa_unidade and pode('mapa_cameras') %}
+          <a href="{{ url_for('dashboards.mapa_cameras', unidade=c.mapa_unidade) }}"
+             class="inline-block text-[11px] text-blue-600 dark:text-blue-400 hover:underline mt-0.5"
+             title="Abre o Mapa de Câmeras filtrado em {{ c.mapa_unidade }}">Ver no Mapa de Câmeras →</a>
+          {% endif %}
         </div>
         {% if c.gravador_host %}
         <div class="text-right flex-shrink-0">
@@ -331,6 +341,42 @@
                 <td class="py-1 pr-2">{{ status_badge(d.status) }}</td>
                 <td class="py-1 text-right font-mono {% if d.historico and d.historico.quedas >= 5 %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}"
                     {% if d.historico %}title="{{ d.historico.tempo }} offline no total"{% endif %}>{{ d.historico.quedas if d.historico else '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+
+      {% if c.inventario %}
+      {% set ips = c.inventario | selectattr('tipo', 'equalto', 'ip') | list %}
+      <details class="group">
+        <summary class="cursor-pointer select-none text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline list-none flex items-center gap-1">
+          <svg class="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          Inventário: {{ c.inventario | length }} câmera{{ 's' if c.inventario | length != 1 }}{% if ips %} ({{ ips | length }} IP){% endif %}
+        </summary>
+        <div class="overflow-x-auto mt-2">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 uppercase">
+                <th class="text-left py-1 pr-2 font-medium">Canal</th>
+                <th class="text-left py-1 pr-2 font-medium">Nome</th>
+                <th class="text-left py-1 pr-2 font-medium">Tipo</th>
+                <th class="text-left py-1 pr-2 font-medium">Modelo</th>
+                <th class="text-left py-1 pr-2 font-medium">IP</th>
+                <th class="text-left py-1 font-medium">MAC</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
+              {% for x in c.inventario %}
+              <tr class="{% if x.sem_video %}bg-red-50/50 dark:bg-red-900/10{% endif %}" {% if x.sem_video %}title="Canal sem vídeo"{% endif %}>
+                <td class="py-1 pr-2 text-slate-400 font-mono">{{ x.canal }}</td>
+                <td class="py-1 pr-2 text-slate-700 dark:text-slate-200">{{ x.nome or '—' }}</td>
+                <td class="py-1 pr-2 text-slate-500">{{ {'ip': 'IP', 'analogica': 'Analógica'}.get(x.tipo, '—') }}</td>
+                <td class="py-1 pr-2 text-slate-500">{{ x.modelo or '—' }}</td>
+                <td class="py-1 pr-2 text-slate-500 font-mono">{{ x.ip or '—' }}</td>
+                <td class="py-1 text-slate-500 font-mono">{{ x.mac or '—' }}</td>
               </tr>
               {% endfor %}
             </tbody>

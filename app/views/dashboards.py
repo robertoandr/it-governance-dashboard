@@ -6,7 +6,7 @@ import asyncio
 import os
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -408,29 +408,36 @@ def infra_temperatura_diaria():
     return jsonify(get_cached_temp_diaria(dias))
 
 
-@bp.route("/cftv")
-@login_required
-@require_role("admin", "gestor", "operador", pagina="cftv")
-def cftv_monitoring() -> str:
-    """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
+class _VisaoCftv(NamedTuple):
+    todas: list
+    unidades: list
+    nomes: dict[int, str]
+    filtro: set[int] | str | None
+    vinculos: list
+    data: dict
+    visao: dict
+
+
+def _visao_cftv(filtro_raw: str) -> _VisaoCftv:
+    """Monta a visão do CFTV (cards por gravador, canais e inventário) para um filtro de unidade.
+
+    Args:
+        filtro_raw: Valor de ``?unidade=`` (id, ``sem`` ou vazio).
+
+    Returns:
+        Unidades, filtro, vínculos, resumo do Zabbix e a visão montada.
+    """
     from app.models.unidade import DvrUnidade, Unidade
     from itgov.api.v1.cftv_monitoring import (
-        DIAS_HISTORICO,
         SEM_UNIDADE,
-        formatar_duracao,
         get_cached_cftv_summary,
         get_cached_historico_quedas,
         montar_visao,
     )
-    from itgov.services.cftv_snmp import AUTH_PROTOCOLOS, NIVEIS, PRIV_PROTOCOLOS
-
-    if not os.getenv("ZABBIX_URL"):
-        abort(404)
 
     todas = Unidade.query.all()
     unidades = [u for u in todas if u.ativo]
     nomes = {u.id: u.caminho for u in todas}
-    filtro_raw = request.args.get("unidade", "")
     filtro = _filtro_unidade(filtro_raw, unidades, SEM_UNIDADE)
 
     data = get_cached_cftv_summary()
@@ -449,6 +456,25 @@ def cftv_monitoring() -> str:
         quedas=get_cached_historico_quedas(),
     )
     _canais_dos_gravadores(visao, vinculos, nomes, sede_por_unidade)
+    mapa = {u.id: u.nome_mapa or u.nome for u in todas}
+    for c in visao["cards"]:
+        c["mapa_unidade"] = mapa.get(c["unidade_id"], "") if c["unidade_id"] is not None else ""
+    return _VisaoCftv(todas, unidades, nomes, filtro, vinculos, data, visao)
+
+
+@bp.route("/cftv")
+@login_required
+@require_role("admin", "gestor", "operador", pagina="cftv")
+def cftv_monitoring() -> str:
+    """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
+    from itgov.api.v1.cftv_monitoring import DIAS_HISTORICO, SEM_UNIDADE, formatar_duracao
+    from itgov.services.cftv_snmp import AUTH_PROTOCOLOS, NIVEIS, PRIV_PROTOCOLOS
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+
+    filtro_raw = request.args.get("unidade", "")
+    todas, unidades, nomes, filtro, vinculos, data, visao = _visao_cftv(filtro_raw)
     nuvem = [
         {"dvr": v.dvr, "unidade": nomes.get(v.unidade_id, ""), "modelo": v.modelo, "serie": v.serie}
         for v in sorted(vinculos, key=lambda v: v.dvr.lower())
@@ -518,6 +544,7 @@ def _canais_dos_gravadores(
     for c in visao["cards"]:
         ip = (c.get("gravador_host") or {}).get("ip", "")
         c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(c["gravador"]))
+        c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip))
         if c["canais"]:
             sede = sede_por_unidade.get(c["unidade_id"], c["unidade_id"]) if c["unidade_id"] is not None else None
             livres_por_sede[sede] = livres_por_sede.get(sede, 0) + c["canais"]["livres"]
@@ -528,6 +555,55 @@ def _canais_dos_gravadores(
 
 
 ACESSO_NUVEM = "nuvem"
+INVENTARIO_COLUNAS = ("Unidade", "Gravador", "Canal", "Nome", "Tipo", "Modelo", "IP", "MAC", "Vídeo", "Status")
+_TIPO_CAMERA = {"ip": "IP", "analogica": "Analógica"}
+_STATUS_CAMERA = {"up": "online", "down": "offline", "nodata": "sem dados", "maint": "manutenção"}
+
+
+def _celula_csv(valor: object) -> object:
+    """Texto que o Excel leria como fórmula (``=``, ``+``, ``-``, ``@``) ganha um apóstrofo na frente."""
+    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + valor
+    return valor
+
+
+@bp.route("/cftv/inventario.csv")
+@login_required
+@require_role("admin", "gestor", "operador", pagina="cftv")
+def cftv_inventario_csv() -> Response:
+    """Inventário das câmeras (canal, modelo, IP, MAC) em CSV, com o mesmo filtro de unidade da página."""
+    import csv
+    import io
+
+    if not os.getenv("ZABBIX_URL"):
+        abort(404)
+    visao = _visao_cftv(request.args.get("unidade", "")).visao
+    saida = io.StringIO()
+    escritor = csv.writer(saida, delimiter=";")
+    escritor.writerow(INVENTARIO_COLUNAS)
+    for c in visao["cards"]:
+        for linha in c.get("inventario") or []:
+            escritor.writerow(
+                _celula_csv(v)
+                for v in (
+                    c.get("unidade") or "",
+                    c.get("titulo") or "",
+                    linha["canal"],
+                    linha["nome"],
+                    _TIPO_CAMERA.get(linha["tipo"], ""),
+                    linha["modelo"],
+                    linha["ip"],
+                    linha["mac"],
+                    "sem vídeo" if linha["sem_video"] else "",
+                    _STATUS_CAMERA.get(linha["status"], ""),
+                )
+            )
+    # BOM: o Excel abre o CSV em UTF-8 com acentos
+    return Response(
+        "\ufeff" + saida.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=inventario-cameras.csv"},
+    )
 
 
 def _resumo_gravador_nuvem() -> str:
@@ -898,6 +974,7 @@ def unidade_form(unidade_id: int | None = None) -> object:
     unidade.cep = cep
     unidade.cidade = request.form.get("cidade", "").strip()[:120]
     unidade.uf = uf
+    unidade.nome_mapa = " ".join(request.form.get("nome_mapa", "").split())[:120]
     if logo is not None:
         unidade.logo, unidade.logo_mime = logo, logo_mime
     elif "remover_logo" in request.form:
@@ -936,8 +1013,15 @@ MAPA_CAMERAS_PROXY_PATH = "/mapa-cameras/"
 @login_required
 @require_role(*MAPA_CAMERAS_ROLES, pagina="mapa_cameras")
 def mapa_cameras() -> str:
-    """Render o Mapa de Câmeras embutido (iframe) na dashboard."""
-    return render_template("dashboards/mapa_cameras.html", mapa_url=MAPA_CAMERAS_PROXY_PATH)
+    """Render o Mapa de Câmeras embutido (iframe) na dashboard.
+
+    ``?unidade=<nome>`` abre o mapa já filtrado na unidade (nome como está no MapaCameras).
+    """
+    from urllib.parse import urlencode
+
+    unidade = request.args.get("unidade", "").strip()[:120]
+    url = f"{MAPA_CAMERAS_PROXY_PATH}?{urlencode({'unidade': unidade})}" if unidade else MAPA_CAMERAS_PROXY_PATH
+    return render_template("dashboards/mapa_cameras.html", mapa_url=url)
 
 
 @bp.route("/cameras/auth")
