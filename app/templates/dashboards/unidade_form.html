@@ -79,7 +79,15 @@
     </div>
 
     <div>
-      <label for="logo" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Logo</label>
+      <label for="nome_mapa" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Nome no Mapa de Câmeras</label>
+      <input id="nome_mapa" type="text" name="nome_mapa" maxlength="120"
+             value="{{ f.get('nome_mapa', unidade.nome_mapa if unidade else '') }}"
+             placeholder="{{ unidade.nome if unidade else 'igual ao nome da unidade' }}" class="{{ campo }}">
+      <p class="text-xs text-slate-400 mt-1">Só se a unidade tiver outro nome no MapaCameras. Em branco, o link do CFTV abre o mapa filtrado pelo nome acima.</p>
+    </div>
+
+    <div>
+      <label for="logo"class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Logo</label>
       <div class="flex items-center gap-4">
         {% if unidade and unidade.logo_mime %}
         <img src="{{ url_for('dashboards.unidade_logo', unidade_id=unidade.id, v=unidade.updated_at.timestamp() | int) }}"

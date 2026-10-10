@@ -178,3 +178,19 @@ class TestDispositivosDeInfra:
         # sub_filter ignora maiúsculas: nenhum padrão pode ser só 'gravador'.
         for old, _new in _sub_filters():
             assert old.lower() not in ("gravador", "'gravador'", "gravadores")
+
+
+class TestFiltroUnidade:
+    """/gov/cameras?unidade= abre o mapa já filtrado (link do CFTV)."""
+
+    def test_iframe_recebe_a_unidade(self, client_as: Callable[[str], FlaskClient]) -> None:
+        html = client_as("admin").get("/gov/cameras?unidade=Shopping Mueller").get_data(as_text=True)
+        assert 'src="/mapa-cameras/?unidade=Shopping+Mueller"' in html
+
+    def test_sem_unidade_abre_o_mapa_inteiro(self, client_as: Callable[[str], FlaskClient]) -> None:
+        html = client_as("admin").get("/gov/cameras").get_data(as_text=True)
+        assert 'src="/mapa-cameras/"' in html
+
+    def test_unidade_com_aspas_e_escapada(self, client_as: Callable[[str], FlaskClient]) -> None:
+        html = client_as("admin").get('/gov/cameras?unidade="><script>').get_data(as_text=True)
+        assert "<script>" not in html.split("<iframe", 1)[1].split(">", 1)[0]

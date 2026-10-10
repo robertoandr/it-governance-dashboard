@@ -7,7 +7,10 @@ Endpoints usados (todos de leitura, autenticação Basic ou Digest):
 - ``devVideoInput.cgi?action=getCollect`` — quantidade de canais;
 - ``eventManager.cgi?action=getEventIndexes&code=VideoLoss`` — canais sem vídeo
   (índices a partir de 0; "sem eventos" volta como erro e vira lista vazia);
-- ``configManager.cgi?action=getConfig&name=ChannelTitle`` — nome de cada canal.
+- ``configManager.cgi?action=getConfig&name=ChannelTitle`` — nome de cada canal;
+- ``LogicDeviceManager.cgi?action=getCameraAll`` — câmera de cada canal: analógica
+  (``Local``) ou IP (``Remote``, com IP, MAC e modelo). A resposta traz também a
+  senha de cada câmera IP, que é descartada aqui e nunca guardada.
 
 O aparelho bloqueia o usuário depois de algumas senhas erradas seguidas: quem
 chama deve guardar a credencial que falhou e não insistir (``AcessoNegadoError``).
@@ -29,6 +32,16 @@ class AcessoNegadoError(Exception):
     """O gravador recusou a credencial (não tentar de novo tão cedo)."""
 
 
+class CameraGravador(BaseModel):
+    """Câmera ligada a um canal do gravador."""
+
+    canal: int
+    tipo: str  # "analogica" ou "ip"
+    ip: str = ""
+    mac: str = ""
+    modelo: str = ""
+
+
 class LeituraGravador(BaseModel):
     """O que o gravador informou."""
 
@@ -37,6 +50,7 @@ class LeituraGravador(BaseModel):
     canais: int = 0
     sem_video: list[int] = []
     titulos: dict[int, str] = {}
+    cameras: list[CameraGravador] = []
 
 
 def capacidade_do_modelo(modelo: str) -> int:
@@ -57,12 +71,60 @@ def titulo_padrao(titulo: str) -> bool:
     return not titulo.strip() or bool(_TITULO_PADRAO.match(titulo.strip()))
 
 
+# Posição de câmera IP sem câmera: endereço de fábrica ou vazio
+_SEM_ENDERECO = {"", "0.0.0.0", "192.168.0.0", "192.168.1.108"}
+_MAC_NULO = {"", "ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"}
+_CAMPO_CAMERA = re.compile(
+    r"^camera\[(\d+)\]\.(Type|Enable|UniqueChannel|DeviceInfo\.Address|DeviceInfo\.Mac|DeviceInfo\.DeviceType)=(.*)$"
+)
+
+
+def cameras_do_gravador(texto: str) -> list[CameraGravador]:
+    """Câmeras por canal a partir da resposta de ``getCameraAll``.
+
+    Ignora a câmera virtual (``Compose``), as posições IP sem câmera (desligadas
+    ou com endereço de fábrica) e qualquer campo que não seja dos listados,
+    entre eles a senha da câmera.
+
+    Args:
+        texto: Corpo da resposta.
+
+    Returns:
+        Câmeras em ordem de canal (canal a partir de 1).
+    """
+    brutos: dict[int, dict[str, str]] = {}
+    for linha in _linhas(texto):
+        m = _CAMPO_CAMERA.match(linha)
+        if m:
+            brutos.setdefault(int(m.group(1)), {})[m.group(2)] = m.group(3).strip()
+    cameras: dict[int, CameraGravador] = {}
+    for indice, campos in sorted(brutos.items()):
+        tipo = campos.get("Type", "")
+        unico = campos.get("UniqueChannel", "")
+        canal = int(unico) + 1 if unico.isdigit() else indice + 1
+        if tipo == "Local":
+            cameras.setdefault(canal, CameraGravador(canal=canal, tipo="analogica"))
+        elif tipo == "Remote":
+            ip = campos.get("DeviceInfo.Address", "")
+            if campos.get("Enable", "true").lower() != "true" or ip in _SEM_ENDERECO:
+                continue
+            mac = campos.get("DeviceInfo.Mac", "").lower()
+            cameras[canal] = CameraGravador(
+                canal=canal,
+                tipo="ip",
+                ip=ip,
+                mac="" if mac in _MAC_NULO else mac,
+                modelo=campos.get("DeviceInfo.DeviceType", ""),
+            )
+    return [cameras[c] for c in sorted(cameras)]
+
+
 def _linhas(texto: str) -> list[str]:
     return [linha.strip() for linha in texto.replace("\r", "").split("\n") if linha.strip()]
 
 
 def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> LeituraGravador:
-    """Lê modelo, canais, canais sem vídeo e nomes dos canais.
+    """Lê modelo, canais, canais sem vídeo, nomes dos canais e câmeras.
 
     Args:
         ip: IP do gravador.
@@ -98,6 +160,7 @@ def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> Lei
         coleta = _get("devVideoInput.cgi?action=getCollect").partition("=")[2].strip()
         perdas = _get("eventManager.cgi?action=getEventIndexes&code=VideoLoss")
         titulos_txt = _get("configManager.cgi?action=getConfig&name=ChannelTitle")
+        cameras = cameras_do_gravador(_get("LogicDeviceManager.cgi?action=getCameraAll"))
 
     sem_video = sorted({int(m) + 1 for m in re.findall(r"channels\[\d+\]=(\d+)", perdas)})
     titulos = {
@@ -106,5 +169,10 @@ def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> Lei
     # NVR responde 0 em getCollect (canais IP): usa os nomes de canal ou o modelo
     canais = int(coleta) if coleta.isdigit() and int(coleta) > 0 else (len(titulos) or capacidade_do_modelo(modelo))
     return LeituraGravador(
-        modelo=modelo, serie=serie.text.partition("=")[2].strip(), canais=canais, sem_video=sem_video, titulos=titulos
+        modelo=modelo,
+        serie=serie.text.partition("=")[2].strip(),
+        canais=canais,
+        sem_video=sem_video,
+        titulos=titulos,
+        cameras=cameras,
     )

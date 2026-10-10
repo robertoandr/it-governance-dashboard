@@ -452,3 +452,220 @@ def test_pagina_nao_le_gravador_de_outro_fabricante(authed_client, com_zabbix: N
     alvos = disparar.call_args.args[1]
     assert [a.ip for a in alvos] == ["10.0.0.7"]
     assert len(alvos) == 1
+
+
+# ── Inventário das câmeras (getCameraAll) ─────────────────────────────────────
+
+_CAMERAS = "\r\n".join(
+    [
+        # Canal 1 analógico; senha da câmera vem na resposta e não pode ir para a leitura
+        "camera[0].Type=Local",
+        "camera[0].UniqueChannel=0",
+        "camera[0].DeviceInfo.Password=segredo-da-camera",
+        # Canal 2 IP, com MAC e modelo
+        "camera[1].Type=Remote",
+        "camera[1].Enable=true",
+        "camera[1].UniqueChannel=1",
+        "camera[1].DeviceInfo.Address=10.41.100.210",
+        "camera[1].DeviceInfo.Mac=80:85:44:36:AD:BF",
+        "camera[1].DeviceInfo.DeviceType=VIP-1230-D-G4",
+        "camera[1].DeviceInfo.Password=segredo-da-camera",
+        # Canal 3: posição IP vazia (endereço de fábrica, MAC nulo)
+        "camera[2].Type=Remote",
+        "camera[2].Enable=true",
+        "camera[2].UniqueChannel=2",
+        "camera[2].DeviceInfo.Address=192.168.0.0",
+        "camera[2].DeviceInfo.Mac=ff:ff:ff:ff:ff:ff",
+        # Canal 4: desligada
+        "camera[3].Type=Remote",
+        "camera[3].Enable=false",
+        "camera[3].UniqueChannel=3",
+        "camera[3].DeviceInfo.Address=10.41.100.211",
+        # Canal 5: IP sem MAC conhecido
+        "camera[4].Type=Remote",
+        "camera[4].Enable=true",
+        "camera[4].UniqueChannel=4",
+        "camera[4].DeviceInfo.Address=10.41.100.212",
+        "camera[4].DeviceInfo.Mac=ff:ff:ff:ff:ff:ff",
+        # Câmera virtual (mosaico)
+        "camera[5].Type=Compose",
+        "camera[5].UniqueChannel=5",
+    ]
+)
+
+
+def test_cameras_do_gravador() -> None:
+    cameras = intelbras_api.cameras_do_gravador(_CAMERAS)
+    assert [(c.canal, c.tipo, c.ip, c.mac, c.modelo) for c in cameras] == [
+        (1, "analogica", "", "", ""),
+        (2, "ip", "10.41.100.210", "80:85:44:36:ad:bf", "VIP-1230-D-G4"),
+        (5, "ip", "10.41.100.212", "", ""),
+    ]
+
+
+def test_cameras_do_gravador_sem_resposta() -> None:
+    assert intelbras_api.cameras_do_gravador("") == []
+
+
+def test_ler_gravador_traz_cameras_sem_senha(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cliente(
+        monkeypatch,
+        {
+            "magicBox.cgi?action=getSerialNo": (200, "sn=ABC123\r\n"),
+            "magicBox.cgi?action=getDeviceType": (200, "type=MHDX 1108\r\n"),
+            "devVideoInput.cgi?action=getCollect": (200, "result=8\r\n"),
+            "LogicDeviceManager.cgi?action=getCameraAll": (200, _CAMERAS),
+        },
+    )
+    leitura = intelbras_api.ler_gravador("10.0.0.9", "u", "p")
+    assert [c.canal for c in leitura.cameras] == [1, 2, 5]
+    assert "segredo" not in leitura.model_dump_json()
+
+
+def test_leitura_antiga_sem_cameras_ainda_valida() -> None:
+    antiga = '{"modelo": "MHDX 1108", "serie": "X", "canais": 8, "sem_video": [], "titulos": {}}'
+    assert LeituraGravador.model_validate_json(antiga).cameras == []
+
+
+def _card_inventario() -> dict:
+    return {
+        "dispositivos": [
+            {"canal": "2", "name": "Câmera Portão", "ip": "10.41.100.210", "model": "", "status": "up"},
+            {"canal": "7", "name": "Câmera Doca", "ip": "10.41.100.230", "model": "VIP 3230", "status": "down"},
+        ]
+    }
+
+
+def test_inventario_junta_gravador_e_zabbix() -> None:
+    leitura = LeituraGravador(
+        canais=8,
+        sem_video=[3, 4, 5, 6, 8],
+        titulos={1: "Recepção", 3: "CAM 3", 4: "Estoque"},
+        cameras=intelbras_api.cameras_do_gravador(_CAMERAS),
+    )
+    linhas = cg.inventario_do_card(_card_inventario(), {"leitura": leitura})
+    por_canal = {x["canal"]: x for x in linhas}
+    # 1: analógica com vídeo; 2: IP + Zabbix; 4: nome dado e sem vídeo; 5: câmera IP; 7: só no Zabbix
+    assert sorted(por_canal) == [1, 2, 4, 5, 7]
+    assert por_canal[1] | {} == {
+        "canal": 1,
+        "nome": "Recepção",
+        "tipo": "analogica",
+        "modelo": "",
+        "ip": "",
+        "mac": "",
+        "sem_video": False,
+        "status": "",
+    }
+    assert (por_canal[2]["nome"], por_canal[2]["mac"], por_canal[2]["modelo"]) == (
+        "Câmera Portão",
+        "80:85:44:36:ad:bf",
+        "VIP-1230-D-G4",
+    )
+    assert por_canal[4]["sem_video"] is True
+    assert (por_canal[7]["modelo"], por_canal[7]["ip"], por_canal[7]["status"]) == ("VIP 3230", "10.41.100.230", "down")
+
+
+def test_inventario_sem_leitura_usa_so_o_zabbix() -> None:
+    linhas = cg.inventario_do_card(_card_inventario(), None)
+    assert [(x["canal"], x["ip"], x["tipo"]) for x in linhas] == [(2, "10.41.100.210", ""), (7, "10.41.100.230", "")]
+
+
+# ── Rotas: inventário em CSV e link do MapaCameras ────────────────────────────
+
+_IP_INV = "10.9.8.7"
+
+
+@pytest.fixture
+def gravador_inventario(factory_app, monkeypatch: pytest.MonkeyPatch) -> Iterator[int]:
+    """Gravador ``INV Teste`` na unidade Shopping, já lido, com câmeras."""
+    from app.models.unidade import GravadorAcesso
+
+    monkeypatch.setenv("ZABBIX_URL", "https://zabbix.test")
+    monkeypatch.setattr(cg, "disparar", lambda app, gravadores: None)
+    leitura = LeituraGravador(
+        modelo="NVD 1432",
+        canais=4,
+        titulos={1: "=HYPERLINK(1)"},
+        cameras=intelbras_api.cameras_do_gravador(_CAMERAS),
+    )
+    with factory_app.app_context():
+        shopping = Unidade.query.filter_by(nome="Shopping", parent_id=None).one()
+        nome_mapa_antes = shopping.nome_mapa
+        db.session.add(DvrUnidade(dvr="INV Teste", unidade_id=shopping.id))
+        db.session.add(
+            GravadorAcesso(ip=_IP_INV, credencial="padrao", leitura=leitura.model_dump_json(), lido_em=_AGORA)
+        )
+        db.session.commit()
+        shopping_id = shopping.id
+    dados = {
+        "enabled": True,
+        "devices": [
+            {
+                "host": "nvr-inv",
+                "name": "INV Teste",
+                "ip": _IP_INV,
+                "subcat": "nvr",
+                "andar": "?",
+                "gravador": "INV Teste",
+                "is_gravador": True,
+                "canal": "",
+                "loja": "",
+                "vendor": "Intelbras",
+                "model": "",
+                "status": "up",
+                "problems": 0,
+            }
+        ],
+    }
+    with patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value=dados):
+        yield shopping_id
+    with factory_app.app_context():
+        DvrUnidade.query.filter_by(dvr="INV Teste").delete()
+        db.session.query(GravadorAcesso).filter_by(ip=_IP_INV).delete()
+        db.session.get(Unidade, shopping_id).nome_mapa = nome_mapa_antes
+        db.session.commit()
+
+
+def test_csv_do_inventario(authed_client, gravador_inventario: int) -> None:
+    resp = authed_client.get(f"/gov/cftv/inventario.csv?unidade={gravador_inventario}")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/csv"
+    assert "attachment" in resp.headers["Content-Disposition"]
+    texto = resp.get_data(as_text=True)
+    assert texto.startswith("﻿Unidade;Gravador;Canal;Nome;Tipo;Modelo;IP;MAC;Vídeo;Status")
+    assert "Shopping;INV Teste;2;;IP;VIP-1230-D-G4;10.41.100.210;80:85:44:36:ad:bf;;" in texto
+    # Nome de canal vindo do aparelho não vira fórmula no Excel
+    assert ";'=HYPERLINK(1);" in texto
+    assert "segredo" not in texto
+
+
+def test_csv_do_inventario_exige_login(factory_app, gravador_inventario: int) -> None:
+    resp = factory_app.test_client().get("/gov/cftv/inventario.csv")
+    assert resp.status_code in (302, 401)
+
+
+def test_pagina_mostra_inventario_e_link_do_mapa(authed_client, factory_app, gravador_inventario: int) -> None:
+    with factory_app.app_context():
+        db.session.get(Unidade, gravador_inventario).nome_mapa = "Shopping Mueller"
+        db.session.commit()
+    html = authed_client.get(f"/gov/cftv?unidade={gravador_inventario}").get_data(as_text=True)
+    assert "Inventário: 5 câmeras (2 IP)" in html
+    assert "80:85:44:36:ad:bf" in html
+    assert "/gov/cameras?unidade=Shopping+Mueller" in html
+    assert "/gov/cftv/inventario.csv?unidade=" in html
+
+
+def test_link_do_mapa_usa_nome_da_unidade_por_padrao(authed_client, gravador_inventario: int) -> None:
+    html = authed_client.get(f"/gov/cftv?unidade={gravador_inventario}").get_data(as_text=True)
+    assert "/gov/cameras?unidade=Shopping" in html
+
+
+def test_garantir_colunas_cria_nome_mapa(tmp_path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'antigo.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE unidades (id INTEGER PRIMARY KEY, nome VARCHAR(120) NOT NULL)"))
+        conn.execute(text("INSERT INTO unidades (nome) VALUES ('Sede')"))
+    garantir_colunas(engine)
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT nome_mapa FROM unidades")).one() == ("",)
