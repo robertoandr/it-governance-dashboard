@@ -231,6 +231,36 @@ def _contagem(devs: list[dict]) -> dict[str, Any]:
     return {"total": total, **c, "up_pct": round(c["up"] / total * 100, 1) if total else 0.0}
 
 
+# Tipos de dispositivo (tag ``subcategory``) agrupados para os totais; o que não
+# estiver aqui aparece com o próprio nome, depois destes
+TIPOS_CFTV: tuple[tuple[str, frozenset[str]], ...] = (
+    ("Câmeras", frozenset({"camera"})),
+    ("Faciais", frozenset({"facial"})),
+    ("Gravadores (DVR/NVR)", SUBCATS_GRAVADOR),
+    ("Antenas", frozenset({"antena"})),
+    ("Telas", frozenset({"tela"})),
+)
+
+
+def totais_por_tipo(devs: list[dict]) -> list[dict[str, Any]]:
+    """Contagem por tipo de dispositivo (câmeras, faciais, gravadores...).
+
+    Args:
+        devs: Dispositivos do recorte.
+
+    Returns:
+        ``[{"tipo", "total", "up", "down", "nodata", "maint", "up_pct"}]``, só os tipos presentes.
+    """
+    grupo_de = {sub: rotulo for rotulo, subs in TIPOS_CFTV for sub in subs}
+    grupos: dict[str, list[dict]] = {}
+    for d in devs:
+        sub = d.get("subcat") or "outros"
+        grupos.setdefault(grupo_de.get(sub, sub.capitalize()), []).append(d)
+    ordem = [rotulo for rotulo, _ in TIPOS_CFTV]
+    rotulos = sorted(grupos, key=lambda r: (ordem.index(r) if r in ordem else len(ordem), r))
+    return [{"tipo": r, **_contagem(grupos[r])} for r in rotulos]
+
+
 def _canal_key(d: dict) -> tuple:
     canal = d.get("canal", "")
     return (0, int(canal), d["name"]) if canal.isdigit() else (1, 0, d["name"])
@@ -347,6 +377,7 @@ def montar_visao(
     resumo = _contagem(todos)
     return {
         **resumo,
+        "por_tipo": totais_por_tipo(todos),
         "cards": cards,
         "sedes": _totais_por_sede(grupos, unidades, sede_por_unidade or {}),
         # Quem mais caiu no período, só entre os dispositivos do recorte
