@@ -24,7 +24,7 @@ pydantic-settings>=2.15.0
 flask-restx>=1.3.2
 
 # ORM + Migrations (Sprint 11 — Inventário de Ativos)
-sqlalchemy>=2.1.2,<3.0
+sqlalchemy>=2.1.3,<3.0
 alembic>=1.13,<2.0
 
 # Delta token persistence (Sprint 12 — M365 SP Orphans)
