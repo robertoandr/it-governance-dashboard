@@ -157,8 +157,34 @@ class DvrUnidade(db.Model):
     apelido: str = db.Column(db.String(120), nullable=False, default="", server_default="")
     # Gravador principal quando este é um duplicado (só admin marca); vazio = não é
     duplicado_de: str = db.Column(db.String(120), nullable=False, default="", server_default="")
+    # Quantidade de canais informada à mão (quando o gravador não responde à API)
+    canais: int | None = db.Column(db.Integer, nullable=True)
+    # "nuvem" = fora das faixas de rede, acessado pelo Intelbras Cloud (sem host no Zabbix)
+    acesso: str = db.Column(db.String(10), nullable=False, default="", server_default="")
+    modelo: str = db.Column(db.String(80), nullable=False, default="", server_default="")
+    # Número de série / ID do Intelbras Cloud
+    serie: str = db.Column(db.String(40), nullable=False, default="", server_default="")
 
     unidade = db.relationship("Unidade")
+
+
+class GravadorAcesso(db.Model):
+    """Última leitura de um gravador pela API Intelbras e qual credencial serve.
+
+    Guardar as falhas evita insistir numa senha errada: o aparelho bloqueia o
+    usuário depois de algumas tentativas. Compartilhado entre os workers.
+    """
+
+    __tablename__ = "gravador_acessos"
+
+    ip: str = db.Column(db.String(45), primary_key=True)
+    credencial: str = db.Column(db.String(20), nullable=False, default="", server_default="")
+    # JSON: credencial → horário ISO da última recusa
+    falhas: str = db.Column(db.Text, nullable=False, default="{}", server_default="{}")
+    # JSON da LeituraGravador
+    leitura: str = db.Column(db.Text, nullable=False, default="", server_default="")
+    erro: str = db.Column(db.String(255), nullable=False, default="", server_default="")
+    lido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 def parse_faixas(texto: str) -> list[str]:
@@ -287,6 +313,10 @@ _COLUNAS_NOVAS: tuple[tuple[str, str], ...] = (
 _COLUNAS_NOVAS_DVR: tuple[tuple[str, str], ...] = (
     ("apelido", "VARCHAR(120) NOT NULL DEFAULT ''"),
     ("duplicado_de", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    ("canais", "INTEGER"),
+    ("acesso", "VARCHAR(10) NOT NULL DEFAULT ''"),
+    ("modelo", "VARCHAR(80) NOT NULL DEFAULT ''"),
+    ("serie", "VARCHAR(40) NOT NULL DEFAULT ''"),
 )
 
 
