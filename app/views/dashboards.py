@@ -504,7 +504,9 @@ def _canais_dos_gravadores(
     alvos = []
     for c in visao["cards"]:
         host = c.get("gravador_host") or {}
-        if host.get("ip"):
+        # Só Intelbras fala essa API; noutros (ex.: NVR Hikvision) cada tentativa conta como senha errada
+        vendor = (host.get("vendor") or "").lower()
+        if host.get("ip") and (not vendor or "intelbras" in vendor):
             alvos.append(
                 cftv_gravadores.Alvo(
                     host["ip"], (c.get("unidade") or "").lower().startswith("sede centro"), c.get("titulo", "")

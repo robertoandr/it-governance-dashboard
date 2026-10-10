@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 import httpx
 import structlog
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from itgov.services.intelbras_api import (
     AcessoNegadoError,
@@ -177,7 +177,12 @@ def atualizar(gravadores: list[Alvo]) -> int:
             continue
         ler_um(ip, centro, acesso, agora, nome)
         db.session.add(acesso)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Outro worker gravou o mesmo IP ao mesmo tempo: fica a leitura dele
+            db.session.rollback()
+            continue
         lidos += 1
     return lidos
 

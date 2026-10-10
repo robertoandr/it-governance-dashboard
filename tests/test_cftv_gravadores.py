@@ -387,3 +387,68 @@ def test_canais_informados_e_volta_a_ler(authed_client, factory_app, limpa: None
     authed_client.post("/gov/cftv/gravador/canais", data={"gravador": "Canais Nuvem", "canais": ""})
     assert _vinculo(factory_app, "Canais Nuvem").canais is None
     assert authed_client.post("/gov/cftv/gravador/canais", data={"gravador": "X", "canais": "999"}).status_code == 400
+
+
+# ── Ajustes da 1ª leitura em produção ─────────────────────────────────────────
+
+
+def test_nvr_com_get_collect_zero_usa_nomes_dos_canais(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cliente(
+        monkeypatch,
+        {
+            "magicBox.cgi?action=getSerialNo": (200, "sn=NVR1\r\n"),
+            "magicBox.cgi?action=getDeviceType": (200, "type=NVD 1432\r\n"),
+            "devVideoInput.cgi?action=getCollect": (200, "result=0\r\n"),
+            "configManager.cgi?action=getConfig&name=ChannelTitle": (
+                200,
+                "".join(f"table.ChannelTitle[{i}].Name=CAM {i + 1}\r\n" for i in range(32)),
+            ),
+        },
+    )
+    assert intelbras_api.ler_gravador("10.0.0.9", "u", "p").canais == 32
+
+
+def test_nvr_sem_canais_nem_nomes_usa_modelo(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cliente(
+        monkeypatch,
+        {
+            "magicBox.cgi?action=getSerialNo": (200, "sn=NVR1\r\n"),
+            "magicBox.cgi?action=getDeviceType": (200, "type=NVD 3316\r\n"),
+            "devVideoInput.cgi?action=getCollect": (200, "result=0\r\n"),
+        },
+    )
+    assert intelbras_api.ler_gravador("10.0.0.9", "u", "p").canais == 16
+
+
+def test_atualizar_ignora_corrida_entre_workers(factory_app, padrao_e_principal: None) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.unidade import GravadorAcesso
+
+    with factory_app.app_context():
+        with (
+            patch.object(cg, "ler_gravador", return_value=LeituraGravador()),
+            patch.object(db.session, "commit", side_effect=IntegrityError("x", {}, Exception("dup"))),
+        ):
+            assert cg.atualizar([cg.Alvo("10.9.9.9", False)]) == 0
+        assert db.session.get(GravadorAcesso, "10.9.9.9") is None
+
+
+def test_pagina_nao_le_gravador_de_outro_fabricante(authed_client, com_zabbix: None) -> None:
+    def dev(host: str, gravador: str, vendor: str) -> dict:
+        base = {"host": host, "name": host, "ip": "10.0.0.7", "subcat": "nvr", "andar": "?", "gravador": gravador}
+        base |= {"is_gravador": True, "canal": "", "loja": "", "vendor": vendor, "model": "", "status": "up"}
+        return base | {"problems": 0}
+
+    dados = {
+        "enabled": True,
+        "devices": [dev("nvr-hik", "nvr-hik", "Hikvision"), dev("dvr-ib", "dvr-ib", "Intelbras")],
+    }
+    with (
+        patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value=dados),
+        patch.object(cg, "disparar") as disparar,
+    ):
+        authed_client.get("/gov/cftv?ver=gravadores")
+    alvos = disparar.call_args.args[1]
+    assert [a.ip for a in alvos] == ["10.0.0.7"]
+    assert len(alvos) == 1
