@@ -669,3 +669,29 @@ def test_garantir_colunas_cria_nome_mapa(tmp_path) -> None:
     garantir_colunas(engine)
     with engine.connect() as conn:
         assert conn.execute(text("SELECT nome_mapa FROM unidades")).one() == ("",)
+
+
+# ── Totais por tipo de dispositivo ────────────────────────────────────────────
+
+
+def test_totais_por_tipo() -> None:
+    def d(subcat: str, status: str = "up") -> dict:
+        return {"subcat": subcat, "status": status}
+
+    devs = [d("tela"), d("camera"), d("camera", "down"), d("nvr"), d("dvr", "nodata"), d("facial"), d("sirene"), d("")]
+    totais = cftv_monitoring.totais_por_tipo(devs)
+    assert [(t["tipo"], t["total"], t["up"], t["down"], t["nodata"]) for t in totais] == [
+        ("Câmeras", 2, 1, 1, 0),
+        ("Faciais", 1, 1, 0, 0),
+        ("Gravadores (DVR/NVR)", 2, 1, 0, 1),
+        ("Telas", 1, 1, 0, 0),
+        ("Outros", 1, 1, 0, 0),
+        ("Sirene", 1, 1, 0, 0),
+    ]
+    assert sum(t["total"] for t in totais) == len(devs)
+
+
+def test_pagina_mostra_totais_por_tipo(authed_client, gravador_inventario: int) -> None:
+    html = authed_client.get("/gov/cftv").get_data(as_text=True)
+    assert 'aria-label="Dispositivos por tipo"' in html
+    assert "Gravadores (DVR/NVR)" in html

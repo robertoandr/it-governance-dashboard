@@ -192,6 +192,23 @@
     {{ stat_card('Manutenção / sem dados', visao.maint ~ ' / ' ~ visao.nodata, 'text-yellow-600', none) }}
   </div>
 
+  {% if visao.por_tipo %}
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-label="Dispositivos por tipo">
+    {% for t in visao.por_tipo %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{{ t.tipo }}</p>
+      <p class="text-xl font-bold text-slate-800 dark:text-slate-100">{{ t.total }}</p>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">
+        {{ t.up }} online
+        {% if t.down %}· <span class="text-red-600 font-semibold">{{ t.down }} offline</span>{% endif %}
+        {% if t.nodata %}· {{ t.nodata }} sem dados{% endif %}
+        {% if t.maint %}· {{ t.maint }} manut.{% endif %}
+      </p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if visao.total > 0 %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
     <div class="flex items-center justify-between mb-2">
