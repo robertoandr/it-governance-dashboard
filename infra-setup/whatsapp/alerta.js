@@ -1,6 +1,7 @@
 // Webhook "WhatsApp (Evolution)": um alerta por mensagem, em português simples.
 // Fora da janela (padrão 08:00–19:00) não envia nada: o alerta fica registrado
-// no Zabbix e entra no resumo da manhã (resumo.js).
+// no Zabbix e entra no resumo da manhã (resumo.js). Sábado, domingo e feriado
+// não envia nada na hora: tudo vai nos resumos das 08:00, 14:00 e 18:00.
 
 function dentroDaJanela(agoraMs, p) {
     var l = local(agoraMs, parseFloat(p.fuso_horas));
@@ -53,6 +54,9 @@ function mensagemAlerta(p) {
 function principal(p, agoraMs) {
     if (!texto(p.to)) {
         throw 'destino vazio (preencha "Enviar para" com o JID do grupo)';
+    }
+    if (ehFolga(local(agoraMs, parseFloat(p.fuso_horas)), p.feriados_extras)) {
+        return 'Fim de semana/feriado: vai no resumo das ' + horarios(p.resumos_folga).join(', ');
     }
     if (!dentroDaJanela(agoraMs, p)) {
         return 'Fora do horário (' + p.janela_inicio + '–' + p.janela_fim + '): vai no resumo da manhã';

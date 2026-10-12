@@ -38,6 +38,7 @@ _GRUPOS = (
     ("CFTV/DVRs", "camera"),
     ("CFTV/NVRs", "camera"),
     ("CFTV/Controle de acesso", "outro"),
+    ("CFTV/Centrais de alarme", "outro"),  # AMT 8000: não são câmeras
     ("Servidores", "servidor"),
     ("Linux servers", "servidor"),
     ("Zabbix servers", "servidor"),

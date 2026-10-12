@@ -433,6 +433,11 @@ def test_classificar_pelo_dhcp(vci: str, hostname: str, tipo: str) -> None:
     assert classificar({"vci": vci, "hostname": hostname})[0] == tipo
 
 
+def test_central_de_alarme_no_zabbix_nao_vira_camera() -> None:
+    tipo, motivo = classificar({"zabbix_grupos": ["CFTV/Centrais de alarme"], "hostname": "CAM-AMT"})
+    assert (tipo, motivo) == ("outro", "monitorado no Zabbix (CFTV/Centrais de alarme)")
+
+
 def test_aplicar_clientes_completa_e_acrescenta() -> None:
     from itgov.api.v1.rede_descoberta import aplicar_clientes
 
