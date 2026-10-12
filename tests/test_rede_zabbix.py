@@ -216,3 +216,79 @@ def test_monitorar_recusar_e_trocar_pela_tela(authed_client, pagina) -> None:
     assert authed_client.post("/gov/rede/zabbix/10.41.1.20/recusar").status_code == 302
     assert "não monitorar" in authed_client.get("/gov/rede").get_data(as_text=True)
     assert authed_client.post("/gov/rede/zabbix/9.9.9.9/monitorar", data={"template": "ICMP Ping"}).status_code == 404
+
+
+# ── Tirar do Zabbix (com aprovação) e filtro ────────────────────────────────
+
+
+def test_remover_apaga_so_host_do_dashboard() -> None:
+    zbx = _Zbx({"hostid": "500", "name": "A15-de-Camila", "tags": [{"tag": "origem", "value": "dashboard-rede"}]})
+    with patch.object(zt, "_zbx", zbx):
+        assert zt.remover("10.41.101.75") == "500"
+    assert zbx.params("host.delete") == ["500"]
+
+    zbx = _Zbx({"hostid": "501", "name": "cam-loja", "tags": []})
+    with patch.object(zt, "_zbx", zbx), pytest.raises(ValueError, match="não foi criado pelo dashboard"):
+        zt.remover("10.0.0.5")
+    assert not any(m == "host.delete" for m, _ in zbx.chamadas)
+    with patch.object(zt, "_zbx", _Zbx()), pytest.raises(ValueError, match="não está no Zabbix"):
+        zt.remover("10.0.0.6")
+
+
+def _monitorar_imp(client) -> None:
+    with patch.object(zt, "monitorar", return_value=("600", True)):
+        client.post("/gov/rede/zabbix/172.29.1.9/monitorar", data={"template": "SNMP Ricoh Printers"})
+
+
+def test_filtro_zabbix_e_tirar_do_zabbix(authed_client, pagina, factory_app) -> None:
+    from app.models.rede import RedeMonitoramento
+
+    _monitorar_imp(authed_client)
+    html = authed_client.get("/gov/rede?zabbix=dashboard").get_data(as_text=True)
+    assert "Incluídos pelo dashboard: 1" in html and "Fora do Zabbix: 1" in html
+    assert "172.29.1.9" in html and "10.41.1.20" not in html and "Tirar do Zabbix" in html
+
+    with patch.object(zt, "remover", return_value="600") as remover:
+        resp = authed_client.post("/gov/rede/zabbix/172.29.1.9/remover", data={"nome": "IMP", "zabbix": "dashboard"})
+    assert resp.status_code == 302 and "zabbix=dashboard" in resp.headers["Location"]
+    remover.assert_called_once_with("172.29.1.9")
+    with factory_app.app_context():
+        assert db.session.get(RedeMonitoramento, "172.29.1.9").decisao == "recusado"
+    html = authed_client.get("/gov/rede?zabbix=fora").get_data(as_text=True)
+    assert "Fora do Zabbix: 2" in html and "172.29.1.9" in html and "não monitorar" in html
+
+    with patch.object(zt, "remover", side_effect=ValueError("não foi criado pelo dashboard")):
+        authed_client.post("/gov/rede/zabbix/10.41.1.20/remover")
+    assert "Não foi possível tirar 10.41.1.20" in authed_client.get("/gov/rede").get_data(as_text=True)
+
+
+def test_tirar_do_zabbix_espera_super_admin(authed_client, pagina, factory_app) -> None:
+    from app.models.aprovacao import PENDENTE, Solicitacao
+    from app.models.user import User
+
+    with factory_app.app_context():
+        chefe = User.query.filter_by(email="pytest-super-rede@test.local").first() or User(
+            name="chefe", email="pytest-super-rede@test.local", role="admin"
+        )
+        chefe.set_password("pytest-only-not-real")
+        chefe.super_admin, chefe.is_active = True, True
+        db.session.add(chefe)
+        db.session.commit()
+    try:
+        _monitorar_imp(authed_client)  # também vira pedido: aplica direto pelo serviço
+        with factory_app.app_context():
+            Solicitacao.query.delete()
+            rede_zabbix.registrar("172.29.1.9", "confirmado", "SNMP Ricoh Printers", "600", por="teste")
+        with patch.object(zt, "remover") as remover:
+            authed_client.post("/gov/rede/zabbix/172.29.1.9/remover", data={"nome": "IMP-01"})
+        remover.assert_not_called()
+        with factory_app.app_context():
+            pedido = Solicitacao.query.filter_by(status=PENDENTE).one()
+            assert pedido.resumo == "Rede: tirar 172.29.1.9 (IMP-01) do monitoramento do Zabbix"
+        html = authed_client.get("/gov/rede").get_data(as_text=True)
+        assert "saída do Zabbix aguardando aprovação" in html
+    finally:
+        with factory_app.app_context():
+            Solicitacao.query.delete()
+            User.query.filter_by(email="pytest-super-rede@test.local").delete()
+            db.session.commit()

@@ -4,7 +4,8 @@ Com o automático ligado (Rede → "Monitorar sozinho no Zabbix"), a cada
 atualização da descoberta os dispositivos com template de confiança alta
 viram host no Zabbix, numa thread e com limite por rodada. Os de confiança
 baixa ficam na tela como sugestão para confirmar ou trocar; "não monitorar"
-fica guardado e não volta a ser sugerido.
+fica guardado e não volta a ser sugerido. Host criado aqui por engano pode
+ser tirado do Zabbix (com aprovação do super admin) e vira "não monitorar".
 """
 
 from __future__ import annotations
@@ -119,6 +120,24 @@ def monitorar(host: dict[str, Any], template: str, grupo: str, interface: str, d
         registrar(host["ip"], "erro", template, erro=str(exc), por=por)
         raise
     registrar(host["ip"], decisao, template, hostid, por=por)
+    return hostid
+
+
+def remover(ip: str, por: str) -> str:
+    """Tira o host do Zabbix e marca o IP como "não monitorar" (o automático não o recria).
+
+    Returns:
+        O ``hostid`` apagado.
+
+    Raises:
+        ValueError, RuntimeError, requests.RequestException: Falha no Zabbix
+            ou host que não foi criado pelo dashboard (nada é gravado).
+    """
+    from itgov.api.v1.rede_monitoring import invalidar_cache
+
+    hostid = zabbix_templates.remover(ip)
+    registrar(ip, "recusado", por=por)
+    invalidar_cache()
     return hostid
 
 

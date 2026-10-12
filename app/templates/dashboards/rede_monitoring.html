@@ -21,7 +21,7 @@
         <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>{{ data.online }} respondendo agora
       </span>
       {% if data.recentes %}
-      <a href="{{ url_for('dashboards.rede_monitoring', status='recentes') }}" class="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 hover:underline">
+      <a href="{{ url_for('dashboards.rede_monitoring', status='recentes', zabbix=zfiltro or None) }}" class="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 hover:underline">
         {{ data.recentes }} novo{{ 's' if data.recentes != 1 }} na rede (7 dias)
       </a>
       {% endif %}
@@ -43,7 +43,7 @@
   {% if cards %}
   <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
     {% for c in cards %}
-    <a href="{{ url_for('dashboards.rede_monitoring', unidade=c.id if c.id else 'sem') }}" class="{{ card }} p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+    <a href="{{ url_for('dashboards.rede_monitoring', unidade=c.id if c.id else 'sem', zabbix=zfiltro or None) }}" class="{{ card }} p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
       <p class="text-xs font-medium text-slate-500 dark:text-slate-400 truncate" title="{{ c.nome }}">{{ c.nome }}</p>
       <p class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{{ c.total }}</p>
       <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 space-x-2">
@@ -142,15 +142,15 @@
     {% endif %}
 
     <nav class="flex flex-wrap gap-2" aria-label="Filtrar por unidade">
-      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
       {% for u in unidades %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
       {% endfor %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
     </nav>
     <nav class="flex flex-wrap items-center gap-2" aria-label="Filtrar por status">
       {% for valor, rotulo in [('', 'Todos'), ('recentes', 'Novos na rede'), ('novos', 'Sem cadastro'), ('cadastrados', 'Cadastrados')] %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None, tipo=tipo or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
       {% endfor %}
     </nav>
     <nav class="flex flex-wrap items-center gap-1.5" aria-label="Filtrar por tipo de dispositivo">
@@ -158,13 +158,21 @@
       {% set chip = 'text-[11px] rounded px-2 py-0.5 border' %}
       {% set chip_off = 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border-transparent hover:border-slate-300 dark:hover:border-slate-500' %}
       {% set chip_on = 'bg-gadens-600 text-white border-gadens-600' %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None) }}" class="{{ chip }} {{ chip_on if not tipo else chip_off }}">Todos</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, zabbix=zfiltro or None) }}" class="{{ chip }} {{ chip_on if not tipo else chip_off }}">Todos</a>
       {% for t, n in revisao.por_tipo.items() %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=None if tipo == t else t) }}" class="{{ chip }} {{ chip_on if tipo == t else chip_off }}" {% if tipo == t %}aria-current="true"{% endif %}>{{ tipo_labels.get(t, t) }}: {{ n }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=None if tipo == t else t, zabbix=zfiltro or None) }}" class="{{ chip }} {{ chip_on if tipo == t else chip_off }}" {% if tipo == t %}aria-current="true"{% endif %}>{{ tipo_labels.get(t, t) }}: {{ n }}</a>
       {% endfor %}
       {% if tipo and tipo not in revisao.por_tipo %}
       <span class="{{ chip }} {{ chip_on }}">{{ tipo_labels.get(tipo, tipo) }}: 0</span>
       {% endif %}
+    </nav>
+
+    <nav class="flex flex-wrap items-center gap-1.5" aria-label="Filtrar pelo monitoramento no Zabbix">
+      <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">Zabbix:</span>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None) }}" class="{{ chip }} {{ chip_on if not zfiltro else chip_off }}">Todos</a>
+      {% for chave, rotulo in filtros_zabbix.items() %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, zabbix=None if zfiltro == chave else chave) }}" class="{{ chip }} {{ chip_on if zfiltro == chave else chip_off }}" {% if zfiltro == chave %}aria-current="true"{% endif %}>{{ rotulo }}: {{ por_zabbix[chave] }}</a>
+      {% endfor %}
     </nav>
 
     <div class="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs">
@@ -237,6 +245,17 @@
                   <input name="template" list="zbx-templates" value="{{ z.template or (z.sugestao.template if z.sugestao else '') }}" aria-label="Template do Zabbix para {{ h.ip }}" class="w-40 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-1 py-0.5">
                   <button type="submit" class="text-gadens-700 dark:text-gadens-300 font-medium hover:underline">{{ 'Trocar' if z.estado == 'pelo_dashboard' else 'Monitorar' }}</button>
                 </form>
+                {% if z.estado == 'pelo_dashboard' %}
+                  {% if h.ip in remocoes_pendentes %}
+                  <span class="block text-[10px] text-amber-700 dark:text-amber-400">saída do Zabbix aguardando aprovação</span>
+                  {% else %}
+                  <form method="POST" action="{{ url_for('dashboards.rede_zabbix_remover', ip=h.ip) }}">
+                    <input type="hidden" name="nome" value="{{ h.ia_nome or (h.hostname if h.hostname != h.ip else '') }}">
+                    <input type="hidden" name="zabbix" value="{{ zfiltro }}">
+                    <button type="submit" data-confirm="Tirar {{ h.ip }} do Zabbix? O host é apagado de lá{{ '' if current_user.super_admin else ' depois que o super admin aprovar' }} e o IP fica como &quot;não monitorar&quot;." class="text-[10px] text-slate-400 hover:text-red-600">Tirar do Zabbix</button>
+                  </form>
+                  {% endif %}
+                {% endif %}
                 {% if z.estado in ('sugestao', 'auto', 'erro') %}
                 <form method="POST" action="{{ url_for('dashboards.rede_zabbix_recusar', ip=h.ip) }}">
                   <input type="hidden" name="tipo" value="{{ tipo }}">
@@ -306,7 +325,7 @@
           <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
             {% for c in classificacoes %}
             <tr>
-              <td class="py-1.5 pr-3 font-medium"><a href="{{ url_for('dashboards.rede_monitoring', tipo=c.chave) }}" class="hover:underline">{{ c.rotulo }}</a></td>
+              <td class="py-1.5 pr-3 font-medium"><a href="{{ url_for('dashboards.rede_monitoring', tipo=c.chave, zabbix=zfiltro or None) }}" class="hover:underline">{{ c.rotulo }}</a></td>
               <td class="pr-3"><code class="bg-slate-100 dark:bg-slate-700 rounded px-1">{{ c.sigla }}</code></td>
               <td class="pr-3">{{ c.lista_palavras|join(', ') or '— (só manual, no cadastro)' }}</td>
               <td class="pr-3 text-right tabular-nums">{{ revisao.por_tipo.get(c.chave, 0) }}</td>

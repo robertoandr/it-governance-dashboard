@@ -190,10 +190,12 @@ def classificar(host: dict[str, Any]) -> tuple[str, str]:
 
 # Nome de host (DHCP) → tipo; a ordem importa (celular antes de "estação")
 _NOMES = (
-    (re.compile(r"IPHONE|IPAD|GALAXY|REDMI|XIAOMI|MOTO[ -]?[A-Z0-9]|POCO|ANDROID", re.I), "movel", "celular/tablet"),
+    (re.compile(r"IPHONE|IPAD|GALAXY|REDMI|XIAOMI|MOTO[ -]?[A-Z0-9]|POCO|ANDROID|TECNO|INFINIX|ONEPLUS"
+                r"|^[AMSZ]\d{2,3}[A-Z]?[-_ ]", re.I), "movel", "celular/tablet"),
     (re.compile(r"PRINTER|IMPRESSORA|EPSON|RICOH|LEXMARK|^(?:BRN|NPI|HP)[0-9A-F]{6,12}$", re.I),
      "impressora", "impressora"),
-    (re.compile(r"\b(?:CAM|DVR|NVR)|HIKVISION|INTELBRAS", re.I), "camera", "câmera/DVR"),
+    # CAM só como palavra (CAM01, CAM-2, CAMERA): "Camila", "Camille" e "CAMON" são celulares
+    (re.compile(r"\b(?:CAM(?:ERA)?|DVR|NVR)(?![A-Z])|HIKVISION|INTELBRAS", re.I), "camera", "câmera/DVR"),
     (re.compile(r"\bSRV|SERVER|SERVIDOR", re.I), "servidor", "servidor"),
     (re.compile(r"^(?:DESKTOP|LAPTOP|NOTE|NB|PC|WS)[-_]|NOTEBOOK", re.I), "endpoint", "computador"),
     (re.compile(r"UNIFI|\bUAP|\bAP[-_]", re.I), "ap", "access point"),
@@ -201,14 +203,18 @@ _NOMES = (
 
 
 def _pelo_dhcp(vci: str, hostname: str) -> tuple[str, str] | None:
-    """Tipo pela classe DHCP (vci) e pelo nome de host que o próprio aparelho informa."""
+    """Tipo pela classe DHCP (vci) e pelo nome de host que o próprio aparelho informa.
+
+    Classe Android vale antes do nome: o nome é livre ("A15-de-Camila") e
+    câmera ou impressora não se apresentam como Android.
+    """
+    baixo = vci.lower()
+    if baixo.startswith("android"):
+        return "movel", f"DHCP {vci}"
     if hostname:
         for padrao, tipo, rotulo in _NOMES:
             if padrao.search(hostname):
                 return tipo, f"nome {hostname} ({rotulo})"
-    baixo = vci.lower()
-    if baixo.startswith("android"):
-        return "movel", f"DHCP {vci}"
     if baixo.startswith("msft"):
         return "endpoint", "DHCP Windows (MSFT)"
     if baixo.startswith("ubnt"):

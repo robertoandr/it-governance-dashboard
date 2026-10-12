@@ -207,3 +207,29 @@ def monitorar(ip: str, nome: str, template: str, grupo: str, interface: str) -> 
     hostid = str(criado["hostids"][0])
     log.info("zabbix_templates.host_criado", ip=ip, template=template, grupo=grupo, hostid=hostid)
     return hostid, True
+
+
+def remover(ip: str) -> str:
+    """Apaga do Zabbix o host criado pelo dashboard para este IP.
+
+    Só apaga hosts com a tag de origem do dashboard: os cadastrados à mão pelo
+    time de infra ficam como estão.
+
+    Args:
+        ip: IP do dispositivo.
+
+    Returns:
+        O ``hostid`` apagado.
+
+    Raises:
+        ValueError: IP sem host no Zabbix ou host que não foi criado pelo dashboard.
+        RuntimeError: Erro da API do Zabbix.
+    """
+    existente = host_por_ip(ip)
+    if existente is None:
+        raise ValueError(f"{ip} não está no Zabbix")
+    if not criado_pelo_dashboard(existente):
+        raise ValueError(f"{ip} é monitorado por {existente['name']}, que não foi criado pelo dashboard")
+    _zbx("host.delete", [existente["hostid"]])
+    log.info("zabbix_templates.host_removido", ip=ip, hostid=existente["hostid"])
+    return str(existente["hostid"])
