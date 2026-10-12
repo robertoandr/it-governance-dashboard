@@ -10,7 +10,8 @@ só. Cria/reaproveita (idempotente):
   - Token de API "whatsapp-resumo" do usuário `alertas-integracao` (leitura em
     todos os hostgroups), guardado na macro global secreta {$WHATSAPP.RESUMO.TOKEN}
   - Item Script `whatsapp.resumo.manha` no host "Zabbix server", agendado
-    para o início da janela (h8m0)
+    para 08:00, 14:00 e 18:00: em dia útil só o das 08:00 manda (a noite);
+    em sábado, domingo e feriado os três mandam o que juntou desde o anterior
   - Trigger avisando se o resumo não sair (item sem valor por 25 h)
 
 Uso (depois do script 09):
@@ -45,10 +46,19 @@ VALUE_TYPE_TEXT = "4"
 ITEM_SCRIPT = "\n".join((_AQUI / "whatsapp" / nome).read_text(encoding="utf-8") for nome in ("comum.js", "resumo.js"))
 
 
-def agendamento(janela_inicio: str) -> str:
-    """Intervalo do item: só o agendamento diário no início da janela ("08:00" → "0;h8m0")."""
-    hora, minuto = (int(x) for x in janela_inicio.split(":"))
-    return f"0;h{hora}m{minuto}"
+def agendamento(*horarios: str) -> str:
+    """Intervalo do item: agendamentos diários, sem repetição ("08:00", "14:00" → "0;h8m0;h14m0").
+
+    O item roda em todos os horários todo dia; em dia útil o resumo.js ignora
+    os horários de fim de semana/feriado.
+    """
+    vistos: list[tuple[int, int]] = []
+    for lista in horarios:
+        for h in lista.split(","):
+            hora, minuto = (int(x) for x in h.strip().split(":"))
+            if (hora, minuto) not in vistos:
+                vistos.append((hora, minuto))
+    return "0;" + ";".join(f"h{h}m{m}" for h, m in sorted(vistos))
 
 
 def parametros_item(mediatypeid: str) -> list[dict[str, str]]:
@@ -65,6 +75,8 @@ def parametros_item(mediatypeid: str) -> list[dict[str, str]]:
         {"name": "janela_inicio", "value": wa.JANELA_INICIO},
         {"name": "janela_fim", "value": wa.JANELA_FIM},
         {"name": "fuso_horas", "value": wa.FUSO_HORAS},
+        {"name": "resumos_folga", "value": wa.RESUMOS_FOLGA},
+        {"name": "feriados_extras", "value": wa.FERIADOS_MACRO},
     ]
 
 
@@ -111,7 +123,7 @@ def main() -> None:
         "name": ITEM_NOME,
         "type": ITEM_TYPE_SCRIPT,
         "value_type": VALUE_TYPE_TEXT,
-        "delay": agendamento(wa.JANELA_INICIO),
+        "delay": agendamento(wa.JANELA_INICIO, wa.RESUMOS_FOLGA),
         "timeout": "60s",
         "history": "30d",
         "params": ITEM_SCRIPT,
@@ -147,7 +159,7 @@ def main() -> None:
             sys.exit(f"  [ERRO] trigger: {exc}")
 
     wa.banner("CONCLUÍDO")
-    print(f"  Item {ITEM_KEY} (ID {itemid}) roda todo dia às {wa.JANELA_INICIO}")
+    print(f"  Item {ITEM_KEY} (ID {itemid}) roda às {wa.JANELA_INICIO} (dia útil) e {wa.RESUMOS_FOLGA} (folga)")
     print("  Teste: Coleta de dados → Itens → Resumo da manhã no WhatsApp → Executar agora\n")
 
 

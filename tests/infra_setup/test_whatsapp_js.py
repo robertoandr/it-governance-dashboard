@@ -320,6 +320,126 @@ def test_resumo_corta_listas_longas() -> None:
     assert "… e mais 5 (veja no Zabbix)" in texto
 
 
+# ── Fim de semana e feriados: só resumos às 08, 14 e 18h ──────────────────
+
+
+@pytest.mark.parametrize(
+    ("ano", "esperado"), [(2025, "2025-04-20"), (2026, "2026-04-05"), (2027, "2027-03-28"), (2038, "2038-04-25")]
+)
+def test_pascoa(ano: int, esperado: str) -> None:
+    ms = _rodar("alerta.js", extra=f"return pascoa({ano});")["r"]
+    assert datetime.fromtimestamp(ms / 1000, UTC).date().isoformat() == esperado
+
+
+@pytest.mark.parametrize(
+    ("data", "folga"),
+    [
+        ("2026-10-10", True),  # sábado
+        ("2026-10-11", True),  # domingo
+        ("2026-10-12", True),  # Nossa Senhora Aparecida (segunda)
+        ("2026-04-03", True),  # Sexta-feira Santa
+        ("2026-06-04", True),  # Corpus Christi (Curitiba)
+        ("2026-09-08", True),  # Nossa Senhora da Luz dos Pinhais (Curitiba)
+        ("2026-11-20", True),  # Consciência Negra
+        ("2026-02-17", False),  # Carnaval é ponto facultativo...
+        ("2026-10-13", False),  # terça comum
+    ],
+)
+def test_dias_de_folga(data: str, folga: bool) -> None:
+    ano, mes, dia = (int(x) for x in data.split("-"))
+    js = f"return ehFolga({{ano: {ano}, mes: {mes - 1}, dia: {dia}}}, '');"
+    assert _rodar("alerta.js", extra=js)["r"] is folga
+
+
+def test_feriado_extra_pela_macro() -> None:
+    js = "return [ehFolga({ano: 2026, mes: 1, dia: 17}, '16/02, 17/02'), ehFolga({ano: 2026, mes: 1, dia: 18}, '2026-02-18')];"
+    assert _rodar("alerta.js", extra=js)["r"] == [True, True]
+
+
+@pytest.mark.parametrize(
+    "hora_utc",
+    ["2026-10-10T15:00:00", "2026-10-12T11:00:00", "2026-10-11T21:00:00"],  # sáb 12h, feriado 08h, dom 18h
+)
+def test_alerta_nao_vai_na_hora_em_folga(hora_utc: str) -> None:
+    saida = _rodar("alerta.js", _alerta(agora_ms=str(_ms(hora_utc)), resumos_folga="08:00,14:00,18:00"))
+
+    assert saida["erro"] is None and not saida["enviados"]
+    assert saida["r"] == "Fim de semana/feriado: vai no resumo das 08:00, 14:00, 18:00"
+
+
+def _folga(agora_utc: str) -> dict[str, Any]:
+    return {
+        **_resumo(agora_utc),
+        "resumos_folga": "08:00,14:00,18:00",
+        "feriados_extras": "{$WHATSAPP.FERIADOS.EXTRAS}",
+    }
+
+
+@pytest.mark.parametrize(
+    ("agora_utc", "de_utc", "ate_utc", "texto"),
+    [
+        # sábado 08:00: a noite de sexta
+        ("2026-10-10T11:00:00", "2026-10-09T22:00:00", "2026-10-10T11:00:00",
+         "☀️ *Bom dia!* Nenhum alerta durante a noite (19:00 às 08:00). ✅"),
+        # sábado 14:00 e 18:00
+        ("2026-10-10T17:00:00", "2026-10-10T11:00:00", "2026-10-10T17:00:00",
+         "🕑 *Boa tarde!* Nenhum alerta durante a manhã (08:00 às 14:00). ✅"),
+        ("2026-10-10T21:00:00", "2026-10-10T17:00:00", "2026-10-10T21:00:00",
+         "🌆 *Boa noite!* Nenhum alerta durante a tarde (14:00 às 18:00). ✅"),
+        # segunda feriado 08:00 (desde domingo 18:00) e terça útil 08:00 (desde o feriado 18:00)
+        ("2026-10-12T11:00:00", "2026-10-11T21:00:00", "2026-10-12T11:00:00",
+         "☀️ *Bom dia!* Nenhum alerta durante a noite (18:00 às 08:00). ✅"),
+        ("2026-10-13T11:00:00", "2026-10-12T21:00:00", "2026-10-13T11:00:00",
+         "☀️ *Bom dia!* Nenhum alerta durante a noite (18:00 às 08:00). ✅"),
+        # execução atrasada alguns minutos ainda é o mesmo resumo
+        ("2026-10-10T17:04:00", "2026-10-10T11:00:00", "2026-10-10T17:00:00",
+         "🕑 *Boa tarde!* Nenhum alerta durante a manhã (08:00 às 14:00). ✅"),
+    ],
+)  # fmt: skip
+def test_resumos_de_folga(agora_utc: str, de_utc: str, ate_utc: str, texto: str) -> None:
+    saida = _rodar("resumo.js", _folga(agora_utc), api={"alert.get": [[]]})
+
+    filtro = saida["chamadas"][0]["params"]
+    assert filtro["time_from"] == _ms(de_utc) // 1000
+    assert filtro["time_till"] == _ms(ate_utc) // 1000 - 1
+    assert _texto(saida) == texto
+
+
+@pytest.mark.parametrize("agora_utc", ["2026-10-07T17:00:00", "2026-10-07T21:10:00"])  # quarta 14:00 e 18:10
+def test_dia_util_nao_manda_resumo_das_14_e_18(agora_utc: str) -> None:
+    saida = _rodar("resumo.js", _folga(agora_utc))
+
+    assert saida["erro"] is None and not saida["enviados"] and not saida["chamadas"]
+    assert saida["r"] == "Dia útil: sem resumo agora (os alertas vão na hora)"
+
+
+def test_resumo_de_folga_com_alertas_avisa_os_horarios() -> None:
+    api = {
+        "alert.get": [[{"eventid": "10", "p_eventid": "0"}]],
+        "event.get": [
+            [
+                {
+                    "eventid": "10",
+                    "name": "ICMP Ping: Unavailable by ICMP ping",
+                    "clock": _seg("2026-10-10T13:00:00"),
+                    "severity": "4",
+                    "r_eventid": "0",
+                    "hosts": _HOST_29,
+                }
+            ]
+        ],
+    }
+
+    linhas = _texto(_rodar("resumo.js", _folga("2026-10-10T17:00:00"), api=api)).splitlines()
+
+    assert linhas[:2] == [
+        "🕑 *Boa tarde! Resumo dos alertas da manhã* (08:00 às 14:00)",
+        "📅 Fim de semana/feriado: alertas só às 08:00, 14:00 e 18:00.",
+    ]
+    assert "• Câmera Shopping 1 - canal 29 — fora do ar (desde 10:00)" in linhas
+    assert linhas[-1] == "Os chamados no Zendesk foram abertos normalmente durante a manhã."
+
+
 # ── Compatibilidade com o Duktape (ES5) e scripts Python ──────────────────
 
 
@@ -342,10 +462,13 @@ def test_script_10_agenda_no_inicio_da_janela_e_usa_token_secreto() -> None:
 
     assert resumo.agendamento("08:00") == "0;h8m0"
     assert resumo.agendamento("07:30") == "0;h7m30"
+    assert resumo.agendamento("08:00", "08:00,14:00,18:00") == "0;h8m0;h14m0;h18m0"
     params = {p["name"]: p["value"] for p in resumo.parametros_item("105")}
     assert params["api_token"] == "{$WHATSAPP.RESUMO.TOKEN}"
     assert params["mediatype_id"] == "105"
     assert (params["janela_inicio"], params["janela_fim"]) == ("08:00", "19:00")
+    assert params["resumos_folga"] == "08:00,14:00,18:00"
+    assert params["feriados_extras"] == "{$WHATSAPP.FERIADOS.EXTRAS}"
     assert "function principal" in resumo.ITEM_SCRIPT
     assert "function mensagemResumo" in resumo.ITEM_SCRIPT
 
