@@ -225,8 +225,10 @@ def _pelo_dhcp(vci: str, hostname: str) -> tuple[str, str] | None:
 def aplicar_clientes(hosts: list[dict[str, Any]], clientes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Completa os hosts com o DHCP/ARP dos FortiGates e acrescenta os que a varredura não viu.
 
-    Nome e MAC só preenchem o que está vazio; o tipo é refeito quando as regras
-    ainda não tinham sinal (``outro``) e o host não é monitorado no Zabbix.
+    Nome e MAC só preenchem o que está vazio. Fora dos hosts monitorados no
+    Zabbix, o tipo é refeito quando as regras não tinham sinal (``outro``) ou
+    quando o DHCP diz o tipo e só havia sinal mais fraco (ex.: AP UniFi com a
+    porta 22 aberta tinha virado "servidor").
 
     Args:
         hosts: Hosts da descoberta (e do nmap).
@@ -253,8 +255,16 @@ def aplicar_clientes(hosts: list[dict[str, Any]], clientes: list[dict[str, Any]]
         h["mac"] = h.get("mac") or c["mac"]
         h["vci"] = c["vci"]
         h["fortigate"] = c["fortigate"]
-        if h.get("tipo_sugerido") in (None, "", "outro") and not h.get("zabbix_grupos"):
+        if h.get("zabbix_grupos"):
+            continue
+        if h.get("tipo_sugerido") in (None, "", "outro"):
             h["tipo_sugerido"], h["motivo"] = classificar(h)
+            continue
+        # Já tinha tipo por sinal fraco (portas, nmap): o DHCP vale mais, a
+        # não ser que um sinal ainda mais forte (SNMP) diga outra coisa.
+        pelo_dhcp = _pelo_dhcp(h["vci"], h["hostname"])
+        if pelo_dhcp and classificar(h)[0] == pelo_dhcp[0]:
+            h["tipo_sugerido"], h["motivo"] = pelo_dhcp
     return hosts
 
 

@@ -246,7 +246,8 @@ def test_filtro_zabbix_e_tirar_do_zabbix(authed_client, pagina, factory_app) -> 
     _monitorar_imp(authed_client)
     html = authed_client.get("/gov/rede?zabbix=dashboard").get_data(as_text=True)
     assert "Incluídos pelo dashboard: 1" in html and "Fora do Zabbix: 1" in html
-    assert "172.29.1.9" in html and "10.41.1.20" not in html and "Tirar do Zabbix" in html
+    assert "172.29.1.9" in html and "10.41.1.20" not in html and "Tirar do Zabbix</button>" in html
+    assert "text-red-700" in html  # botão visível, não texto cinza miúdo
 
     with patch.object(zt, "remover", return_value="600") as remover:
         resp = authed_client.post("/gov/rede/zabbix/172.29.1.9/remover", data={"nome": "IMP", "zabbix": "dashboard"})
