@@ -1,5 +1,7 @@
-// Item Script "Resumo da manhã no WhatsApp": roda às 08:00 e manda, num bloco
-// só, o que o webhook segurou fora do horário (19:00 de ontem → 08:00 de hoje).
+// Item Script "Resumo da manhã no WhatsApp": roda às 08:00, 14:00 e 18:00 e
+// manda, num bloco só, o que o webhook segurou desde o último marco: em dia
+// útil, a noite (19:00 → 08:00); em fim de semana/feriado, cada intervalo
+// entre os resumos (18:00 → 08:00 → 14:00 → 18:00).
 // A fila é o próprio histórico de alertas do Zabbix (alert.get), sem estado.
 
 var LIMITE_LINHAS = 25;
@@ -19,17 +21,58 @@ function chamarApi(p, metodo, args) {
     return json.result;
 }
 
-/** Início e fim (ms) da última noite já encerrada até `agoraMs`. */
-function janelaDaNoite(agoraMs, p) {
+var TOLERANCIA_MS = 30 * 60000; // atraso aceito entre o horário agendado e a execução
+
+/** Marcos de um dia (ms UTC): resumos e fim da janela ao vivo dos dias úteis. */
+function marcosDoDia(meiaNoite, p) {
+    var l = local(meiaNoite + 12 * 3600000, parseFloat(p.fuso_horas));
+    var marcos = [];
+    if (ehFolga(l, p.feriados_extras)) {
+        horarios(p.resumos_folga).forEach(function (h) {
+            marcos.push({ms: meiaNoite + minutos(h) * 60000, resumo: true});
+        });
+    } else {
+        marcos.push({ms: meiaNoite + minutos(p.janela_inicio) * 60000, resumo: true});
+        marcos.push({ms: meiaNoite + minutos(p.janela_fim) * 60000, resumo: false});
+    }
+    return marcos;
+}
+
+/**
+ * Período que o resumo de agora cobre: do último marco (resumo anterior ou
+ * fim da janela ao vivo) até o último horário de resumo já alcançado.
+ * Em dia útil o item também roda às 14:00 e 18:00 (horários de folga); aí
+ * não há resumo e a função devolve null.
+ */
+function periodoDoResumo(agoraMs, p) {
     var fuso = parseFloat(p.fuso_horas);
     var l = local(agoraMs, fuso);
-    var meiaNoite = Date.UTC(l.ano, l.mes, l.dia) - fuso * 3600000;
-    var fim = meiaNoite + minutos(p.janela_inicio) * 60000;
-    if (agoraMs < fim) {
-        fim -= 86400000;
+    var hoje = Date.UTC(l.ano, l.mes, l.dia) - fuso * 3600000;
+    var marcos = [];
+    for (var d = 0; d <= 10; d++) {
+        marcos = marcos.concat(marcosDoDia(hoje - d * 86400000, p));
     }
-    var inicio = fim - 86400000 + (minutos(p.janela_fim) - minutos(p.janela_inicio)) * 60000;
-    return {inicio: inicio, fim: fim};
+    marcos.sort(function (a, b) { return b.ms - a.ms; });
+
+    var deHoje = marcosDoDia(hoje, p);
+    var agendados = horarios(p.resumos_folga).concat([p.janela_inicio]);
+    for (var i = 0; i < agendados.length; i++) {
+        var slot = hoje + minutos(agendados[i]) * 60000;
+        var ehResumo = deHoje.some(function (m) { return m.resumo && m.ms === slot; });
+        if (!ehResumo && agoraMs >= slot && agoraMs < slot + TOLERANCIA_MS) {
+            return null;
+        }
+    }
+
+    var fim = null;
+    for (var k = 0; k < marcos.length; k++) {
+        if (fim === null && marcos[k].resumo && marcos[k].ms <= agoraMs) {
+            fim = marcos[k].ms;
+        } else if (fim !== null && marcos[k].ms < fim) {
+            return {inicio: marcos[k].ms, fim: fim, folga: ehFolga(local(fim, fuso), p.feriados_extras)};
+        }
+    }
+    throw 'sem horário de resumo nos últimos 10 dias';
 }
 
 function horaDe(segundos, p) {
@@ -85,22 +128,36 @@ function secao(titulo, grupos, p) {
     return linhas;
 }
 
-function mensagemResumo(grupos, p) {
-    var periodo = '(' + p.janela_fim + ' às ' + p.janela_inicio + ')';
+/** "08:00, 14:00 e 18:00". */
+function emLista(itens) {
+    return itens.length > 1 ? itens.slice(0, -1).join(', ') + ' e ' + itens[itens.length - 1] : itens.join('');
+}
+
+function mensagemResumo(grupos, periodo, p) {
+    var horaFim = local(periodo.fim, parseFloat(p.fuso_horas)).hora;
+    var saudacao = horaFim < 12 ? '☀️ *Bom dia!' : horaFim < 18 ? '🕑 *Boa tarde!' : '🌆 *Boa noite!';
+    var parte = horaFim <= 12 ? 'noite' : horaFim <= 15 ? 'manhã' : 'tarde';
+    var intervalo = '(' + horaDe(periodo.inicio / 1000, p) + ' às ' + horaDe(periodo.fim / 1000, p) + ')';
     if (!grupos.length) {
-        return '☀️ *Bom dia!* Nenhum alerta durante a noite ' + periodo + '. ✅';
+        return saudacao + '* Nenhum alerta durante a ' + parte + ' ' + intervalo + '. ✅';
     }
     var ativos = grupos.filter(function (g) { return g.ativo; });
     var resolvidos = grupos.filter(function (g) { return !g.ativo; });
-    var linhas = ['☀️ *Bom dia! Resumo dos alertas da noite* ' + periodo];
+    var linhas = [saudacao + ' Resumo dos alertas da ' + parte + '* ' + intervalo];
+    if (periodo.folga) {
+        linhas.push('📅 Fim de semana/feriado: alertas só às ' + emLista(horarios(p.resumos_folga)) + '.');
+    }
     linhas = linhas.concat(secao('🔴 *Ainda com problema*', ativos, p));
     linhas = linhas.concat(secao('✅ *Já voltaram ao normal*', resolvidos, p));
-    linhas.push('', 'Os chamados no Zendesk foram abertos normalmente durante a noite.');
+    linhas.push('', 'Os chamados no Zendesk foram abertos normalmente durante a ' + parte + '.');
     return linhas.join('\n');
 }
 
 function principal(p, agoraMs) {
-    var janela = janelaDaNoite(agoraMs, p);
+    var janela = periodoDoResumo(agoraMs, p);
+    if (janela === null) {
+        return 'Dia útil: sem resumo agora (os alertas vão na hora)';
+    }
     var alertas = chamarApi(p, 'alert.get', {
         output: ['eventid', 'p_eventid'],
         actionids: [p.acao_id],
@@ -135,7 +192,7 @@ function principal(p, agoraMs) {
         grupos = agrupar(eventos, recuperacoes);
     }
 
-    enviarWhatsApp(p, mensagemResumo(grupos, p));
+    enviarWhatsApp(p, mensagemResumo(grupos, janela, p));
     return 'Resumo enviado: ' + ids.length + ' alerta(s) em ' + grupos.length + ' linha(s)';
 }
 

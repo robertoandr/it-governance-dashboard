@@ -7,7 +7,9 @@ Cria/reaproveita (idempotente):
   - Media type webhook "WhatsApp (Evolution)" — POST /message/sendText na
     instância `alertas-zabbix` (chip 41 98903-8337). O texto é montado em
     português simples por whatsapp/alerta.js; fora das 08:00–19:00 o envio
-    fica para o resumo da manhã (10_create_whatsapp_resumo.py)
+    fica para o resumo da manhã (10_create_whatsapp_resumo.py). Sábado,
+    domingo e feriado (nacionais + Curitiba) só vão resumos às 08, 14 e 18h
+  - Macro global {$WHATSAPP.FERIADOS.EXTRAS} (vazia; não sobrescreve)
   - Mídia no usuário `alertas-integracao` apontando para o grupo de destino
   - Operação na ação 12 (mesmo passo 2 do Zendesk, ou seja, só alerta se o
     problema durar >= 5 min). Recovery/update já são "notificar todos os
@@ -80,6 +82,11 @@ MEDIATYPE_TYPE_WEBHOOK = "4"
 JANELA_INICIO = "08:00"
 JANELA_FIM = "19:00"
 FUSO_HORAS = "-3"
+# Sábado, domingo e feriados (nacionais + Curitiba, em whatsapp/comum.js): nada
+# na hora, só resumos nestes horários. Feriados a mais (ex.: Carnaval) vão na
+# macro abaixo, "DD/MM" ou "AAAA-MM-DD" separados por vírgula.
+RESUMOS_FOLGA = "08:00,14:00,18:00"
+FERIADOS_MACRO = "{$WHATSAPP.FERIADOS.EXTRAS}"
 
 # Sandbox JS do Zabbix Server — `value` é o JSON dos `parameters` abaixo.
 _JS = Path(__file__).resolve().parent / "whatsapp"
@@ -218,6 +225,13 @@ def main() -> None:
     banner("1. Macros globais {$EVO.URL} / {$EVO.APIKEY}")
     _ensure_global_macro(api, "{$EVO.URL}", EVO_URL, "Evolution API (WhatsApp) na rede Docker")
     _ensure_global_macro(api, "{$EVO.APIKEY}", EVO_API_KEY, "Chave global da Evolution API", secret=True)
+    if api.usermacro.get(globalmacro=True, output=["globalmacroid"], filter={"macro": FERIADOS_MACRO}):
+        info(f"Macro global {FERIADOS_MACRO} já existe — valor mantido")
+    else:
+        api.usermacro.createglobal(
+            macro=FERIADOS_MACRO, value="", description='Feriados a mais no WhatsApp: "DD/MM" ou "AAAA-MM-DD", vírgula'
+        )
+        ok(f"Macro global criada: {FERIADOS_MACRO} (vazia)")
 
     banner(f"2. Media type '{MEDIATYPE_NAME}'")
     mediatype_def = {
@@ -248,6 +262,8 @@ def main() -> None:
             {"name": "janela_inicio", "value": JANELA_INICIO},
             {"name": "janela_fim", "value": JANELA_FIM},
             {"name": "fuso_horas", "value": FUSO_HORAS},
+            {"name": "resumos_folga", "value": RESUMOS_FOLGA},
+            {"name": "feriados_extras", "value": FERIADOS_MACRO},
         ],
         "message_templates": MESSAGE_TEMPLATES,
     }

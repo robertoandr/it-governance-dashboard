@@ -111,3 +111,48 @@ function enviarWhatsApp(p, mensagem) {
         throw 'Evolution respondeu HTTP ' + req.getStatus() + ': ' + resp;
     }
 }
+
+// ── Fim de semana e feriados (nacionais + Curitiba/PR) ────────────────────
+// Nesses dias o webhook não manda nada na hora: os alertas vão em resumos
+// nos horários de `resumos_folga` (padrão 08:00, 14:00 e 18:00).
+
+// Fixos, "DD/MM": nacionais (Lei 662/1949, 6.802/1980 e 14.759/2023) e
+// Nossa Senhora da Luz dos Pinhais (padroeira de Curitiba).
+var FERIADOS_FIXOS = ['01/01', '21/04', '01/05', '07/09', '08/09', '12/10', '02/11', '15/11', '20/11', '25/12'];
+
+/** Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher) em ms UTC. */
+function pascoa(ano) {
+    var a = ano % 19, b = Math.floor(ano / 100), c = ano % 100;
+    var d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    var g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+    var i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+    var m = Math.floor((a + 11 * h + 22 * l) / 451);
+    var mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return Date.UTC(ano, mes - 1, dia);
+}
+
+/** Feriado nacional ou de Curitiba (mais os extras "DD/MM" ou "AAAA-MM-DD", separados por vírgula). */
+function ehFeriado(ano, mes, dia, extras) {
+    var ddmm = dois(dia) + '/' + dois(mes + 1);
+    var iso = ano + '-' + dois(mes + 1) + '-' + dois(dia);
+    var lista = FERIADOS_FIXOS.concat(String(texto(extras)).split(','));
+    for (var i = 0; i < lista.length; i++) {
+        var f = lista[i].trim();
+        if (f === ddmm || f === iso) {
+            return true;
+        }
+    }
+    var diasDaPascoa = Math.round((Date.UTC(ano, mes, dia) - pascoa(ano)) / 86400000);
+    return diasDaPascoa === -2 || diasDaPascoa === 60; // Sexta-feira Santa e Corpus Christi (Curitiba)
+}
+
+/** Sábado, domingo ou feriado (data local de `local()`). */
+function ehFolga(l, extras) {
+    var semana = new Date(Date.UTC(l.ano, l.mes, l.dia)).getUTCDay();
+    return semana === 0 || semana === 6 || ehFeriado(l.ano, l.mes, l.dia, extras);
+}
+
+/** "08:00,14:00,18:00" → ['08:00', '14:00', '18:00']. */
+function horarios(lista) {
+    return String(texto(lista) || '08:00,14:00,18:00').split(',').map(function (h) { return h.trim(); });
+}
