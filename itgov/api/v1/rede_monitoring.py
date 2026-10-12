@@ -575,6 +575,13 @@ def _buscar_rede() -> dict:
     }
 
 
+def invalidar_cache() -> None:
+    """Força nova leitura na próxima visita (ex.: host tirado do Zabbix)."""
+    global _cache_data
+    with _lock:
+        _cache_data = None
+
+
 def get_cached_rede_summary() -> dict:
     """Retorna dados de rede com cache TTL 5min."""
     global _cache_data, _cache_ts

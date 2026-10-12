@@ -1151,12 +1151,27 @@ def rede_monitoring() -> str:
     feitas = rede_zabbix.decisoes()
     zbx = {h["ip"]: rede_zabbix.situacao(h, feitas.get(h["ip"])) for h in revisao["hosts"]}
     estados = [z["estado"] for z in zbx.values()]
+    por_zabbix = {chave: sum(1 for e in estados if e in aceitos) for chave, (_, aceitos) in FILTROS_ZABBIX.items()}
+    zfiltro = request.args.get("zabbix", "")
+    if zfiltro in FILTROS_ZABBIX:
+        aceitos = FILTROS_ZABBIX[zfiltro][1]
+        revisao["hosts"] = [h for h in revisao["hosts"] if zbx[h["ip"]]["estado"] in aceitos]
+        revisao["total"] = len(revisao["hosts"])
+        revisao["novos"] = sum(1 for h in revisao["hosts"] if not h["ativo"])
+        revisao["cadastrados"] = revisao["total"] - revisao["novos"]
+        revisao["recentes"] = sum(1 for h in revisao["hosts"] if h.get("recente"))
+    else:
+        zfiltro = ""
     return render_template(
         "dashboards/rede_monitoring.html",
         data=data,
         revisao=revisao,
         zbx=zbx,
         zbx_auto=rede_zabbix.auto_ligado(),
+        zfiltro=zfiltro,
+        filtros_zabbix={chave: rotulo for chave, (rotulo, _) in FILTROS_ZABBIX.items()},
+        por_zabbix=por_zabbix,
+        remocoes_pendentes=_remocoes_pendentes(),
         zbx_contagem={"auto": estados.count("auto"), "sugestao": estados.count("sugestao")},
         zbx_templates=templates_disponiveis()
         if any(e != "monitorado" and e != "nao_se_aplica" for e in estados)
@@ -1419,6 +1434,44 @@ def rede_zabbix_recusar(ip: str) -> object:
     log.info("rede.zabbix_recusar", ip=ip, user=current_user.email)
     flash(f"{ip} não será monitorado no Zabbix.", "success")
     return redirect(url_for("dashboards.rede_monitoring", tipo=request.form.get("tipo") or None))
+
+
+@bp.route("/rede/zabbix/<ip>/remover", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="rede", nivel="alterar")
+@requer_aprovacao(lambda ip: f"Rede: tirar {ip} ({request.form.get('nome') or 'sem nome'}) do monitoramento do Zabbix")
+def rede_zabbix_remover(ip: str) -> object:
+    """Apaga do Zabbix o host criado pelo dashboard e marca o IP como "não monitorar"."""
+    import requests as _requests
+
+    from app.services import rede_zabbix
+
+    try:
+        hostid = rede_zabbix.remover(ip, current_user.email)
+    except (_requests.RequestException, RuntimeError, ValueError) as exc:
+        flash(f"Não foi possível tirar {ip} do Zabbix: {exc}", "error")
+        return redirect(url_for("dashboards.rede_monitoring", zabbix=request.form.get("zabbix") or None))
+    log.info("rede.zabbix_remover", ip=ip, hostid=hostid, user=current_user.email)
+    flash(f"{ip} saiu do Zabbix e não será mais monitorado.", "success")
+    return redirect(url_for("dashboards.rede_monitoring", zabbix=request.form.get("zabbix") or None))
+
+
+def _remocoes_pendentes() -> set[str]:
+    """IPs com pedido de "tirar do Zabbix" esperando o super admin."""
+    import json
+
+    from app.models.aprovacao import PENDENTE, Solicitacao
+
+    pedidos = Solicitacao.query.filter_by(status=PENDENTE, endpoint="dashboards.rede_zabbix_remover").all()
+    return {str(json.loads(p.view_args_json or "{}").get("ip", "")) for p in pedidos}
+
+
+# Filtro "Zabbix" da página Rede → estados de ``rede_zabbix.situacao`` que entram
+FILTROS_ZABBIX: dict[str, tuple[str, frozenset[str]]] = {
+    "no_zabbix": ("No Zabbix", frozenset({"monitorado", "pelo_dashboard"})),
+    "dashboard": ("Incluídos pelo dashboard", frozenset({"pelo_dashboard"})),
+    "fora": ("Fora do Zabbix", frozenset({"auto", "sugestao", "recusado", "erro", "nao_se_aplica"})),
+}
 
 
 @bp.route("/ativos-rede")

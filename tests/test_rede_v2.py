@@ -418,6 +418,15 @@ def test_dispara_logo_apos_o_boot(factory_app, monkeypatch: pytest.MonkeyPatch) 
         ("ubnt", "", "ap"),
         ("", "SRV-ARQUIVOS", "servidor"),
         ("udhcpc1.21.1", "", "outro"),
+        # celulares com nome que lembra "CAM" (entraram no Zabbix como câmera)
+        ("android-dhcp-16", "A15-de-Camila", "movel"),
+        ("", "S24-de-Camila", "movel"),
+        ("", "TECNO-CAMON-17-Pro", "movel"),
+        ("", "Camille", "outro"),
+        ("", "CAM01", "camera"),
+        ("", "CAM-12", "camera"),
+        ("", "CAMERA-LOJA", "camera"),
+        ("", "NVR_SEDE", "camera"),
     ],
 )
 def test_classificar_pelo_dhcp(vci: str, hostname: str, tipo: str) -> None:
