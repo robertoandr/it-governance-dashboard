@@ -463,6 +463,49 @@ def test_aplicar_clientes_completa_e_acrescenta() -> None:
     assert novo["origem"] == "fortigate" and novo["tipo_sugerido"] == "movel" and not novo["online"]
 
 
+def test_dhcp_corrige_tipo_que_veio_so_das_portas() -> None:
+    from itgov.api.v1.rede_descoberta import aplicar_clientes
+
+    unifi = {
+        "ip": "172.17.1.34",
+        "hostname": "",
+        "mac": "",
+        "portas": "22",
+        "tipo_sugerido": "servidor",
+        "motivo": "portas [22]",
+        "zabbix_grupos": [],
+        "origem": "zabbix",
+        "online": True,
+    }
+    impressora = {
+        "ip": "172.17.1.40",
+        "hostname": "",
+        "mac": "",
+        "portas": "22",
+        "snmp_descr": "RICOH IM C3000",
+        "tipo_sugerido": "impressora",
+        "zabbix_grupos": [],
+        "origem": "zabbix",
+        "online": True,
+    }
+    clientes = [
+        {
+            "ip": "172.17.1.34",
+            "mac": "0C:EA:14:41:21:01",
+            "hostname": "AP06UNIFI-Porta23-sw-borda02",
+            "vci": "ubnt",
+            "fonte": "dhcp",
+            "fortigate": "Hauer",
+        },
+        {"ip": "172.17.1.40", "mac": "AA:40", "hostname": "", "vci": "ubnt", "fonte": "dhcp", "fortigate": "Hauer"},
+    ]
+    por_ip = {h["ip"]: h for h in aplicar_clientes([unifi, impressora], clientes)}  # fmt: skip
+
+    assert por_ip["172.17.1.34"]["tipo_sugerido"] == "ap"
+    assert por_ip["172.17.1.34"]["motivo"] == "nome AP06UNIFI-Porta23-sw-borda02 (access point)"
+    assert por_ip["172.17.1.40"]["tipo_sugerido"] == "impressora"  # SNMP vale mais que o DHCP
+
+
 def test_primeira_leitura_do_fortigate_vira_baseline(factory_app) -> None:
     ips = ["198.51.100.31", "198.51.100.32"]
     with factory_app.app_context():
