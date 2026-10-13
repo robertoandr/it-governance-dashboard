@@ -17,6 +17,7 @@ from app.services import rede_ia
 from itgov.api.v1 import rede_monitoring
 from itgov.api.v1.rede_descoberta import (
     classificar,
+    eh_celular,
     faixas_fora_da_varredura,
     hosts_da_descoberta,
     latencia_por_unidade,
@@ -450,7 +451,7 @@ def test_aplicar_clientes_completa_e_acrescenta() -> None:
     clientes = [
         {"ip": "10.41.100.5", "mac": "AA:01", "hostname": "DESKTOP-X", "vci": "MSFT 5.0", "fonte": "dhcp",
          "fortigate": "Shopping"},
-        {"ip": "10.41.100.9", "mac": "AA:09", "hostname": "android-123", "vci": "android-dhcp-14", "fonte": "dhcp",
+        {"ip": "10.41.100.9", "mac": "AA:09", "hostname": "intelbras-9", "vci": "udhcp 1.27.2", "fonte": "dhcp",
          "fortigate": "Shopping"},
         {"ip": "10.41.101.7", "mac": "AA:07", "hostname": "", "vci": "android-dhcp-16", "fonte": "dhcp",
          "fortigate": "Shopping"},
@@ -620,3 +621,42 @@ def test_cadastrar_classificacao_reclassifica_e_remove(authed_client, pagina, se
     assert authed_client.post("/gov/rede/classificacoes/impressora_ricoh/remover").status_code == 404
     html = authed_client.get("/gov/rede").get_data(as_text=True)
     assert "Impressora: 1" in html
+
+
+# ── Celular (Android/iOS) nunca vai para o Zabbix ───────────────────────────
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        {"vci": "android-dhcp-16", "hostname": "qualquer"},
+        {"hostname": "iPhone-de-Ana"},
+        {"hostname": "iPad"},
+        {"hostname": "SM-A155M"},
+        {"hostname": "moto-g84"},
+        {"hostname": "REDMI-NOTE-13"},
+        {"hostname": "x", "ia_nome": "Galaxy S23"},
+    ],
+)
+def test_eh_celular(host: dict) -> None:
+    assert eh_celular(host)
+
+
+@pytest.mark.parametrize("host", [{"vci": "MSFT 5.0", "hostname": "Camille"}, {"hostname": "CAM01"}, {}])
+def test_nao_e_celular(host: dict) -> None:
+    assert eh_celular(host) == ""
+
+
+def test_celular_no_zabbix_continua_celular() -> None:
+    tipo, motivo = classificar({"zabbix_grupos": ["CFTV/Cameras"], "hostname": "S24-de-Camila (172.29.3.61)"})
+    assert tipo == "movel" and "celular" in motivo
+
+
+def test_dhcp_android_reclassifica_host_que_estava_no_zabbix() -> None:
+    from itgov.api.v1.rede_descoberta import aplicar_clientes
+
+    hosts = [{"ip": "10.0.0.9", "hostname": "x", "mac": "", "tipo_sugerido": "camera",
+              "zabbix_grupos": ["CFTV/Cameras"]}]  # fmt: skip
+    clientes = [{"ip": "10.0.0.9", "hostname": "", "mac": "AA", "vci": "android-dhcp-16", "fonte": "dhcp",
+                 "fortigate": "fg"}]  # fmt: skip
+    assert aplicar_clientes(hosts, clientes)[0]["tipo_sugerido"] == "movel"

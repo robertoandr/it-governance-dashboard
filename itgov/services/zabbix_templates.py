@@ -19,6 +19,7 @@ import structlog
 from pydantic import BaseModel
 
 from itgov.api.v1.cftv_monitoring import _zbx
+from itgov.api.v1.rede_descoberta import eh_celular
 from itgov.utils.cache_swr import CacheSWR
 
 log = structlog.get_logger(__name__)
@@ -74,7 +75,7 @@ def sugerir(host: dict[str, Any]) -> Sugestao | None:
         A sugestão, ou None para tipos que não se monitora (celular, estação).
     """
     tipo = str(host.get("tipo_sugerido") or "outro")
-    if tipo in NAO_MONITORAR:
+    if tipo in NAO_MONITORAR or eh_celular(host):
         return None
     texto, snmp = _texto(host), bool(host.get("has_snmp") or host.get("snmp_descr"))
     for t, padrao, template, grupo, interface, exige_snmp in _REGRAS:
