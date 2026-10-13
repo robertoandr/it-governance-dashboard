@@ -293,3 +293,12 @@ def test_tirar_do_zabbix_espera_super_admin(authed_client, pagina, factory_app) 
             Solicitacao.query.delete()
             User.query.filter_by(email="pytest-super-rede@test.local").delete()
             db.session.commit()
+
+
+def test_celular_nunca_e_sugerido_nem_monitorado() -> None:
+    celular = {"ip": "10.0.0.7", "tipo_sugerido": "camera", "hostname": "A15-de-Camila", "vci": "android-dhcp-16"}
+    assert zt.sugerir(celular) is None
+    zbx = _Zbx()
+    with patch.object(zt, "_zbx", zbx), pytest.raises(ValueError, match="celular não entra no Zabbix"):
+        rede_zabbix.monitorar(celular, "ICMP Ping", "CFTV/Cameras", "agente", "auto", "automático")
+    assert not zbx.chamadas

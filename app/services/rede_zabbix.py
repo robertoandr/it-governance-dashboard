@@ -19,6 +19,7 @@ import requests
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
+from itgov.api.v1.rede_descoberta import eh_celular
 from itgov.services import zabbix_templates
 
 if TYPE_CHECKING:
@@ -111,8 +112,11 @@ def monitorar(host: dict[str, Any], template: str, grupo: str, interface: str, d
 
     Raises:
         ValueError, RuntimeError, requests.RequestException: Falha no Zabbix
-            (a decisão fica gravada como ``erro``).
+            (a decisão fica gravada como ``erro``). Celular (Android/iOS)
+            é recusado com ValueError antes de chegar ao Zabbix.
     """
+    if celular := eh_celular(host):
+        raise ValueError(f"{host['ip']} é celular ({celular}): celular não entra no Zabbix")
     nome = str(host.get("ia_nome") or (host.get("hostname") if host.get("hostname") != host["ip"] else "") or "")
     try:
         hostid, _ = zabbix_templates.monitorar(host["ip"], nome, template, grupo, interface)

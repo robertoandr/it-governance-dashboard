@@ -152,6 +152,10 @@ def classificar(host: dict[str, Any]) -> tuple[str, str]:
     Returns:
         ``(tipo, motivo)``.
     """
+    # Celular (Android/iOS) é celular até dentro do Zabbix: não pode virar câmera
+    celular = eh_celular(host)
+    if celular:
+        return "movel", celular
     for grupo, tipo in _GRUPOS:
         if grupo in host.get("zabbix_grupos", []):
             return tipo, f"monitorado no Zabbix ({grupo})"
@@ -188,10 +192,40 @@ def classificar(host: dict[str, Any]) -> tuple[str, str]:
     return "outro", "só responde a ping"
 
 
+# Celular/tablet Android ou iOS pelo nome: marcas e modelos (A15-, S24-, SM-A155M)
+_CELULAR = re.compile(
+    r"IPHONE|IPAD|IPOD|GALAXY|REDMI|XIAOMI|MOTO[ -]?[A-Z0-9]|MOTOROLA|POCO|ANDROID|TECNO|INFINIX|ONEPLUS|HONOR"
+    r"|REALME|OPPO|^SM-[A-Z]\d|^[AMSZ]\d{2,3}[A-Z]?[-_ ]",
+    re.I,
+)
+
+
+def eh_celular(host: dict[str, Any]) -> str:
+    """Diz se o host é celular/tablet (Android ou iOS), que nunca vai para o Zabbix.
+
+    Sinais: classe DHCP Android (``android-dhcp-*``) e nome de host do
+    aparelho (iPhone, iPad, Galaxy, A15-de-Fulano...). Valem mesmo para
+    host que já está no Zabbix.
+
+    Args:
+        host: Host da descoberta (``vci``, ``hostname``, ``ia_nome``).
+
+    Returns:
+        O motivo (ex.: ``"DHCP android-dhcp-16"``), ou ``""`` se não é celular.
+    """
+    vci = str(host.get("vci") or "")
+    if vci.lower().startswith("android"):
+        return f"DHCP {vci}"
+    for campo in ("hostname", "ia_nome"):
+        nome = str(host.get(campo) or "")
+        if nome and _CELULAR.search(nome):
+            return f"nome {nome} (celular/tablet)"
+    return ""
+
+
 # Nome de host (DHCP) → tipo; a ordem importa (celular antes de "estação")
 _NOMES = (
-    (re.compile(r"IPHONE|IPAD|GALAXY|REDMI|XIAOMI|MOTO[ -]?[A-Z0-9]|POCO|ANDROID|TECNO|INFINIX|ONEPLUS"
-                r"|^[AMSZ]\d{2,3}[A-Z]?[-_ ]", re.I), "movel", "celular/tablet"),
+    (_CELULAR, "movel", "celular/tablet"),
     (re.compile(r"PRINTER|IMPRESSORA|EPSON|RICOH|LEXMARK|^(?:BRN|NPI|HP)[0-9A-F]{6,12}$", re.I),
      "impressora", "impressora"),
     # CAM só como palavra (CAM01, CAM-2, CAMERA): "Camila", "Camille" e "CAMON" são celulares
@@ -255,6 +289,9 @@ def aplicar_clientes(hosts: list[dict[str, Any]], clientes: list[dict[str, Any]]
         h["mac"] = h.get("mac") or c["mac"]
         h["vci"] = c["vci"]
         h["fortigate"] = c["fortigate"]
+        if celular := eh_celular(h):
+            h["tipo_sugerido"], h["motivo"] = "movel", celular
+            continue
         if h.get("zabbix_grupos"):
             continue
         if h.get("tipo_sugerido") in (None, "", "outro"):
