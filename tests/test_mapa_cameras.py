@@ -213,3 +213,9 @@ class TestUploadGrandeNoMapa:
 
     def test_auth_request_nao_repassa_o_corpo(self) -> None:
         assert "proxy_pass_request_body off;" in self._auth_location()
+
+
+def test_mapa_espera_conversao_de_planta() -> None:
+    # 14/10/2026: planta DWG convertida no MapaCameras leva ~2 min; 120 s cortava o upload.
+    tempo = re.search(r"proxy_read_timeout\s+(\d+)s;", _mapa_location())
+    assert tempo and int(tempo.group(1)) >= 600
