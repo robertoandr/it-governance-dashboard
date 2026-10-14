@@ -291,6 +291,30 @@ def test_definir_super_admin_marca_um_so_e_garante_admin(factory_app) -> None:
             db.session.commit()
 
 
+def test_definir_super_admin_aceita_varios(factory_app) -> None:
+    a = _usuario(factory_app, "pytest-multi-a@test.local", "gestor")
+    b = _usuario(factory_app, "pytest-multi-b@test.local", "admin")
+    c = _usuario(factory_app, "pytest-multi-c@test.local", "admin", super_admin=True)
+    try:
+        with factory_app.app_context():
+            definir_super_admin("pytest-multi-a@test.local, PYTEST-MULTI-B@test.local ,ninguem@test.local")
+            ua, ub, uc = (db.session.get(User, x) for x in (a, b, c))
+            assert (ua.super_admin, ua.role) == (True, "admin")
+            assert ub.super_admin is True
+            assert uc.super_admin is False
+    finally:
+        with factory_app.app_context():
+            User.query.filter(User.email.like("pytest-multi-%")).delete(synchronize_session=False)
+            db.session.commit()
+
+
+def test_padrao_tem_roberto_e_allan(monkeypatch) -> None:
+    from app.services.aprovacoes import super_admin_email
+
+    monkeypatch.delenv("SUPER_ADMIN_EMAIL", raising=False)
+    assert super_admin_email() == "roberto@grupogadens.com.br,allan.kepel@grupogadens.com.br"
+
+
 def test_garantir_coluna_super_admin(tmp_path) -> None:
     engine = create_engine(f"sqlite:///{tmp_path / 'antigo.db'}")
     with engine.begin() as conn:

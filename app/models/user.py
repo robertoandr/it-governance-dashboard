@@ -162,29 +162,34 @@ def garantir_coluna_permissoes(engine: Engine | None = None) -> None:
     _garantir_coluna("permissoes", engine, "TEXT NOT NULL DEFAULT '{}'")
 
 
-def definir_super_admin(email: str) -> None:
-    """Marca como super admin a conta com este e-mail (e só ela).
+def definir_super_admin(emails: str) -> None:
+    """Marca como super admin as contas com estes e-mails (e só elas).
 
-    Só age quando a conta existe; garante papel admin e desmarca qualquer
-    outra conta. E-mail vazio não muda nada.
+    Aceita vários e-mails separados por vírgula. Só age sobre contas que
+    existem; garante papel admin e desmarca as outras contas. Se nenhum
+    e-mail tiver conta, não muda nada (não deixa o sistema sem super admin
+    por erro de digitação). Texto vazio não muda nada.
 
     Args:
-        email: E-mail do super admin (``SUPER_ADMIN_EMAIL``).
+        emails: E-mail(s) do super admin (``SUPER_ADMIN_EMAIL``).
     """
-    email = email.strip().lower()
-    if not email:
+    lista = [e.strip().lower() for e in emails.replace(";", ",").split(",") if e.strip()]
+    if not lista:
         return
-    alvo = User.query.filter_by(email=email).first()
-    if alvo is None:
-        log.warning("users.super_admin_sem_conta", email=email)
+    alvos = User.query.filter(User.email.in_(lista)).all()
+    for faltando in sorted(set(lista) - {u.email for u in alvos}):
+        log.warning("users.super_admin_sem_conta", email=faltando)
+    if not alvos:
         return
+    ids = {u.id for u in alvos}
     mudou = False
-    for outro in User.query.filter_by(super_admin=True).filter(User.id != alvo.id):
+    for outro in User.query.filter_by(super_admin=True).filter(User.id.notin_(ids)):
         outro.super_admin = False
         mudou = True
-    if not alvo.super_admin or alvo.role != "admin":
-        alvo.super_admin, alvo.role = True, "admin"
-        mudou = True
+    for alvo in alvos:
+        if not alvo.super_admin or alvo.role != "admin":
+            alvo.super_admin, alvo.role = True, "admin"
+            mudou = True
     if mudou:
         db.session.commit()
-        log.info("users.super_admin_definido", email=email)
+        log.info("users.super_admin_definido", emails=sorted(u.email for u in alvos))

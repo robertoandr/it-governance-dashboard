@@ -43,7 +43,7 @@ from app.models.user import User
 
 log = structlog.get_logger(__name__)
 
-SUPER_ADMIN_PADRAO = "roberto@grupogadens.com.br"
+SUPER_ADMIN_PADRAO = "roberto@grupogadens.com.br,allan.kepel@grupogadens.com.br"
 
 # Nunca guardados na fila
 CAMPOS_SENSIVEIS = frozenset(
@@ -57,7 +57,7 @@ Resumo = str | Callable[..., str]
 
 
 def super_admin_email() -> str:
-    """E-mail da conta super admin (``SUPER_ADMIN_EMAIL``; vazio desliga)."""
+    """E-mail(s) das contas super admin (``SUPER_ADMIN_EMAIL``, separados por vírgula; vazio desliga)."""
     return os.getenv("SUPER_ADMIN_EMAIL", SUPER_ADMIN_PADRAO).strip().lower()
 
 
