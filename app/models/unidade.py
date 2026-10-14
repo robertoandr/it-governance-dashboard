@@ -189,6 +189,30 @@ class GravadorAcesso(db.Model):
     lido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
+class CanalCftv(db.Model):
+    """O que a conferência no local achou em um canal de gravador.
+
+    É a referência para o painel saber quais canais têm câmera (inclusive
+    analógica, que o Zabbix não pinga) e quais estão vazios de propósito.
+    """
+
+    __tablename__ = "cftv_canais"
+    __table_args__ = (db.UniqueConstraint("ip_gravador", "canal", name="uq_cftv_canal"),)
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    ip_gravador: str = db.Column(db.String(45), nullable=False, index=True)
+    canal: int = db.Column(db.Integer, nullable=False)
+    # "ativo" (câmera), "vazio" (sem câmera) ou "outro" (outro equipamento no canal)
+    situacao: str = db.Column(db.String(10), nullable=False)
+    analogica: bool = db.Column(db.Boolean, nullable=False, default=False)
+    ip_camera: str = db.Column(db.String(45), nullable=False, default="", server_default="")
+    equipamento: str = db.Column(db.String(120), nullable=False, default="", server_default="")
+    # "ok", "sem" (ligada mas sem imagem) ou "" (não conferido)
+    imagem: str = db.Column(db.String(4), nullable=False, default="", server_default="")
+    origem: str = db.Column(db.String(40), nullable=False, default="", server_default="")
+    conferido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
+
+
 def parse_faixas(texto: str) -> list[str]:
     """Separa faixas por vírgula, espaço ou quebra de linha e normaliza.
 

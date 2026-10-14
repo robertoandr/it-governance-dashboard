@@ -555,7 +555,10 @@ def test_inventario_junta_gravador_e_zabbix() -> None:
         "ip": "",
         "mac": "",
         "sem_video": False,
+        "video": "ok",
         "status": "",
+        "situacao": "",
+        "sem_imagem": False,
     }
     assert (por_canal[2]["nome"], por_canal[2]["mac"], por_canal[2]["modelo"]) == (
         "Câmera Portão",
@@ -569,6 +572,122 @@ def test_inventario_junta_gravador_e_zabbix() -> None:
 def test_inventario_sem_leitura_usa_so_o_zabbix() -> None:
     linhas = cg.inventario_do_card(_card_inventario(), None)
     assert [(x["canal"], x["ip"], x["tipo"]) for x in linhas] == [(2, "10.41.100.210", ""), (7, "10.41.100.230", "")]
+
+
+# ── Canais pelo SNMP do Zabbix e pela conferência no local ────────────────────
+
+
+def _card_snmp(confiavel: bool = True) -> dict:
+    """DVR de 6 canais: 1 IP no Zabbix, 2–3 analógicas, 4 vazio, 5 IP sumida, 6 outro equipamento."""
+    return {
+        "dispositivos": [{"canal": "1", "name": "Câmera Portão", "ip": "10.41.100.210", "model": "", "status": "up"}],
+        "gravador_host": {
+            "model": "MHDX 3106",
+            "status_canal_confiavel": confiavel,
+            "canais_snmp": {
+                "1": {"status": "Connected", "nome": "VIP Intelbras", "ip": "10.41.100.210"},
+                "2": {"status": "Connected", "nome": "BARREIRA", "ip": "192.168.0.0"},
+                "3": {"status": "Empty", "nome": "CAM 3", "ip": "192.168.0.0"},
+                "4": {"status": "Unconnect", "nome": "CAM 4", "ip": "192.168.0.0"},
+                "5": {"status": "Empty", "nome": "Doca", "ip": "10.41.100.230"},
+                "6": {"status": "Unconnect", "nome": "CAM 6", "ip": "192.168.0.0"},
+            },
+        },
+    }
+
+
+_CADASTRO = {
+    2: {"situacao": "ativo", "analogica": True, "ip_camera": "", "equipamento": "", "imagem": "ok"},
+    3: {"situacao": "ativo", "analogica": True, "ip_camera": "", "equipamento": "", "imagem": "sem"},
+    4: {"situacao": "vazio", "analogica": False, "ip_camera": "", "equipamento": "", "imagem": ""},
+    6: {"situacao": "outro", "analogica": False, "ip_camera": "", "equipamento": "Controlador de acesso", "imagem": ""},
+}
+
+
+def test_canais_snmp_agrupa_itens_por_host_e_canal() -> None:
+    itens = [
+        {"hostid": "9", "key_": "remoteCam[status1]", "lastvalue": "Connected"},
+        {"hostid": "9", "key_": "remoteCam[name1]", "lastvalue": " Portão "},
+        {"hostid": "9", "key_": "remoteCam[IpAddr12]", "lastvalue": "10.0.0.5"},
+        {"hostid": "9", "key_": "remoteCam[outra1]", "lastvalue": "x"},
+    ]
+    assert cftv_monitoring.canais_snmp(itens) == {
+        "9": {"1": {"status": "Connected", "nome": "Portão"}, "12": {"ip": "10.0.0.5"}}
+    }
+
+
+def test_inventario_mostra_analogicas_pela_conferencia_e_snmp() -> None:
+    por_canal = {x["canal"]: x for x in cg.inventario_do_card(_card_snmp(), None, _CADASTRO)}
+    # 4 é vazio na conferência; 5 entra pelo IP de câmera no SNMP
+    assert sorted(por_canal) == [1, 2, 3, 5, 6]
+    assert (por_canal[2]["tipo"], por_canal[2]["nome"], por_canal[2]["video"]) == ("analogica", "BARREIRA", "ok")
+    # "Empty" em canal analógico: o gravador não diz com certeza
+    assert (por_canal[3]["tipo"], por_canal[3]["video"], por_canal[3]["sem_imagem"]) == ("analogica", "", True)
+    # "Empty" com IP de câmera em gravador confiável = câmera sumiu
+    assert (por_canal[5]["tipo"], por_canal[5]["ip"], por_canal[5]["sem_video"]) == ("ip", "10.41.100.230", True)
+    assert (por_canal[6]["tipo"], por_canal[6]["nome"], por_canal[6]["sem_video"]) == (
+        "outro",
+        "Controlador de acesso",
+        True,
+    )
+    assert por_canal[1]["status"] == "up" and por_canal[1]["situacao"] == ""
+
+
+def test_inventario_gravador_com_status_nao_confiavel() -> None:
+    por_canal = {x["canal"]: x for x in cg.inventario_do_card(_card_snmp(confiavel=False), None, _CADASTRO)}
+    assert (por_canal[5]["sem_video"], por_canal[5]["video"]) == (False, "")
+
+
+def test_canal_unconnect_em_uso_fica_sem_video() -> None:
+    cadastro = {4: {**_CADASTRO[4], "situacao": "ativo", "analogica": True}}
+    por_canal = {x["canal"]: x for x in cg.inventario_do_card(_card_snmp(), None, cadastro)}
+    assert (por_canal[4]["tipo"], por_canal[4]["video"]) == ("analogica", "sem")
+
+
+def test_canais_do_card_pelo_snmp() -> None:
+    k = cg.canais_do_card(_card_snmp(), None, None, _CADASTRO)
+    assert (k["total"], k["fonte"], k["usados"], k["livres"], k["analogicas"]) == (6, "snmp", 5, 1, 2)
+    assert [x["canal"] for x in k["sem_video"]] == [5, 6]
+
+
+def test_importar_canais_cftv(factory_app, tmp_path) -> None:
+    from app.models.unidade import CanalCftv
+
+    arquivo = tmp_path / "marcas.json"
+    marcas = [
+        {
+            "ip_gravador": "10.1.1.1",
+            "canal": 1,
+            "marca": "ativo",
+            "analogica": True,
+            "imagem": "sem",
+            "em": "2026-10-14T16:58:41.129Z",
+        },
+        {"ip_gravador": "10.1.1.1", "canal": 2, "marca": "vazio", "analogica": True, "ip_real": "10.1.1.50"},
+        {"ip_gravador": "10.1.1.1", "canal": 3, "marca": "outro", "equipamento": "Controlador"},
+        {"ip_gravador": "10.1.1.1", "canal": "4", "marca": "ativo"},
+        {"ip_gravador": "10.1.1.1", "canal": 5, "marca": ""},
+    ]
+    arquivo.write_text(json.dumps(marcas), encoding="utf-8")
+    runner = factory_app.test_cli_runner()
+    try:
+        r = runner.invoke(args=["cftv-importar-canais", str(arquivo), "--origem", "teste"])
+        assert "3 novos, 0 atualizados, 2 ignorados" in r.output
+        marcas[0]["imagem"] = "ok"
+        arquivo.write_text(json.dumps(marcas), encoding="utf-8")
+        r = runner.invoke(args=["cftv-importar-canais", str(arquivo)])
+        assert "0 novos, 3 atualizados" in r.output
+        with factory_app.app_context():
+            canais = {c.canal: c for c in CanalCftv.query.filter_by(ip_gravador="10.1.1.1")}
+            assert (canais[1].analogica, canais[1].imagem, canais[1].conferido_em is not None) == (True, "ok", True)
+            # vazio não guarda analógica nem IP de câmera
+            assert (canais[2].analogica, canais[2].ip_camera) == (False, "")
+            assert canais[3].equipamento == "Controlador"
+            assert cg.cadastro_canais()["10.1.1.1"][1]["situacao"] == "ativo"
+    finally:
+        with factory_app.app_context():
+            CanalCftv.query.delete()
+            db.session.commit()
 
 
 # ── Rotas: inventário em CSV e link do MapaCameras ────────────────────────────
@@ -633,8 +752,8 @@ def test_csv_do_inventario(authed_client, gravador_inventario: int) -> None:
     assert resp.mimetype == "text/csv"
     assert "attachment" in resp.headers["Content-Disposition"]
     texto = resp.get_data(as_text=True)
-    assert texto.startswith("﻿Unidade;Gravador;Canal;Nome;Tipo;Modelo;IP;MAC;Vídeo;Status")
-    assert "Shopping;INV Teste;2;;IP;VIP-1230-D-G4;10.41.100.210;80:85:44:36:ad:bf;;" in texto
+    assert texto.startswith("﻿Unidade;Gravador;Canal;Nome;Tipo;Modelo;IP;MAC;Vídeo;Imagem;Status")
+    assert "Shopping;INV Teste;2;;IP;VIP-1230-D-G4;10.41.100.210;80:85:44:36:ad:bf;ok;;" in texto
     # Nome de canal vindo do aparelho não vira fórmula no Excel
     assert ";'=HYPERLINK(1);" in texto
     assert "segredo" not in texto
@@ -650,7 +769,7 @@ def test_pagina_mostra_inventario_e_link_do_mapa(authed_client, factory_app, gra
         db.session.get(Unidade, gravador_inventario).nome_mapa = "Shopping Mueller"
         db.session.commit()
     html = authed_client.get(f"/gov/cftv?unidade={gravador_inventario}").get_data(as_text=True)
-    assert "Inventário: 5 câmeras (2 IP)" in html
+    assert "Canais: 5 câmeras (2 IP" in html
     assert "80:85:44:36:ad:bf" in html
     assert "/gov/cameras?unidade=Shopping+Mueller" in html
     assert "/gov/cftv/inventario.csv?unidade=" in html
@@ -695,3 +814,45 @@ def test_pagina_mostra_totais_por_tipo(authed_client, gravador_inventario: int) 
     html = authed_client.get("/gov/cftv").get_data(as_text=True)
     assert 'aria-label="Dispositivos por tipo"' in html
     assert "Gravadores (DVR/NVR)" in html
+
+
+def test_buscar_cftv_traz_canais_snmp_dos_gravadores() -> None:
+    hosts = [
+        {
+            "hostid": "1",
+            "host": "DVR-X",
+            "name": "DVR X",
+            "maintenance_status": "0",
+            "interfaces": [],
+            "tags": [{"tag": "subcategory", "value": "dvr"}],
+            "macros": [{"macro": "{$CAM.STATUS.CONFIAVEL}", "value": "0"}],
+        },
+        {
+            "hostid": "2",
+            "host": "cam-x-ch01",
+            "name": "Câmera X",
+            "maintenance_status": "0",
+            "interfaces": [],
+            "tags": [{"tag": "subcategory", "value": "camera"}, {"tag": "dvr", "value": "DVR-X"}],
+            "macros": [],
+        },
+    ]
+    chamadas: list[dict] = []
+
+    def fake_zbx(method: str, params: dict) -> list:
+        if method == "hostgroup.get":
+            return [{"groupid": "35", "name": "CFTV/Cameras"}]
+        if method == "host.get":
+            return hosts
+        if method == "item.get" and params.get("search"):
+            chamadas.append(params)
+            return [{"hostid": "1", "key_": "remoteCam[status2]", "lastvalue": "Connected"}]
+        return []
+
+    with patch.object(cftv_monitoring, "_zbx", side_effect=fake_zbx):
+        devices = {d["host"]: d for d in cftv_monitoring._buscar_cftv()["devices"]}
+    # Só os gravadores entram na busca dos itens de canal
+    assert chamadas[0]["hostids"] == ["1"]
+    assert devices["DVR-X"]["canais_snmp"] == {"2": {"status": "Connected"}}
+    assert devices["DVR-X"]["status_canal_confiavel"] is False
+    assert devices["cam-x-ch01"]["canais_snmp"] == {} and devices["cam-x-ch01"]["status_canal_confiavel"] is True

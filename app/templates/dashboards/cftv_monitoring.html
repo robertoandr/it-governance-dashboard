@@ -206,6 +206,17 @@
       </p>
     </div>
     {% endfor %}
+    {% if visao.analogicas %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3"
+         title="Câmeras analógicas não têm IP: aparecem pelos canais dos gravadores, não pelo ping">
+      <p class="text-xs text-slate-500 dark:text-slate-400">Câmeras analógicas</p>
+      <p class="text-xl font-bold text-slate-800 dark:text-slate-100">{{ visao.analogicas }}</p>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">
+        pelos canais dos gravadores
+        {% if visao.analogicas_sem_video %}· <span class="text-red-600 font-semibold">{{ visao.analogicas_sem_video }} sem vídeo</span>{% endif %}
+      </p>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -309,14 +320,21 @@
       <div class="rounded-lg bg-slate-50 dark:bg-slate-700/40 px-3 py-2 text-xs space-y-1">
         <p class="text-slate-600 dark:text-slate-300">
           <span class="font-semibold text-slate-800 dark:text-slate-100">{{ k.total }}</span> canais
-          · {{ k.usados }} em uso
+          · {{ k.usados }} em uso{% if k.analogicas %} ({{ k.analogicas }} analógica{{ 's' if k.analogicas != 1 }}){% endif %}
           · <span class="font-semibold {{ 'text-green-700 dark:text-green-400' if k.livres else 'text-amber-700 dark:text-amber-400' }}">{{ k.livres }} livre{{ 's' if k.livres != 1 }}</span>
-          <span class="text-[10px] text-slate-400" title="De onde veio a quantidade de canais">({{ {'gravador': 'lido do gravador', 'modelo': 'pelo modelo ' ~ k.modelo, 'informado': 'informado pelo admin'}[k.fonte] }})</span>
+          <span class="text-[10px] text-slate-400" title="De onde veio a quantidade de canais">({{ {'gravador': 'lido do gravador', 'snmp': 'pelo SNMP do gravador', 'modelo': 'pelo modelo ' ~ k.modelo, 'informado': 'informado pelo admin'}[k.fonte] }})</span>
         </p>
         {% if k.sem_video %}
         <p class="text-red-700 dark:text-red-400 font-medium">{{ k.sem_video | length }} cana{{ 'is' if k.sem_video | length != 1 else 'l' }} sem vídeo:</p>
         <ul class="text-red-700 dark:text-red-400 flex flex-wrap gap-x-3 gap-y-0.5">
           {% for x in k.sem_video %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% set sem_imagem = c.inventario | selectattr('sem_imagem') | list %}
+        {% if sem_imagem %}
+        <p class="text-amber-700 dark:text-amber-400 font-medium" title="Câmera ligada, mas sem imagem útil na conferência no local">{{ sem_imagem | length }} câmera{{ 's' if sem_imagem | length != 1 }} sem imagem na conferência:</p>
+        <ul class="text-amber-700 dark:text-amber-400 flex flex-wrap gap-x-3 gap-y-0.5">
+          {% for x in sem_imagem %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
         {% if k.erro %}<p class="text-[10px] text-amber-600 dark:text-amber-400">Gravador não respondeu à API: {{ k.erro }}</p>{% endif %}
@@ -368,10 +386,11 @@
 
       {% if c.inventario %}
       {% set ips = c.inventario | selectattr('tipo', 'equalto', 'ip') | list %}
+      {% set analogicas = c.inventario | selectattr('tipo', 'equalto', 'analogica') | list %}
       <details class="group">
         <summary class="cursor-pointer select-none text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline list-none flex items-center gap-1">
           <svg class="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          Inventário: {{ c.inventario | length }} câmera{{ 's' if c.inventario | length != 1 }}{% if ips %} ({{ ips | length }} IP){% endif %}
+          Canais: {{ c.inventario | length }} câmera{{ 's' if c.inventario | length != 1 }}{% if ips or analogicas %} ({% if ips %}{{ ips | length }} IP{% endif %}{% if ips and analogicas %}, {% endif %}{% if analogicas %}{{ analogicas | length }} analógica{{ 's' if analogicas | length != 1 }}{% endif %}){% endif %}
         </summary>
         <div class="overflow-x-auto mt-2">
           <table class="w-full text-xs">
@@ -382,18 +401,24 @@
                 <th class="text-left py-1 pr-2 font-medium">Tipo</th>
                 <th class="text-left py-1 pr-2 font-medium">Modelo</th>
                 <th class="text-left py-1 pr-2 font-medium">IP</th>
-                <th class="text-left py-1 font-medium">MAC</th>
+                <th class="text-left py-1 pr-2 font-medium">MAC</th>
+                <th class="text-left py-1 pr-2 font-medium" title="Pelo gravador (SNMP ou API): o canal está recebendo vídeo?">Vídeo</th>
+                <th class="text-left py-1 pr-2 font-medium" title="Conferência no local: a imagem está boa?">Imagem</th>
+                <th class="text-left py-1 font-medium" title="Ping da câmera no Zabbix (só câmera IP)">Ping</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
               {% for x in c.inventario %}
-              <tr class="{% if x.sem_video %}bg-red-50/50 dark:bg-red-900/10{% endif %}" {% if x.sem_video %}title="Canal sem vídeo"{% endif %}>
+              <tr class="{% if x.sem_video %}bg-red-50/50 dark:bg-red-900/10{% elif x.sem_imagem %}bg-amber-50/50 dark:bg-amber-900/10{% endif %}">
                 <td class="py-1 pr-2 text-slate-400 font-mono">{{ x.canal }}</td>
                 <td class="py-1 pr-2 text-slate-700 dark:text-slate-200">{{ x.nome or '—' }}</td>
-                <td class="py-1 pr-2 text-slate-500">{{ {'ip': 'IP', 'analogica': 'Analógica'}.get(x.tipo, '—') }}</td>
+                <td class="py-1 pr-2 text-slate-500">{{ {'ip': 'IP', 'analogica': 'Analógica', 'outro': 'Outro'}.get(x.tipo, '—') }}</td>
                 <td class="py-1 pr-2 text-slate-500">{{ x.modelo or '—' }}</td>
                 <td class="py-1 pr-2 text-slate-500 font-mono">{{ x.ip or '—' }}</td>
-                <td class="py-1 text-slate-500 font-mono">{{ x.mac or '—' }}</td>
+                <td class="py-1 pr-2 text-slate-500 font-mono">{{ x.mac or '—' }}</td>
+                <td class="py-1 pr-2">{% if x.video == 'sem' %}<span class="text-red-600 font-semibold">sem vídeo</span>{% elif x.video == 'ok' %}<span class="text-green-600">ok</span>{% else %}<span class="text-slate-400" title="O gravador não informa com certeza">?</span>{% endif %}</td>
+                <td class="py-1 pr-2">{% if x.sem_imagem %}<span class="text-amber-600 font-semibold">sem imagem</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+                <td class="py-1">{% if x.status %}{{ status_badge(x.status) }}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
               </tr>
               {% endfor %}
             </tbody>

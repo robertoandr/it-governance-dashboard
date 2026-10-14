@@ -11,6 +11,7 @@ unidade, e calcula os KPIs do recorte.
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from collections import Counter
@@ -98,6 +99,28 @@ def _buscar_cftv() -> dict:
     )
     ping_map: dict[str, dict] = {i["hostid"]: i for i in ping_items}
 
+    # ── 2c. Canais dos gravadores pelo SNMP (template "Intelbras NVR SNMP") ───
+    ids_gravador = [
+        h["hostid"]
+        for h in hosts
+        if {tg["tag"]: tg["value"] for tg in h.get("tags", [])}.get("subcategory") in SUBCATS_GRAVADOR
+    ]
+    snmp_por_host = (
+        canais_snmp(
+            _zbx(
+                "item.get",
+                {
+                    "output": ["hostid", "key_", "lastvalue"],
+                    "hostids": ids_gravador,
+                    "search": {"key_": "remoteCam["},
+                    "startSearch": True,
+                },
+            )
+        )
+        if ids_gravador
+        else {}
+    )
+
     # ── 3. Problemas ativos por host ──────────────────────────────────────────
     problems_raw = (
         _zbx(
@@ -172,6 +195,9 @@ def _buscar_cftv() -> dict:
                 "snmp": status_snmp(h.get("interfaces") or [], h.get("macros") or [])
                 if subcat in SUBCATS_GRAVADOR
                 else None,
+                "canais_snmp": snmp_por_host.get(hid, {}) if subcat in SUBCATS_GRAVADOR else {},
+                # Firmware que diz "Empty" em canal com câmera: o host leva {$CAM.STATUS.CONFIAVEL}=0
+                "status_canal_confiavel": _macro(h, MACRO_STATUS_CONFIAVEL) != "0",
                 "canal": tags.get("canal") or tags.get("canal_nvr") or "",
                 "loja": tags.get("loja", ""),
                 "vendor": tags.get("vendor", ""),
@@ -190,6 +216,38 @@ def _buscar_cftv() -> dict:
 
 
 SUBCATS_GRAVADOR = frozenset({"dvr", "nvr"})
+MACRO_STATUS_CONFIAVEL = "{$CAM.STATUS.CONFIAVEL}"
+_ITEM_CANAL = re.compile(r"^remoteCam\[(status|name|IpAddr)(\d+)\]$")
+_CAMPO_CANAL = {"status": "status", "name": "nome", "IpAddr": "ip"}
+
+
+def _macro(host: dict, macro: str) -> str | None:
+    return next((m.get("value") for m in host.get("macros") or [] if m.get("macro") == macro), None)
+
+
+def canais_snmp(itens: list[dict]) -> dict[str, dict[str, dict[str, str]]]:
+    """Status, nome e IP de cada canal dos gravadores, pelos itens SNMP do Zabbix.
+
+    O template "Intelbras NVR SNMP" descobre ``remoteCam[statusN]``,
+    ``remoteCam[nameN]`` e ``remoteCam[IpAddrN]`` por canal. O status é
+    ``Connected`` (com vídeo), ``Unconnect`` (sem vídeo) ou ``Empty``
+    (alguns firmwares dizem "Empty" mesmo com câmera).
+
+    Args:
+        itens: Resultado de ``item.get`` (``hostid``, ``key_``, ``lastvalue``).
+
+    Returns:
+        hostid → canal (texto) → ``{"status", "nome", "ip"}``.
+    """
+    por_host: dict[str, dict[str, dict[str, str]]] = {}
+    for item in itens:
+        m = _ITEM_CANAL.match(item.get("key_", ""))
+        if m:
+            canal = por_host.setdefault(item["hostid"], {}).setdefault(m.group(2), {})
+            canal[_CAMPO_CANAL[m.group(1)]] = (item.get("lastvalue") or "").strip()
+    return por_host
+
+
 # Nome do trigger do template "ICMP Ping" que marca o dispositivo como offline
 TRIGGER_SEM_PING = "Unavailable by ICMP ping"
 DIAS_HISTORICO = 30

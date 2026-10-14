@@ -517,7 +517,9 @@ def cftv_monitoring() -> str:
 def _canais_dos_gravadores(
     visao: dict, vinculos: list[DvrUnidade], nomes: dict[int, str], sede_por_unidade: dict[int, int]
 ) -> None:
-    """Põe em cada card ``canais`` (capacidade, livres, sem vídeo) e nas sedes os canais livres.
+    """Põe em cada card ``canais`` (capacidade, livres, sem vídeo) e ``inventario`` (câmeras por canal).
+
+    Nas sedes, os canais livres; na visão, o total de câmeras analógicas.
 
     Dispara a leitura dos gravadores pela API Intelbras em segundo plano; a tela
     usa a última leitura guardada.
@@ -540,11 +542,12 @@ def _canais_dos_gravadores(
             )
     cftv_gravadores.disparar(current_app._get_current_object(), alvos)  # type: ignore[attr-defined]
     acessos = cftv_gravadores.leituras()
+    cadastro = cftv_gravadores.cadastro_canais()
     livres_por_sede: dict[int | None, int] = {}
     for c in visao["cards"]:
         ip = (c.get("gravador_host") or {}).get("ip", "")
-        c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(c["gravador"]))
-        c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip))
+        c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(c["gravador"]), cadastro.get(ip))
+        c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip), cadastro.get(ip))
         if c["canais"]:
             sede = sede_por_unidade.get(c["unidade_id"], c["unidade_id"]) if c["unidade_id"] is not None else None
             livres_por_sede[sede] = livres_por_sede.get(sede, 0) + c["canais"]["livres"]
@@ -552,11 +555,26 @@ def _canais_dos_gravadores(
         s["canais_livres"] = livres_por_sede.get(s["id"])
     visao["canais_livres"] = sum(livres_por_sede.values()) if livres_por_sede else None
     visao["canais_sem_video"] = sum(len(c["canais"]["sem_video"]) for c in visao["cards"] if c.get("canais"))
+    analogicas = [x for c in visao["cards"] for x in c["inventario"] if x["tipo"] == "analogica"]
+    visao["analogicas"] = len(analogicas)
+    visao["analogicas_sem_video"] = sum(1 for x in analogicas if x["sem_video"])
 
 
 ACESSO_NUVEM = "nuvem"
-INVENTARIO_COLUNAS = ("Unidade", "Gravador", "Canal", "Nome", "Tipo", "Modelo", "IP", "MAC", "Vídeo", "Status")
-_TIPO_CAMERA = {"ip": "IP", "analogica": "Analógica"}
+INVENTARIO_COLUNAS = (
+    "Unidade",
+    "Gravador",
+    "Canal",
+    "Nome",
+    "Tipo",
+    "Modelo",
+    "IP",
+    "MAC",
+    "Vídeo",
+    "Imagem",
+    "Status",
+)
+_TIPO_CAMERA = {"ip": "IP", "analogica": "Analógica", "outro": "Outro equipamento"}
 _STATUS_CAMERA = {"up": "online", "down": "offline", "nodata": "sem dados", "maint": "manutenção"}
 
 
@@ -594,7 +612,8 @@ def cftv_inventario_csv() -> Response:
                     linha["modelo"],
                     linha["ip"],
                     linha["mac"],
-                    "sem vídeo" if linha["sem_video"] else "",
+                    "sem vídeo" if linha["sem_video"] else ("ok" if linha["video"] == "ok" else ""),
+                    "sem imagem (conferência)" if linha["sem_imagem"] else "",
                     _STATUS_CAMERA.get(linha["status"], ""),
                 )
             )
