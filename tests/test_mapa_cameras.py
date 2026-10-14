@@ -194,3 +194,22 @@ class TestFiltroUnidade:
     def test_unidade_com_aspas_e_escapada(self, client_as: Callable[[str], FlaskClient]) -> None:
         html = client_as("admin").get('/gov/cameras?unidade="><script>').get_data(as_text=True)
         assert "<script>" not in html.split("<iframe", 1)[1].split(">", 1)[0]
+
+
+class TestUploadGrandeNoMapa:
+    """Upload de planta/foto (até 60 MB) não pode ser barrado no auth_request."""
+
+    def _auth_location(self) -> str:
+        conf = NGINX_CONF.read_text(encoding="utf-8")
+        match = re.search(r"location = /_auth/mapa-cameras \{(.*?)\n        \}", conf, re.S)
+        assert match, "location = /_auth/mapa-cameras não encontrado no nginx.conf"
+        return match.group(1)
+
+    def test_auth_request_aceita_o_mesmo_limite_do_mapa(self) -> None:
+        # 14/10/2026: planta JPG de 4,6 MB deu 500 — o subrequest usava o limite padrão de 1 MB.
+        limite = re.search(r"client_max_body_size\s+(\S+);", _mapa_location())
+        assert limite
+        assert f"client_max_body_size {limite.group(1)};" in self._auth_location()
+
+    def test_auth_request_nao_repassa_o_corpo(self) -> None:
+        assert "proxy_pass_request_body off;" in self._auth_location()
