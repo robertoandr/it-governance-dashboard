@@ -40,6 +40,11 @@ def test_expressoes_preservam_macro_e_esperam_o_gravador() -> None:
     assert "time()<015000 or time()>023000" in gc.EXPR_REINICIOU
 
 
+def test_canal_sem_camera_cadastrada_nao_alerta() -> None:
+    for descricao in ("Camera {#SNMPINDEX} absent", "Camera {#SNMPINDEX} disconnected"):
+        assert '/Intelbras NVR SNMP/remoteCam[IpAddr{#SNMPINDEX}])<>"192.168.0.0"' in gc.CANAIS[descricao]
+
+
 class _Api:
     """Zabbix falso: registra os updates de dependências."""
 

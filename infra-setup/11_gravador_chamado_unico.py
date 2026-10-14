@@ -16,6 +16,9 @@ alertas de câmera não chegarem lá quando a causa é o gravador. Ajusta
         programada dos gravadores
       * canais "Camera N absent/disconnected" só alertam com o gravador no ar
         há 15 min e dependem do "reiniciou" e do "No SNMP data collection"
+      * canal sem câmera cadastrada (o gravador informa IP 192.168.0.0) não
+        alerta: eram os 41 "absent" fixos de 13/10 (Triunfo_4 com 32 canais e
+        9 câmeras); quando cadastram câmera no canal, ele volta a alertar
   - Cada gravador: "No SNMP data collection" e "Unavailable by Media Port"
     dependem do "Unavailable by ICMP ping" dele (caiu = um chamado só)
   - Cada câmera (tag ``dvr``/``parent_nvr``): o ping depende do ping e do
@@ -55,6 +58,8 @@ PORTA_MIDIA = "Unavailable by Media Port"
 # Manutenção automática dos gravadores ~02:05; o fim cobre os 10 min do uptime
 JANELA_MANUTENCAO = ("015000", "023000")
 UPTIME_MINIMO_CANAIS = "15m"
+# IP que o gravador Intelbras informa para canal sem câmera cadastrada
+IP_CANAL_VAZIO = "192.168.0.0"
 
 EXPR_REINICIOU = (
     f"last(/{TEMPLATE}/{UPTIME_KEY})<10m and (time()<{JANELA_MANUTENCAO[0]} or time()>{JANELA_MANUTENCAO[1]})"
@@ -62,11 +67,12 @@ EXPR_REINICIOU = (
 
 
 def expr_canal(estado: str) -> str:
-    """Expressão do canal ``estado`` ("Empty"/"Unconnect") com o gravador no ar há 15 min."""
+    """Expressão do canal ``estado`` ("Empty"/"Unconnect") com câmera cadastrada e o gravador no ar há 15 min."""
     return (
         f'last(/{TEMPLATE}/remoteCam[status{{#SNMPINDEX}}],#1)="{estado}"'
         " and {$CAM.STATUS.CONFIAVEL}=1"
         f" and last(/{TEMPLATE}/{UPTIME_KEY})>={UPTIME_MINIMO_CANAIS}"
+        f' and last(/{TEMPLATE}/remoteCam[IpAddr{{#SNMPINDEX}}])<>"{IP_CANAL_VAZIO}"'
     )
 
 
@@ -172,7 +178,10 @@ def ajustar_template(api: ZabbixAPI, dry: bool) -> None:
         if not dry:
             api.triggerprototype.update(triggerid=p["triggerid"], expression=CANAIS[p["description"]])
         _somar_deps(api, p, [trig[REINICIOU]["triggerid"], trig[SEM_SNMP]["triggerid"]], prototipo=True, dry=dry)
-        wa.ok(f"'{p['description']}': só com uptime ≥ {UPTIME_MINIMO_CANAIS}, depende do reinício e do SNMP")
+        wa.ok(
+            f"'{p['description']}': só com uptime ≥ {UPTIME_MINIMO_CANAIS} e câmera cadastrada (IP ≠ {IP_CANAL_VAZIO}),"
+            " depende do reinício e do SNMP"
+        )
 
 
 def ajustar_gravadores(api: ZabbixAPI, dry: bool) -> dict[str, dict[str, Any]]:
