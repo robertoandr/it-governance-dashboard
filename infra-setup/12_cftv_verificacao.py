@@ -52,6 +52,7 @@ TAG_ALERTA = ("alerta", "so-whatsapp")
 COND_TAG_VALOR = "26"
 COND_MANUTENCAO = "16"
 OP_IGUAL, OP_DIFERENTE, OP_NAO_EM = "0", "1", "11"
+OP_AVISAR_ENVOLVIDOS = "11"  # tipo de operação de recuperação
 
 ITENS = (
     ("cftv.verif.sem_gravar", "Canais sem gravar (verificação do dashboard)"),
@@ -119,7 +120,8 @@ def operacoes_escrita(operacoes: list[dict[str, Any]], recuperacao: bool = False
     """Operações de outra ação só com os campos aceitos na escrita (Zabbix 7.4 recusa ids).
 
     Operação de recuperação não tem escalonamento nem condições: o Zabbix
-    recusa ``evaltype``, ``esc_*`` e ``opconditions`` nela.
+    recusa ``evaltype``, ``esc_*`` e ``opconditions`` nela. "Avisar todos os
+    envolvidos" também recusa ``mediatypeid`` na mensagem.
     """
     campos_op = (
         ("operationtype",)
@@ -131,7 +133,15 @@ def operacoes_escrita(operacoes: list[dict[str, Any]], recuperacao: bool = False
     for op in operacoes:
         nova = {k: op[k] for k in campos_op if k in op}
         if "opmessage" in op:
-            campos: tuple[str, ...] = ("default_msg", "mediatypeid")
+            # "Avisar todos os envolvidos" (11) usa a mídia de quem recebeu o alerta: não aceita mediatypeid
+            campos: tuple[str, ...] = (
+                ("default_msg",)
+                if op.get("operationtype") == OP_AVISAR_ENVOLVIDOS
+                else (
+                    "default_msg",
+                    "mediatypeid",
+                )
+            )
             if op["opmessage"].get("default_msg") == "0":
                 campos += ("subject", "message")
             nova["opmessage"] = {k: v for k, v in op["opmessage"].items() if k in campos}

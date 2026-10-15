@@ -94,7 +94,12 @@ def test_operacoes_de_recuperacao_sem_escalonamento() -> None:
     assert cv.operacoes_escrita(ops, recuperacao=True) == [
         {
             "operationtype": "11",
-            "opmessage": {"default_msg": "1", "mediatypeid": "105"},
+            "opmessage": {"default_msg": "1"},
             "opmessage_usr": [{"userid": "5"}],
         }
     ]
+
+
+def test_recuperacao_por_midia_mantem_mediatypeid() -> None:
+    ops = [{"operationtype": "0", "opmessage": {"default_msg": "1", "mediatypeid": "105"}}]
+    assert cv.operacoes_escrita(ops, recuperacao=True) == ops
