@@ -326,8 +326,11 @@ def test_ativos_rede_separa_por_unidade_e_filtra(authed_client, rede, ativos_db,
 
     html = authed_client.get("/gov/ativos-rede").get_data(as_text=True)
     assert "3 ativos no inventário" in html
-    # Seções por unidade, "Sem unidade" por último
-    assert html.index("Sede Centro <span") < html.index("Shopping <span") < html.index("Sem unidade <span")
+    # Seções do inventário por unidade, "Sem unidade" por último (a topologia
+    # da rede, mais acima na página, também tem um título por unidade)
+    secao = '{} <span class="text-slate-400 font-normal">('
+    assert html.index(secao.format("Sede Centro")) < html.index(secao.format("Shopping"))
+    assert html.index(secao.format("Shopping")) < html.index(secao.format("Sem unidade"))
 
     html = authed_client.get(f"/gov/ativos-rede?unidade={faixas['Shopping']}").get_data(as_text=True)
     assert "Cam loja" in html and "Impressora RH" not in html

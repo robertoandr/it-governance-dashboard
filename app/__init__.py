@@ -42,6 +42,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     # Core Flask config
     _users_db = Path(__file__).resolve().parent.parent / "data" / "app.db"
+    if settings.app.testing:
+        # Testes: banco novo na pasta de dados da rodada; o data/app.db do
+        # checkout ficava entre rodadas e acumulava sobras de testes interrompidos.
+        _users_db = settings.db.data_dir.resolve() / "app.db"
     app.config.update(
         SECRET_KEY=settings.app.secret_key.get_secret_value(),
         TESTING=settings.app.testing,
