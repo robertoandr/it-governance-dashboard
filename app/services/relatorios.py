@@ -66,6 +66,7 @@ class Relatorio(BaseModel):
     descricao: str
     gerado_em: datetime
     secoes: list[Secao]
+    unidade: str = ""
 
 
 # ── Formatação ────────────────────────────────────────────────────────────────
@@ -270,6 +271,222 @@ def secao_cftv() -> Secao:
                     ]
                     for h, q in ranking[:20]
                 ],
+            ),
+        ],
+    )
+
+
+# ── Seções: situação do CFTV canal a canal (aceitam filtro de unidade) ────────
+#
+# Leem a mesma visão da página /gov/cftv (cards por gravador com o inventário
+# canal a canal), já recortada pela unidade escolhida.
+
+_IMAGEM_RUIM = {"sem_resposta": "sem imagem (não responde)", "chapada": "sem imagem (tela chapada)"}
+_SEM_GRAVAR = {"parada": "sem gravar", "desligada": "gravação desligada"}
+
+
+def _quando(valor: Any) -> str:
+    """Dia e hora curtos em Brasília (epoch ou datetime; sem fuso = hora do aparelho) ou "—"."""
+    if isinstance(valor, int | float) and not isinstance(valor, bool):
+        valor = datetime.fromtimestamp(valor, TZ)
+    if isinstance(valor, datetime):
+        return (valor if valor.tzinfo is None else valor.astimezone(TZ)).strftime("%d/%m %H:%M")
+    return "—"
+
+
+def _faixas(canais: list[int]) -> str:
+    """``[5, 6, 7, 9]`` → ``"5 a 7, 9"``."""
+    partes: list[list[int]] = []
+    for c in sorted(canais):
+        if partes and partes[-1][1] == c - 1:
+            partes[-1][1] = c
+        else:
+            partes.append([c, c])
+    return ", ".join(str(a) if a == b else f"{a} a {b}" for a, b in partes)
+
+
+def _cartoes(visao: dict[str, Any]) -> list[dict[str, Any]]:
+    """Cards da visão em ordem de unidade e gravador."""
+    return sorted(
+        visao.get("cards") or [],
+        key=lambda c: ((c.get("unidade") or "~").lower(), (c.get("titulo") or "").lower()),
+    )
+
+
+def _origem(card: dict[str, Any]) -> tuple[str, str]:
+    return card.get("unidade") or "Sem unidade", card.get("titulo") or "Sem gravador"
+
+
+def secao_cftv_fora(visao: dict[str, Any]) -> Secao:
+    """Câmeras fora do ar: ping parado ou o gravador sem vídeo no canal (canal com outro equipamento não entra)."""
+    linhas: list[list[str]] = []
+    for c in _cartoes(visao):
+        unidade, gravador = _origem(c)
+        cameras = [d for d in c.get("dispositivos") or [] if d.get("subcat") == "camera"]
+        desde = {str(d.get("canal", "")): d.get("offline_desde") for d in cameras}
+        vistos: set[str] = set()
+        for x in c.get("inventario") or []:
+            if x["tipo"] == "outro" or (x["status"] != "down" and not x["sem_video"]):
+                continue
+            vistos.add(str(x["canal"]))
+            como = " e ".join(
+                p for p, sim in (("ping", x["status"] == "down"), ("sem vídeo no gravador", x["sem_video"])) if sim
+            )
+            linhas.append(
+                [unidade, gravador, str(x["canal"]), x["nome"], x["ip"], como, _quando(desde.get(str(x["canal"])))]
+            )
+        for d in cameras:
+            if d.get("status") == "down" and str(d.get("canal", "")) not in vistos:
+                linhas.append(
+                    [
+                        unidade,
+                        gravador,
+                        str(d.get("canal") or "—"),
+                        d.get("name", ""),
+                        d.get("ip", ""),
+                        "ping",
+                        _quando(d.get("offline_desde")),
+                    ]
+                )
+    return Secao(
+        chave="cftv-fora",
+        titulo="Câmeras fora do ar",
+        fonte="Zabbix — ping da câmera e status do canal no gravador",
+        kpis=[Kpi(rotulo="Câmeras fora do ar", valor=str(len(linhas)), tom=_tom_qtd(len(linhas)))],
+        tabelas=[
+            Tabela(
+                titulo="Câmeras fora do ar",
+                colunas=["Unidade", "Gravador", "Canal", "Câmera", "IP", "Detectado por", "Fora desde"],
+                linhas=linhas,
+                nota="'Fora desde' vazio: o gravador informa o canal sem vídeo, mas a câmera não tem ping no Zabbix.",
+            )
+        ],
+    )
+
+
+def secao_cftv_sem_imagem(visao: dict[str, Any]) -> Secao:
+    """Canais sem imagem: foto automática ruim, ou conferência no local onde não há foto automática."""
+    linhas: list[list[str]] = []
+    for c in _cartoes(visao):
+        unidade, gravador = _origem(c)
+        for x in c.get("inventario") or []:
+            if x["tipo"] == "outro":
+                continue
+            if x["imagem"] in _IMAGEM_RUIM:
+                situacao, fonte = _IMAGEM_RUIM[x["imagem"]], f"foto automática {_quando(x['verificado_em'])}"
+            elif x["sem_imagem"] and not x["imagem"]:
+                situacao, fonte = "sem imagem", "conferência no local"
+            else:
+                continue
+            linhas.append([unidade, gravador, str(x["canal"]), x["nome"], x["ip"], situacao, fonte])
+    return Secao(
+        chave="cftv-sem-imagem",
+        titulo="Câmeras sem imagem",
+        fonte="Foto automática do dashboard (08h, 11h, 14h e 17h) e conferência no local",
+        kpis=[Kpi(rotulo="Canais sem imagem", valor=str(len(linhas)), tom=_tom_qtd(len(linhas)))],
+        tabelas=[
+            Tabela(
+                titulo="Canais sem imagem",
+                colunas=["Unidade", "Gravador", "Canal", "Câmera", "IP", "Situação", "Fonte"],
+                linhas=linhas,
+                nota="'Não responde': o gravador não entregou a foto, o que costuma ser câmera fora do ar. "
+                "'Tela chapada': imagem de uma cor só (preta, azul ou cinza).",
+            )
+        ],
+    )
+
+
+def secao_cftv_sem_gravar(visao: dict[str, Any]) -> Secao:
+    """Gravadores fora do ar e canais sem gravar (verificação automática a cada 30 min)."""
+    fora: list[list[str]] = []
+    canais: list[list[str]] = []
+    verificados = 0
+    cartoes = [c for c in _cartoes(visao) if c.get("gravador_host")]
+    for c in cartoes:
+        unidade, gravador = _origem(c)
+        host = c["gravador_host"]
+        if host.get("status") == "down":
+            fora.append([unidade, gravador, host.get("ip", ""), _quando(host.get("offline_desde"))])
+        inventario = c.get("inventario") or []
+        verificados += any(x["gravacao"] for x in inventario)
+        for x in inventario:
+            if x["gravacao"] in _SEM_GRAVAR:
+                canais.append(
+                    [
+                        unidade,
+                        gravador,
+                        str(x["canal"]),
+                        x["nome"],
+                        _SEM_GRAVAR[x["gravacao"]],
+                        _quando(x["ultima_gravacao"]) if x["ultima_gravacao"] else "nenhum nas últimas 2 h",
+                    ]
+                )
+    return Secao(
+        chave="cftv-sem-gravar",
+        titulo="Gravadores sem gravar",
+        fonte="Zabbix (gravador fora do ar) e verificação automática dos arquivos gravados",
+        kpis=[
+            Kpi(rotulo="Gravadores fora do ar", valor=str(len(fora)), tom=_tom_qtd(len(fora))),
+            Kpi(rotulo="Canais sem gravar", valor=str(len(canais)), tom=_tom_qtd(len(canais))),
+            Kpi(
+                rotulo="Gravadores verificados",
+                valor=f"{verificados} de {len(cartoes)}",
+                detalhe="os que aceitam acesso pela API Intelbras",
+            ),
+        ],
+        tabelas=[
+            Tabela(titulo="Gravadores fora do ar", colunas=["Unidade", "Gravador", "IP", "Fora desde"], linhas=fora),
+            Tabela(
+                titulo="Canais sem gravar",
+                colunas=["Unidade", "Gravador", "Canal", "Câmera", "Situação", "Último arquivo"],
+                linhas=canais,
+            ),
+        ],
+    )
+
+
+def secao_cftv_vazios(visao: dict[str, Any]) -> Secao:
+    """Canais sem câmera e canais com outro equipamento, pela conferência no local."""
+    from app.services.cftv_gravadores import cadastro_canais
+
+    cadastro = cadastro_canais()
+    vazios: list[list[str]] = []
+    outros: list[list[str]] = []
+    total = 0
+    for c in _cartoes(visao):
+        ip = (c.get("gravador_host") or {}).get("ip", "")
+        if not ip or ip not in cadastro:
+            continue
+        unidade, gravador = _origem(c)
+        conf = cadastro[ip]
+        lista = [canal for canal, m in conf.items() if m["situacao"] == "vazio"]
+        if lista:
+            total += len(lista)
+            vazios.append([unidade, gravador, ip, f"{len(lista)} de {len(conf)}", _faixas(lista)])
+        outros += [
+            [unidade, gravador, str(canal), m["equipamento"] or "sem descrição"]
+            for canal, m in sorted(conf.items())
+            if m["situacao"] == "outro"
+        ]
+    return Secao(
+        chave="cftv-vazios",
+        titulo="Canais vazios",
+        fonte="Conferência no local, canal a canal",
+        kpis=[
+            Kpi(rotulo="Canais vazios", valor=str(total)),
+            Kpi(rotulo="Gravadores com canal vazio", valor=str(len(vazios))),
+        ],
+        tabelas=[
+            Tabela(
+                titulo="Canais vazios por gravador",
+                colunas=["Unidade", "Gravador", "IP", "Vazios", "Canais"],
+                linhas=vazios,
+                nota="Canal vazio não gera alerta no Zabbix.",
+            ),
+            Tabela(
+                titulo="Canal com outro equipamento",
+                colunas=["Unidade", "Gravador", "Canal", "Equipamento"],
+                linhas=outros,
             ),
         ],
     )
@@ -722,10 +939,14 @@ def _data_hora(valor: Any) -> str:
 
 # ── Catálogo ──────────────────────────────────────────────────────────────────
 
-SECOES: dict[str, tuple[str, Callable[[], Secao]]] = {
+SECOES: dict[str, tuple[str, Callable[..., Secao]]] = {
     "disponibilidade": ("Disponibilidade e incidentes", secao_disponibilidade),
     "links": ("Links WAN e túneis", secao_links),
     "cftv": ("CFTV", secao_cftv),
+    "cftv-fora": ("Câmeras fora do ar", secao_cftv_fora),
+    "cftv-sem-imagem": ("Câmeras sem imagem", secao_cftv_sem_imagem),
+    "cftv-sem-gravar": ("Gravadores sem gravar", secao_cftv_sem_gravar),
+    "cftv-vazios": ("Canais vazios", secao_cftv_vazios),
     "sla": ("SLA de atendimento", secao_sla),
     "volume": ("Volume de chamados", secao_volume),
     "secure-score": ("Secure Score (Microsoft 365)", secao_secure_score),
@@ -740,6 +961,11 @@ CATALOGO: dict[str, tuple[str, str, list[str]]] = {
         "Infraestrutura e disponibilidade",
         "Disponibilidade dos hosts, incidentes em aberto, links WAN, túneis e CFTV.",
         ["disponibilidade", "links", "cftv"],
+    ),
+    "cftv-situacao": (
+        "Câmeras e gravadores (CFTV)",
+        "Câmeras fora do ar, câmeras sem imagem, gravadores sem gravar e canais vazios, com filtro por unidade.",
+        ["cftv-fora", "cftv-sem-imagem", "cftv-sem-gravar", "cftv-vazios"],
     ),
     "service-desk": (
         "Service desk e SLA",
@@ -762,29 +988,65 @@ CATALOGO: dict[str, tuple[str, str, list[str]]] = {
 _FALHAS = (RuntimeError, ValueError, KeyError, TypeError, AttributeError, httpx.HTTPError, requests.RequestException)
 
 
-def montar_secao(chave: str) -> Secao:
+# Seções que leem a visão do CFTV e por isso aceitam o filtro de unidade
+SECOES_POR_UNIDADE = frozenset({"cftv-fora", "cftv-sem-imagem", "cftv-sem-gravar", "cftv-vazios"})
+
+
+def montar_secao(chave: str, visao_cftv: Callable[[], dict[str, Any]] | None = None) -> Secao:
     """Monta uma seção; se a origem falhar, a seção vem com o motivo em ``erro``.
 
     Args:
         chave: Chave em ``SECOES``.
+        visao_cftv: Devolve a visão do CFTV já filtrada pela unidade (só para
+            as seções em ``SECOES_POR_UNIDADE``).
 
     Returns:
         A seção preenchida ou com ``erro``.
     """
     titulo, construir = SECOES[chave]
     try:
+        if chave in SECOES_POR_UNIDADE:
+            if visao_cftv is None:
+                return Secao(chave=chave, titulo=titulo, fonte="", erro="CFTV não configurado (sem Zabbix).")
+            return construir(visao_cftv())
         return construir()
     except _FALHAS as exc:
         log.warning("relatorios.secao_falhou", secao=chave, erro=type(exc).__name__, detalhe=str(exc)[:200])
         return Secao(chave=chave, titulo=titulo, fonte="", erro=f"Dados indisponíveis agora ({exc})")
 
 
-def montar_relatorio(chave: str, secoes: list[str] | None = None) -> Relatorio:
+def secoes_do_relatorio(chave: str, secoes: list[str] | None = None) -> list[str]:
+    """Seções que entram no relatório, na ordem do catálogo.
+
+    Args:
+        chave: Chave em ``CATALOGO`` ou ``"personalizado"``.
+        secoes: Seções escolhidas (só para o personalizado; ignora desconhecidas).
+
+    Returns:
+        Chaves de ``SECOES``.
+
+    Raises:
+        KeyError: Relatório desconhecido.
+    """
+    if chave == "personalizado":
+        return [s for s in SECOES if s in set(secoes or [])]
+    return CATALOGO[chave][2]
+
+
+def montar_relatorio(
+    chave: str,
+    secoes: list[str] | None = None,
+    visao_cftv: Callable[[], dict[str, Any]] | None = None,
+    unidade: str = "",
+) -> Relatorio:
     """Monta um relatório do catálogo ou o personalizado.
 
     Args:
         chave: Chave em ``CATALOGO`` ou ``"personalizado"``.
         secoes: Seções escolhidas (só para o personalizado; ignora desconhecidas).
+        visao_cftv: Visão do CFTV filtrada pela unidade; lida uma vez só, mesmo
+            com várias seções de CFTV.
+        unidade: Nome da unidade do filtro, para o cabeçalho ("" = todas).
 
     Returns:
         O relatório com as seções na ordem do catálogo.
@@ -792,20 +1054,31 @@ def montar_relatorio(chave: str, secoes: list[str] | None = None) -> Relatorio:
     Raises:
         KeyError: Relatório desconhecido.
     """
+    escolhidas = secoes_do_relatorio(chave, secoes)
     if chave == "personalizado":
-        escolhidas = [s for s in SECOES if s in set(secoes or [])]
         titulo, descricao = (
             "Relatório personalizado",
             "Seções escolhidas: " + ", ".join(SECOES[s][0] for s in escolhidas),
         )
     else:
-        titulo, descricao, escolhidas = CATALOGO[chave]
+        titulo, descricao, _ = CATALOGO[chave]
+    lida: list[dict[str, Any]] = []
+
+    def _visao() -> dict[str, Any]:
+        if not lida and visao_cftv is not None:
+            lida.append(visao_cftv())
+        return lida[0]
+
     return Relatorio(
         chave=chave,
         titulo=titulo,
         descricao=descricao,
         gerado_em=datetime.now(TZ),
-        secoes=[montar_secao(s) for s in escolhidas],
+        secoes=[
+            montar_secao(s, _visao if visao_cftv is not None else None) if s in SECOES_POR_UNIDADE else montar_secao(s)
+            for s in escolhidas
+        ],
+        unidade=unidade,
     )
 
 
@@ -821,6 +1094,8 @@ def gerar_csv(relatorio: Relatorio) -> str:
     saida = io.StringIO()
     w = csv.writer(saida, delimiter=";")
     w.writerow([relatorio.titulo, relatorio.gerado_em.strftime("%d/%m/%Y %H:%M")])
+    if relatorio.unidade:
+        w.writerow(["Unidade", relatorio.unidade])
     for s in relatorio.secoes:
         w.writerow([])
         w.writerow([s.titulo, s.fonte])
