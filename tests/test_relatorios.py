@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -263,3 +263,162 @@ def test_pagina_personalizado_com_secoes(authed_client) -> None:
 def test_pagina_executivo(authed_client) -> None:
     resp = authed_client.get("/gov/relatorios/executivo")
     assert resp.status_code == 200
+
+
+# ── Situação do CFTV canal a canal, com filtro de unidade ─────────────────────
+
+
+def _linha(canal: int, **campos: object) -> dict:
+    base = {
+        "canal": canal,
+        "tipo": "ip",
+        "nome": f"Câmera {canal}",
+        "ip": f"10.0.0.{canal}",
+        "status": "up",
+        "sem_video": False,
+        "sem_imagem": False,
+        "imagem": "ok",
+        "gravacao": "ok",
+        "ultima_gravacao": None,
+        "verificado_em": datetime(2026, 10, 15, 17, 0, tzinfo=UTC),
+    }
+    return {**base, **campos}
+
+
+def _visao() -> dict:
+    return {
+        "cards": [
+            {
+                "titulo": "DVR-B",
+                "unidade": "Shopping",
+                "gravador_host": {"ip": "10.0.9.2", "status": "down", "offline_desde": 1_760_540_400},
+                "dispositivos": [
+                    {"subcat": "camera", "canal": "3", "status": "down", "offline_desde": 1_760_540_400},
+                    {"subcat": "camera", "canal": "", "status": "down", "name": "Câmera solta", "ip": "10.0.0.99"},
+                    {"subcat": "tela", "canal": "", "status": "down", "name": "Tela loja", "ip": "10.0.0.98"},
+                ],
+                "inventario": [
+                    _linha(1),
+                    _linha(2, imagem="chapada", gravacao="parada"),
+                    _linha(
+                        3,
+                        status="down",
+                        imagem="sem_resposta",
+                        gravacao="parada",
+                        ultima_gravacao=datetime(2026, 10, 15, 9, 41),
+                    ),
+                    _linha(4, sem_video=True, imagem="", gravacao="", sem_imagem=True),
+                    _linha(5, tipo="outro", sem_video=True, imagem="chapada"),  # facial no canal: não é câmera
+                ],
+            },
+            {
+                "titulo": "DVR-A",
+                "unidade": "Shopping",
+                "gravador_host": {"ip": "10.0.9.1", "status": "up"},
+                "dispositivos": [],
+                "inventario": [_linha(1, imagem="", gravacao="")],
+            },
+        ]
+    }
+
+
+def test_faixas_de_canais() -> None:
+    assert rl._faixas([9, 5, 6, 7, 12]) == "5 a 7, 9, 12"
+    assert rl._faixas([]) == ""
+
+
+def test_secao_cftv_fora_junta_ping_e_sem_video() -> None:
+    s = rl.secao_cftv_fora(_visao())
+    assert _valores(s) == {"Câmeras fora do ar": "3"}
+    linhas = s.tabelas[0].linhas
+    assert [(x[2], x[5]) for x in linhas] == [("3", "ping"), ("4", "sem vídeo no gravador"), ("—", "ping")]
+    assert linhas[0][6] == "15/10 12:00" and linhas[1][6] == "—"  # a tela fora do ar não é câmera
+
+
+def test_secao_cftv_sem_imagem_usa_foto_e_conferencia() -> None:
+    s = rl.secao_cftv_sem_imagem(_visao())
+    assert [(x[2], x[5], x[6]) for x in s.tabelas[0].linhas] == [
+        ("2", "sem imagem (tela chapada)", "foto automática 15/10 14:00"),
+        ("3", "sem imagem (não responde)", "foto automática 15/10 14:00"),
+        ("4", "sem imagem", "conferência no local"),
+    ]
+
+
+def test_secao_cftv_sem_gravar_conta_gravadores_e_canais() -> None:
+    s = rl.secao_cftv_sem_gravar(_visao())
+    assert _valores(s) == {"Gravadores fora do ar": "1", "Canais sem gravar": "2", "Gravadores verificados": "1 de 2"}
+    assert s.tabelas[0].linhas == [["Shopping", "DVR-B", "10.0.9.2", "15/10 12:00"]]
+    assert [x[5] for x in s.tabelas[1].linhas] == ["nenhum nas últimas 2 h", "15/10 09:41"]
+
+
+def test_secao_cftv_vazios_pela_conferencia() -> None:
+    cadastro = {
+        "10.0.9.2": {
+            1: {"situacao": "ativo", "equipamento": ""},
+            5: {"situacao": "vazio", "equipamento": ""},
+            6: {"situacao": "vazio", "equipamento": ""},
+            8: {"situacao": "outro", "equipamento": "Facial"},
+        },
+        "10.0.9.7": {1: {"situacao": "vazio", "equipamento": ""}},  # gravador fora do filtro
+    }
+    with patch("app.services.cftv_gravadores.cadastro_canais", return_value=cadastro):
+        s = rl.secao_cftv_vazios(_visao())
+    assert _valores(s) == {"Canais vazios": "2", "Gravadores com canal vazio": "1"}
+    assert s.tabelas[0].linhas == [["Shopping", "DVR-B", "10.0.9.2", "2 de 4", "5 a 6"]]
+    assert s.tabelas[1].linhas == [["Shopping", "DVR-B", "8", "Facial"]]
+
+
+def test_relatorio_cftv_le_a_visao_uma_vez_e_sem_zabbix_avisa() -> None:
+    chamadas: list[int] = []
+
+    def visao() -> dict:
+        chamadas.append(1)
+        return _visao()
+
+    with patch("app.services.cftv_gravadores.cadastro_canais", return_value={}):
+        r = rl.montar_relatorio("cftv-situacao", visao_cftv=visao, unidade="Shopping")
+    assert len(chamadas) == 1 and [s.chave for s in r.secoes] == list(rl.CATALOGO["cftv-situacao"][2])
+    assert "Unidade;Shopping" in rl.gerar_csv(r)
+    sem = rl.montar_relatorio("cftv-situacao")
+    assert all(s.erro and "Zabbix" in s.erro for s in sem.secoes)
+
+
+def test_pagina_relatorio_cftv_com_filtro_de_unidade(authed_client, factory_app, monkeypatch) -> None:
+    from app.extensions import db
+    from app.models.unidade import Unidade
+
+    monkeypatch.setenv("ZABBIX_URL", "https://zabbix.test")
+    with factory_app.app_context():
+        u = Unidade(nome="Unidade Relatório Teste")
+        db.session.add(u)
+        db.session.commit()
+        uid = u.id
+    pedidos: list[str] = []
+
+    def visao(filtro: str) -> SimpleNamespace:
+        pedidos.append(filtro)
+        return SimpleNamespace(visao=_visao())
+
+    try:
+        with (
+            patch("app.views.dashboards._visao_cftv", visao),
+            patch("app.services.cftv_gravadores.cadastro_canais", return_value={}),
+        ):
+            html = authed_client.get(f"/gov/relatorios/cftv-situacao?unidade={uid}").get_data(as_text=True)
+            csv_texto = authed_client.get(f"/gov/relatorios/cftv-situacao?unidade={uid}&formato=csv").get_data(
+                as_text=True
+            )
+            authed_client.get("/gov/relatorios/cftv-situacao?unidade=999999")
+        assert pedidos == [str(uid), str(uid), ""]  # unidade desconhecida = todas
+        assert 'name="unidade"' in html and "Unidade Relatório Teste" in html and "Câmeras fora do ar" in html
+        assert "Unidade;Unidade Relatório Teste" in csv_texto
+    finally:
+        with factory_app.app_context():
+            db.session.delete(db.session.get(Unidade, uid))
+            db.session.commit()
+
+
+def test_relatorio_sem_cftv_nao_mostra_filtro(authed_client) -> None:
+    with patch.object(rl, "montar_secao", lambda _c: _secao_ok()):
+        html = authed_client.get("/gov/relatorios/service-desk?unidade=1").get_data(as_text=True)
+    assert 'name="unidade"' not in html

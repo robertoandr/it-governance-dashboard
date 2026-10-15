@@ -1799,8 +1799,20 @@ def relatorio_executivo() -> str:
 @login_required
 @require_role("admin", "gestor", pagina="relatorios")
 def relatorio(chave: str) -> str | Response:
-    """Render um relatório do catálogo ou o personalizado (``?secao=``); ``?formato=csv`` baixa o CSV."""
-    from app.services.relatorios import CATALOGO, SECOES, gerar_csv, montar_relatorio
+    """Render um relatório do catálogo ou o personalizado (``?secao=``); ``?formato=csv`` baixa o CSV.
+
+    Relatório com seções do CFTV aceita ``?unidade=`` (id, ``sem`` ou vazio), o mesmo filtro da página CFTV.
+    """
+    from app.models.unidade import Unidade
+    from app.services.relatorios import (
+        CATALOGO,
+        SECOES,
+        SECOES_POR_UNIDADE,
+        gerar_csv,
+        montar_relatorio,
+        secoes_do_relatorio,
+    )
+    from itgov.api.v1.cftv_monitoring import SEM_UNIDADE
 
     secoes = request.args.getlist("secao")
     if chave not in CATALOGO and chave != "personalizado":
@@ -1808,7 +1820,22 @@ def relatorio(chave: str) -> str | Response:
     if chave == "personalizado" and not any(s in SECOES for s in secoes):
         flash("Escolha pelo menos uma seção para o relatório personalizado.", "error")
         return redirect(url_for("dashboards.relatorios"))
-    rel = montar_relatorio(chave, secoes)
+    por_unidade = any(s in SECOES_POR_UNIDADE for s in secoes_do_relatorio(chave, secoes))
+    unidade_raw = request.args.get("unidade", "") if por_unidade else ""
+    unidades = sorted((u for u in Unidade.query.all() if u.ativo), key=lambda u: u.caminho) if por_unidade else []
+    nome_unidade = (
+        "Sem unidade"
+        if unidade_raw == SEM_UNIDADE
+        else next((u.caminho for u in unidades if str(u.id) == unidade_raw), "")
+    )
+    if not nome_unidade:
+        unidade_raw = ""
+    rel = montar_relatorio(
+        chave,
+        secoes,
+        visao_cftv=(lambda: _visao_cftv(unidade_raw).visao) if por_unidade and os.getenv("ZABBIX_URL") else None,
+        unidade=nome_unidade,
+    )
     if request.args.get("formato") == "csv":
         nome = f"relatorio-{chave}-{rel.gerado_em:%Y%m%d-%H%M}.csv"
         return Response(
@@ -1816,7 +1843,14 @@ def relatorio(chave: str) -> str | Response:
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment; filename={nome}"},
         )
-    return render_template("dashboards/relatorio.html", rel=rel, secoes_escolhidas=secoes)
+    return render_template(
+        "dashboards/relatorio.html",
+        rel=rel,
+        secoes_escolhidas=secoes,
+        unidades=unidades,
+        unidade=unidade_raw,
+        sem_unidade=SEM_UNIDADE,
+    )
 
 
 @bp.route("/licenses")
