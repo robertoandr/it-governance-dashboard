@@ -288,9 +288,13 @@ def test_textos_e_envio_para_o_zabbix(banco, monkeypatch: pytest.MonkeyPatch) ->
     def fake_zbx(method: str, params: Any) -> Any:
         chamadas.append((method, params))
         if method == "item.get":
+            # Item trapper: o Zabbix não devolve interface no item
+            return [{"itemid": "91", "hostid": "1"}, {"itemid": "92", "hostid": "2"}]
+        if method == "host.get":
             return [
-                {"itemid": "91", "interfaces": [{"ip": _IP}]},
-                {"itemid": "92", "interfaces": [{"ip": "10.77.0.6"}]},  # gravador não verificado
+                # Gravador com duas interfaces (ICMP e SNMP) no mesmo IP: um valor só
+                {"hostid": "1", "interfaces": [{"ip": _IP}, {"ip": _IP}]},
+                {"hostid": "2", "interfaces": [{"ip": "10.77.0.6"}]},  # gravador não verificado
             ]
         return {}
 

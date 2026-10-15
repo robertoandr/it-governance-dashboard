@@ -40,7 +40,9 @@ _spec.loader.exec_module(wa)  # type: ignore[union-attr]
 from zabbix_utils import ZabbixAPI  # noqa: E402
 from zabbix_utils.exceptions import APIRequestError  # noqa: E402
 
-TEMPLATE = "CFTV Verificação (dashboard)"
+# Nome técnico só aceita letras sem acento, números, espaço, ponto, traço e sublinhado
+TEMPLATE = "cftv-verificacao-dashboard"
+TEMPLATE_NOME = "CFTV Verificação (dashboard)"
 TEMPLATE_GRUPO_DE = "Intelbras NVR SNMP"  # o novo template vai para o mesmo grupo deste
 GRUPOS_GRAVADOR = ("CFTV/DVRs", "CFTV/NVRs")
 ACAO_CHAMADO = "Governança — Chamado Zendesk"
@@ -52,6 +54,7 @@ TAG_ALERTA = ("alerta", "so-whatsapp")
 COND_TAG_VALOR = "26"
 COND_MANUTENCAO = "16"
 OP_IGUAL, OP_DIFERENTE, OP_NAO_EM = "0", "1", "11"
+OP_AVISAR_ENVOLVIDOS = "11"  # tipo de operação de recuperação
 
 ITENS = (
     ("cftv.verif.sem_gravar", "Canais sem gravar (verificação do dashboard)"),
@@ -115,19 +118,36 @@ def filtro_sem_chamado(filtro: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def operacoes_escrita(operacoes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Operações de outra ação só com os campos aceitos na escrita (Zabbix 7.4 recusa ids)."""
+def operacoes_escrita(operacoes: list[dict[str, Any]], recuperacao: bool = False) -> list[dict[str, Any]]:
+    """Operações de outra ação só com os campos aceitos na escrita (Zabbix 7.4 recusa ids).
+
+    Operação de recuperação não tem escalonamento nem condições: o Zabbix
+    recusa ``evaltype``, ``esc_*`` e ``opconditions`` nela. "Avisar todos os
+    envolvidos" também recusa ``mediatypeid`` na mensagem.
+    """
+    campos_op = (
+        ("operationtype",)
+        if recuperacao
+        else ("operationtype", "esc_period", "esc_step_from", "esc_step_to", "evaltype")
+    )
+    listas = ("opmessage_usr", "opmessage_grp") if recuperacao else ("opmessage_usr", "opmessage_grp", "opconditions")
     resultado = []
     for op in operacoes:
-        nova = {
-            k: op[k] for k in ("operationtype", "esc_period", "esc_step_from", "esc_step_to", "evaltype") if k in op
-        }
+        nova = {k: op[k] for k in campos_op if k in op}
         if "opmessage" in op:
-            campos: tuple[str, ...] = ("default_msg", "mediatypeid")
+            # "Avisar todos os envolvidos" (11) usa a mídia de quem recebeu o alerta: não aceita mediatypeid
+            campos: tuple[str, ...] = (
+                ("default_msg",)
+                if op.get("operationtype") == OP_AVISAR_ENVOLVIDOS
+                else (
+                    "default_msg",
+                    "mediatypeid",
+                )
+            )
             if op["opmessage"].get("default_msg") == "0":
                 campos += ("subject", "message")
             nova["opmessage"] = {k: v for k, v in op["opmessage"].items() if k in campos}
-        for chave in ("opmessage_usr", "opmessage_grp", "opconditions"):
+        for chave in listas:
             if op.get(chave):
                 nova[chave] = [
                     {k: v for k, v in item.items() if k not in ("operationid", "actionid")} for item in op[chave]
@@ -150,13 +170,15 @@ def garantir_template(api: ZabbixAPI, dry: bool) -> str | None:
     existente = api.template.get(filter={"host": TEMPLATE}, output=["templateid"])
     if existente:
         templateid = existente[0]["templateid"]
-        wa.ok(f"template '{TEMPLATE}' já existe ({templateid})")
+        wa.ok(f"template '{TEMPLATE_NOME}' já existe ({templateid})")
     elif dry:
-        wa.info(f"criaria o template '{TEMPLATE}'")
+        wa.info(f"criaria o template '{TEMPLATE_NOME}' ({TEMPLATE})")
         return None
     else:
-        templateid = api.template.create(host=TEMPLATE, groups=[{"groupid": _grupo_do_template(api)}])["templateids"][0]
-        wa.ok(f"template '{TEMPLATE}' criado ({templateid})")
+        templateid = api.template.create(
+            host=TEMPLATE, name=TEMPLATE_NOME, groups=[{"groupid": _grupo_do_template(api)}]
+        )["templateids"][0]
+        wa.ok(f"template '{TEMPLATE_NOME}' criado ({templateid})")
 
     chaves = {i["key_"] for i in api.item.get(templateids=[templateid], output=["key_"])}
     for chave, nome in ITENS:
@@ -213,7 +235,8 @@ def ligar_gravadores(api: ZabbixAPI, templateid: str | None, dry: bool) -> None:
     if dry or not templateid:
         wa.info(f"ligaria o template a {len(faltam)} gravador(es): " + ", ".join(h["name"] for h in faltam))
         return
-    api.template.massadd(templates=[{"templateid": templateid}], hosts=[{"hostid": h["hostid"]} for h in faltam])
+    # Zabbix 7.x: ligar template a host é pelo host.massadd (template.massadd não aceita "hosts")
+    api.host.massadd(hosts=[{"hostid": h["hostid"]} for h in faltam], templates=[{"templateid": templateid}])
     wa.ok(f"template ligado a {len(faltam)} gravador(es)")
 
 
@@ -224,7 +247,7 @@ def garantir_acao_whatsapp(api: ZabbixAPI, dry: bool) -> None:
         return
     modelo = api.action.get(
         filter={"name": ACAO_MODELO},
-        output=["actionid"],
+        output=["actionid", "esc_period"],
         selectOperations="extend",
         selectRecoveryOperations="extend",
     )
@@ -237,7 +260,8 @@ def garantir_acao_whatsapp(api: ZabbixAPI, dry: bool) -> None:
         name=ACAO_NOVA,
         eventsource=0,
         status=0,
-        esc_period="1h",
+        # Mesmo passo de envio do modelo: o WhatsApp sai no mesmo tempo que o da rede lenta
+        esc_period=modelo[0]["esc_period"],
         filter={
             "evaltype": "0",
             "conditions": [
@@ -251,7 +275,7 @@ def garantir_acao_whatsapp(api: ZabbixAPI, dry: bool) -> None:
             ],
         },
         operations=operacoes_escrita(modelo[0]["operations"]),
-        recovery_operations=operacoes_escrita(modelo[0].get("recovery_operations") or []),
+        recovery_operations=operacoes_escrita(modelo[0].get("recovery_operations") or [], recuperacao=True),
     )
     wa.ok(f"ação '{ACAO_NOVA}' criada")
 

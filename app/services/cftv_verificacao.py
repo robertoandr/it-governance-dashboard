@@ -274,14 +274,20 @@ def enviar_zabbix(ips: set[str], chave: str) -> int:
         return 0
     textos = textos_para_zabbix(ips)
     try:
-        itens = _zbx(
-            "item.get",
-            {"output": ["itemid", "hostid"], "filter": {"key_": [chave]}, "selectInterfaces": ["ip"]},
+        itens = _zbx("item.get", {"output": ["itemid", "hostid"], "filter": {"key_": [chave]}})
+        # Item trapper não tem interface: o IP vem das interfaces do host do item
+        hosts = (
+            _zbx(
+                "host.get", {"output": ["hostid"], "hostids": [i["hostid"] for i in itens], "selectInterfaces": ["ip"]}
+            )
+            if itens
+            else []
         )
+        ips_do_host = {h["hostid"]: {i["ip"] for i in h.get("interfaces", [])} for h in hosts}
         valores = [
             {"itemid": item["itemid"], "value": textos[ip][chave]}
             for item in itens
-            for ip in {i["ip"] for i in item.get("interfaces", [])} & ips
+            for ip in sorted(ips_do_host.get(item["hostid"], set()) & ips)[:1]
         ]
         if valores:
             _zbx("history.push", valores)
