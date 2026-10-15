@@ -511,6 +511,7 @@ def cftv_monitoring() -> str:
         dias_historico=DIAS_HISTORICO,
         agora=time.time(),
         duracao=formatar_duracao,
+        tz=ZoneInfo("America/Sao_Paulo"),
     )
 
 
@@ -526,7 +527,7 @@ def _canais_dos_gravadores(
     """
     from flask import current_app
 
-    from app.services import cftv_gravadores
+    from app.services import cftv_gravadores, cftv_verificacao
 
     manual = {v.dvr: v.canais for v in vinculos if v.canais}
     alvos = []
@@ -543,11 +544,12 @@ def _canais_dos_gravadores(
     cftv_gravadores.disparar(current_app._get_current_object(), alvos)  # type: ignore[attr-defined]
     acessos = cftv_gravadores.leituras()
     cadastro = cftv_gravadores.cadastro_canais()
+    verificacao = cftv_verificacao.por_gravador()
     livres_por_sede: dict[int | None, int] = {}
     for c in visao["cards"]:
         ip = (c.get("gravador_host") or {}).get("ip", "")
         c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(c["gravador"]), cadastro.get(ip))
-        c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip), cadastro.get(ip))
+        c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip), cadastro.get(ip), verificacao.get(ip))
         if c["canais"]:
             sede = sede_por_unidade.get(c["unidade_id"], c["unidade_id"]) if c["unidade_id"] is not None else None
             livres_por_sede[sede] = livres_por_sede.get(sede, 0) + c["canais"]["livres"]
@@ -572,9 +574,12 @@ INVENTARIO_COLUNAS = (
     "MAC",
     "Vídeo",
     "Imagem",
+    "Gravação",
     "Status",
 )
 _TIPO_CAMERA = {"ip": "IP", "analogica": "Analógica", "outro": "Outro equipamento"}
+_IMAGEM_CSV = {"ok": "ok", "sem_resposta": "sem imagem (não responde)", "chapada": "sem imagem (tela chapada)"}
+_GRAVACAO_CSV = {"ok": "gravando", "parada": "sem gravar", "desligada": "gravação desligada"}
 _STATUS_CAMERA = {"up": "online", "down": "offline", "nodata": "sem dados", "maint": "manutenção"}
 
 
@@ -583,6 +588,19 @@ def _celula_csv(valor: object) -> object:
     if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + valor
     return valor
+
+
+@bp.route("/cftv/miniatura/<ip>/<int:canal>")
+@login_required
+@require_role("admin", "gestor", "operador", pagina="cftv")
+def cftv_miniatura(ip: str, canal: int) -> Response:
+    """Foto reduzida do canal com problema de imagem (guardada pela verificação automática)."""
+    from app.models.unidade import VerificacaoCanal
+
+    v = VerificacaoCanal.query.filter_by(ip_gravador=ip, canal=canal).first()
+    if v is None or v.miniatura is None:
+        abort(404)
+    return Response(v.miniatura, mimetype="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
 
 
 @bp.route("/cftv/inventario.csv")
@@ -613,7 +631,8 @@ def cftv_inventario_csv() -> Response:
                     linha["ip"],
                     linha["mac"],
                     "sem vídeo" if linha["sem_video"] else ("ok" if linha["video"] == "ok" else ""),
-                    "sem imagem (conferência)" if linha["sem_imagem"] else "",
+                    _IMAGEM_CSV.get(linha["imagem"], "") or ("sem imagem (conferência)" if linha["sem_imagem"] else ""),
+                    _GRAVACAO_CSV.get(linha["gravacao"], ""),
                     _STATUS_CAMERA.get(linha["status"], ""),
                 )
             )

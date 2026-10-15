@@ -49,3 +49,6 @@ pywinrm>=0.5.0
 # Módulo Tarefas — documento Markdown do card (render + sanitização no servidor)
 markdown-it-py>=3.0
 nh3>=0.3
+
+# CFTV — análise da foto do canal (câmera sem imagem / congelada)
+pillow>=11.0

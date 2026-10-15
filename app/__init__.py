@@ -94,6 +94,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
         classificacoes.carregar()
 
+    # CFTV: gravação e imagem dos canais, verificadas em segundo plano (um worker só)
+    from app.services import cftv_verificacao
+
+    cftv_verificacao.iniciar_agendador(app)
+
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
 

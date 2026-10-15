@@ -213,6 +213,31 @@ class CanalCftv(db.Model):
     conferido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
+class VerificacaoCanal(db.Model):
+    """Última verificação automática de um canal: está gravando? tem imagem?
+
+    Feita pelo dashboard direto no gravador (API Intelbras), só nos canais
+    com câmera na conferência (``CanalCftv``).
+    """
+
+    __tablename__ = "cftv_verificacoes"
+    __table_args__ = (db.UniqueConstraint("ip_gravador", "canal", name="uq_cftv_verificacao"),)
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    ip_gravador: str = db.Column(db.String(45), nullable=False, index=True)
+    canal: int = db.Column(db.Integer, nullable=False)
+    # "ok", "parada" (sem arquivo recente), "desligada" (modo desligado no gravador) ou "" (não verificado)
+    gravacao: str = db.Column(db.String(10), nullable=False, default="", server_default="")
+    # Fim do último arquivo gravado, no relógio do gravador (sem fuso)
+    ultima_gravacao: datetime | None = db.Column(db.DateTime, nullable=True)
+    gravacao_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
+    # "ok", "sem_resposta" (câmera não entrega foto), "chapada" (tela sem cena) ou ""
+    imagem: str = db.Column(db.String(12), nullable=False, default="", server_default="")
+    imagem_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Foto reduzida, só enquanto a imagem está com problema
+    miniatura: bytes | None = db.Column(db.LargeBinary, nullable=True)
+
+
 def parse_faixas(texto: str) -> list[str]:
     """Separa faixas por vírgula, espaço ou quebra de linha e normaliza.
 

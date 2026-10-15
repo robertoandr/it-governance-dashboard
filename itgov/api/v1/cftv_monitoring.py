@@ -37,7 +37,7 @@ def _cache_valido() -> bool:
     return _cache_data is not None and (time.monotonic() - _cache_ts) < _CACHE_TTL
 
 
-def _zbx(method: str, params: dict[str, Any]) -> Any:
+def _zbx(method: str, params: dict[str, Any] | list[dict[str, Any]]) -> Any:
     url = os.getenv("ZABBIX_URL", "")
     if not url:
         raise RuntimeError("ZABBIX_URL não configurado")

@@ -330,7 +330,21 @@
           {% for x in k.sem_video %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
-        {% set sem_imagem = c.inventario | selectattr('sem_imagem') | list %}
+        {% set sem_gravar = c.inventario | selectattr('gravacao', 'in', ['parada', 'desligada']) | list %}
+        {% if sem_gravar %}
+        <p class="text-red-700 dark:text-red-400 font-medium" title="Verificação automática no gravador (a cada 30 min): nenhum arquivo gravado nos últimos 30 min, ou gravação desligada">{{ sem_gravar | length }} cana{{ 'is' if sem_gravar | length != 1 else 'l' }} sem gravar:</p>
+        <ul class="text-red-700 dark:text-red-400 flex flex-wrap gap-x-3 gap-y-0.5">
+          {% for x in sem_gravar %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}{% if x.gravacao == 'desligada' %} (desligada){% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% set sem_imagem_auto = c.inventario | selectattr('imagem', 'in', ['sem_resposta', 'chapada']) | list %}
+        {% if sem_imagem_auto %}
+        <p class="text-red-700 dark:text-red-400 font-medium" title="Verificação automática (fotos às 8h, 11h, 14h e 17h): câmera não entrega imagem ou a imagem é uma tela chapada">{{ sem_imagem_auto | length }} câmera{{ 's' if sem_imagem_auto | length != 1 }} sem imagem agora:</p>
+        <ul class="text-red-700 dark:text-red-400 flex flex-wrap gap-x-3 gap-y-0.5">
+          {% for x in sem_imagem_auto %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% set sem_imagem = c.inventario | selectattr('sem_imagem') | rejectattr('imagem', 'in', ['ok', 'sem_resposta', 'chapada']) | list %}
         {% if sem_imagem %}
         <p class="text-amber-700 dark:text-amber-400 font-medium" title="Câmera ligada, mas sem imagem útil na conferência no local">{{ sem_imagem | length }} câmera{{ 's' if sem_imagem | length != 1 }} sem imagem na conferência:</p>
         <ul class="text-amber-700 dark:text-amber-400 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -403,13 +417,16 @@
                 <th class="text-left py-1 pr-2 font-medium">IP</th>
                 <th class="text-left py-1 pr-2 font-medium">MAC</th>
                 <th class="text-left py-1 pr-2 font-medium" title="Pelo gravador (SNMP ou API): o canal está recebendo vídeo?">Vídeo</th>
-                <th class="text-left py-1 pr-2 font-medium" title="Conferência no local: a imagem está boa?">Imagem</th>
+                <th class="text-left py-1 pr-2 font-medium" title="Verificação automática (foto às 8h, 11h, 14h e 17h); sem ela, a conferência no local">Imagem</th>
+                <th class="text-left py-1 pr-2 font-medium" title="Verificação automática no gravador, a cada 30 min">Gravação</th>
                 <th class="text-left py-1 font-medium" title="Ping da câmera no Zabbix (só câmera IP)">Ping</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50">
               {% for x in c.inventario %}
-              <tr class="{% if x.sem_video %}bg-red-50/50 dark:bg-red-900/10{% elif x.sem_imagem %}bg-amber-50/50 dark:bg-amber-900/10{% endif %}">
+              {% set problema = x.sem_video or x.gravacao in ['parada', 'desligada'] or x.imagem in ['sem_resposta', 'chapada'] %}
+              <tr class="{% if problema %}bg-red-50/50 dark:bg-red-900/10{% elif x.sem_imagem and x.imagem != 'ok' %}bg-amber-50/50 dark:bg-amber-900/10{% endif %}"
+                  {% if x.verificado_em %}title="Verificado em {{ x.verificado_em.astimezone(tz).strftime('%d/%m %H:%M') }}"{% endif %}>
                 <td class="py-1 pr-2 text-slate-400 font-mono">{{ x.canal }}</td>
                 <td class="py-1 pr-2 text-slate-700 dark:text-slate-200">{{ x.nome or '—' }}</td>
                 <td class="py-1 pr-2 text-slate-500">{{ {'ip': 'IP', 'analogica': 'Analógica', 'outro': 'Outro'}.get(x.tipo, '—') }}</td>
@@ -417,7 +434,19 @@
                 <td class="py-1 pr-2 text-slate-500 font-mono">{{ x.ip or '—' }}</td>
                 <td class="py-1 pr-2 text-slate-500 font-mono">{{ x.mac or '—' }}</td>
                 <td class="py-1 pr-2">{% if x.video == 'sem' %}<span class="text-red-600 font-semibold">sem vídeo</span>{% elif x.video == 'ok' %}<span class="text-green-600">ok</span>{% else %}<span class="text-slate-400" title="O gravador não informa com certeza">?</span>{% endif %}</td>
-                <td class="py-1 pr-2">{% if x.sem_imagem %}<span class="text-amber-600 font-semibold">sem imagem</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+                <td class="py-1 pr-2">
+                  {% if x.imagem == 'sem_resposta' %}<span class="text-red-600 font-semibold" title="A câmera não entregou foto (duas tentativas)">sem imagem</span>
+                  {% elif x.imagem == 'chapada' %}<span class="text-red-600 font-semibold" title="A foto é uma tela chapada, sem cena">sem imagem</span>{% if x.miniatura %} <a href="{{ url_for('dashboards.cftv_miniatura', ip=c.gravador_host.ip, canal=x.canal) }}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">foto</a>{% endif %}
+                  {% elif x.imagem == 'ok' %}<span class="text-green-600">ok</span>
+                  {% elif x.sem_imagem %}<span class="text-amber-600 font-semibold" title="Na conferência no local">sem imagem</span>
+                  {% else %}<span class="text-slate-400">—</span>{% endif %}
+                </td>
+                <td class="py-1 pr-2">
+                  {% if x.gravacao == 'ok' %}<span class="text-green-600">gravando</span>
+                  {% elif x.gravacao == 'parada' %}<span class="text-red-600 font-semibold" title="{% if x.ultima_gravacao %}Último arquivo até {{ x.ultima_gravacao.strftime('%d/%m %H:%M') }}{% else %}Nenhum arquivo nas últimas 2 h{% endif %}">sem gravar</span>
+                  {% elif x.gravacao == 'desligada' %}<span class="text-red-600 font-semibold">desligada</span>
+                  {% else %}<span class="text-slate-400" title="Só nos gravadores Intelbras com senha HTTP aceita">—</span>{% endif %}
+                </td>
                 <td class="py-1">{% if x.status %}{{ status_badge(x.status) }}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
               </tr>
               {% endfor %}
