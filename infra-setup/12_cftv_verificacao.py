@@ -115,19 +115,27 @@ def filtro_sem_chamado(filtro: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def operacoes_escrita(operacoes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Operações de outra ação só com os campos aceitos na escrita (Zabbix 7.4 recusa ids)."""
+def operacoes_escrita(operacoes: list[dict[str, Any]], recuperacao: bool = False) -> list[dict[str, Any]]:
+    """Operações de outra ação só com os campos aceitos na escrita (Zabbix 7.4 recusa ids).
+
+    Operação de recuperação não tem escalonamento nem condições: o Zabbix
+    recusa ``evaltype``, ``esc_*`` e ``opconditions`` nela.
+    """
+    campos_op = (
+        ("operationtype",)
+        if recuperacao
+        else ("operationtype", "esc_period", "esc_step_from", "esc_step_to", "evaltype")
+    )
+    listas = ("opmessage_usr", "opmessage_grp") if recuperacao else ("opmessage_usr", "opmessage_grp", "opconditions")
     resultado = []
     for op in operacoes:
-        nova = {
-            k: op[k] for k in ("operationtype", "esc_period", "esc_step_from", "esc_step_to", "evaltype") if k in op
-        }
+        nova = {k: op[k] for k in campos_op if k in op}
         if "opmessage" in op:
             campos: tuple[str, ...] = ("default_msg", "mediatypeid")
             if op["opmessage"].get("default_msg") == "0":
                 campos += ("subject", "message")
             nova["opmessage"] = {k: v for k, v in op["opmessage"].items() if k in campos}
-        for chave in ("opmessage_usr", "opmessage_grp", "opconditions"):
+        for chave in listas:
             if op.get(chave):
                 nova[chave] = [
                     {k: v for k, v in item.items() if k not in ("operationid", "actionid")} for item in op[chave]
@@ -224,7 +232,7 @@ def garantir_acao_whatsapp(api: ZabbixAPI, dry: bool) -> None:
         return
     modelo = api.action.get(
         filter={"name": ACAO_MODELO},
-        output=["actionid"],
+        output=["actionid", "esc_period"],
         selectOperations="extend",
         selectRecoveryOperations="extend",
     )
@@ -237,7 +245,8 @@ def garantir_acao_whatsapp(api: ZabbixAPI, dry: bool) -> None:
         name=ACAO_NOVA,
         eventsource=0,
         status=0,
-        esc_period="1h",
+        # Mesmo passo de envio do modelo: o WhatsApp sai no mesmo tempo que o da rede lenta
+        esc_period=modelo[0]["esc_period"],
         filter={
             "evaltype": "0",
             "conditions": [
@@ -251,7 +260,7 @@ def garantir_acao_whatsapp(api: ZabbixAPI, dry: bool) -> None:
             ],
         },
         operations=operacoes_escrita(modelo[0]["operations"]),
-        recovery_operations=operacoes_escrita(modelo[0].get("recovery_operations") or []),
+        recovery_operations=operacoes_escrita(modelo[0].get("recovery_operations") or [], recuperacao=True),
     )
     wa.ok(f"ação '{ACAO_NOVA}' criada")
 

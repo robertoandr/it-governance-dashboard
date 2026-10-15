@@ -77,3 +77,24 @@ def test_triggers_usam_as_chaves_do_dashboard() -> None:
     assert cv.expr_trigger("cftv.verif.sem_gravar") == (
         "length(last(/CFTV Verificação (dashboard)/cftv.verif.sem_gravar))>0"
     )
+
+
+def test_operacoes_de_recuperacao_sem_escalonamento() -> None:
+    ops = [
+        {
+            "operationid": "10",
+            "operationtype": "11",
+            "evaltype": "0",
+            "esc_period": "0",
+            "opconditions": [{"conditiontype": "14", "operationid": "10"}],
+            "opmessage": {"default_msg": "1", "mediatypeid": "105"},
+            "opmessage_usr": [{"operationid": "10", "userid": "5"}],
+        }
+    ]
+    assert cv.operacoes_escrita(ops, recuperacao=True) == [
+        {
+            "operationtype": "11",
+            "opmessage": {"default_msg": "1", "mediatypeid": "105"},
+            "opmessage_usr": [{"userid": "5"}],
+        }
+    ]
