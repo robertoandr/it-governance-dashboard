@@ -559,6 +559,11 @@ def test_inventario_junta_gravador_e_zabbix() -> None:
         "status": "",
         "situacao": "",
         "sem_imagem": False,
+        "gravacao": "",
+        "ultima_gravacao": None,
+        "imagem": "",
+        "verificado_em": None,
+        "miniatura": False,
     }
     assert (por_canal[2]["nome"], por_canal[2]["mac"], por_canal[2]["modelo"]) == (
         "Câmera Portão",
@@ -752,8 +757,8 @@ def test_csv_do_inventario(authed_client, gravador_inventario: int) -> None:
     assert resp.mimetype == "text/csv"
     assert "attachment" in resp.headers["Content-Disposition"]
     texto = resp.get_data(as_text=True)
-    assert texto.startswith("﻿Unidade;Gravador;Canal;Nome;Tipo;Modelo;IP;MAC;Vídeo;Imagem;Status")
-    assert "Shopping;INV Teste;2;;IP;VIP-1230-D-G4;10.41.100.210;80:85:44:36:ad:bf;ok;;" in texto
+    assert texto.startswith("﻿Unidade;Gravador;Canal;Nome;Tipo;Modelo;IP;MAC;Vídeo;Imagem;Gravação;Status")
+    assert "Shopping;INV Teste;2;;IP;VIP-1230-D-G4;10.41.100.210;80:85:44:36:ad:bf;ok;;;" in texto
     # Nome de canal vindo do aparelho não vira fórmula no Excel
     assert ";'=HYPERLINK(1);" in texto
     assert "segredo" not in texto

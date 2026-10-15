@@ -246,6 +246,10 @@ def cadastro_canais() -> dict[str, dict[int, dict[str, Any]]]:
     return cadastro
 
 
+def _mais_recente(*datas: datetime | None) -> datetime | None:
+    return max((_utc(d) for d in datas if d is not None), default=None)
+
+
 def _snmp_do_card(card: dict[str, Any]) -> tuple[dict[int, dict[str, str]], bool]:
     host = card.get("gravador_host") or {}
     snmp = {int(k): v for k, v in (host.get("canais_snmp") or {}).items() if str(k).isdigit()}
@@ -300,7 +304,10 @@ def canais_do_card(
 
 
 def inventario_do_card(
-    card: dict[str, Any], acesso: dict[str, Any] | None, cadastro: dict[int, dict[str, Any]] | None = None
+    card: dict[str, Any],
+    acesso: dict[str, Any] | None,
+    cadastro: dict[int, dict[str, Any]] | None = None,
+    verificacao: dict[int, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Câmeras em uso de um card de gravador, canal a canal — inclusive as analógicas.
 
@@ -322,15 +329,18 @@ def inventario_do_card(
         card: Card de ``montar_visao``.
         acesso: Item de ``leituras()`` do IP do gravador (ou None).
         cadastro: Canal → conferência no local (``cadastro_canais()[ip]``).
+        verificacao: Canal → verificação automática (``cftv_verificacao.por_gravador()[ip]``).
 
     Returns:
         ``[{"canal", "nome", "tipo", "modelo", "ip", "mac", "sem_video", "video", "status",
-        "situacao", "sem_imagem"}]`` em ordem de canal. ``tipo``: ``ip``, ``analogica``,
-        ``outro`` ou ``""``; ``video``: ``ok``, ``sem`` ou ``""`` (não se sabe).
+        "situacao", "sem_imagem", "gravacao", "ultima_gravacao", "imagem", "verificado_em", "miniatura"}]`` em ordem
+        de canal. ``tipo``: ``ip``, ``analogica``, ``outro`` ou ``""``; ``video``: ``ok``, ``sem``
+        ou ``""`` (não se sabe); ``gravacao`` e ``imagem``: resultado da verificação automática.
     """
     leitura: LeituraGravador | None = (acesso or {}).get("leitura")
     snmp, confiavel = _snmp_do_card(card)
     cadastro = cadastro or {}
+    verificacao = verificacao or {}
     no_zabbix: dict[int, dict[str, Any]] = {
         int(d["canal"]): d for d in card["dispositivos"] if str(d.get("canal", "")).isdigit()
     }
@@ -349,6 +359,7 @@ def inventario_do_card(
         zbx = no_zabbix.get(canal, {})
         conf = cadastro.get(canal, {})
         s = snmp.get(canal, {})
+        v = verificacao.get(canal, {})
         ip_snmp = "" if s.get("ip", "") in SEM_ENDERECO else s["ip"]
         titulo = leitura.titulos.get(canal, "") if leitura else ""
         if conf.get("situacao") == "outro":
@@ -384,6 +395,11 @@ def inventario_do_card(
                 "status": zbx.get("status", ""),
                 "situacao": conf.get("situacao", ""),
                 "sem_imagem": conf.get("imagem") == "sem",
+                "gravacao": v.get("gravacao", ""),
+                "ultima_gravacao": v.get("ultima_gravacao"),
+                "imagem": v.get("imagem", ""),
+                "verificado_em": _mais_recente(v.get("gravacao_em"), v.get("imagem_em")),
+                "miniatura": bool(v.get("miniatura")),
             }
         )
     return linhas
