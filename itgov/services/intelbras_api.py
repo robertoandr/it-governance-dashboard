@@ -72,7 +72,7 @@ def titulo_padrao(titulo: str) -> bool:
 
 
 # Posição de câmera IP sem câmera: endereço de fábrica ou vazio
-_SEM_ENDERECO = {"", "0.0.0.0", "192.168.0.0", "192.168.1.108"}
+SEM_ENDERECO = frozenset({"", "0.0.0.0", "192.168.0.0", "192.168.1.108"})
 _MAC_NULO = {"", "ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"}
 _CAMPO_CAMERA = re.compile(
     r"^camera\[(\d+)\]\.(Type|Enable|UniqueChannel|DeviceInfo\.Address|DeviceInfo\.Mac|DeviceInfo\.DeviceType)=(.*)$"
@@ -106,7 +106,7 @@ def cameras_do_gravador(texto: str) -> list[CameraGravador]:
             cameras.setdefault(canal, CameraGravador(canal=canal, tipo="analogica"))
         elif tipo == "Remote":
             ip = campos.get("DeviceInfo.Address", "")
-            if campos.get("Enable", "true").lower() != "true" or ip in _SEM_ENDERECO:
+            if campos.get("Enable", "true").lower() != "true" or ip in SEM_ENDERECO:
                 continue
             mac = campos.get("DeviceInfo.Mac", "").lower()
             cameras[canal] = CameraGravador(

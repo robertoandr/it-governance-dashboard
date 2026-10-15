@@ -31,6 +31,7 @@ import structlog
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from itgov.services.intelbras_api import (
+    SEM_ENDERECO,
     AcessoNegadoError,
     LeituraGravador,
     capacidade_do_modelo,
@@ -224,70 +225,112 @@ def leituras() -> dict[str, dict[str, Any]]:
     }
 
 
-def canais_do_card(card: dict[str, Any], acesso: dict[str, Any] | None, manual: int | None) -> dict[str, Any] | None:
+def cadastro_canais() -> dict[str, dict[int, dict[str, Any]]]:
+    """Cadastro da conferência no local por gravador: IP → canal → campos de ``CanalCftv``."""
+    from app.models.unidade import CanalCftv
+
+    try:
+        itens = CanalCftv.query.all()
+    except SQLAlchemyError as exc:
+        log.warning("cftv_gravadores.cadastro_falhou", erro=str(exc)[:200])
+        return {}
+    cadastro: dict[str, dict[int, dict[str, Any]]] = {}
+    for c in itens:
+        cadastro.setdefault(c.ip_gravador, {})[c.canal] = {
+            "situacao": c.situacao,
+            "analogica": c.analogica,
+            "ip_camera": c.ip_camera,
+            "equipamento": c.equipamento,
+            "imagem": c.imagem,
+        }
+    return cadastro
+
+
+def _snmp_do_card(card: dict[str, Any]) -> tuple[dict[int, dict[str, str]], bool]:
+    host = card.get("gravador_host") or {}
+    snmp = {int(k): v for k, v in (host.get("canais_snmp") or {}).items() if str(k).isdigit()}
+    return snmp, bool(host.get("status_canal_confiavel", True))
+
+
+def canais_do_card(
+    card: dict[str, Any],
+    acesso: dict[str, Any] | None,
+    manual: int | None,
+    cadastro: dict[int, dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     """Capacidade, canais em uso, livres e canais sem vídeo de um card de gravador.
 
-    Canal em uso: tem câmera no Zabbix (tag ``canal``), tem vídeo, ou tem nome
-    dado no gravador. Canal sem vídeo só vira alerta se estiver em uso.
+    Canal em uso é o que entra no inventário (``inventario_do_card``). Canal
+    sem vídeo só vira alerta se estiver em uso.
 
     Args:
         card: Card de ``montar_visao``.
         acesso: Item de ``leituras()`` do IP do gravador (ou None).
         manual: Capacidade informada à mão (``DvrUnidade.canais``).
+        cadastro: Canal → conferência no local (``cadastro_canais()[ip]``).
 
     Returns:
-        ``{"total", "usados", "livres", "sem_video": [{"canal", "nome"}], "fonte", "erro"}``,
+        ``{"total", "usados", "livres", "sem_video": [{"canal", "nome"}], "analogicas", "fonte", "erro"}``,
         ou None quando não há como saber a capacidade.
     """
     leitura: LeituraGravador | None = (acesso or {}).get("leitura")
-    no_zabbix = {int(d["canal"]) for d in card["dispositivos"] if str(d.get("canal", "")).isdigit()}
+    snmp, _ = _snmp_do_card(card)
     modelo = leitura.modelo if leitura else ((card.get("gravador_host") or {}).get("model") or "")
     if manual:
         total, fonte = manual, "informado"
     elif leitura and leitura.canais:
         total, fonte = leitura.canais, "gravador"
+    elif snmp:
+        total, fonte = max(snmp), "snmp"
     elif capacidade_do_modelo(modelo):
         total, fonte = capacidade_do_modelo(modelo), "modelo"
     else:
         return None
-    usados = set(no_zabbix)
-    sem_video: list[dict[str, Any]] = []
-    if leitura:
-        for canal in range(1, total + 1):
-            nome = leitura.titulos.get(canal, "")
-            em_uso = canal in no_zabbix or not titulo_padrao(nome) or canal not in leitura.sem_video
-            if em_uso:
-                usados.add(canal)
-                if canal in leitura.sem_video:
-                    sem_video.append({"canal": canal, "nome": nome})
-    usados = {c for c in usados if c <= total}
+    linhas = [x for x in inventario_do_card(card, acesso, cadastro) if x["canal"] <= total]
     return {
         "total": total,
-        "usados": len(usados),
-        "livres": max(total - len(usados), 0),
-        "sem_video": sem_video,
+        "usados": len(linhas),
+        "livres": max(total - len(linhas), 0),
+        "sem_video": [{"canal": x["canal"], "nome": x["nome"]} for x in linhas if x["sem_video"]],
+        "analogicas": sum(1 for x in linhas if x["tipo"] == "analogica"),
         "fonte": fonte,
         "modelo": modelo,
         "erro": (acesso or {}).get("erro", "") if not leitura else "",
     }
 
 
-def inventario_do_card(card: dict[str, Any], acesso: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Câmeras em uso de um card de gravador, canal a canal.
+def inventario_do_card(
+    card: dict[str, Any], acesso: dict[str, Any] | None, cadastro: dict[int, dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Câmeras em uso de um card de gravador, canal a canal — inclusive as analógicas.
 
-    Junta o que o gravador informou (tipo, modelo, IP e MAC da câmera IP, nome
-    do canal, vídeo) com a câmera do Zabbix no mesmo canal (nome e status).
-    Entra o canal que tem câmera IP cadastrada, câmera no Zabbix, vídeo ou nome
-    dado no gravador.
+    Junta quatro fontes: a conferência no local (``cadastro``: câmera, vazio ou
+    outro equipamento, analógica), o SNMP do gravador no Zabbix (status, nome e
+    IP de cada canal), a leitura pela API Intelbras (tipo, modelo, IP, MAC,
+    nome do canal e perda de vídeo) e a câmera do Zabbix no mesmo canal (nome
+    e status do ping).
+
+    Entra o canal marcado como câmera/outro na conferência, com câmera no
+    Zabbix, câmera IP cadastrada no gravador (API ou IP no SNMP), vídeo (API ou
+    SNMP ``Connected``) ou nome dado no gravador. Canal conferido como vazio sai, a não ser que
+    tenha câmera no Zabbix.
+
+    Sem vídeo: perda de vídeo pela API, SNMP ``Unconnect``, ou SNMP ``Empty``
+    com IP de câmera cadastrado em gravador cujo status é confiável.
 
     Args:
         card: Card de ``montar_visao``.
         acesso: Item de ``leituras()`` do IP do gravador (ou None).
+        cadastro: Canal → conferência no local (``cadastro_canais()[ip]``).
 
     Returns:
-        ``[{"canal", "nome", "tipo", "modelo", "ip", "mac", "sem_video", "status"}]`` em ordem de canal.
+        ``[{"canal", "nome", "tipo", "modelo", "ip", "mac", "sem_video", "video", "status",
+        "situacao", "sem_imagem"}]`` em ordem de canal. ``tipo``: ``ip``, ``analogica``,
+        ``outro`` ou ``""``; ``video``: ``ok``, ``sem`` ou ``""`` (não se sabe).
     """
     leitura: LeituraGravador | None = (acesso or {}).get("leitura")
+    snmp, confiavel = _snmp_do_card(card)
+    cadastro = cadastro or {}
     no_zabbix: dict[int, dict[str, Any]] = {
         int(d["canal"]): d for d in card["dispositivos"] if str(d.get("canal", "")).isdigit()
     }
@@ -297,21 +340,50 @@ def inventario_do_card(card: dict[str, Any], acesso: dict[str, Any] | None) -> l
         for canal in range(1, leitura.canais + 1):
             if not titulo_padrao(leitura.titulos.get(canal, "")) or canal not in leitura.sem_video:
                 canais.add(canal)
+    canais |= {c for c, s in snmp.items() if s.get("status") == "Connected" or s.get("ip", "") not in SEM_ENDERECO}
+    canais |= {c for c, m in cadastro.items() if m["situacao"] in ("ativo", "outro")}
+    canais -= {c for c, m in cadastro.items() if m["situacao"] == "vazio" and c not in no_zabbix}
     linhas = []
     for canal in sorted(canais):
         cam = cameras.get(canal)
         zbx = no_zabbix.get(canal, {})
+        conf = cadastro.get(canal, {})
+        s = snmp.get(canal, {})
+        ip_snmp = "" if s.get("ip", "") in SEM_ENDERECO else s["ip"]
         titulo = leitura.titulos.get(canal, "") if leitura else ""
+        if conf.get("situacao") == "outro":
+            tipo = "outro"
+        elif cam:
+            tipo = cam.tipo
+        elif conf.get("analogica"):
+            tipo = "analogica"
+        elif conf.get("ip_camera") or ip_snmp:
+            tipo = "ip"
+        else:
+            tipo = ""
+        status_snmp = s.get("status", "")
+        sem_video = (
+            (leitura is not None and canal in leitura.sem_video)
+            or status_snmp == "Unconnect"
+            or (status_snmp == "Empty" and confiavel and bool(ip_snmp))
+        )
+        com_video = status_snmp == "Connected" or (leitura is not None and canal not in leitura.sem_video)
         linhas.append(
             {
                 "canal": canal,
-                "nome": zbx.get("name") or ("" if titulo_padrao(titulo) else titulo),
-                "tipo": cam.tipo if cam else "",
+                "nome": zbx.get("name")
+                or ("" if titulo_padrao(titulo) else titulo)
+                or conf.get("equipamento", "")
+                or ("" if titulo_padrao(s.get("nome", "")) else s.get("nome", "")),
+                "tipo": tipo,
                 "modelo": (cam.modelo if cam else "") or zbx.get("model", ""),
-                "ip": (cam.ip if cam else "") or zbx.get("ip", ""),
+                "ip": (cam.ip if cam else "") or zbx.get("ip", "") or conf.get("ip_camera", "") or ip_snmp,
                 "mac": cam.mac if cam else "",
-                "sem_video": leitura is not None and canal in leitura.sem_video,
+                "sem_video": sem_video,
+                "video": "sem" if sem_video else ("ok" if com_video else ""),
                 "status": zbx.get("status", ""),
+                "situacao": conf.get("situacao", ""),
+                "sem_imagem": conf.get("imagem") == "sem",
             }
         )
     return linhas
