@@ -1082,6 +1082,52 @@ def mapa_cameras_auth() -> tuple[str, int]:
     return "", 204
 
 
+@bp.route("/cameras/dispositivos-rede")
+@login_required
+@require_role(*MAPA_CAMERAS_ROLES, pagina="mapa_cameras")
+def mapa_cameras_dispositivos() -> object:
+    """Dispositivos de rede da unidade (sem celulares) para o botão do Mapa de Câmeras.
+
+    ``?unidade=<nome>``: nome da unidade no MapaCameras (``nome_mapa``) ou o nome dela.
+
+    Returns:
+        JSON ``{unidade, dispositivos, celulares}``; 404 se a unidade não existe.
+    """
+    from flask import jsonify
+
+    from app.models.unidade import CanalCftv, Unidade
+    from app.services import classificacoes
+    from app.services.mapa_dispositivos import CanalConferido, dispositivos_da_unidade
+    from itgov.api.v1.rede_descoberta import aplicar_classificacoes
+    from itgov.api.v1.rede_monitoring import get_cached_rede_summary
+
+    nome = " ".join(request.args.get("unidade", "").split()).lower()
+    todas = Unidade.query.all()
+    unidades = [u for u in todas if u.ativo]
+    unidade = next((u for u in unidades if (u.nome_mapa or "").lower() == nome), None) or next(
+        (u for u in unidades if u.nome.lower() == nome), None
+    )
+    if unidade is None:
+        return jsonify({"erro": "unidade não encontrada no dashboard"}), 404
+    classes = classificacoes.carregar()
+    hosts = aplicar_classificacoes(get_cached_rede_summary().get("hosts", []), classificacoes.regras(classes))
+    # Todos os canais marcam o gravador; só o canal com câmera traz o IP dela
+    canais = [
+        CanalConferido(c.ip_gravador, c.canal, c.ip_camera if c.situacao == "ativo" else "")
+        for c in CanalCftv.query.all()
+    ]
+    dados = dispositivos_da_unidade(
+        hosts,
+        faixas=[(u.id, f) for u in unidades for f in u.faixas],
+        ids_unidade=unidade.ids_subarvore(),
+        canais=canais,
+    )
+    log.info(
+        "mapa_cameras.dispositivos", unidade=unidade.nome, total=len(dados["dispositivos"]), user=current_user.email
+    )
+    return jsonify({"unidade": unidade.nome_mapa or unidade.nome, **dados})
+
+
 @bp.route("/network")
 @login_required
 def network_redirect():
