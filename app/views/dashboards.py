@@ -6,7 +6,7 @@ import asyncio
 import os
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -1096,7 +1096,7 @@ def mapa_cameras_dispositivos() -> object:
     from flask import jsonify
 
     from app.models.unidade import CanalCftv, Unidade
-    from app.services import classificacoes
+    from app.services import cftv_gravadores, classificacoes
     from app.services.mapa_dispositivos import CanalConferido, dispositivos_da_unidade
     from itgov.api.v1.rede_descoberta import aplicar_classificacoes
     from itgov.api.v1.rede_monitoring import get_cached_rede_summary
@@ -1121,11 +1121,26 @@ def mapa_cameras_dispositivos() -> object:
         faixas=[(u.id, f) for u in unidades for f in u.faixas],
         ids_unidade=unidade.ids_subarvore(),
         canais=canais,
+        modelos=_modelos_pelos_gravadores(cftv_gravadores.leituras()),
     )
     log.info(
         "mapa_cameras.dispositivos", unidade=unidade.nome, total=len(dados["dispositivos"]), user=current_user.email
     )
     return jsonify({"unidade": unidade.nome_mapa or unidade.nome, **dados})
+
+
+def _modelos_pelos_gravadores(leituras: dict[str, dict[str, Any]]) -> dict[str, str]:
+    """IP → modelo: o do gravador e o de cada câmera IP que ele informou."""
+    modelos: dict[str, str] = {}
+    for ip, info in leituras.items():
+        if (leitura := info.get("leitura")) is None:
+            continue
+        if leitura.modelo:
+            modelos[ip] = leitura.modelo
+        for cam in leitura.cameras:
+            if cam.ip and cam.modelo:
+                modelos.setdefault(cam.ip, cam.modelo)
+    return modelos
 
 
 @bp.route("/network")

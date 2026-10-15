@@ -4,7 +4,8 @@ O MapaCameras (botão "Dispositivos da rede") lê esta lista para cadastrar,
 sem posição, o que ainda não está no mapa. Entra tudo o que a descoberta
 de rede achou nas faixas da unidade, menos celular/tablet. Câmera e
 gravador saem da conferência do CFTV (``CanalCftv``): a câmera leva o
-gravador e o canal; o gravador vira "Dispositivo de Infra".
+gravador e o canal; o gravador vira "Dispositivo de Infra". O modelo vem
+do que o próprio gravador Intelbras informou (câmera IP de cada canal).
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ def dispositivos_da_unidade(
     faixas: list[tuple[int, str]],
     ids_unidade: set[int],
     canais: list[CanalConferido],
+    modelos: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Dispositivos da descoberta que ficam nas faixas da unidade, sem celulares.
 
@@ -51,11 +53,13 @@ def dispositivos_da_unidade(
         faixas: Pares ``(unidade_id, cidr)`` das unidades ativas.
         ids_unidade: Ids aceitos (a unidade e as filhas).
         canais: Canais da conferência do CFTV (``ip_camera`` vazio = sem câmera IP).
+        modelos: IP → modelo informado pelo gravador (câmera IP ou o próprio gravador).
 
     Returns:
         ``dispositivos`` (um por IP, ordenados por tipo e IP) e ``celulares``
         (quantos ficaram de fora por serem celular/tablet).
     """
+    modelos = modelos or {}
     gravadores = {c.ip_gravador for c in canais}
     camera_em = {c.ip_camera: c for c in canais if c.ip_camera}
     por_ip = {h["ip"]: h for h in hosts if h.get("ip")}
@@ -82,6 +86,7 @@ def dispositivos_da_unidade(
             "nome": _nome(host),
             "tipo": tipo,
             "marca": str(host.get("vendor") or ""),
+            "modelo": modelos.get(ip, ""),
             "zabbix_host": str(host.get("zabbix_host") or ""),
             "online": bool(host.get("online")),
             "ultimo_visto": (
