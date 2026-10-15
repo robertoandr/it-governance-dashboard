@@ -235,7 +235,8 @@ def ligar_gravadores(api: ZabbixAPI, templateid: str | None, dry: bool) -> None:
     if dry or not templateid:
         wa.info(f"ligaria o template a {len(faltam)} gravador(es): " + ", ".join(h["name"] for h in faltam))
         return
-    api.template.massadd(templates=[{"templateid": templateid}], hosts=[{"hostid": h["hostid"]} for h in faltam])
+    # Zabbix 7.x: ligar template a host é pelo host.massadd (template.massadd não aceita "hosts")
+    api.host.massadd(hosts=[{"hostid": h["hostid"]} for h in faltam], templates=[{"templateid": templateid}])
     wa.ok(f"template ligado a {len(faltam)} gravador(es)")
 
 
