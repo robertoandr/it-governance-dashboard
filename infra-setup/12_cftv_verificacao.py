@@ -40,7 +40,9 @@ _spec.loader.exec_module(wa)  # type: ignore[union-attr]
 from zabbix_utils import ZabbixAPI  # noqa: E402
 from zabbix_utils.exceptions import APIRequestError  # noqa: E402
 
-TEMPLATE = "CFTV Verificação (dashboard)"
+# Nome técnico só aceita letras sem acento, números, espaço, ponto, traço e sublinhado
+TEMPLATE = "cftv-verificacao-dashboard"
+TEMPLATE_NOME = "CFTV Verificação (dashboard)"
 TEMPLATE_GRUPO_DE = "Intelbras NVR SNMP"  # o novo template vai para o mesmo grupo deste
 GRUPOS_GRAVADOR = ("CFTV/DVRs", "CFTV/NVRs")
 ACAO_CHAMADO = "Governança — Chamado Zendesk"
@@ -168,13 +170,15 @@ def garantir_template(api: ZabbixAPI, dry: bool) -> str | None:
     existente = api.template.get(filter={"host": TEMPLATE}, output=["templateid"])
     if existente:
         templateid = existente[0]["templateid"]
-        wa.ok(f"template '{TEMPLATE}' já existe ({templateid})")
+        wa.ok(f"template '{TEMPLATE_NOME}' já existe ({templateid})")
     elif dry:
-        wa.info(f"criaria o template '{TEMPLATE}'")
+        wa.info(f"criaria o template '{TEMPLATE_NOME}' ({TEMPLATE})")
         return None
     else:
-        templateid = api.template.create(host=TEMPLATE, groups=[{"groupid": _grupo_do_template(api)}])["templateids"][0]
-        wa.ok(f"template '{TEMPLATE}' criado ({templateid})")
+        templateid = api.template.create(
+            host=TEMPLATE, name=TEMPLATE_NOME, groups=[{"groupid": _grupo_do_template(api)}]
+        )["templateids"][0]
+        wa.ok(f"template '{TEMPLATE_NOME}' criado ({templateid})")
 
     chaves = {i["key_"] for i in api.item.get(templateids=[templateid], output=["key_"])}
     for chave, nome in ITENS:

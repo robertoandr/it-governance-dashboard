@@ -75,7 +75,7 @@ def test_triggers_usam_as_chaves_do_dashboard() -> None:
     assert chaves == {cftv_verificacao.CHAVE_SEM_GRAVAR, cftv_verificacao.CHAVE_SEM_IMAGEM}
     assert {t[0] for t in cv.TRIGGERS} == chaves
     assert cv.expr_trigger("cftv.verif.sem_gravar") == (
-        "length(last(/CFTV Verificação (dashboard)/cftv.verif.sem_gravar))>0"
+        "length(last(/cftv-verificacao-dashboard/cftv.verif.sem_gravar))>0"
     )
 
 
@@ -103,3 +103,10 @@ def test_operacoes_de_recuperacao_sem_escalonamento() -> None:
 def test_recuperacao_por_midia_mantem_mediatypeid() -> None:
     ops = [{"operationtype": "0", "opmessage": {"default_msg": "1", "mediatypeid": "105"}}]
     assert cv.operacoes_escrita(ops, recuperacao=True) == ops
+
+
+def test_nome_tecnico_do_template_valido() -> None:
+    import re
+
+    # Zabbix: letras sem acento, números, espaço, ponto, traço e sublinhado
+    assert re.fullmatch(r"[A-Za-z0-9 ._-]+", cv.TEMPLATE)
