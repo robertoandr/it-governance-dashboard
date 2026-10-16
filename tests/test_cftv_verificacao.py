@@ -20,7 +20,7 @@ from app.services import cftv_gravadores as cg
 from app.services import cftv_verificacao as cv
 from itgov.api.v1 import cftv_monitoring
 from itgov.services import cftv_imagem, intelbras_api
-from itgov.services.intelbras_api import AcessoNegadoError, LeituraGravador, SessaoGravador
+from itgov.services.intelbras_api import AcessoNegadoError, CameraGravador, LeituraGravador, SessaoGravador
 
 _AGORA = datetime(2026, 10, 15, 14, 10, tzinfo=UTC)  # 11:10 em Brasília
 _IP = "10.77.0.9"
@@ -329,18 +329,110 @@ def test_horario_de_foto(agora_brt, ultima_brt, esperado) -> None:
 
 def test_rodada_respeita_intervalos(banco, monkeypatch: pytest.MonkeyPatch) -> None:
     feitos: list[str] = []
-    monkeypatch.setattr(cv, "_tentativa", {"gravacao": None, "imagem": None})
+    monkeypatch.setattr(cv, "_tentativa", {"gravacao": None, "imagem": None, "conferencia": None})
     monkeypatch.setattr(cv, "alvos", lambda: _alvo(1))
     monkeypatch.setattr(cv, "verificar_gravacao", lambda lista, agora: feitos.append("gravacao") or {_IP})
     monkeypatch.setattr(cv, "verificar_imagens", lambda lista, agora: feitos.append("imagem") or {_IP})
-    monkeypatch.setattr(cv, "enviar_zabbix", lambda ips, chave: 1)
-    # 11:10 em Brasília: grava e tira foto
-    assert cv.rodada(_AGORA) == {"gravacao": 1, "imagem": 1}
+    monkeypatch.setattr(cv, "verificar_conferencia", lambda agora: feitos.append("conferencia") or {_IP: ""})
+    monkeypatch.setattr(cv, "enviar_zabbix", lambda ips, chave, textos=None: 1)
+    # 11:10 em Brasília: grava, tira foto e confere
+    assert cv.rodada(_AGORA) == {"gravacao": 1, "imagem": 1, "conferencia": 1}
     # 10 min depois: nada vencido (mesmo sem nada gravado no banco — gravador fora do ar)
-    assert cv.rodada(_AGORA + timedelta(minutes=10)) == {"gravacao": 0, "imagem": 0}
+    assert cv.rodada(_AGORA + timedelta(minutes=10)) == {"gravacao": 0, "imagem": 0, "conferencia": 0}
     # 30 min depois: só a gravação
-    assert cv.rodada(_AGORA + timedelta(minutes=30)) == {"gravacao": 1, "imagem": 0}
-    assert feitos == ["gravacao", "imagem", "gravacao"]
+    assert cv.rodada(_AGORA + timedelta(minutes=30)) == {"gravacao": 1, "imagem": 0, "conferencia": 0}
+    # 60 min depois: gravação e conferência
+    assert cv.rodada(_AGORA + timedelta(minutes=60)) == {"gravacao": 1, "imagem": 0, "conferencia": 1}
+    assert feitos == ["gravacao", "imagem", "conferencia", "gravacao", "gravacao", "conferencia"]
+
+
+def _conf(situacao: str = "ativo", ip: str = "", analogica: bool = False) -> dict[str, Any]:
+    return {"situacao": situacao, "analogica": analogica, "ip_camera": ip, "equipamento": "", "imagem": ""}
+
+
+def test_divergencias_conferencia() -> None:
+    leitura = LeituraGravador(
+        cameras=[
+            CameraGravador(canal=1, tipo="analogica"),
+            CameraGravador(canal=2, tipo="analogica"),
+            CameraGravador(canal=17, tipo="ip", ip="10.41.0.49"),
+            CameraGravador(canal=18, tipo="ip", ip="10.41.0.84"),
+            CameraGravador(canal=19, tipo="ip", ip="10.41.0.9"),
+            CameraGravador(canal=20, tipo="ip", ip="10.41.0.10"),
+            CameraGravador(canal=21, tipo="ip", ip="10.41.0.11"),
+            CameraGravador(canal=22, tipo="ip", ip="10.41.0.12"),
+        ]
+    )
+    cadastro = {
+        1: _conf(analogica=True),  # bate
+        2: _conf("vazio"),  # analógica sem câmera aparece como "Local": não diverge
+        3: _conf(analogica=True),  # gravador sem nada no canal
+        17: _conf(ip="10.41.0.49"),  # bate
+        18: _conf(ip="10.41.100.77"),  # IP diferente
+        19: _conf("vazio"),  # câmera onde a conferência diz vazio
+        20: _conf(analogica=True),  # IP onde a conferência diz analógica
+        21: _conf("outro"),  # outro equipamento: não entra
+        23: _conf(ip="10.41.0.13"),  # câmera que o gravador não tem
+        # 22: não conferido
+    }
+    assert cv.divergencias_conferencia(cadastro, leitura) == [
+        "canal 3: conferência analógica, gravador sem câmera",
+        "canal 18: conferência 10.41.100.77, gravador 10.41.0.84",
+        "canal 19: conferência vazio, gravador 10.41.0.9",
+        "canal 20: conferência analógica, gravador 10.41.0.10",
+        "canal 22: sem conferência, gravador 10.41.0.12",
+        "canal 23: conferência 10.41.0.13, gravador sem câmera",
+    ]
+    assert cv.divergencias_conferencia({17: _conf(ip="10.41.0.49")}, LeituraGravador()) == [
+        "canal 17: conferência 10.41.0.49, gravador sem câmera"
+    ]
+
+
+def test_verificar_conferencia_rele_e_compara(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    db.session.add_all(
+        [
+            GravadorAcesso(ip=_IP, credencial="padrao", leitura="", falhas="{}"),
+            # Senha recusada: não é relido
+            GravadorAcesso(ip="10.77.0.8", credencial="", leitura="", falhas="{}", erro="credencial recusada"),
+            CanalCftv(ip_gravador=_IP, canal=17, situacao="ativo", ip_camera="10.41.0.49"),
+            CanalCftv(ip_gravador=_IP, canal=18, situacao="ativo", ip_camera="10.41.0.84"),
+            CanalCftv(ip_gravador="10.77.0.8", canal=1, situacao="ativo", analogica=True),
+        ]
+    )
+    db.session.commit()
+    lidos: list[str] = []
+
+    def fake_ler_um(ip: str, centro: bool, acesso: Any, agora: datetime, nome: str = "") -> None:
+        lidos.append(ip)
+        cams = [
+            CameraGravador(canal=17, tipo="ip", ip="10.41.0.49"),
+            CameraGravador(canal=18, tipo="ip", ip="10.41.0.5"),
+        ]
+        acesso.leitura, acesso.lido_em = LeituraGravador(cameras=cams).model_dump_json(), agora
+
+    monkeypatch.setattr(cg, "ler_um", fake_ler_um)
+    monkeypatch.setattr(cv, "_nomes_gravadores", dict)
+    assert cv.verificar_conferencia(_AGORA) == {_IP: "canal 18: conferência 10.41.0.84, gravador 10.41.0.5"}
+    assert lidos == [_IP]
+    assert db.session.get(GravadorAcesso, _IP).leitura  # a leitura nova fica guardada
+
+
+def test_envio_com_textos_prontos(monkeypatch: pytest.MonkeyPatch) -> None:
+    chamadas: list[tuple[str, Any]] = []
+
+    def fake_zbx(method: str, params: Any) -> Any:
+        chamadas.append((method, params))
+        if method == "item.get":
+            return [{"itemid": "93", "hostid": "1"}]
+        if method == "host.get":
+            return [{"hostid": "1", "interfaces": [{"ip": _IP}]}]
+        return {}
+
+    monkeypatch.setenv("ZABBIX_URL", "https://zabbix.test")
+    monkeypatch.setattr(cftv_monitoring, "_zbx", fake_zbx)
+    assert cv.enviar_zabbix({_IP}, cv.CHAVE_CONFERENCIA, {_IP: "canal 18: x"}) == 1
+    assert chamadas[0] == ("item.get", {"output": ["itemid", "hostid"], "filter": {"key_": [cv.CHAVE_CONFERENCIA]}})
+    assert chamadas[-1] == ("history.push", [{"itemid": "93", "value": "canal 18: x"}])
 
 
 def test_agendador_nao_liga_em_teste(factory_app) -> None:

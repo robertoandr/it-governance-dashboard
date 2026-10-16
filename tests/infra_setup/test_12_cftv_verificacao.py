@@ -72,7 +72,11 @@ def test_triggers_usam_as_chaves_do_dashboard() -> None:
     from app.services import cftv_verificacao
 
     chaves = {c for c, _ in cv.ITENS}
-    assert chaves == {cftv_verificacao.CHAVE_SEM_GRAVAR, cftv_verificacao.CHAVE_SEM_IMAGEM}
+    assert chaves == {
+        cftv_verificacao.CHAVE_SEM_GRAVAR,
+        cftv_verificacao.CHAVE_SEM_IMAGEM,
+        cftv_verificacao.CHAVE_CONFERENCIA,
+    }
     assert {t[0] for t in cv.TRIGGERS} == chaves
     assert cv.expr_trigger("cftv.verif.sem_gravar") == (
         "length(last(/cftv-verificacao-dashboard/cftv.verif.sem_gravar))>0"

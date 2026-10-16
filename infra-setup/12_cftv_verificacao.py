@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-CFTV: canal sem gravar ou câmera sem imagem → aviso no WhatsApp, sem chamado.
+CFTV: canal sem gravar, câmera sem imagem ou conferência divergente → aviso no WhatsApp, sem chamado.
 
 O dashboard verifica sozinho, direto nos gravadores Intelbras, se cada canal
-com câmera está gravando (a cada 30 min) e se a câmera entrega imagem (fotos
-às 8h, 11h, 14h e 17h) — ver ``app/services/cftv_verificacao.py``. O
-resultado chega ao Zabbix em dois itens trapper por gravador (texto com os
-canais com problema; vazio = tudo ok). Cria/ajusta (idempotente):
+com câmera está gravando (a cada 30 min), se a câmera entrega imagem (fotos
+às 8h, 11h, 14h e 17h) e se a câmera de cada canal bate com a conferência no
+local (a cada hora) — ver ``app/services/cftv_verificacao.py``. O resultado
+chega ao Zabbix em três itens trapper por gravador (texto com os canais com
+problema; vazio = tudo ok). Cria/ajusta (idempotente):
 
   - Template "CFTV Verificação (dashboard)" com os itens
-    ``cftv.verif.sem_gravar`` e ``cftv.verif.sem_imagem`` e um trigger para
+    ``cftv.verif.sem_gravar``, ``cftv.verif.sem_imagem`` e
+    ``cftv.verif.conferencia`` e um trigger para
     cada (tag ``alerta=so-whatsapp``), ligado a todos os gravadores
     (CFTV/DVRs e CFTV/NVRs). Gravador que o dashboard não consegue verificar
     não recebe valor e não alerta.
@@ -59,11 +61,13 @@ OP_AVISAR_ENVOLVIDOS = "11"  # tipo de operação de recuperação
 ITENS = (
     ("cftv.verif.sem_gravar", "Canais sem gravar (verificação do dashboard)"),
     ("cftv.verif.sem_imagem", "Câmeras sem imagem (verificação do dashboard)"),
+    ("cftv.verif.conferencia", "Canais diferentes da conferência (verificação do dashboard)"),
 )
 TRIGGERS = (
     # (chave, nome, severidade, valor da tag problema)
     ("cftv.verif.sem_gravar", "CFTV {HOST.NAME}: sem gravar — {ITEM.LASTVALUE}", "3", "gravacao"),
     ("cftv.verif.sem_imagem", "CFTV {HOST.NAME}: câmera sem imagem — {ITEM.LASTVALUE}", "2", "imagem"),
+    ("cftv.verif.conferencia", "CFTV {HOST.NAME}: diferente da conferência — {ITEM.LASTVALUE}", "2", "conferencia"),
 )
 
 
@@ -194,7 +198,7 @@ def garantir_template(api: ZabbixAPI, dry: bool) -> str | None:
             type=2,  # trapper
             value_type=4,  # texto
             history="30d",
-            description="Enviado pelo dashboard (verificação de gravação/imagem). Vazio = tudo ok.",
+            description="Enviado pelo dashboard (verificação de gravação/imagem/conferência). Vazio = tudo ok.",
             tags=[{"tag": "componente", "value": "cftv"}],
         )
         wa.ok(f"item {chave} criado")
