@@ -13,6 +13,11 @@ Só nos gravadores Intelbras cuja senha HTTP o dashboard já acertou
   não entrega foto (duas tentativas) = sem resposta; tela chapada = sem cena
   (``cftv_imagem``). A miniatura fica guardada só enquanto há problema.
 
+- Conferência, a cada ``INTERVALO_CONFERENCIA``: relê cada gravador e compara,
+  canal a canal, a câmera que ele tem configurada com a conferência no local
+  (IP diferente, câmera onde a conferência diz vazio, IP onde diz analógica...).
+  Canal marcado como "outro equipamento" não entra.
+
 Depois de cada rodada, o resultado vai para o Zabbix (itens trapper do
 template "CFTV Verificação (dashboard)", ver ``infra-setup/12_cftv_verificacao.py``):
 o trigger avisa no WhatsApp, sem abrir chamado.
@@ -41,7 +46,7 @@ import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
 from itgov.services import cftv_imagem
-from itgov.services.intelbras_api import AcessoNegadoError, SessaoGravador
+from itgov.services.intelbras_api import AcessoNegadoError, CameraGravador, LeituraGravador, SessaoGravador
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -49,6 +54,7 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 INTERVALO_GRAVACAO = timedelta(minutes=30)
+INTERVALO_CONFERENCIA = timedelta(minutes=60)
 BUSCA_GRAVACAO = timedelta(hours=2)
 TOLERANCIA_GRAVACAO = timedelta(minutes=30)
 HORARIOS_FOTO = (8, 11, 14, 17)  # horário de Brasília, de dia (foto à noite é escura de verdade)
@@ -56,6 +62,7 @@ ESPERA_NOVA_FOTO = 3.0
 PAUSA_ENTRE_FOTOS = 0.5
 CHAVE_SEM_GRAVAR = "cftv.verif.sem_gravar"
 CHAVE_SEM_IMAGEM = "cftv.verif.sem_imagem"
+CHAVE_CONFERENCIA = "cftv.verif.conferencia"
 _TZ = ZoneInfo("America/Sao_Paulo")
 _TRAVA = os.path.join(tempfile.gettempdir(), "itgov-cftv-verificacao.lock")
 
@@ -73,22 +80,28 @@ def _agora() -> datetime:
     return datetime.now(UTC)
 
 
-def alvos() -> list[Alvo]:
-    """Gravadores com senha HTTP aceita e canais com câmera na conferência (requer app context)."""
-    from app.models.unidade import CanalCftv, DvrUnidade, GravadorAcesso
-    from app.services.cftv_gravadores import _usuario_senha
+def _nomes_gravadores() -> dict[str, str]:
+    """IP → nome oficial do gravador, para a credencial própria (``CFTV_DVR_<NOME>_*``)."""
+    from app.models.unidade import DvrUnidade
     from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
 
-    canais: dict[str, list[int]] = {}
-    for c in CanalCftv.query.filter_by(situacao="ativo").order_by(CanalCftv.canal):
-        canais.setdefault(c.ip_gravador, []).append(c.canal)
-    # Nome oficial do gravador, para a credencial própria (CFTV_DVR_<NOME>_*)
     apelidos = {v.dvr: v.apelido for v in DvrUnidade.query.all() if v.apelido}
-    nomes = {
+    return {
         d["ip"]: apelidos.get(d["gravador"]) or d["name"]
         for d in get_cached_cftv_summary().get("devices", [])
         if d.get("is_gravador") and d.get("ip")
     }
+
+
+def alvos() -> list[Alvo]:
+    """Gravadores com senha HTTP aceita e canais com câmera na conferência (requer app context)."""
+    from app.models.unidade import CanalCftv, GravadorAcesso
+    from app.services.cftv_gravadores import _usuario_senha
+
+    canais: dict[str, list[int]] = {}
+    for c in CanalCftv.query.filter_by(situacao="ativo").order_by(CanalCftv.canal):
+        canais.setdefault(c.ip_gravador, []).append(c.canal)
+    nomes = _nomes_gravadores()
     resultado = []
     for acesso in GravadorAcesso.query.all():
         if acesso.ip in canais and acesso.credencial and acesso.leitura and not acesso.erro:
@@ -260,10 +273,15 @@ def textos_para_zabbix(ips: set[str]) -> dict[str, dict[str, str]]:
     return textos
 
 
-def enviar_zabbix(ips: set[str], chave: str) -> int:
+def enviar_zabbix(ips: set[str], chave: str, textos: dict[str, str] | None = None) -> int:
     """Manda para o Zabbix o texto do item ``chave`` dos gravadores ``ips`` (``history.push``).
 
     Só envia para os gravadores que têm o template "CFTV Verificação (dashboard)".
+
+    Args:
+        ips: Gravadores verificados.
+        chave: Chave do item trapper.
+        textos: IP → texto já pronto; sem ele, sai da última verificação de gravação/imagem.
 
     Returns:
         Quantos valores foram enviados.
@@ -272,7 +290,7 @@ def enviar_zabbix(ips: set[str], chave: str) -> int:
 
     if not ips or not os.getenv("ZABBIX_URL"):
         return 0
-    textos = textos_para_zabbix(ips)
+    por_ip = textos if textos is not None else {ip: t[chave] for ip, t in textos_para_zabbix(ips).items()}
     try:
         itens = _zbx("item.get", {"output": ["itemid", "hostid"], "filter": {"key_": [chave]}})
         # Item trapper não tem interface: o IP vem das interfaces do host do item
@@ -285,7 +303,7 @@ def enviar_zabbix(ips: set[str], chave: str) -> int:
         )
         ips_do_host = {h["hostid"]: {i["ip"] for i in h.get("interfaces", [])} for h in hosts}
         valores = [
-            {"itemid": item["itemid"], "value": textos[ip][chave]}
+            {"itemid": item["itemid"], "value": por_ip[ip]}
             for item in itens
             for ip in sorted(ips_do_host.get(item["hostid"], set()) & ips)[:1]
         ]
@@ -295,6 +313,89 @@ def enviar_zabbix(ips: set[str], chave: str) -> int:
         log.warning("cftv_verificacao.zabbix_falhou", chave=chave, erro=str(exc)[:200])
         return 0
     return len(valores)
+
+
+def _no_gravador(cam: CameraGravador | None) -> str:
+    if cam is None:
+        return "sem câmera"
+    return cam.ip if cam.tipo == "ip" else "analógica"
+
+
+def _na_conferencia(campos: dict[str, Any]) -> str:
+    if campos["situacao"] == "vazio":
+        return "vazio"
+    return campos["ip_camera"] or ("analógica" if campos["analogica"] else "câmera sem IP")
+
+
+def divergencias_conferencia(cadastro: dict[int, dict[str, Any]], leitura: LeituraGravador) -> list[str]:
+    """Canais em que a câmera configurada no gravador não bate com a conferência no local.
+
+    Diverge: IP diferente; câmera IP onde a conferência diz vazio ou analógica;
+    câmera na conferência que o gravador não tem; câmera IP em canal que não
+    foi conferido. Canal "outro" (outro equipamento) não entra: o gravador
+    mostra o equipamento como câmera IP.
+
+    Args:
+        cadastro: Canal → campos de ``CanalCftv`` (``cftv_gravadores.cadastro_canais``).
+        leitura: O que o gravador informou.
+
+    Returns:
+        Uma descrição por canal divergente, em ordem de canal.
+    """
+    viva = {c.canal: c for c in leitura.cameras}
+    saida: list[str] = []
+    for canal in sorted(set(cadastro) | {c for c, cam in viva.items() if cam.tipo == "ip"}):
+        campos, cam = cadastro.get(canal), viva.get(canal)
+        if campos is None:
+            saida.append(f"canal {canal}: sem conferência, gravador {_no_gravador(cam)}")
+            continue
+        if campos["situacao"] == "outro":
+            continue
+        if campos["situacao"] == "vazio":
+            diverge = cam is not None and cam.tipo == "ip"
+        elif campos["ip_camera"]:
+            diverge = cam is None or cam.tipo != "ip" or cam.ip != campos["ip_camera"]
+        elif campos["analogica"]:
+            diverge = cam is None or cam.tipo == "ip"
+        else:
+            diverge = True  # ativo sem IP nem analógica: a conferência ficou incompleta
+        if diverge:
+            saida.append(f"canal {canal}: conferência {_na_conferencia(campos)}, gravador {_no_gravador(cam)}")
+    return saida
+
+
+def verificar_conferencia(agora: datetime | None = None) -> dict[str, str]:
+    """Relê os gravadores conferidos e compara com a conferência (requer app context).
+
+    Só os gravadores cuja senha HTTP já foi aceita; a leitura segue as regras
+    de ``cftv_gravadores.ler_um`` (não insiste em senha recusada).
+
+    Args:
+        agora: Horário da rodada (UTC).
+
+    Returns:
+        IP → divergências em texto ("" = tudo bate), só dos gravadores lidos agora.
+    """
+    from app.extensions import db
+    from app.models.unidade import GravadorAcesso
+    from app.services.cftv_gravadores import cadastro_canais, ler_um
+
+    agora = agora or _agora()
+    cadastro = cadastro_canais()
+    nomes = _nomes_gravadores()
+    textos: dict[str, str] = {}
+    for acesso in GravadorAcesso.query.all():
+        if acesso.ip not in cadastro or not acesso.credencial or acesso.erro:
+            continue
+        ler_um(acesso.ip, acesso.credencial == "centro", acesso, agora, nomes.get(acesso.ip, ""))
+        db.session.commit()
+        if acesso.erro or not acesso.leitura:
+            continue
+        lista = divergencias_conferencia(cadastro[acesso.ip], LeituraGravador.model_validate_json(acesso.leitura))
+        if lista:
+            log.warning("cftv_verificacao.conferencia_divergente", ip=acesso.ip, canais=lista)
+        textos[acesso.ip] = "; ".join(lista)
+    return textos
 
 
 # ── Agendador ────────────────────────────────────────────────────────────────
@@ -318,7 +419,7 @@ def horario_de_foto(agora: datetime, ultima: datetime | None) -> bool:
 
 
 # Última tentativa neste processo: gravador fora do ar não pode virar consulta a cada minuto
-_tentativa: dict[str, datetime | None] = {"gravacao": None, "imagem": None}
+_tentativa: dict[str, datetime | None] = {"gravacao": None, "imagem": None, "conferencia": None}
 
 
 def _mais_recente(*datas: datetime | None) -> datetime | None:
@@ -326,17 +427,20 @@ def _mais_recente(*datas: datetime | None) -> datetime | None:
 
 
 def rodada(agora: datetime | None = None) -> dict[str, int]:
-    """Faz o que estiver vencido: gravação a cada 30 min, foto nos horários (requer app context).
+    """Faz o que estiver vencido: gravação a cada 30 min, conferência a cada hora, foto nos horários.
+
+    Requer app context.
 
     Returns:
         Quantos gravadores foram verificados em cada parte.
     """
     agora = agora or _agora()
-    feito = {"gravacao": 0, "imagem": 0}
+    feito = {"gravacao": 0, "imagem": 0, "conferencia": 0}
     ultima_gravacao = _mais_recente(_ultima("gravacao_em"), _tentativa["gravacao"])
     gravacao = ultima_gravacao is None or agora - ultima_gravacao >= INTERVALO_GRAVACAO
     foto = horario_de_foto(agora, _mais_recente(_ultima("imagem_em"), _tentativa["imagem"]))
-    if not (gravacao or foto):
+    conferencia = _tentativa["conferencia"] is None or agora - _tentativa["conferencia"] >= INTERVALO_CONFERENCIA
+    if not (gravacao or foto or conferencia):
         return feito
     lista = alvos()
     if gravacao:
@@ -349,6 +453,11 @@ def rodada(agora: datetime | None = None) -> dict[str, int]:
         ips = verificar_imagens(lista, agora)
         enviar_zabbix(ips, CHAVE_SEM_IMAGEM)
         feito["imagem"] = len(ips)
+    if conferencia:
+        _tentativa["conferencia"] = agora
+        textos = verificar_conferencia(agora)
+        enviar_zabbix(set(textos), CHAVE_CONFERENCIA, textos)
+        feito["conferencia"] = len(textos)
     log.info("cftv_verificacao.rodada", **feito)
     return feito
 
