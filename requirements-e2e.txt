@@ -5,5 +5,5 @@
 # Rodar:    pytest e2e -o addopts="" -p no:cacheprovider
 # ============================================
 pytest>=9.0.3,<10.0
-pytest-playwright==0.9.0
-playwright==1.63.0
+pytest-playwright==0.10.0
+playwright==1.64.0
