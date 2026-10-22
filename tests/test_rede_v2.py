@@ -177,10 +177,11 @@ def test_enriquecer_marca_recente_e_aplica_ia() -> None:
     agora = datetime.now(UTC)
     vistos = {
         "1.1.1.1": SimpleNamespace(baseline=False, primeiro_visto=agora - timedelta(days=1), ia_tipo="ap",
-                                   ia_nome="AP Ubiquiti", ia_motivo="porta 8443"),
-        "2.2.2.2": SimpleNamespace(baseline=True, primeiro_visto=agora, ia_tipo="", ia_nome="", ia_motivo=""),
+                                   ia_nome="AP Ubiquiti", ia_modelo="UniFi U6 Lite", ia_motivo="porta 8443"),
+        "2.2.2.2": SimpleNamespace(baseline=True, primeiro_visto=agora, ia_tipo="", ia_nome="", ia_modelo="",
+                                   ia_motivo=""),
         "3.3.3.3": SimpleNamespace(baseline=False, primeiro_visto=(agora - timedelta(days=30)).replace(tzinfo=None),
-                                   ia_tipo="servidor", ia_nome="", ia_motivo="x"),
+                                   ia_tipo="servidor", ia_nome="", ia_modelo="", ia_motivo="x"),
     }  # fmt: skip
     hosts = [
         {"ip": "1.1.1.1", "tipo_sugerido": "outro"},
@@ -190,6 +191,7 @@ def test_enriquecer_marca_recente_e_aplica_ia() -> None:
     rede_monitoring._enriquecer(hosts, vistos, agora)
     a, b, c = hosts
     assert a["recente"] and a["tipo_sugerido"] == "ap" and a["por_ia"] and a["ia_nome"] == "AP Ubiquiti"
+    assert a["ia_modelo"] == "UniFi U6 Lite" and b["ia_modelo"] == ""
     assert not b["recente"]  # baseline: já estava na rede
     assert not c["recente"] and c["tipo_sugerido"] == "impressora"  # regra vale mais que a IA
 
@@ -251,12 +253,12 @@ def test_classificar_lote_aceita_so_tipos_validos_e_ips_pedidos(monkeypatch: pyt
     monkeypatch.setenv("REDE_IA_URL", "http://ia.test/v1")
     monkeypatch.setenv("REDE_IA_KEY", "fake-key-for-tests")
     conteudo = """Aqui está: {"hosts": [
-        {"ip": "1.1.1.1", "tipo": "ap", "nome": "AP Ubiquiti", "motivo": "porta 8443"},
+        {"ip": "1.1.1.1", "tipo": "ap", "nome": "AP Ubiquiti", "modelo": "UniFi U6 Lite", "motivo": "porta 8443"},
         {"ip": "2.2.2.2", "tipo": "torradeira", "nome": "x", "motivo": "y"},
         {"ip": "9.9.9.9", "tipo": "servidor", "nome": "intruso", "motivo": "z"}]}"""
     with patch.object(rede_ia.requests, "post", return_value=_resposta(conteudo)) as post:
         r = rede_ia.classificar_lote([{"ip": "1.1.1.1", "portas": "8443"}, {"ip": "2.2.2.2", "portas": "80"}])
-    assert r == {"1.1.1.1": {"tipo": "ap", "nome": "AP Ubiquiti", "motivo": "porta 8443"}}
+    assert r == {"1.1.1.1": {"tipo": "ap", "nome": "AP Ubiquiti", "modelo": "UniFi U6 Lite", "motivo": "porta 8443"}}
     assert post.call_args.args[0] == "http://ia.test/v1/chat/completions"
 
 
@@ -288,7 +290,7 @@ def test_processar_grava_sugestao_e_nao_repete(factory_app, monkeypatch: pytest.
         assert post.call_count == 1
         with factory_app.app_context():
             v = db.session.get(RedeVisto, host["ip"])
-            assert (v.ia_tipo, v.ia_nome) == ("ap", "AP") and v.ia_assinatura
+            assert (v.ia_tipo, v.ia_nome, v.ia_modelo) == ("ap", "AP", "") and v.ia_assinatura
     finally:
         with factory_app.app_context():
             RedeVisto.query.filter_by(ip=host["ip"]).delete()
@@ -380,6 +382,40 @@ def test_pagina_rede_filtra_novos_na_rede(authed_client, pagina) -> None:
     html = authed_client.get("/gov/rede?status=recentes").get_data(as_text=True)
     assert "10.41.1.7" in html
     assert "172.29.1.5" not in html
+
+
+def test_pagina_rede_pesquisa_por_ip_e_tipo(authed_client, pagina) -> None:
+    html = authed_client.get("/gov/rede?q=10.41").get_data(as_text=True)
+    assert "10.41.1.7" in html and "172.29.1.5" not in html
+    html = authed_client.get("/gov/rede?q=impressora").get_data(as_text=True)
+    assert "172.29.1.5" in html and "10.41.1.7" not in html
+    assert 'value="impressora"' in html  # o termo continua no campo
+
+
+def test_pagina_rede_abas_e_inventario_do_gravador(authed_client, pagina) -> None:
+    from itgov.services.intelbras_api import LeituraGravador
+
+    leituras = {"10.41.1.7": {"leitura": LeituraGravador(modelo="iNVD 7032", serie="SERIE-NVR-1")}}
+    with patch("app.services.cftv_gravadores.leituras", return_value=leituras):
+        html = authed_client.get("/gov/rede?grupo=gravadores").get_data(as_text=True)
+        assert "10.41.1.7" in html and "172.29.1.5" not in html
+        for trecho in ("iNVD 7032", "SERIE-NVR-1", ">NVR<", "Gravadores (DVR/NVR): 1", "Outros: 1"):
+            assert trecho in html, trecho
+        html = authed_client.get("/gov/rede?grupo=outros").get_data(as_text=True)
+        assert "172.29.1.5" in html and "10.41.1.7" not in html
+
+
+def test_garantir_coluna_ia_modelo_em_banco_antigo(tmp_path) -> None:
+    from sqlalchemy import create_engine, inspect, text
+
+    from app.models.rede import garantir_coluna_ia_modelo
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'antigo.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE rede_vistos (ip VARCHAR(45) PRIMARY KEY, ia_nome VARCHAR(100))"))
+    garantir_coluna_ia_modelo(engine)
+    garantir_coluna_ia_modelo(engine)  # segunda vez não faz nada
+    assert "ia_modelo" in {c["name"] for c in inspect(engine).get_columns("rede_vistos")}
 
 
 def test_um_lote_por_vez(factory_app, monkeypatch: pytest.MonkeyPatch) -> None:

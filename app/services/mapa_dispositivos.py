@@ -4,17 +4,21 @@ O MapaCameras (botão "Dispositivos da rede") lê esta lista para cadastrar,
 sem posição, o que ainda não está no mapa. Entra tudo o que a descoberta
 de rede achou nas faixas da unidade, menos celular/tablet. Câmera e
 gravador saem da conferência do CFTV (``CanalCftv``): a câmera leva o
-gravador e o canal; o gravador vira "Dispositivo de Infra". O modelo vem
-do que o próprio gravador Intelbras informou (câmera IP de cada canal).
+gravador e o canal; o gravador vira "Dispositivo de Infra". Modelo, nº de
+série, MAC e fabricante vêm do inventário (``app.services.inventario_rede``):
+o que o próprio gravador Intelbras informou, completado pela descoberta.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from itgov.api.v1.rede_descoberta import eh_celular
 from itgov.api.v1.rede_monitoring import unidade_do_ip
+
+if TYPE_CHECKING:
+    from app.services.inventario_rede import InfoEquipamento
 
 
 class CanalConferido(NamedTuple):
@@ -44,7 +48,7 @@ def dispositivos_da_unidade(
     faixas: list[tuple[int, str]],
     ids_unidade: set[int],
     canais: list[CanalConferido],
-    modelos: dict[str, str] | None = None,
+    inventario: dict[str, InfoEquipamento] | None = None,
 ) -> dict[str, Any]:
     """Dispositivos da descoberta que ficam nas faixas da unidade, sem celulares.
 
@@ -53,13 +57,13 @@ def dispositivos_da_unidade(
         faixas: Pares ``(unidade_id, cidr)`` das unidades ativas.
         ids_unidade: Ids aceitos (a unidade e as filhas).
         canais: Canais da conferência do CFTV (``ip_camera`` vazio = sem câmera IP).
-        modelos: IP → modelo informado pelo gravador (câmera IP ou o próprio gravador).
+        inventario: IP → modelo, série, MAC e fabricante (``inventario_rede.inventario``).
 
     Returns:
         ``dispositivos`` (um por IP, ordenados por tipo e IP) e ``celulares``
         (quantos ficaram de fora por serem celular/tablet).
     """
-    modelos = modelos or {}
+    inventario = inventario or {}
     gravadores = {c.ip_gravador for c in canais}
     camera_em = {c.ip_camera: c for c in canais if c.ip_camera}
     por_ip = {h["ip"]: h for h in hosts if h.get("ip")}
@@ -68,6 +72,7 @@ def dispositivos_da_unidade(
     # Câmera ou gravador da conferência entra mesmo se a descoberta não o viu
     for ip in sorted(set(por_ip) | set(camera_em) | gravadores):
         host = por_ip.get(ip, {})
+        info = inventario.get(ip)
         if unidade_do_ip(ip, faixas) not in ids_unidade:
             continue
         if ip not in gravadores and ip not in camera_em and (eh_celular(host) or host.get("tipo_sugerido") == "movel"):
@@ -82,11 +87,13 @@ def dispositivos_da_unidade(
         )
         item: dict[str, Any] = {
             "ip": ip,
-            "mac": str(host.get("mac") or ""),
+            "mac": (info.mac if info else "") or str(host.get("mac") or ""),
             "nome": _nome(host),
             "tipo": tipo,
-            "marca": str(host.get("vendor") or ""),
-            "modelo": modelos.get(ip, ""),
+            "marca": (info.fabricante if info else "") or str(host.get("vendor") or ""),
+            "modelo": info.modelo if info else "",
+            "serie": info.serie if info else "",
+            "equipamento": info.equipamento if info else "",
             "zabbix_host": str(host.get("zabbix_host") or ""),
             "online": bool(host.get("online")),
             "ultimo_visto": (

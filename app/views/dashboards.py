@@ -1097,6 +1097,7 @@ def mapa_cameras_dispositivos() -> object:
 
     from app.models.unidade import CanalCftv, Unidade
     from app.services import cftv_gravadores, classificacoes
+    from app.services.inventario_rede import inventario
     from app.services.mapa_dispositivos import CanalConferido, dispositivos_da_unidade
     from itgov.api.v1.rede_descoberta import aplicar_classificacoes
     from itgov.api.v1.rede_monitoring import get_cached_rede_summary
@@ -1121,26 +1122,12 @@ def mapa_cameras_dispositivos() -> object:
         faixas=[(u.id, f) for u in unidades for f in u.faixas],
         ids_unidade=unidade.ids_subarvore(),
         canais=canais,
-        modelos=_modelos_pelos_gravadores(cftv_gravadores.leituras()),
+        inventario=inventario(cftv_gravadores.leituras(), hosts),
     )
     log.info(
         "mapa_cameras.dispositivos", unidade=unidade.nome, total=len(dados["dispositivos"]), user=current_user.email
     )
     return jsonify({"unidade": unidade.nome_mapa or unidade.nome, **dados})
-
-
-def _modelos_pelos_gravadores(leituras: dict[str, dict[str, Any]]) -> dict[str, str]:
-    """IP → modelo: o do gravador e o de cada câmera IP que ele informou."""
-    modelos: dict[str, str] = {}
-    for ip, info in leituras.items():
-        if (leitura := info.get("leitura")) is None:
-            continue
-        if leitura.modelo:
-            modelos[ip] = leitura.modelo
-        for cam in leitura.cameras:
-            if cam.ip and cam.modelo:
-                modelos.setdefault(cam.ip, cam.modelo)
-    return modelos
 
 
 @bp.route("/network")
@@ -1244,7 +1231,10 @@ def rede_monitoring() -> str:
         filtro_status=status,
         filtro_tipo=tipo,
     )
+    from collections import Counter
+
     from app.services import rede_zabbix
+    from app.services.inventario_rede import GRUPOS, casa_busca, rotulo_equipamento
     from itgov.services.zabbix_templates import templates_disponiveis
 
     feitas = rede_zabbix.decisoes()
@@ -1261,10 +1251,35 @@ def rede_monitoring() -> str:
         revisao["recentes"] = sum(1 for h in revisao["hosts"] if h.get("recente"))
     else:
         zfiltro = ""
+    inv, grupos = _inventario_da_pagina(hosts)
+    q = request.args.get("q", "").strip()[:60]
+    if q:
+        revisao["hosts"] = [
+            h for h in revisao["hosts"] if casa_busca(h, inv.get(h["ip"]), q, labels.get(h["tipo_sugerido"], ""))
+        ]
+    por_grupo = Counter(grupos(h) for h in revisao["hosts"])
+    aba = request.args.get("grupo", "")
+    if aba in GRUPOS:
+        revisao["hosts"] = [h for h in revisao["hosts"] if grupos(h) == aba]
+    else:
+        aba = ""
+    if q or aba:
+        revisao["total"] = len(revisao["hosts"])
+        revisao["novos"] = sum(1 for h in revisao["hosts"] if not h["ativo"])
+        revisao["cadastrados"] = revisao["total"] - revisao["novos"]
+        revisao["recentes"] = sum(1 for h in revisao["hosts"] if h.get("recente"))
     return render_template(
         "dashboards/rede_monitoring.html",
         data=data,
         revisao=revisao,
+        inv=inv,
+        q=q,
+        aba=aba,
+        grupos=GRUPOS,
+        por_grupo=por_grupo,
+        equipamento={
+            h["ip"]: rotulo_equipamento(h, inv.get(h["ip"])) for h in revisao["hosts"] if grupos(h) == "gravadores"
+        },
         zbx=zbx,
         zbx_auto=rede_zabbix.auto_ligado(),
         zfiltro=zfiltro,
@@ -1291,6 +1306,30 @@ def rede_monitoring() -> str:
         classificacoes=classes,
         sem_faixas=not any(u.faixas for u in unidades),
     )
+
+
+def _inventario_da_pagina(hosts: list[dict[str, Any]]) -> tuple[dict[str, Any], Any]:
+    """Inventário por IP e a função que diz a aba (gravadores, câmeras, outros) de cada host.
+
+    Gravadores e câmeras vêm do que os gravadores Intelbras informam e da
+    conferência do CFTV; o resto, da classificação da descoberta.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.models.unidade import CanalCftv
+    from app.services import cftv_gravadores
+    from app.services.inventario_rede import grupo, inventario
+
+    leituras = cftv_gravadores.leituras()
+    inv = inventario(leituras, hosts)
+    try:
+        canais = CanalCftv.query.all()
+    except SQLAlchemyError as exc:
+        log.warning("rede.canais_cftv_falhou", erro=str(exc)[:200])
+        canais = []
+    gravadores = set(leituras) | {c.ip_gravador for c in canais}
+    cameras = {c.ip_camera for c in canais if c.ip_camera} | {ip for ip, i in inv.items() if i.gravador_ip}
+    return inv, lambda h: grupo(h, inv.get(h["ip"]), gravadores, cameras)
 
 
 @bp.route("/rede/cadastrar", methods=["GET", "POST"])

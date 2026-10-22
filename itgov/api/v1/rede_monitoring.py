@@ -516,6 +516,7 @@ def _enriquecer(hosts: list[dict], vistos: dict[str, Any], agora: datetime) -> N
         h["recente"] = bool(v and not v.baseline and _utc(v.primeiro_visto) >= limite)
         h["primeiro_visto"] = _utc(v.primeiro_visto).isoformat() if v else ""
         h["ia_nome"] = (v.ia_nome if v else "") or ""
+        h["ia_modelo"] = (v.ia_modelo if v else "") or ""
         if v and v.ia_tipo and v.ia_tipo != "outro" and h.get("tipo_sugerido") == "outro":
             h["tipo_sugerido"], h["motivo"], h["por_ia"] = v.ia_tipo, f"IA: {v.ia_motivo}", True
 

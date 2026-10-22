@@ -78,7 +78,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     with app.app_context():
         from app.models import aprovacao as _aprovacao_model
         from app.models import link as _link_model  # noqa: F401
-        from app.models import rede as _rede_model  # noqa: F401
+        from app.models import rede as _rede_model
         from app.models import tarefas as _tarefas_model  # noqa: F401
         from app.models import trigger_resolucao as _trigger_resolucao_model  # noqa: F401
         from app.models import unidade as _unidade_model
@@ -86,6 +86,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
         db.create_all()
         _unidade_model.garantir_colunas()
+        _rede_model.garantir_coluna_ia_modelo()
         _unidade_model.seed_unidades()
         _user_model.garantir_coluna_super_admin()
         _user_model.garantir_coluna_painel_tv()
