@@ -1091,14 +1091,15 @@ def mapa_cameras_dispositivos() -> object:
     ``?unidade=<nome>``: nome da unidade no MapaCameras (``nome_mapa``) ou o nome dela.
 
     Returns:
-        JSON ``{unidade, dispositivos, celulares}``; 404 se a unidade não existe.
+        JSON ``{unidade, dispositivos, celulares, analogicas}``; 404 se a unidade não existe.
+        Câmera analógica vem sem IP, com ``analogica`` e ``chave`` (``<ip do gravador>#<canal>``).
     """
     from flask import jsonify
 
     from app.models.unidade import CanalCftv, Unidade
     from app.services import cftv_gravadores, classificacoes
     from app.services.inventario_rede import inventario
-    from app.services.mapa_dispositivos import CanalConferido, dispositivos_da_unidade
+    from app.services.mapa_dispositivos import CanalConferido, analogicas_dos_gravadores, dispositivos_da_unidade
     from itgov.api.v1.rede_descoberta import aplicar_classificacoes
     from itgov.api.v1.rede_monitoring import get_cached_rede_summary
 
@@ -1117,15 +1118,21 @@ def mapa_cameras_dispositivos() -> object:
         CanalConferido(c.ip_gravador, c.canal, c.ip_camera if c.situacao == "ativo" else "")
         for c in CanalCftv.query.all()
     ]
+    leituras = cftv_gravadores.leituras()
     dados = dispositivos_da_unidade(
         hosts,
         faixas=[(u.id, f) for u in unidades for f in u.faixas],
         ids_unidade=unidade.ids_subarvore(),
         canais=canais,
-        inventario=inventario(cftv_gravadores.leituras(), hosts),
+        inventario=inventario(leituras, hosts),
+        analogicas=analogicas_dos_gravadores(leituras, cftv_gravadores.cadastro_canais()),
     )
     log.info(
-        "mapa_cameras.dispositivos", unidade=unidade.nome, total=len(dados["dispositivos"]), user=current_user.email
+        "mapa_cameras.dispositivos",
+        unidade=unidade.nome,
+        total=len(dados["dispositivos"]),
+        analogicas=dados["analogicas"],
+        user=current_user.email,
     )
     return jsonify({"unidade": unidade.nome_mapa or unidade.nome, **dados})
 
