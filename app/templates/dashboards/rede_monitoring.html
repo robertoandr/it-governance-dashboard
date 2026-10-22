@@ -142,15 +142,15 @@
     {% endif %}
 
     <nav class="flex flex-wrap gap-2" aria-label="Filtrar por unidade">
-      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', status=status or None, tipo=tipo or None, zabbix=zfiltro or None, q=q or None, grupo=aba or None) }}" class="{{ pill }} {{ on if not filtro else off }}">Todas</a>
       {% for u in unidades %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=u.id, status=status or None, tipo=tipo or None, zabbix=zfiltro or None, q=q or None, grupo=aba or None) }}" class="{{ pill }} {{ on if filtro == u.id | string else off }}">{{ u.caminho }}</a>
       {% endfor %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade='sem', status=status or None, tipo=tipo or None, zabbix=zfiltro or None, q=q or None, grupo=aba or None) }}" class="{{ pill }} {{ on if filtro == 'sem' else off }}">Sem unidade</a>
     </nav>
     <nav class="flex flex-wrap items-center gap-2" aria-label="Filtrar por status">
       {% for valor, rotulo in [('', 'Todos'), ('recentes', 'Novos na rede'), ('novos', 'Sem cadastro'), ('cadastrados', 'Cadastrados')] %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None, tipo=tipo or None, zabbix=zfiltro or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=valor or None, tipo=tipo or None, zabbix=zfiltro or None, q=q or None, grupo=aba or None) }}" class="{{ pill }} {{ on if status == valor else off }}">{{ rotulo }}</a>
       {% endfor %}
     </nav>
     <nav class="flex flex-wrap items-center gap-1.5" aria-label="Filtrar por tipo de dispositivo">
@@ -158,9 +158,9 @@
       {% set chip = 'text-[11px] rounded px-2 py-0.5 border' %}
       {% set chip_off = 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border-transparent hover:border-slate-300 dark:hover:border-slate-500' %}
       {% set chip_on = 'bg-gadens-600 text-white border-gadens-600' %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, zabbix=zfiltro or None) }}" class="{{ chip }} {{ chip_on if not tipo else chip_off }}">Todos</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, zabbix=zfiltro or None, q=q or None, grupo=aba or None) }}" class="{{ chip }} {{ chip_on if not tipo else chip_off }}">Todos</a>
       {% for t, n in revisao.por_tipo.items() %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=None if tipo == t else t, zabbix=zfiltro or None) }}" class="{{ chip }} {{ chip_on if tipo == t else chip_off }}" {% if tipo == t %}aria-current="true"{% endif %}>{{ tipo_labels.get(t, t) }}: {{ n }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=None if tipo == t else t, zabbix=zfiltro or None, q=q or None, grupo=aba or None) }}" class="{{ chip }} {{ chip_on if tipo == t else chip_off }}" {% if tipo == t %}aria-current="true"{% endif %}>{{ tipo_labels.get(t, t) }}: {{ n }}</a>
       {% endfor %}
       {% if tipo and tipo not in revisao.por_tipo %}
       <span class="{{ chip }} {{ chip_on }}">{{ tipo_labels.get(tipo, tipo) }}: 0</span>
@@ -169,9 +169,27 @@
 
     <nav class="flex flex-wrap items-center gap-1.5" aria-label="Filtrar pelo monitoramento no Zabbix">
       <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">Zabbix:</span>
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None) }}" class="{{ chip }} {{ chip_on if not zfiltro else chip_off }}">Todos</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, q=q or None, grupo=aba or None) }}" class="{{ chip }} {{ chip_on if not zfiltro else chip_off }}">Todos</a>
       {% for chave, rotulo in filtros_zabbix.items() %}
-      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, zabbix=None if zfiltro == chave else chave) }}" class="{{ chip }} {{ chip_on if zfiltro == chave else chip_off }}" {% if zfiltro == chave %}aria-current="true"{% endif %}>{{ rotulo }}: {{ por_zabbix[chave] }}</a>
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, zabbix=None if zfiltro == chave else chave, q=q or None, grupo=aba or None) }}" class="{{ chip }} {{ chip_on if zfiltro == chave else chip_off }}" {% if zfiltro == chave %}aria-current="true"{% endif %}>{{ rotulo }}: {{ por_zabbix[chave] }}</a>
+      {% endfor %}
+    </nav>
+
+    <form method="GET" action="{{ url_for('dashboards.rede_monitoring') }}" role="search" class="flex flex-wrap items-center gap-2">
+      {% for nome, valor in [('unidade', filtro), ('status', status), ('tipo', tipo), ('zabbix', zfiltro), ('grupo', aba)] if valor %}
+      <input type="hidden" name="{{ nome }}" value="{{ valor }}">
+      {% endfor %}
+      <input type="search" name="q" value="{{ q }}" maxlength="60" placeholder="Pesquisar por IP ou tipo (ex.: 10.41.103, câmera, NVR)" aria-label="Pesquisar dispositivos por IP ou tipo" class="w-full sm:w-80 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs">
+      <button type="submit" class="bg-gadens-600 hover:bg-gadens-700 text-white text-xs font-medium rounded px-3 py-1.5">Pesquisar</button>
+      {% if q %}<a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, zabbix=zfiltro or None, grupo=aba or None) }}" class="text-xs text-slate-500 hover:underline">limpar</a>{% endif %}
+    </form>
+
+    <nav class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-700" aria-label="Separar por equipamento">
+      {% set aba_on = 'border-gadens-600 text-gadens-700 dark:text-gadens-300' %}
+      {% set aba_off = 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200' %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, zabbix=zfiltro or None, q=q or None) }}" class="-mb-px border-b-2 px-3 py-2 text-xs font-medium {{ aba_on if not aba else aba_off }}">Todos: {{ por_grupo.values()|sum }}</a>
+      {% for chave, rotulo in grupos.items() %}
+      <a href="{{ url_for('dashboards.rede_monitoring', unidade=filtro or None, status=status or None, tipo=tipo or None, zabbix=zfiltro or None, q=q or None, grupo=chave) }}" class="-mb-px border-b-2 px-3 py-2 text-xs font-medium {{ aba_on if aba == chave else aba_off }}" {% if aba == chave %}aria-current="page"{% endif %}>{{ rotulo }}: {{ por_grupo.get(chave, 0) }}</a>
       {% endfor %}
     </nav>
 
@@ -194,6 +212,9 @@
           <tr class="text-left text-[10px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
             <th class="pb-2 pr-3 font-medium">IP</th>
             <th class="pb-2 pr-3 font-medium">Nome visto</th>
+            <th class="pb-2 pr-3 font-medium">Modelo</th>
+            <th class="pb-2 pr-3 font-medium">Nº de série</th>
+            <th class="pb-2 pr-3 font-medium">MAC</th>
             <th class="pb-2 pr-3 font-medium">Fabricante / SNMP / DHCP</th>
             <th class="pb-2 pr-3 font-medium">Portas</th>
             <th class="pb-2 pr-3 font-medium">Tipo sugerido</th>
@@ -210,9 +231,16 @@
               {% if h.recente %}<span class="ml-1 font-sans text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded px-1.5 py-0.5">novo na rede</span>{% endif %}
             </td>
             <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title="{{ h.hostname }}">{{ h.ia_nome or (h.hostname if h.hostname and h.hostname != h.ip else '—') }}</td>
+            {% set i = inv.get(h.ip) %}
+            <td class="py-2 pr-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">
+              {% if equipamento.get(h.ip) %}<span class="mr-1 text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5">{{ equipamento[h.ip] }}</span>{% endif %}
+              {{ i.modelo if i and i.modelo else '—' }}{% if i and i.modelo and i.fonte == 'ia' %}<span class="ml-1 text-[10px] font-semibold text-violet-700 dark:text-violet-300" title="Sugerido pela IA a partir dos sinais do aparelho">IA</span>{% endif %}
+              {% if i and i.canal %}<span class="block text-[10px] text-slate-400" title="Informado pelo gravador {{ i.gravador_ip }}">canal {{ i.canal }} do gravador {{ i.gravador_ip }}</span>{% endif %}
+            </td>
+            <td class="py-2 pr-3 font-mono text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ i.serie if i and i.serie else '—' }}</td>
+            <td class="py-2 pr-3 font-mono text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ i.mac if i and i.mac else (h.mac or '—') }}</td>
             <td class="py-2 pr-3 text-slate-500 dark:text-slate-400 max-w-[200px]">
-              <span class="block truncate">{{ h.vendor or h.os_guess[:40] or h.vci or '—' }}</span>
-              {% if h.mac %}<span class="block font-mono text-[10px] text-slate-400">{{ h.mac }}</span>{% endif %}
+              <span class="block truncate">{{ (i.fabricante if i else '') or h.vendor or h.os_guess[:40] or h.vci or '—' }}</span>
             </td>
             <td class="py-2 pr-3 font-mono text-slate-500 dark:text-slate-400 max-w-[140px] truncate" title="{{ h.portas }}">{{ h.portas or '—' }}</td>
             <td class="py-2 pr-3">
@@ -299,6 +327,7 @@
       <summary class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Como os dispositivos são encontrados e classificados</summary>
       <div class="text-xs text-slate-600 dark:text-slate-300 mt-3 space-y-2">
         <p>A regra de descoberta do Zabbix varre as faixas abaixo de hora em hora (ping, portas e SNMP). Os FortiGates completam com o DHCP/ARP (nome que o aparelho informa, MAC e classe DHCP) e trazem os clientes que não respondem à varredura. Cada IP é cruzado com os hosts já monitorados no Zabbix e com o inventário; IP que nunca tinha aparecido ganha o selo <span class="text-blue-700 dark:text-blue-300 font-medium">novo na rede</span> por 7 dias.</p>
+        <p>Modelo, nº de série e MAC das câmeras IP e dos gravadores vêm do próprio gravador Intelbras (a mesma leitura dos canais do CFTV, sem logar em cada câmera). Para os demais, o MAC vem da varredura e o modelo, quando aparece com o selo <span class="text-violet-700 dark:text-violet-300 font-medium">IA</span>, é sugestão da IA a partir dos sinais do aparelho.</p>
         <p>O tipo é sugerido por regras (grupo no Zabbix, descrição SNMP, nome e classe DHCP, portas). {% if data.ia_ativa %}O que as regras não resolvem e tem algum sinal vai para a IA, que sugere tipo e nome.{% else %}A IA para os casos sem regra está desligada (configure <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_URL</code> e <code class="bg-slate-100 dark:bg-slate-700 rounded px-1">REDE_IA_KEY</code>).{% endif %} Host que só responde a ping fica como "Outro" até ser revisado.</p>
         {% for dr in data.drules %}
         <p class="pt-1 border-t border-slate-100 dark:border-slate-700">

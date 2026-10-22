@@ -12,7 +12,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import structlog
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
+
 from app.extensions import db
+
+log = structlog.get_logger(__name__)
 
 
 class RedeVisto(db.Model):
@@ -27,6 +34,7 @@ class RedeVisto(db.Model):
     # Sugestão da IA; ``ia_assinatura`` resume os sinais usados, para refazer só quando mudarem
     ia_tipo: str = db.Column(db.String(20), nullable=False, default="")
     ia_nome: str = db.Column(db.String(100), nullable=False, default="")
+    ia_modelo: str = db.Column(db.String(100), nullable=False, default="", server_default="")
     ia_motivo: str = db.Column(db.String(255), nullable=False, default="")
     ia_assinatura: str = db.Column(db.String(64), nullable=False, default="")
     ia_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -81,3 +89,25 @@ class RedeConfig(db.Model):
 
     chave: str = db.Column(db.String(40), primary_key=True)
     valor: str = db.Column(db.String(255), nullable=False, default="")
+
+
+def garantir_coluna_ia_modelo(engine: Engine | None = None) -> None:
+    """Acrescenta ``rede_vistos.ia_modelo`` em bancos criados antes dela.
+
+    ``db.create_all()`` não altera tabela que já existe.
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    engine = engine or db.engine
+    inspetor = inspect(engine)
+    tabela = RedeVisto.__tablename__
+    if not inspetor.has_table(tabela) or "ia_modelo" in {c["name"] for c in inspetor.get_columns(tabela)}:
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN ia_modelo VARCHAR(100) NOT NULL DEFAULT ''"))
+        log.info("rede.coluna_adicionada", tabela=tabela, coluna="ia_modelo")
+    except OperationalError as exc:
+        if "duplicate column" not in str(exc).lower():
+            raise

@@ -462,13 +462,15 @@ _CAMERAS = "\r\n".join(
         "camera[0].Type=Local",
         "camera[0].UniqueChannel=0",
         "camera[0].DeviceInfo.Password=segredo-da-camera",
-        # Canal 2 IP, com MAC e modelo
+        # Canal 2 IP, com MAC, modelo, nº de série e fabricante
         "camera[1].Type=Remote",
         "camera[1].Enable=true",
         "camera[1].UniqueChannel=1",
         "camera[1].DeviceInfo.Address=10.41.100.210",
         "camera[1].DeviceInfo.Mac=80:85:44:36:AD:BF",
         "camera[1].DeviceInfo.DeviceType=VIP-1230-D-G4",
+        "camera[1].DeviceInfo.SerialNo=7J0A1B2CAZ12345",
+        "camera[1].DeviceInfo.Vendor=Intelbras",
         "camera[1].DeviceInfo.Password=segredo-da-camera",
         # Canal 3: posição IP vazia (endereço de fábrica, MAC nulo)
         "camera[2].Type=Remote",
@@ -496,10 +498,10 @@ _CAMERAS = "\r\n".join(
 
 def test_cameras_do_gravador() -> None:
     cameras = intelbras_api.cameras_do_gravador(_CAMERAS)
-    assert [(c.canal, c.tipo, c.ip, c.mac, c.modelo) for c in cameras] == [
-        (1, "analogica", "", "", ""),
-        (2, "ip", "10.41.100.210", "80:85:44:36:ad:bf", "VIP-1230-D-G4"),
-        (5, "ip", "10.41.100.212", "", ""),
+    assert [(c.canal, c.tipo, c.ip, c.mac, c.modelo, c.serie, c.fabricante) for c in cameras] == [
+        (1, "analogica", "", "", "", "", ""),
+        (2, "ip", "10.41.100.210", "80:85:44:36:ad:bf", "VIP-1230-D-G4", "7J0A1B2CAZ12345", "Intelbras"),
+        (5, "ip", "10.41.100.212", "", "", "", ""),
     ]
 
 

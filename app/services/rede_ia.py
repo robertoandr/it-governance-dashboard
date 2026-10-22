@@ -42,9 +42,11 @@ _falhou_em = float("-inf")  # monotonic() pode ser menor que ESPERA_FALHA logo a
 _PROMPT = """Você classifica dispositivos encontrados numa rede corporativa (lojas, shopping, fábrica, escritório).
 Para cada host recebe: ip, portas TCP abertas, descrição SNMP (sysDescr), nome (DHCP, DNS ou monitoramento),
 classe DHCP (vendor class id) e MAC (o prefixo indica o fabricante).
-Responda SOMENTE com JSON: {"hosts": [{"ip": "...", "tipo": "...", "nome": "...", "motivo": "..."}]}
+Responda SOMENTE com JSON: {"hosts": [{"ip": "...", "tipo": "...", "nome": "...", "modelo": "...", "motivo": "..."}]}
 - tipo: um destes valores: %(tipos)s. Use "outro" se os sinais não bastarem.
 - nome: nome curto e descritivo do dispositivo (ex.: "Impressora Ricoh IM C2000"), até 60 caracteres.
+- modelo: fabricante e modelo exatos quando algum sinal diz (ex.: SNMP "RICOH IM C2000" → "Ricoh IM C2000");
+  vazio se só der para adivinhar. Até 60 caracteres.
 - motivo: em até 12 palavras, qual sinal levou ao tipo.
 Não invente: se não der para saber, tipo "outro" e diga por quê."""
 
@@ -57,7 +59,8 @@ def ia_ativa() -> bool:
 def assinatura(host: dict[str, Any]) -> str:
     """Resumo dos sinais do host; muda quando vale perguntar de novo."""
     sinais = [host.get("portas", ""), host.get("snmp_descr", ""), host.get("hostname", ""), host.get("vci", "")]
-    return hashlib.sha256(json.dumps(sinais).encode()).hexdigest()[:32]
+    # "v2": a resposta passou a trazer o modelo; cada host é perguntado de novo uma vez
+    return hashlib.sha256(json.dumps(["v2", *sinais]).encode()).hexdigest()[:32]
 
 
 def _sinais(host: dict[str, Any]) -> dict[str, str]:
@@ -78,7 +81,7 @@ def classificar_lote(hosts: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
         hosts: Hosts no formato da página Rede.
 
     Returns:
-        IP → ``{"tipo", "nome", "motivo"}``, só com respostas válidas.
+        IP → ``{"tipo", "nome", "modelo", "motivo"}``, só com respostas válidas.
 
     Raises:
         requests.RequestException: Falha de rede ou HTTP.
@@ -111,6 +114,7 @@ def classificar_lote(hosts: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
             resultado[ip] = {
                 "tipo": tipo,
                 "nome": str(item.get("nome", ""))[:60].strip(),
+                "modelo": str(item.get("modelo") or "")[:60].strip(),
                 "motivo": str(item.get("motivo", ""))[:120].strip(),
             }
     return resultado
@@ -153,8 +157,8 @@ def _processar(app: Flask, hosts: list[dict[str, Any]]) -> None:
             agora = datetime.now(UTC)
             for h in pendentes:
                 v = vistos[h["ip"]]
-                r = respostas.get(h["ip"], {"tipo": "", "nome": "", "motivo": ""})
-                v.ia_tipo, v.ia_nome, v.ia_motivo = r["tipo"], r["nome"], r["motivo"]
+                r = respostas.get(h["ip"], {"tipo": "", "nome": "", "modelo": "", "motivo": ""})
+                v.ia_tipo, v.ia_nome, v.ia_modelo, v.ia_motivo = r["tipo"], r["nome"], r["modelo"], r["motivo"]
                 v.ia_assinatura, v.ia_em = assinatura(h), agora
             db.session.commit()
             log.info("rede_ia.lote_classificado", pedidos=len(pendentes), respondidos=len(respostas))

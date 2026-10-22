@@ -68,15 +68,29 @@ class TestDispositivosDaUnidade:
         ]
         assert (unico["tipo"], unico["gravador_ip"], unico["canal"]) == ("gravador", "", None)
 
-    def test_modelo_informado_pelo_gravador(self) -> None:
+    def test_inventario_informado_pelo_gravador(self) -> None:
+        from app.services.inventario_rede import InfoEquipamento
+
         canais = [CanalConferido("10.41.100.11", 3, "10.41.0.77")]
-        modelos = {"10.41.0.77": "VIPC-1230-B-G2", "10.41.100.11": "NVD 3332"}
-        por_ip = {d["ip"]: d for d in dispositivos_da_unidade([], FAIXAS, {1}, canais, modelos)["dispositivos"]}
-        assert por_ip["10.41.0.77"]["modelo"] == "VIPC-1230-B-G2"
-        assert por_ip["10.41.100.11"]["modelo"] == "NVD 3332"
+        inv = {
+            "10.41.0.77": InfoEquipamento(
+                modelo="VIPC-1230-B-G2", serie="SN77", mac="aa:bb:cc:00:00:77", fabricante="Intelbras"
+            ),
+            "10.41.100.11": InfoEquipamento(modelo="NVD 3332", serie="NVR11", equipamento="NVR"),
+        }
+        por_ip = {d["ip"]: d for d in dispositivos_da_unidade([], FAIXAS, {1}, canais, inv)["dispositivos"]}
+        cam, grav = por_ip["10.41.0.77"], por_ip["10.41.100.11"]
+        assert (cam["modelo"], cam["serie"], cam["mac"], cam["marca"]) == (
+            "VIPC-1230-B-G2",
+            "SN77",
+            "aa:bb:cc:00:00:77",
+            "Intelbras",
+        )
+        assert (grav["modelo"], grav["serie"], grav["equipamento"]) == ("NVD 3332", "NVR11", "NVR")
 
     def test_sem_modelo_fica_vazio(self) -> None:
-        assert dispositivos_da_unidade([_host("10.41.0.9")], FAIXAS, {1}, [])["dispositivos"][0]["modelo"] == ""
+        (item,) = dispositivos_da_unidade([_host("10.41.0.9")], FAIXAS, {1}, [])["dispositivos"]
+        assert (item["modelo"], item["serie"], item["equipamento"]) == ("", "", "")
 
     def test_ordena_ip_pelo_numero(self) -> None:
         hosts = [_host("10.41.0.10"), _host("10.41.0.9")]
@@ -142,21 +156,6 @@ class TestRota:
         assert corpo["unidade"] == "MapaTeste"
         assert [(d["ip"], d["tipo"]) for d in corpo["dispositivos"]] == [("10.99.0.5", "ap")]
         assert corpo["celulares"] == 1
-
-    def test_modelo_vem_da_leitura_do_gravador(self) -> None:
-        from app.views.dashboards import _modelos_pelos_gravadores
-        from itgov.services.intelbras_api import CameraGravador, LeituraGravador
-
-        leitura = LeituraGravador(
-            modelo="NVD 3332",
-            cameras=[
-                CameraGravador(canal=1, tipo="ip", ip="10.99.0.20", modelo="VIP-S4320-G2"),
-                CameraGravador(canal=2, tipo="analogica"),
-                CameraGravador(canal=3, tipo="ip", ip="10.99.0.21"),
-            ],
-        )
-        modelos = _modelos_pelos_gravadores({"10.99.0.1": {"leitura": leitura}, "10.99.0.2": {"leitura": None}})
-        assert modelos == {"10.99.0.1": "NVD 3332", "10.99.0.20": "VIP-S4320-G2"}
 
     def test_unidade_desconhecida_404(self, client_as: Callable[[str], FlaskClient]) -> None:
         with patch("itgov.api.v1.rede_monitoring.get_cached_rede_summary", return_value={"hosts": []}):

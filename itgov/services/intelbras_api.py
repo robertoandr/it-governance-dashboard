@@ -9,7 +9,7 @@ Endpoints usados (todos de leitura, autenticação Basic ou Digest):
   (índices a partir de 0; "sem eventos" volta como erro e vira lista vazia);
 - ``configManager.cgi?action=getConfig&name=ChannelTitle`` — nome de cada canal;
 - ``LogicDeviceManager.cgi?action=getCameraAll`` — câmera de cada canal: analógica
-  (``Local``) ou IP (``Remote``, com IP, MAC e modelo). A resposta traz também a
+  (``Local``) ou IP (``Remote``, com IP, MAC, modelo, nº de série e fabricante). A resposta traz também a
   senha de cada câmera IP, que é descartada aqui e nunca guardada.
 
 O aparelho bloqueia o usuário depois de algumas senhas erradas seguidas: quem
@@ -41,6 +41,8 @@ class CameraGravador(BaseModel):
     ip: str = ""
     mac: str = ""
     modelo: str = ""
+    serie: str = ""
+    fabricante: str = ""
 
 
 class LeituraGravador(BaseModel):
@@ -76,7 +78,7 @@ def titulo_padrao(titulo: str) -> bool:
 SEM_ENDERECO = frozenset({"", "0.0.0.0", "192.168.0.0", "192.168.1.108"})
 _MAC_NULO = {"", "ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"}
 _CAMPO_CAMERA = re.compile(
-    r"^camera\[(\d+)\]\.(Type|Enable|UniqueChannel|DeviceInfo\.Address|DeviceInfo\.Mac|DeviceInfo\.DeviceType)=(.*)$"
+    r"^camera\[(\d+)\]\.(Type|Enable|UniqueChannel|DeviceInfo\.(?:Address|Mac|DeviceType|SerialNo|Vendor))=(.*)$"
 )
 
 
@@ -116,6 +118,8 @@ def cameras_do_gravador(texto: str) -> list[CameraGravador]:
                 ip=ip,
                 mac="" if mac in _MAC_NULO else mac,
                 modelo=campos.get("DeviceInfo.DeviceType", ""),
+                serie=campos.get("DeviceInfo.SerialNo", ""),
+                fabricante=campos.get("DeviceInfo.Vendor", ""),
             )
     return [cameras[c] for c in sorted(cameras)]
 
