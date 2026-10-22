@@ -10,7 +10,13 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from app.services.mapa_dispositivos import CanalConferido, dispositivos_da_unidade
+from app.services.mapa_dispositivos import (
+    CanalAnalogico,
+    CanalConferido,
+    analogicas_dos_gravadores,
+    dispositivos_da_unidade,
+)
+from itgov.services.intelbras_api import CameraGravador, LeituraGravador
 
 FAIXAS = [(1, "10.41.0.0/16"), (2, "172.17.0.0/16")]
 
@@ -100,6 +106,69 @@ class TestDispositivosDaUnidade:
         ]
 
 
+class TestCamerasAnalogicas:
+    """Câmera analógica entra pelo gravador + canal, sem IP."""
+
+    def test_entra_com_chave_gravador_e_canal(self) -> None:
+        hosts = [_host("10.41.100.11", zabbix_host="Shopping_Ext_1", online=True)]
+        analogicas = [CanalAnalogico("10.41.100.11", 2, "PORTARIA 1"), CanalAnalogico("10.41.100.11", 1)]
+        dados = dispositivos_da_unidade(hosts, FAIXAS, {1}, [], analogicas=analogicas)
+        cams = [d for d in dados["dispositivos"] if d["analogica"]]
+        assert [(d["canal"], d["nome"], d["chave"], d["ip"], d["tipo"]) for d in cams] == [
+            (1, "Shopping_Ext_1 - canal 1 (analógica)", "10.41.100.11#1", "", "camera"),
+            (2, "PORTARIA 1", "10.41.100.11#2", "", "camera"),
+        ]
+        assert cams[0]["gravador_nome"] == "Shopping_Ext_1" and cams[0]["online"]
+        assert dados["analogicas"] == 2
+
+    def test_so_da_unidade_e_sem_repetir(self) -> None:
+        analogicas = [
+            CanalAnalogico("10.41.100.11", 1),
+            CanalAnalogico("10.41.100.11", 1, "repetida"),
+            CanalAnalogico("172.17.1.151", 1),
+        ]
+        dados = dispositivos_da_unidade([], FAIXAS, {1}, [], analogicas=analogicas)
+        assert [d["chave"] for d in dados["dispositivos"]] == ["10.41.100.11#1"]
+
+    def test_camera_ip_da_conferencia_tambem_ganha_chave(self) -> None:
+        canais = [CanalConferido("10.41.100.11", 17, "10.41.0.49")]
+        (cam,) = [
+            d for d in dispositivos_da_unidade([], FAIXAS, {1}, canais)["dispositivos"] if d["ip"] == "10.41.0.49"
+        ]
+        assert (cam["chave"], cam["analogica"]) == ("10.41.100.11#17", False)
+
+
+class TestAnalogicasDosGravadores:
+    """Critério de canal analógico em uso (o DVR lista todo canal como Local)."""
+
+    def _leituras(self) -> dict[str, Any]:
+        leitura = LeituraGravador(
+            modelo="MHDX 1116",
+            canais=6,
+            sem_video=[3, 4, 5, 6],
+            titulos={1: "CAM 1", 2: "PORTARIA", 3: "DOCA", 4: "CAM 4", 5: "S/ CÂMERA", 6: "CAM 6"},
+            cameras=[CameraGravador(canal=c, tipo="analogica") for c in range(1, 7)]
+            + [CameraGravador(canal=7, tipo="ip", ip="10.41.0.7")],
+        )
+        return {"10.41.100.11": {"leitura": leitura}, "10.41.100.12": {"leitura": None}}
+
+    def test_criterio_do_cftv(self) -> None:
+        cadastro = {"10.41.100.11": {6: {"situacao": "ativo", "analogica": True, "equipamento": "Fundos"}}}
+        res = analogicas_dos_gravadores(self._leituras(), cadastro)
+        # 1: com vídeo; 2: com vídeo e nome; 3: sem vídeo mas com nome; 4: sem vídeo e nome de fábrica (fora);
+        # 5: "S/ CÂMERA" (fora); 6: conferida no local como câmera (entra, sem o nome de fábrica)
+        assert [(a.canal, a.nome) for a in res] == [(1, ""), (2, "PORTARIA"), (3, "DOCA"), (6, "")]
+
+    def test_conferencia_vazio_tira_e_ativa_sem_leitura_entra(self) -> None:
+        cadastro = {
+            "10.41.100.11": {1: {"situacao": "vazio", "analogica": False}},
+            "10.41.100.12": {9: {"situacao": "ativo", "analogica": True, "equipamento": "Estoque"}},
+        }
+        res = analogicas_dos_gravadores(self._leituras(), cadastro)
+        assert (CanalAnalogico("10.41.100.11", 1, "")) not in res
+        assert CanalAnalogico("10.41.100.12", 9, "Estoque") in res
+
+
 @pytest.fixture
 def client_as(factory_app: Flask) -> Iterator[Callable[[str], FlaskClient]]:
     """Cliente logado com o perfil pedido."""
@@ -156,6 +225,27 @@ class TestRota:
         assert corpo["unidade"] == "MapaTeste"
         assert [(d["ip"], d["tipo"]) for d in corpo["dispositivos"]] == [("10.99.0.5", "ap")]
         assert corpo["celulares"] == 1
+
+    def test_leva_analogicas_e_inventario_do_gravador(
+        self, client_as: Callable[[str], FlaskClient], unidade_mapa: str
+    ) -> None:
+        leitura = LeituraGravador(
+            modelo="MHDX 1116",
+            serie="DVR-SN",
+            canais=2,
+            titulos={1: "PORTARIA"},
+            cameras=[CameraGravador(canal=1, tipo="analogica"), CameraGravador(canal=2, tipo="analogica")],
+            sem_video=[2],
+        )
+        with (
+            patch("itgov.api.v1.rede_monitoring.get_cached_rede_summary", return_value={"hosts": []}),
+            patch("app.services.cftv_gravadores.leituras", return_value={"10.99.0.9": {"leitura": leitura}}),
+            patch("app.services.cftv_gravadores.cadastro_canais", return_value={}),
+        ):
+            corpo = client_as("gestor").get(f"/gov/cameras/dispositivos-rede?unidade={unidade_mapa}").get_json()
+        assert corpo["analogicas"] == 1
+        (cam,) = [d for d in corpo["dispositivos"] if d["analogica"]]
+        assert (cam["chave"], cam["nome"], cam["ip"]) == ("10.99.0.9#1", "PORTARIA", "")
 
     def test_unidade_desconhecida_404(self, client_as: Callable[[str], FlaskClient]) -> None:
         with patch("itgov.api.v1.rede_monitoring.get_cached_rede_summary", return_value={"hosts": []}):
