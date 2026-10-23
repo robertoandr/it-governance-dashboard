@@ -10,8 +10,40 @@
     Alpine.data('cyberPage', function () {
       return {
         aba: 'incidentes',
+        liveUrl: '/api/v1/cyber/incidentes/live',
+        liveConfigurado: {{ 'true' if investigacao_ativa else 'false' }},
+        liveCarregado: false,
+        liveCarregando: false,
+        liveErro: '',
+        liveIncidentes: [],
+        expandido: '',
         ehAba: function (nome) { return this.aba === nome; },
-        irPara: function (nome) { this.aba = nome; },
+        irPara: function (nome) {
+          this.aba = nome;
+          if (nome === 'live' && this.liveConfigurado && !this.liveCarregado) {
+            this.carregarLive();
+          }
+        },
+        carregarLive: async function () {
+          this.liveCarregando = true;
+          this.liveErro = '';
+          try {
+            const r = await fetch(this.liveUrl, {credentials: 'same-origin'});
+            const d = await r.json();
+            this.liveConfigurado = d.configurado;
+            this.liveIncidentes = d.incidentes || [];
+          } catch (e) {
+            this.liveErro = 'Falha ao consultar a API Acronis.';
+          }
+          this.liveCarregado = true;
+          this.liveCarregando = false;
+        },
+        recarregarLive: function () { this.liveCarregado = false; this.carregarLive(); },
+        toggleTimeline: function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          this.expandido = this.expandido === id ? '' : id;
+        },
+        estaExpandido: function (id) { return this.expandido === id; },
       };
     });
   });
@@ -49,6 +81,11 @@
             :class="ehAba('noc') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
             class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
       NOC de Segurança
+    </button>
+    <button type="button" @click="irPara('live')"
+            :class="ehAba('live') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
+            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
+      Investigação ao vivo
     </button>
   </div>
 
@@ -184,6 +221,68 @@
       </div>
 
     </div>
+  </div>
+
+  {# ============================== ABA AO VIVO ============================= #}
+  <div x-show="ehAba('live')" x-cloak>
+
+    {% if not investigacao_ativa %}
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
+      <p class="font-semibold mb-1">Investigação ao vivo não configurada</p>
+      <p>Para consultar incidentes direto na API do Acronis (detalhe e linha do tempo),
+         defina a conta de serviço <strong>master + Cyber</strong> no ambiente:
+         <code>ACRONIS_CYBER_CLIENT_ID</code> e <code>ACRONIS_CYBER_CLIENT_SECRET</code>
+         (ou as credenciais padrão <code>ACRONIS_CLIENT_ID</code> / <code>ACRONIS_CLIENT_SECRET</code>).
+         Enquanto isso, a aba <strong>Incidentes</strong> segue funcionando com os dados do InfluxDB.</p>
+    </div>
+    {% else %}
+
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-gray-500 dark:text-slate-400">
+        Incidentes consultados em tempo real na API Acronis. Clique em um incidente para ver a linha do tempo.
+      </p>
+      <button type="button" @click="recarregarLive"
+              class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">
+        Atualizar
+      </button>
+    </div>
+
+    <p x-show="liveCarregando" class="text-sm text-gray-400">Consultando a API Acronis…</p>
+    <p x-show="liveErro" x-text="liveErro" x-cloak class="text-sm text-red-600"></p>
+    <p x-show="liveCarregado && !liveCarregando && liveIncidentes.length === 0 && !liveErro" x-cloak
+       class="text-sm text-gray-400">Nenhum incidente ativo.</p>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+      <template x-for="inc in liveIncidentes" :key="inc.incident_id">
+        <div class="border-b border-gray-100 dark:border-slate-700 last:border-0">
+          <button type="button" @click="toggleTimeline" :data-id="inc.incident_id"
+                  class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/40">
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200"
+                  x-text="inc.severidade"></span>
+            <span class="font-medium text-gray-800 dark:text-slate-100" x-text="inc.recurso"></span>
+            <span class="text-sm text-gray-500 dark:text-slate-400" x-text="inc.tipo"></span>
+            <span class="ml-auto text-xs text-gray-400" x-text="inc.total_alertas + ' alerta(s)'"></span>
+            <span class="text-xs font-semibold" :class="inc.mitigado ? 'text-green-600' : 'text-red-600'"
+                  x-text="inc.mitigado ? 'mitigado' : 'não mitigado'"></span>
+          </button>
+          <div x-show="estaExpandido(inc.incident_id)" x-cloak class="px-6 pb-4">
+            <ol class="border-l-2 border-gray-200 dark:border-slate-600 ml-2">
+              <template x-for="ev in inc.timeline" :key="ev.id">
+                <li class="ml-4 py-2">
+                  <p class="text-xs text-gray-400" x-text="ev.criado_em || '—'"></p>
+                  <p class="text-sm text-gray-700 dark:text-slate-200">
+                    <span x-text="ev.tipo"></span>
+                    <span class="text-gray-400">·</span>
+                    <span x-text="ev.severidade"></span>
+                  </p>
+                </li>
+              </template>
+            </ol>
+          </div>
+        </div>
+      </template>
+    </div>
+    {% endif %}
   </div>
 
 </div>

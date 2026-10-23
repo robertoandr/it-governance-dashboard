@@ -351,6 +351,7 @@ def cyber_incidentes() -> str:
     ``ACRONIS_BASE_URL`` a página não é exposta.
     """
     from itgov.api.v1.cyber import filtrar_incidentes, get_cached_cyber
+    from itgov.services import acronis_cyber
 
     if not os.getenv("ACRONIS_BASE_URL"):
         abort(404)
@@ -369,6 +370,7 @@ def cyber_incidentes() -> str:
         total_incidentes=len(dados["incidentes"]),
         severidades=severidades,
         filtro={"severidade": severidade or "", "tipo": tipo or "", "q": busca or ""},
+        investigacao_ativa=acronis_cyber.configurado(),
     )
 
 
