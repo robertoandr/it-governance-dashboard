@@ -359,12 +359,8 @@ def cyber_incidentes() -> str:
     severidade = request.args.get("severidade") or None
     tipo = request.args.get("tipo") or None
     busca = request.args.get("q") or None
-    incidentes = filtrar_incidentes(
-        dados["incidentes"], severidade=severidade, tipo=tipo, busca=busca
-    )
-    severidades = sorted(
-        {str(i.get("severity", "")).strip() for i in dados["incidentes"] if i.get("severity")}
-    )
+    incidentes = filtrar_incidentes(dados["incidentes"], severidade=severidade, tipo=tipo, busca=busca)
+    severidades = sorted({str(i.get("severity", "")).strip() for i in dados["incidentes"] if i.get("severity")})
     return render_template(
         "dashboards/cyber.html",
         kpis=dados["kpis"],
