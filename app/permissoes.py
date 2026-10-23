@@ -90,6 +90,9 @@ PAGINAS: tuple[Pagina, ...] = (
     Pagina("unidades", "dashboards.unidades_list", "Unidades", "Monitoramento", _AGO, _AG),
     Pagina("mapa_cameras", "dashboards.mapa_cameras", "Mapa de Câmeras", "Segurança", _AG),
     Pagina("ciberseguranca", "dashboards.acronis_backup", "Cibersegurança", "Segurança", _AG),
+    # Módulo Cyber: só leitura (investigação + NOC). Ações de resposta passam
+    # pela fila de aprovação, por isso a página não tem perfis em "alterar".
+    Pagina("cyber", "dashboards.cyber_incidentes", "Cyber / Incidentes", "Segurança", _AG),
     Pagina("pmo", "dashboards.pmo_dashboard", "PMO", "Gestão", _AGV, _AG),
     Pagina("relatorios", "dashboards.relatorios", "Relatórios", "Gestão", _AG),
 )
