@@ -341,6 +341,41 @@ def acronis_backup() -> str:
     return render_template("dashboards/acronis_backup.html", data=data)
 
 
+@bp.route("/cyber")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_incidentes() -> str:
+    """Render módulo Cyber: investigação de incidentes + NOC de segurança.
+
+    Somente leitura. Depende do Acronis (mesma fonte da Cibersegurança); sem
+    ``ACRONIS_BASE_URL`` a página não é exposta.
+    """
+    from itgov.api.v1.cyber import filtrar_incidentes, get_cached_cyber
+
+    if not os.getenv("ACRONIS_BASE_URL"):
+        abort(404)
+
+    dados = get_cached_cyber()
+    severidade = request.args.get("severidade") or None
+    tipo = request.args.get("tipo") or None
+    busca = request.args.get("q") or None
+    incidentes = filtrar_incidentes(
+        dados["incidentes"], severidade=severidade, tipo=tipo, busca=busca
+    )
+    severidades = sorted(
+        {str(i.get("severity", "")).strip() for i in dados["incidentes"] if i.get("severity")}
+    )
+    return render_template(
+        "dashboards/cyber.html",
+        kpis=dados["kpis"],
+        noc=dados["noc"],
+        incidentes=incidentes,
+        total_incidentes=len(dados["incidentes"]),
+        severidades=severidades,
+        filtro={"severidade": severidade or "", "tipo": tipo or "", "q": busca or ""},
+    )
+
+
 @bp.route("/zabbix")
 @login_required
 @require_role("admin", "gestor", "operador", pagina="zabbix")

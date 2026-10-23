@@ -209,6 +209,15 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     except Exception as _e:
         log.warning("itgov_governance_security_alerts_unavailable", error=str(_e))
 
+    # Módulo Cyber — incidentes + NOC de segurança (somente leitura)
+    try:
+        from itgov.api.v1.cyber import ns as cyber_ns
+
+        api.add_namespace(cyber_ns, path="/v1/cyber")
+        log.info("itgov_cyber_registered")
+    except Exception as _e:
+        log.warning("itgov_cyber_unavailable", error=str(_e))
+
     # HTML blueprints
     import os
 
