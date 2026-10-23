@@ -266,3 +266,51 @@ class CyberNocResource(Resource):
     def get(self) -> dict[str, Any]:
         """Retorna o bloco NOC correlacionado (Acronis + Zabbix + FortiGate)."""
         return get_cached_cyber()["noc"]
+
+
+@ns.route("/incidentes/live")
+class CyberIncidentesLiveResource(Resource):
+    """Investigação ao vivo: incidentes consultados direto na API Acronis."""
+
+    @ns.doc("get_cyber_incidentes_live")
+    @require_role("admin", "gestor", pagina="cyber")
+    def get(self) -> dict[str, Any]:
+        """Lista incidentes ativos ao vivo.
+
+        Returns:
+            ``{"configurado": False}`` quando a conta de serviço Acronis
+            (master + Cyber) ainda não está configurada; caso contrário, os
+            incidentes agregados do mais grave ao menos grave.
+        """
+        from itgov.services import acronis_cyber
+
+        if not acronis_cyber.configurado():
+            return {"configurado": False, "incidentes": []}
+        incidentes = acronis_cyber.listar_incidentes()
+        return {
+            "configurado": True,
+            "total": len(incidentes),
+            "incidentes": [i.model_dump() for i in incidentes],
+        }
+
+
+@ns.route("/incidentes/live/<string:incident_id>")
+class CyberIncidenteLiveResource(Resource):
+    """Detalhe e linha do tempo de um incidente, ao vivo."""
+
+    @ns.doc("get_cyber_incidente_live")
+    @require_role("admin", "gestor", pagina="cyber")
+    def get(self, incident_id: str) -> dict[str, Any]:
+        """Retorna um incidente específico com sua linha do tempo.
+
+        Args:
+            incident_id: Identificador do incidente.
+        """
+        from itgov.services import acronis_cyber
+
+        if not acronis_cyber.configurado():
+            return {"configurado": False, "incidente": None}
+        inc = acronis_cyber.detalhe_incidente(incident_id)
+        if inc is None:
+            return {"configurado": True, "incidente": None}
+        return {"configurado": True, "incidente": inc.model_dump()}

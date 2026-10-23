@@ -193,3 +193,66 @@ def test_endpoint_noc_json(authed_client, com_acronis: None, monkeypatch) -> Non
     resp = authed_client.get("/api/v1/cyber/noc")
     assert resp.status_code == 200
     assert resp.get_json()["criticidade"] == "critico"
+
+
+# ── Endpoints de investigação ao vivo ────────────────────────────────────────
+
+
+def test_endpoint_live_nao_configurado(authed_client, monkeypatch) -> None:
+    from itgov.services import acronis_cyber
+
+    monkeypatch.setattr(acronis_cyber, "configurado", lambda: False)
+    j = authed_client.get("/api/v1/cyber/incidentes/live").get_json()
+    assert j == {"configurado": False, "incidentes": []}
+
+
+def test_endpoint_live_lista_incidentes(authed_client, monkeypatch) -> None:
+    from itgov.services import acronis_cyber
+
+    monkeypatch.setattr(acronis_cyber, "configurado", lambda: True)
+    inc = acronis_cyber.IncidenteCyber(
+        incident_id="INC-1",
+        tipo="EDRIncidentDetected",
+        severidade="critical",
+        recurso="pc-rh-01",
+        total_alertas=2,
+        mitigado=False,
+        primeiro_em=None,
+        ultimo_em=None,
+        timeline=[],
+    )
+    monkeypatch.setattr(acronis_cyber, "listar_incidentes", lambda: [inc])
+    j = authed_client.get("/api/v1/cyber/incidentes/live").get_json()
+    assert j["configurado"] is True
+    assert j["total"] == 1
+    assert j["incidentes"][0]["incident_id"] == "INC-1"
+
+
+def test_endpoint_live_detalhe(authed_client, monkeypatch) -> None:
+    from itgov.services import acronis_cyber
+
+    monkeypatch.setattr(acronis_cyber, "configurado", lambda: True)
+    inc = acronis_cyber.IncidenteCyber(
+        incident_id="INC-9",
+        tipo="T",
+        severidade="high",
+        recurso="srv",
+        total_alertas=1,
+        mitigado=True,
+        primeiro_em=None,
+        ultimo_em=None,
+        timeline=[],
+    )
+    monkeypatch.setattr(acronis_cyber, "detalhe_incidente", lambda _id: inc if _id == "INC-9" else None)
+    assert authed_client.get("/api/v1/cyber/incidentes/live/INC-9").get_json()["incidente"]["recurso"] == "srv"
+    assert authed_client.get("/api/v1/cyber/incidentes/live/OUTRO").get_json()["incidente"] is None
+
+
+def test_pagina_cyber_mostra_aviso_quando_live_nao_configurado(authed_client, com_acronis, monkeypatch) -> None:
+    _mock_fontes(monkeypatch)
+    from itgov.services import acronis_cyber
+
+    monkeypatch.setattr(acronis_cyber, "configurado", lambda: False)
+    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    assert "Investigação ao vivo" in html
+    assert "ACRONIS_CYBER_CLIENT_ID" in html
