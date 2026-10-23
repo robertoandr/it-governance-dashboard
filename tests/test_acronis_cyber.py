@@ -23,12 +23,21 @@ _RAW = [
     },
     {
         "id": "a3",
-        "type": "SuspiciousLogin",
+        "type": "MaliciousUrlDetected",
         "severity": "warning",
         "createdAt": "2026-10-23T08:00:00Z",
         "details": {"incidentId": "INC-2", "resourceName": "srv-web"},
     },
 ]
+
+# Ruído de monitoramento que a investigação deve descartar.
+_RUIDO = {
+    "id": "n1",
+    "type": "MiMonitoringSoftwareInstalled",
+    "severity": "info",
+    "createdAt": "2026-10-23T07:00:00Z",
+    "details": {"resourceName": "pc-qualquer"},
+}
 
 
 # ── configurado() + fallback de credenciais ──────────────────────────────────
@@ -101,6 +110,16 @@ def test_peso_severidade() -> None:
     assert acronis_cyber.peso_severidade("xpto") == 0
 
 
+def test_eh_incidente_seguranca() -> None:
+    assert acronis_cyber.eh_incidente_seguranca("EDRIncidentDetected") is True
+    assert acronis_cyber.eh_incidente_seguranca("MaliciousUrlDetected") is True
+    assert acronis_cyber.eh_incidente_seguranca("UserFailedLoginAttempt") is True  # termo
+    assert acronis_cyber.eh_incidente_seguranca("RansomwareActivityDetected") is True
+    assert acronis_cyber.eh_incidente_seguranca("MiMonitoringSoftwareInstalled") is False
+    assert acronis_cyber.eh_incidente_seguranca("MiMonitoringMissingPatches") is False
+    assert acronis_cyber.eh_incidente_seguranca(None) is False
+
+
 # ── _coletar / listar / detalhe (com busca mockada) ──────────────────────────
 
 
@@ -121,6 +140,13 @@ def _mock_busca(monkeypatch: pytest.MonkeyPatch, raw: list[dict]) -> None:
 def test_listar_incidentes_agrupa(monkeypatch: pytest.MonkeyPatch) -> None:
     _mock_busca(monkeypatch, _RAW)
     incidentes = acronis_cyber.listar_incidentes()
+    assert [i.incident_id for i in incidentes] == ["INC-1", "INC-2"]
+
+
+def test_listar_incidentes_descarta_ruido_de_monitoramento(monkeypatch: pytest.MonkeyPatch) -> None:
+    _mock_busca(monkeypatch, [*_RAW, _RUIDO])
+    incidentes = acronis_cyber.listar_incidentes()
+    # O alerta de software instalado não vira incidente.
     assert [i.incident_id for i in incidentes] == ["INC-1", "INC-2"]
 
 
