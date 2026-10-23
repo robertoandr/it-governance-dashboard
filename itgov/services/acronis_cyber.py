@@ -33,6 +33,13 @@ _ALERTS_PATH = "/api/alert_manager/v1/alerts"
 _AUTH_PATH = "/api/2/idp/token"
 _TIMEOUT = 30
 
+# Tipos de alerta que representam incidentes de SEGURANÇA — a investigação só
+# mostra estes. O resto do alert_manager é ruído de monitoramento (software
+# instalado, hardware, patches, reboot) e não entra na tela de incidentes.
+_TIPOS_SEGURANCA_EXATOS = frozenset({"EDRIncidentDetected", "MaliciousUrlDetected"})
+# Além dos exatos, qualquer tipo cujo nome contenha um destes termos.
+_TERMOS_SEGURANCA = ("failedlogin", "ransomware", "activeprotection", "threat", "malware")
+
 # Peso de severidade para escolher a "severidade do incidente" (a maior entre
 # seus alertas) e ordenar a lista. Rótulos desconhecidos caem em 0.
 _PESO_SEV: dict[str, int] = {
@@ -113,6 +120,23 @@ def peso_severidade(severidade: str | None) -> int:
     if not severidade:
         return 0
     return _PESO_SEV.get(str(severidade).strip().lower(), 0)
+
+
+def eh_incidente_seguranca(tipo: str | None) -> bool:
+    """O tipo de alerta representa um incidente de segurança (não monitoramento)?
+
+    Args:
+        tipo: Valor de ``type`` do alerta Acronis.
+
+    Returns:
+        ``True`` para EDR, URL maliciosa, falha de login, ransomware e afins.
+    """
+    if not tipo:
+        return False
+    if tipo in _TIPOS_SEGURANCA_EXATOS:
+        return True
+    baixo = tipo.lower()
+    return any(termo in baixo for termo in _TERMOS_SEGURANCA)
 
 
 def normalizar_alerta(raw: dict[str, Any]) -> AlertaCyber:
@@ -216,10 +240,11 @@ def _coletar(limit: int) -> list[IncidenteCyber]:
     except (httpx.HTTPError, KeyError, ValueError, RuntimeError) as exc:
         log.warning("acronis_cyber.falhou", erro=type(exc).__name__, detalhe=str(exc)[:200])
         return []
-    return agrupar_incidentes([normalizar_alerta(a) for a in alertas])
+    seguranca = [a for a in alertas if eh_incidente_seguranca(a.get("type"))]
+    return agrupar_incidentes([normalizar_alerta(a) for a in seguranca])
 
 
-def listar_incidentes(limit: int = 300) -> list[IncidenteCyber]:
+def listar_incidentes(limit: int = 2000) -> list[IncidenteCyber]:
     """Lista os incidentes ativos, do mais grave ao menos grave.
 
     Args:
@@ -231,7 +256,7 @@ def listar_incidentes(limit: int = 300) -> list[IncidenteCyber]:
     return _coletar(limit)
 
 
-def detalhe_incidente(incident_id: str, limit: int = 300) -> IncidenteCyber | None:
+def detalhe_incidente(incident_id: str, limit: int = 2000) -> IncidenteCyber | None:
     """Retorna um incidente específico com sua linha do tempo.
 
     Args:
