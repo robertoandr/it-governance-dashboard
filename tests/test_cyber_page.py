@@ -13,9 +13,27 @@ def com_acronis(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 _INCIDENTES = [
-    {"resource_name": "pc-rh-01", "alert_type": "EDRIncidentDetected", "severity": "critical", "mitigation": "", "time": "2026-10-23T10:00:00Z"},
-    {"resource_name": "pc-fin-02", "alert_type": "RansomwareDetected", "severity": "high", "mitigation": "mitigado", "time": "2026-10-23T09:00:00Z"},
-    {"resource_name": "srv-web", "alert_type": "SuspiciousLogin", "severity": "warning", "mitigation": "", "time": "2026-10-23T08:00:00Z"},
+    {
+        "resource_name": "pc-rh-01",
+        "alert_type": "EDRIncidentDetected",
+        "severity": "critical",
+        "mitigation": "",
+        "time": "2026-10-23T10:00:00Z",
+    },
+    {
+        "resource_name": "pc-fin-02",
+        "alert_type": "RansomwareDetected",
+        "severity": "high",
+        "mitigation": "mitigado",
+        "time": "2026-10-23T09:00:00Z",
+    },
+    {
+        "resource_name": "srv-web",
+        "alert_type": "SuspiciousLogin",
+        "severity": "warning",
+        "mitigation": "",
+        "time": "2026-10-23T08:00:00Z",
+    },
 ]
 
 _ACRONIS = {
