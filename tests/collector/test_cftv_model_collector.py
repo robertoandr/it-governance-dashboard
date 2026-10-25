@@ -66,6 +66,8 @@ def cfg(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         ZBX_VERIFY_TLS=False,
         CFTV_CAM_PADRAO_USER="admin",
         CFTV_CAM_PADRAO_PASS="p1",
+        CFTV_CAM_CENTRO_USER="",
+        CFTV_CAM_CENTRO_PASS="",
         CFTV_CAM_USER="adm",
         CFTV_CAM_TRIUNFO_PASS="t1",
         CFTV_CAM_TRIUNFO_PASS2="t2",
@@ -208,6 +210,8 @@ def test_credenciais_so_as_configuradas(cfg: SimpleNamespace) -> None:
     assert credenciais() == {"padrao": ("admin", "p1"), "triunfo": ("adm", "t1"), "triunfo2": ("adm", "t2")}
     cfg.CFTV_CAM_USER = ""
     assert set(credenciais()) == {"padrao"}
+    cfg.CFTV_CAM_CENTRO_USER, cfg.CFTV_CAM_CENTRO_PASS = "centro", "c1"
+    assert credenciais()["centro"] == ("centro", "c1")
 
 
 def test_selecionar_pula_sem_tag_sem_credencial_e_recusa_recente() -> None:

@@ -14,7 +14,7 @@ encontrado, que a página /gov/cftv exibe no drill-down do gravador.
 ### Credencial por equipamento
 
 Cada host traz na tag ``cftv_cred`` qual credencial do ``.env`` ele aceita
-(``padrao``, ``triunfo``, ``triunfo2`` ou ``intelbras``, ver :func:`credenciais`).
+(``padrao``, ``centro``, ``triunfo``, ``triunfo2`` ou ``intelbras``, ver :func:`credenciais`).
 Host sem a tag, ou com credencial não configurada, não é consultado: o job
 nunca "chuta" senha.
 
@@ -107,6 +107,7 @@ def credenciais() -> dict[str, tuple[str, str]]:
     """
     pares = {
         "padrao": (settings.CFTV_CAM_PADRAO_USER, settings.CFTV_CAM_PADRAO_PASS),
+        "centro": (settings.CFTV_CAM_CENTRO_USER, settings.CFTV_CAM_CENTRO_PASS),
         "triunfo": (settings.CFTV_CAM_USER, settings.CFTV_CAM_TRIUNFO_PASS),
         "triunfo2": (settings.CFTV_CAM_USER, settings.CFTV_CAM_TRIUNFO_PASS2),
         "intelbras": (settings.INTELBRAS_HTTP_USER, settings.INTELBRAS_HTTP_PASSWORD),
