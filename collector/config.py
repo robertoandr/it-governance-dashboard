@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     # CFTV — credenciais das câmeras/DVRs (coleta de modelo); cada host escolhe a sua pela tag cftv_cred
     CFTV_CAM_PADRAO_USER: str = ""
     CFTV_CAM_PADRAO_PASS: str = ""
+    CFTV_CAM_CENTRO_USER: str = ""  # câmeras dos DVR-1/2/3 da Sede Centro
+    CFTV_CAM_CENTRO_PASS: str = ""
     CFTV_CAM_USER: str = ""  # usuário das câmeras do Triunfo
     CFTV_CAM_TRIUNFO_PASS: str = ""
     CFTV_CAM_TRIUNFO_PASS2: str = ""
