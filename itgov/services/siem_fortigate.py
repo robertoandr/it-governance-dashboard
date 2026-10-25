@@ -116,7 +116,7 @@ def normalizar(fortigate: str, raw: dict[str, Any]) -> EventoSiem | None:
         mensagem = f"{raw.get('hostname')} — {raw.get('catdesc') or mensagem}"
     bruto = "|".join(str(x) for x in (fortigate, eventtime, raw.get("logid"), origem, usuario, raw.get("sessionid")))
     return EventoSiem(
-        chave=hashlib.sha1(bruto.encode(), usedforsecurity=False).hexdigest()[:32],
+        chave=hashlib.sha256(bruto.encode()).hexdigest()[:32],
         fortigate=fortigate,
         quando=datetime.fromtimestamp(segundos, tz=UTC),
         eventtime=eventtime,
