@@ -35,9 +35,14 @@ class Settings(BaseSettings):
     ZABBIX_PASSWORD: str = ""
     ZABBIX_TOKEN: str = ""
     ZBX_VERIFY_TLS: bool = True
-    # CFTV — credencial padrão das câmeras/DVRs (coleta de modelo)
-    CFTV_CAM_USER: str = ""
-    CFTV_CAM_PASS: str = ""
+    # CFTV — credenciais das câmeras/DVRs (coleta de modelo); cada host escolhe a sua pela tag cftv_cred
+    CFTV_CAM_PADRAO_USER: str = ""
+    CFTV_CAM_PADRAO_PASS: str = ""
+    CFTV_CAM_USER: str = ""  # usuário das câmeras do Triunfo
+    CFTV_CAM_TRIUNFO_PASS: str = ""
+    CFTV_CAM_TRIUNFO_PASS2: str = ""
+    INTELBRAS_HTTP_USER: str = ""
+    INTELBRAS_HTTP_PASSWORD: str = ""
     # Acronis Cyber Cloud — coletor de agentes e proteção
     ACRONIS_BASE_URL: str = ""
     ACRONIS_CLIENT_ID: str = ""

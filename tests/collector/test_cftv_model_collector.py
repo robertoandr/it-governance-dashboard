@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -21,12 +22,15 @@ from collector.jobs.cftv_model_collector import (
     Resultado,
     coletar,
     consultar,
+    credenciais,
     gravar_modelo,
+    gravar_recusa,
     listar_sem_modelo,
     modelo_hikvision,
     modelo_intelbras,
     modelo_onvif,
     protocolo_para,
+    selecionar,
 )
 
 _HOST_OK = "10.41.101.148"
@@ -39,10 +43,19 @@ def _resp(status: int = 200, text: str = "") -> MagicMock:
     return r
 
 
-def _eq(host: str = "cam-1", vendor: str = "Intelbras", ip: str = _HOST_OK) -> Equipamento:
-    return Equipamento(
-        hostid=host, host=host, ip=ip, vendor=vendor, tags=(("subcategory", "camera"), ("vendor", vendor))
-    )
+_HOJE = date(2026, 10, 26)
+_CREDS = {"padrao": ("admin", "p1"), "triunfo": ("adm", "t1"), "triunfo2": ("adm", "t2")}
+
+
+def _eq(
+    host: str = "cam-1", vendor: str = "Intelbras", ip: str = _HOST_OK, cred: str = "padrao", recusada: str = ""
+) -> Equipamento:
+    tags = [("subcategory", "camera"), ("vendor", vendor)]
+    if cred:
+        tags.append(("cftv_cred", cred))
+    if recusada:
+        tags.append(("cftv_cred_recusada", recusada))
+    return Equipamento(hostid=host, host=host, ip=ip, vendor=vendor, tags=tuple(tags))
 
 
 @pytest.fixture
@@ -51,8 +64,13 @@ def cfg(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         ZABBIX_URL="https://zbx.test",
         ZABBIX_TOKEN="tok",
         ZBX_VERIFY_TLS=False,
-        CFTV_CAM_USER="admin",
-        CFTV_CAM_PASS="segredo",
+        CFTV_CAM_PADRAO_USER="admin",
+        CFTV_CAM_PADRAO_PASS="p1",
+        CFTV_CAM_USER="adm",
+        CFTV_CAM_TRIUNFO_PASS="t1",
+        CFTV_CAM_TRIUNFO_PASS2="t2",
+        INTELBRAS_HTTP_USER="",
+        INTELBRAS_HTTP_PASSWORD="",
     )
     monkeypatch.setattr(mod, "settings", s)
     return s
@@ -130,19 +148,81 @@ def test_consultar_classifica_erros() -> None:
 def test_coletar_aborta_quando_credencial_errada_no_inicio() -> None:
     equipamentos = [_eq(f"cam-{i}") for i in range(20)]
     with patch.object(mod, "modelo_intelbras", side_effect=CredencialRecusadaError) as fn:
-        resultados = coletar(equipamentos, "u", "errada")
+        resultados = coletar(equipamentos, _CREDS)
     # Só os 5 primeiros são tentados: evita bloquear a conta em todo o parque
     assert fn.call_count == mod._LIMITE_AUTH_INICIAL
     assert len(resultados) == mod._LIMITE_AUTH_INICIAL
+
+
+def test_coletar_erro_de_conexao_nao_impede_o_aborto() -> None:
+    # Regressão: 1 timeout entre os 5 primeiros fazia o job seguir e errar a senha em ~280 câmeras
+    equipamentos = [_eq(f"cam-{i}") for i in range(30)]
+    respostas = [requests.ConnectTimeout(), CredencialRecusadaError(), requests.ConnectionError()] + [
+        CredencialRecusadaError()
+    ] * 27
+    with patch.object(mod, "modelo_intelbras", side_effect=respostas) as fn:
+        resultados = coletar(equipamentos, _CREDS)
+    assert fn.call_count == 2 + mod._LIMITE_AUTH_INICIAL
+    assert len(resultados) == fn.call_count
 
 
 def test_coletar_continua_se_alguma_inicial_autentica() -> None:
     equipamentos = [_eq(f"cam-{i}") for i in range(12)]
     respostas = [CredencialRecusadaError()] * 4 + ["VIP-1"] * 8
     with patch.object(mod, "modelo_intelbras", side_effect=respostas):
-        resultados = coletar(equipamentos, "u", "p")
+        resultados = coletar(equipamentos, _CREDS)
     assert len(resultados) == 12
     assert sum(1 for r in resultados if r.model) == 8
+
+
+def test_coletar_usa_a_credencial_da_tag_de_cada_host() -> None:
+    equipamentos = [_eq("a", cred="padrao"), _eq("b", cred="triunfo2"), _eq("c", cred="triunfo")]
+    usadas: dict[str, tuple[str, str]] = {}
+
+    def fake(eq: Equipamento, usuario: str, senha: str) -> Resultado:
+        usadas[eq.host] = (usuario, senha)
+        return Resultado(eq, model="VIP-1")
+
+    with patch.object(mod, "consultar", side_effect=fake):
+        coletar(equipamentos, _CREDS)
+    assert usadas == {"a": ("admin", "p1"), "b": ("adm", "t2"), "c": ("adm", "t1")}
+
+
+def test_aborto_de_uma_credencial_nao_afeta_as_outras() -> None:
+    errados = [_eq(f"t-{i}", cred="triunfo") for i in range(10)]
+    certos = [_eq(f"p-{i}", cred="padrao") for i in range(3)]
+
+    def fake(eq: Equipamento, usuario: str, senha: str) -> Resultado:
+        return Resultado(eq, erro="auth") if senha == "t1" else Resultado(eq, model="VIP-1")
+
+    with patch.object(mod, "consultar", side_effect=fake):
+        resultados = coletar(errados + certos, _CREDS)
+    assert sum(1 for r in resultados if r.erro == "auth") == mod._LIMITE_AUTH_INICIAL
+    assert sum(1 for r in resultados if r.model) == 3
+
+
+# ── Credenciais / seleção ─────────────────────────────────────────────────────
+
+
+def test_credenciais_so_as_configuradas(cfg: SimpleNamespace) -> None:
+    assert credenciais() == {"padrao": ("admin", "p1"), "triunfo": ("adm", "t1"), "triunfo2": ("adm", "t2")}
+    cfg.CFTV_CAM_USER = ""
+    assert set(credenciais()) == {"padrao"}
+
+
+def test_selecionar_pula_sem_tag_sem_credencial_e_recusa_recente() -> None:
+    eqs = [
+        _eq("ok", cred="padrao"),
+        _eq("sem-tag", cred=""),
+        _eq("intelbras", cred="intelbras"),  # credencial não configurada
+        _eq("recente", cred="triunfo", recusada="triunfo:2026-10-24"),
+        _eq("antiga", cred="triunfo", recusada="triunfo:2026-10-10"),
+        _eq("trocou", cred="triunfo2", recusada="triunfo:2026-10-25"),
+        _eq("lixo", cred="padrao", recusada="padrao:ontem"),
+    ]
+    escolhidos, pulados = selecionar(eqs, _CREDS, _HOJE)
+    assert [e.host for e in escolhidos] == ["ok", "antiga", "trocou", "lixo"]
+    assert pulados == {"sem_tag_cred": 1, "cred_nao_configurada": 1, "recusada_recente": 1}
 
 
 # ── Zabbix ────────────────────────────────────────────────────────────────────
@@ -175,7 +255,7 @@ def test_gravar_modelo_preserva_tags_e_substitui_model(cfg: SimpleNamespace) -> 
         host="cam",
         ip="10.0.0.1",
         vendor="Intelbras",
-        tags=(("dvr", "Shopping 1"), ("model", "antigo"), ("canal", "3")),
+        tags=(("dvr", "Shopping 1"), ("model", "antigo"), ("canal", "3"), ("cftv_cred_recusada", "padrao:2026-10-01")),
     )
     with patch.object(mod, "_zbx") as zbx:
         gravar_modelo(Resultado(eq, model="VIP-3230-B", fonte="intelbras_cgi"))
@@ -190,11 +270,25 @@ def test_gravar_modelo_preserva_tags_e_substitui_model(cfg: SimpleNamespace) -> 
     ]
 
 
+def test_gravar_recusa_marca_credencial_e_data(cfg: SimpleNamespace) -> None:
+    eq = _eq("cam", cred="triunfo2", recusada="triunfo:2026-10-01")
+    with patch.object(mod, "_zbx") as zbx:
+        gravar_recusa(eq, _HOJE)
+    method, params = zbx.call_args.args
+    assert method == "host.update"
+    assert params["tags"] == [
+        {"tag": "subcategory", "value": "camera"},
+        {"tag": "vendor", "value": "Intelbras"},
+        {"tag": "cftv_cred", "value": "triunfo2"},
+        {"tag": "cftv_cred_recusada", "value": "triunfo2:2026-10-26"},
+    ]
+
+
 # ── run ───────────────────────────────────────────────────────────────────────
 
 
 def test_run_ignora_sem_credencial(cfg: SimpleNamespace) -> None:
-    cfg.CFTV_CAM_PASS = ""
+    cfg.CFTV_CAM_PADRAO_PASS = cfg.CFTV_CAM_TRIUNFO_PASS = cfg.CFTV_CAM_TRIUNFO_PASS2 = ""
     with patch.object(mod, "listar_sem_modelo") as listar:
         mod.run()
     listar.assert_not_called()
@@ -208,9 +302,11 @@ def test_run_grava_so_quem_tem_modelo(cfg: SimpleNamespace) -> None:
             mod, "coletar", return_value=[Resultado(ok, model="VIP-1", fonte="x"), Resultado(falha, erro="auth")]
         ),
         patch.object(mod, "gravar_modelo") as gravar,
+        patch.object(mod, "gravar_recusa") as recusa,
     ):
         mod.run()
     assert [c.args[0].equipamento.host for c in gravar.call_args_list] == ["cam-ok"]
+    assert [c.args[0].host for c in recusa.call_args_list] == ["cam-falha"]
 
 
 def test_run_sobrevive_a_falha_do_zabbix(cfg: SimpleNamespace) -> None:
