@@ -1,4 +1,4 @@
-"""Página /gov/ciberseguranca (ex-/gov/backup, Acronis) e leitura do InfluxDB em itgov/api/v1/acronis_backup."""
+"""Página /gov/cyberseguranca (ex-/gov/backup, Acronis) e leitura do InfluxDB em itgov/api/v1/acronis_backup."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ def test_buscar_dados_login_legado_sem_event_time_usa_time() -> None:
 def test_backup_page_renderiza_kpis_novos(authed_client, com_acronis: None) -> None:
     with patch.object(acronis_backup, "_query", side_effect=_fake_query):
         acronis_backup._cache_data = None
-        resp = authed_client.get("/gov/ciberseguranca")
+        resp = authed_client.get("/gov/cyberseguranca")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     for trecho in (
@@ -125,14 +125,19 @@ def test_backup_page_renderiza_kpis_novos(authed_client, com_acronis: None) -> N
         "não mitigado",
     ):
         assert trecho in html, trecho
+    assert "Cybersegurança" in html
 
 
 def test_backup_page_404_sem_acronis(authed_client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ACRONIS_BASE_URL", raising=False)
-    assert authed_client.get("/gov/ciberseguranca").status_code == 404
+    assert authed_client.get("/gov/cyberseguranca").status_code == 404
 
 
-def test_backup_antigo_redireciona_para_ciberseguranca(authed_client) -> None:
+def test_rotas_antigas_redirecionam_para_cyberseguranca(authed_client) -> None:
     resp = authed_client.get("/gov/backup")
     assert resp.status_code == 301
-    assert resp.headers["Location"].endswith("/gov/ciberseguranca")
+    assert resp.headers["Location"].endswith("/gov/cyberseguranca")
+
+    resp2 = authed_client.get("/gov/ciberseguranca")
+    assert resp2.status_code == 301
+    assert resp2.headers["Location"].endswith("/gov/cyberseguranca")

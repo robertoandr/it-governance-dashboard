@@ -89,7 +89,7 @@ PAGINAS: tuple[Pagina, ...] = (
     Pagina("links", "dashboards.links_manager", "Links WAN", "Monitoramento", _AGO, _AG),
     Pagina("unidades", "dashboards.unidades_list", "Unidades", "Monitoramento", _AGO, _AG),
     Pagina("mapa_cameras", "dashboards.mapa_cameras", "Mapa de Câmeras", "Segurança", _AG),
-    Pagina("ciberseguranca", "dashboards.acronis_backup", "Cibersegurança", "Segurança", _AG),
+    Pagina("cyberseguranca", "dashboards.acronis_backup", "Cybersegurança", "Segurança", _AG),
     # Módulo Cyber: só leitura (investigação + NOC). Ações de resposta passam
     # pela fila de aprovação, por isso a página não tem perfis em "alterar".
     Pagina("cyber", "dashboards.cyber_incidentes", "Cyber / Incidentes", "Segurança", _AG),
@@ -98,6 +98,8 @@ PAGINAS: tuple[Pagina, ...] = (
 )
 
 POR_CHAVE: dict[str, Pagina] = {p.chave: p for p in PAGINAS}
+# Compatibilidade com permissões/referências legadas
+POR_CHAVE["ciberseguranca"] = POR_CHAVE["cyberseguranca"]
 
 
 def grupos() -> list[tuple[str, list[Pagina]]]:

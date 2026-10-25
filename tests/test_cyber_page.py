@@ -264,3 +264,5 @@ def test_menu_lateral_tem_link_para_cyber(authed_client, com_acronis: None, monk
     inicio = html.index('<nav class="flex-1 py-3')
     menu = html[inicio : html.index("</nav>", inicio)]
     assert 'href="/gov/cyber"' in menu
+    assert 'href="/gov/cyberseguranca"' in menu
+    assert "Cybersegurança" in menu

@@ -323,15 +323,21 @@ def governance_service_health() -> str:
 
 @bp.route("/backup")
 def backup_redirect() -> Response:
-    """Endereço antigo: a página passou a se chamar Cibersegurança."""
+    """Endereço antigo: a página passou a se chamar Cybersegurança."""
     return redirect(url_for("dashboards.acronis_backup"), code=301)
 
 
 @bp.route("/ciberseguranca")
+def ciberseguranca_redirect() -> Response:
+    """Endereço antigo: a página passou a se chamar Cybersegurança (/gov/cyberseguranca)."""
+    return redirect(url_for("dashboards.acronis_backup"), code=301)
+
+
+@bp.route("/cyberseguranca")
 @login_required
-@require_role("admin", "gestor", pagina="ciberseguranca")
+@require_role("admin", "gestor", pagina="cyberseguranca")
 def acronis_backup() -> str:
-    """Render painel de Cibersegurança (proteção/backup Acronis)."""
+    """Render painel de Cybersegurança (proteção/backup Acronis)."""
     from itgov.api.v1.acronis_backup import get_cached_acronis_summary
 
     if not os.getenv("ACRONIS_BASE_URL"):
@@ -347,7 +353,7 @@ def acronis_backup() -> str:
 def cyber_incidentes() -> str:
     """Render módulo Cyber: investigação de incidentes + NOC de segurança.
 
-    Somente leitura. Depende do Acronis (mesma fonte da Cibersegurança); sem
+    Somente leitura. Depende do Acronis (mesma fonte da Cybersegurança); sem
     ``ACRONIS_BASE_URL`` a página não é exposta.
     """
     from itgov.api.v1.cyber import filtrar_incidentes, get_cached_cyber

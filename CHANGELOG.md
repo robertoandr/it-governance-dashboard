@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Rota e item de menu `/gov/ciberseguranca` renomeados para **Cybersegurança** em `/gov/cyberseguranca` (com redirecionamento 301 de `/gov/ciberseguranca` e `/gov/backup` e compatibilidade reversa de permissões)
+
 ## [2.1.0] - 2026-10-09
 
 Versão final da V2 "Governança de TI 360": revisão página por página de 30/09 e
