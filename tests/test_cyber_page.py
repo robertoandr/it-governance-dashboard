@@ -256,3 +256,11 @@ def test_pagina_cyber_mostra_aviso_quando_live_nao_configurado(authed_client, co
     html = authed_client.get("/gov/cyber").get_data(as_text=True)
     assert "Investigação ao vivo" in html
     assert "ACRONIS_CYBER_CLIENT_ID" in html
+
+
+def test_menu_lateral_tem_link_para_cyber(authed_client, com_acronis: None, monkeypatch) -> None:
+    _mock_fontes(monkeypatch)
+    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    inicio = html.index('<nav class="flex-1 py-3')
+    menu = html[inicio : html.index("</nav>", inicio)]
+    assert 'href="/gov/cyber"' in menu
