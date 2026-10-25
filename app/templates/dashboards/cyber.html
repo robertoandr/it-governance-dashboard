@@ -17,13 +17,55 @@
         liveErro: '',
         liveIncidentes: [],
         expandido: '',
+        siemUrl: '/api/v1/cyber/siem',
+        siem: null,
+        siemErro: '',
+        siemCarregando: false,
+        siemTimer: null,
         ehAba: function (nome) { return this.aba === nome; },
         irPara: function (nome) {
           this.aba = nome;
           if (nome === 'live' && this.liveConfigurado && !this.liveCarregado) {
             this.carregarLive();
           }
+          if (nome === 'siem') {
+            this.carregarSiem();
+            if (!this.siemTimer) { this.siemTimer = setInterval(() => { if (this.aba === 'siem') { this.carregarSiem(); } }, 60000); }
+          }
         },
+        carregarSiem: async function () {
+          this.siemCarregando = true;
+          this.siemErro = '';
+          try {
+            const r = await fetch(this.siemUrl, {credentials: 'same-origin'});
+            if (!r.ok) { throw new Error(r.status); }
+            this.siem = await r.json();
+          } catch (e) {
+            this.siemErro = 'Falha ao carregar o agente SIEM.';
+          }
+          this.siemCarregando = false;
+        },
+        decidir: async function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          const status = ev.currentTarget.dataset.status;
+          try {
+            const r = await fetch(this.siemUrl + '/achados/' + id, {
+              method: 'POST', credentials: 'same-origin',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({status: status})
+            });
+            if (!r.ok) { const d = await r.json(); alert(d.erro || 'Falhou'); return; }
+            this.carregarSiem();
+          } catch (e) {
+            alert('Falha de comunicação com o servidor');
+          }
+        },
+        corSeveridade: function (sev) {
+          return {critica: 'bg-red-600 text-white', alta: 'bg-red-100 text-red-700', media: 'bg-yellow-100 text-yellow-800',
+                  baixa: 'bg-blue-100 text-blue-700', info: 'bg-gray-100 text-gray-600'}[sev] || 'bg-gray-100 text-gray-600';
+        },
+        dataHora: function (iso) { return iso ? new Date(iso).toLocaleString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : '—'; },
+        volumes: function () { return this.siem ? Object.entries(this.siem.eventos_24h || {}) : []; },
         carregarLive: async function () {
           this.liveCarregando = true;
           this.liveErro = '';
@@ -86,6 +128,11 @@
             :class="ehAba('live') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
             class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
       Investigação ao vivo
+    </button>
+    <button type="button" @click="irPara('siem')"
+            :class="ehAba('siem') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
+            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
+      Agente SIEM
     </button>
   </div>
 
@@ -283,6 +330,82 @@
       </template>
     </div>
     {% endif %}
+  </div>
+
+  {# ============================== ABA AGENTE SIEM ========================= #}
+  <div x-show="ehAba('siem')" x-cloak>
+
+    <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
+      O agente lê os logs dos FortiGate a cada 5 minutos e analisa a cada 15, cruzando com os incidentes
+      do Acronis. Ele só aponta e recomenda: nenhuma mudança é feita nos firewalls. Achados graves avisam no WhatsApp.
+    </p>
+
+    <p x-show="siemCarregando && !siem" class="text-sm text-gray-400">Carregando…</p>
+    <p x-show="siemErro" x-text="siemErro" x-cloak class="text-sm text-red-600"></p>
+
+    <template x-if="siem">
+      <div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+            <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Última análise</p>
+            <p class="text-lg font-bold text-gray-800 dark:text-slate-100"
+               x-text="siem.ultima_analise ? dataHora(siem.ultima_analise.em) : 'ainda não rodou'"></p>
+            <p class="text-xs text-gray-400 mt-1" x-show="siem.ultima_analise"
+               x-text="siem.ultima_analise ? siem.ultima_analise.eventos + ' eventos · ' + siem.ultima_analise.achados + ' achado(s)' : ''"></p>
+          </div>
+          <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+            <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Análise por IA</p>
+            <p class="text-lg font-bold" :class="siem.ia ? 'text-green-600' : 'text-gray-500'"
+               x-text="siem.ia ? 'Ligada' : 'Desligada (só regras)'"></p>
+            <p class="text-xs text-red-600 mt-1" x-show="siem.ultima_analise && siem.ultima_analise.erro"
+               x-text="siem.ultima_analise ? siem.ultima_analise.erro : ''"></p>
+          </div>
+          <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800 sm:col-span-2">
+            <p class="text-xs text-gray-500 mb-2 dark:text-slate-400">Eventos de segurança guardados nas últimas 24 h</p>
+            <div class="flex flex-wrap gap-4">
+              <template x-for="par in volumes()" :key="par[0]">
+                <div>
+                  <p class="text-xs text-gray-400" x-text="par[0]"></p>
+                  <p class="text-xl font-bold text-gray-800 dark:text-slate-100" x-text="par[1].toLocaleString('pt-BR')"></p>
+                </div>
+              </template>
+              <p x-show="volumes().length === 0" class="text-sm text-gray-400">Nenhum evento ainda.</p>
+            </div>
+          </div>
+        </div>
+
+        <p x-show="siem.achados.length === 0" class="text-sm text-gray-400">Nenhum achado.</p>
+
+        <div class="space-y-3">
+          <template x-for="a in siem.achados" :key="a.id">
+            <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800" :class="a.ativo ? '' : 'opacity-60'">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded-full text-xs font-semibold uppercase" :class="corSeveridade(a.severidade)"
+                      x-text="a.severidade"></span>
+                <span class="text-xs font-semibold text-gray-500 dark:text-slate-400" x-text="a.fortigate"></span>
+                <span class="font-semibold text-gray-800 dark:text-slate-100" x-text="a.titulo"></span>
+                <span class="ml-auto text-xs text-gray-400"
+                      x-text="(a.ativo ? 'ativo' : 'parou') + ' · ' + a.ocorrencias + ' análise(s) · visto ' + dataHora(a.visto_em)"></span>
+              </div>
+              <p class="text-sm text-gray-600 dark:text-slate-300 mb-2" x-text="a.resumo"></p>
+              <ul class="text-xs text-gray-500 dark:text-slate-400 mb-2 list-disc ml-5" x-show="a.evidencias.length">
+                <template x-for="(e, i) in a.evidencias" :key="i"><li x-text="e"></li></template>
+              </ul>
+              <p class="text-sm text-gray-700 dark:text-slate-200"><span class="font-semibold">Recomendação:</span> <span x-text="a.recomendacao"></span></p>
+              <div class="flex flex-wrap items-center gap-2 mt-3">
+                <span class="text-xs text-gray-400" x-text="'status: ' + a.status + (a.decidido_por ? ' (' + a.decidido_por + ')' : '') + ' · fonte: ' + a.fonte"></span>
+                <button type="button" @click="decidir" :data-id="a.id" data-status="visto" x-show="a.status === 'novo'"
+                        class="ml-auto px-3 py-1 text-xs rounded-lg border border-gray-300 dark:border-slate-600">Marcar como visto</button>
+                <button type="button" @click="decidir" :data-id="a.id" data-status="resolvido" x-show="a.status !== 'resolvido'"
+                        class="px-3 py-1 text-xs rounded-lg bg-green-600 text-white">Resolvido</button>
+                <button type="button" @click="decidir" :data-id="a.id" data-status="descartado"
+                        class="px-3 py-1 text-xs rounded-lg border border-gray-300 text-gray-500 dark:border-slate-600">Descartar</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
   </div>
 
 </div>

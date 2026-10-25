@@ -314,3 +314,51 @@ class CyberIncidenteLiveResource(Resource):
         if inc is None:
             return {"configurado": True, "incidente": None}
         return {"configurado": True, "incidente": inc.model_dump()}
+
+
+_STATUS_DECIDIVEIS = ("novo", "visto", "descartado", "resolvido")
+
+
+@ns.route("/siem")
+class CyberSiemResource(Resource):
+    """Agente SIEM: achados, última análise e volumes de eventos."""
+
+    @ns.doc("get_cyber_siem")
+    @require_role("admin", "gestor", pagina="cyber")
+    def get(self) -> dict[str, Any]:
+        """Retorna o painel do agente SIEM."""
+        from app.services import siem_agente
+
+        return siem_agente.painel()
+
+
+@ns.route("/siem/achados/<int:achado_id>")
+class CyberSiemAchadoResource(Resource):
+    """Marca um achado do agente como visto, descartado ou resolvido."""
+
+    @ns.doc("post_cyber_siem_achado")
+    # Marcar achado é operação do dia a dia (não muda firewall nem cadastro): basta ver a página
+    @require_role("admin", "gestor", pagina="cyber", nivel="ver")
+    def post(self, achado_id: int) -> tuple[dict[str, Any], int]:
+        """Muda o status do achado (corpo JSON ``{"status": "visto"}``).
+
+        Args:
+            achado_id: Id do achado.
+        """
+        from flask import request
+        from flask_login import current_user
+
+        from app.extensions import db
+        from app.models.siem import SiemAchado
+
+        status = str((request.get_json(silent=True) or {}).get("status", ""))
+        if status not in _STATUS_DECIDIVEIS:
+            return {"erro": f"status deve ser um de {', '.join(_STATUS_DECIDIVEIS)}"}, 400
+        achado = db.session.get(SiemAchado, achado_id)
+        if achado is None:
+            return {"erro": "achado não encontrado"}, 404
+        achado.status = status
+        achado.decidido_por = getattr(current_user, "email", "") or ""
+        db.session.commit()
+        log.info("cyber.siem.achado_status", achado=achado_id, status=status, por=achado.decidido_por)
+        return achado.para_dict(), 200
