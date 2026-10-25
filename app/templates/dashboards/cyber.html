@@ -28,6 +28,7 @@
           if (nome === 'live' && this.liveConfigurado && !this.liveCarregado) {
             this.carregarLive();
           }
+          if (nome === 'agente' && !this.ag) { this.carregarAgente(); }
           if (nome === 'siem') {
             this.carregarSiem();
             if (!this.siemTimer) { this.siemTimer = setInterval(() => { if (this.aba === 'siem') { this.carregarSiem(); } }, 60000); }
@@ -66,6 +67,67 @@
         },
         dataHora: function (iso) { return iso ? new Date(iso).toLocaleString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : '—'; },
         volumes: function () { return this.siem ? Object.entries(this.siem.eventos_24h || {}) : []; },
+        agUrl: '/api/v1/cyber/incidentes/agente',
+        ag: null,
+        agErro: '',
+        agFiltro: '',
+        agMarcados: [],
+        agOcupado: false,
+        carregarAgente: async function () {
+          this.agErro = '';
+          try {
+            const r = await fetch(this.agUrl, {credentials: 'same-origin'});
+            if (!r.ok) { throw new Error(r.status); }
+            this.ag = await r.json();
+            this.agMarcados = this.agMarcados.filter((id) => this.ag.esperando.some((p) => p.id === id));
+          } catch (e) {
+            this.agErro = 'Falha ao carregar o agente de incidentes.';
+          }
+        },
+        agLista: function () {
+          if (!this.ag) { return []; }
+          return this.agFiltro ? this.ag.esperando.filter((p) => p.decisao === this.agFiltro) : this.ag.esperando;
+        },
+        agFiltrar: function (ev) { this.agFiltro = ev.currentTarget.dataset.decisao; },
+        agEmLote: function (p) { return p.decisao === 'encerrar' || p.decisao === 'falso_positivo'; },
+        agMarcarTodos: function () {
+          this.agMarcados = this.agLista().filter((p) => this.agEmLote(p)).map((p) => p.id);
+        },
+        agRotulo: function (p) {
+          return {encerrar: 'Encerrar no Acronis', falso_positivo: 'Marcar falso positivo', acao: 'Executar ' + p.acao}[p.decisao] || 'Aprovar';
+        },
+        agCor: function (decisao) {
+          return {encerrar: 'bg-green-100 text-green-700', falso_positivo: 'bg-blue-100 text-blue-700',
+                  acao: 'bg-red-100 text-red-700', investigar: 'bg-yellow-100 text-yellow-800'}[decisao] || 'bg-gray-100 text-gray-600';
+        },
+        _agPost: async function (url, corpo) {
+          this.agOcupado = true;
+          try {
+            const r = await fetch(url, {method: 'POST', credentials: 'same-origin',
+              headers: {'Content-Type': 'application/json'}, body: JSON.stringify(corpo || {})});
+            const d = await r.json();
+            if (d.pendente) { alert(d.mensagem); }
+            else if (!d.ok) { alert(d.error || 'Falhou'); }
+          } catch (e) {
+            alert('Falha de comunicação com o servidor');
+          }
+          this.agOcupado = false;
+          this.carregarAgente();
+        },
+        agAprovar: function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          const p = this.ag.esperando.find((x) => String(x.id) === id);
+          if (!p || !confirm(this.agRotulo(p) + ' — máquina ' + p.maquina + '?')) { return; }
+          this._agPost('/gov/cyber/incidentes/propostas/' + id + '/aprovar');
+        },
+        agRejeitar: function (ev) {
+          this._agPost('/gov/cyber/incidentes/propostas/' + ev.currentTarget.dataset.id + '/rejeitar');
+        },
+        agAprovarLote: function () {
+          if (!this.agMarcados.length || !confirm('Aprovar ' + this.agMarcados.length + ' proposta(s) de encerrar/falso positivo?')) { return; }
+          this._agPost('/gov/cyber/incidentes/propostas/aprovar-lote', {ids: this.agMarcados});
+          this.agMarcados = [];
+        },
         carregarLive: async function () {
           this.liveCarregando = true;
           this.liveErro = '';
@@ -133,6 +195,11 @@
             :class="ehAba('siem') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
             class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
       Agente SIEM
+    </button>
+    <button type="button" @click="irPara('agente')"
+            :class="ehAba('agente') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
+            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
+      Agente de incidentes
     </button>
   </div>
 
@@ -403,6 +470,108 @@
               </div>
             </div>
           </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  {# =========================== ABA AGENTE DE INCIDENTES =================== #}
+  <div x-show="ehAba('agente')" x-cloak>
+
+    <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
+      O agente lê a cada 30 minutos os incidentes do EDR do Acronis que não foram mitigados (dos mais novos para os
+      mais antigos) e propõe o que fazer. <strong>Nada é feito no Acronis sem aprovação</strong>: quem não é super admin
+      envia o pedido para a fila de aprovação; o super admin aprova e o agente executa, com comentário no incidente.
+    </p>
+
+    <p x-show="agErro" x-text="agErro" x-cloak class="text-sm text-red-600"></p>
+
+    <template x-if="ag">
+      <div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+          <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800 col-span-2">
+            <p class="text-xs text-gray-500 dark:text-slate-400">Última triagem</p>
+            <p class="text-lg font-bold text-gray-800 dark:text-slate-100" x-text="ag.ultima_triagem ? dataHora(ag.ultima_triagem) : 'ainda não rodou'"></p>
+            <p class="text-xs mt-1" :class="ag.ia ? 'text-green-600' : 'text-gray-500'" x-text="ag.ia ? 'IA ligada' : 'IA desligada (só regras)'"></p>
+          </div>
+          <button type="button" data-decisao="" @click="agFiltrar" class="bg-white rounded-xl shadow p-4 text-left dark:bg-slate-800" :class="agFiltro === '' ? 'ring-2 ring-blue-400' : ''">
+            <p class="text-xs text-gray-500 dark:text-slate-400">Esperando decisão</p>
+            <p class="text-2xl font-bold text-gray-800 dark:text-slate-100" x-text="ag.esperando.length"></p>
+          </button>
+          <template x-for="d in ['encerrar', 'falso_positivo', 'acao', 'investigar']" :key="d">
+            <button type="button" :data-decisao="d" @click="agFiltrar" class="bg-white rounded-xl shadow p-4 text-left dark:bg-slate-800" :class="agFiltro === d ? 'ring-2 ring-blue-400' : ''">
+              <p class="text-xs text-gray-500 dark:text-slate-400" x-text="{encerrar: 'Encerrar', falso_positivo: 'Falso positivo', acao: 'Ação de resposta', investigar: 'Investigar'}[d]"></p>
+              <p class="text-2xl font-bold text-gray-800 dark:text-slate-100" x-text="ag.por_decisao[d] || 0"></p>
+            </button>
+          </template>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <button type="button" @click="agMarcarTodos" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600">
+            Marcar todos de encerrar/falso positivo (filtro atual)
+          </button>
+          <button type="button" @click="agAprovarLote" :disabled="!agMarcados.length || agOcupado"
+                  class="px-3 py-1.5 text-xs rounded-lg bg-green-600 text-white disabled:opacity-40"
+                  x-text="'Aprovar ' + agMarcados.length + ' marcada(s)'"></button>
+          <button type="button" @click="carregarAgente" class="ml-auto px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white">Atualizar</button>
+        </div>
+
+        <p x-show="agLista().length === 0" class="text-sm text-gray-400">Nenhuma proposta esperando decisão.</p>
+
+        <div class="space-y-3">
+          <template x-for="p in agLista()" :key="p.id">
+            <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <input type="checkbox" :value="p.id" x-model.number="agMarcados" x-show="agEmLote(p)" class="rounded">
+                <span class="px-2 py-0.5 rounded-full text-xs font-semibold" :class="agCor(p.decisao)"
+                      x-text="p.decisao === 'acao' ? p.acao : p.decisao"></span>
+                <span class="font-semibold text-gray-800 dark:text-slate-100" x-text="p.maquina"></span>
+                <span class="text-xs text-gray-500" x-text="p.severidade + ' · ' + p.veredito + ' · ' + p.categorias.join(', ')"></span>
+                <span class="ml-auto text-xs text-gray-400" x-text="'incidente de ' + dataHora(p.criado_no_acronis) + ' · fonte: ' + p.fonte"></span>
+              </div>
+              <p class="text-sm text-gray-700 dark:text-slate-200 mb-2" x-text="p.justificativa"></p>
+              <ul class="text-xs text-gray-500 dark:text-slate-400 mb-2 list-disc ml-5" x-show="p.evidencias.length">
+                <template x-for="(e, i) in p.evidencias" :key="i"><li x-text="e"></li></template>
+              </ul>
+              <details class="text-xs text-gray-500 dark:text-slate-400 mb-2" x-show="p.deteccoes.length">
+                <summary class="cursor-pointer">Detecções (<span x-text="p.deteccoes.length"></span>)</summary>
+                <ul class="mt-1 space-y-1 ml-4">
+                  <template x-for="(d, i) in p.deteccoes" :key="i">
+                    <li x-text="d.motor + ' · ' + d.ameaca + ' · ' + d.descricao + (d.alvo ? ' · ' + d.alvo : '') + (d.bloqueado === true ? ' · bloqueado' : '')"></li>
+                  </template>
+                </ul>
+              </details>
+              <div class="flex flex-wrap items-center gap-2">
+                <a :href="p.link" target="_blank" rel="noopener" x-show="p.link" class="text-xs text-blue-600 hover:underline">Abrir no Acronis</a>
+                <button type="button" @click="agAprovar" :data-id="p.id" x-show="p.decisao !== 'investigar'" :disabled="agOcupado"
+                        class="ml-auto px-3 py-1 text-xs rounded-lg text-white disabled:opacity-40"
+                        :class="p.decisao === 'acao' ? 'bg-red-600' : 'bg-green-600'" x-text="agRotulo(p)"></button>
+                <button type="button" @click="agRejeitar" :data-id="p.id" :disabled="agOcupado"
+                        class="px-3 py-1 text-xs rounded-lg border border-gray-300 text-gray-500 dark:border-slate-600"
+                        :class="p.decisao === 'investigar' ? 'ml-auto' : ''"
+                        x-text="p.decisao === 'investigar' ? 'Já investiguei (tirar da lista)' : 'Rejeitar'"></button>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <h3 class="font-semibold text-gray-800 dark:text-slate-100 mt-8 mb-2" x-show="ag.decididas.length">Últimas decisões</h3>
+        <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800" x-show="ag.decididas.length">
+          <table class="min-w-full text-sm">
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+              <template x-for="p in ag.decididas" :key="p.id">
+                <tr>
+                  <td class="px-4 py-2 text-xs text-gray-400 whitespace-nowrap" x-text="dataHora(p.decidido_em)"></td>
+                  <td class="px-4 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="p.maquina"></td>
+                  <td class="px-4 py-2 text-xs" x-text="p.decisao === 'acao' ? p.acao : p.decisao"></td>
+                  <td class="px-4 py-2 text-xs font-semibold" :class="p.status === 'executada' ? 'text-green-600' : (p.status === 'falhou' ? 'text-red-600' : 'text-gray-500')"
+                      x-text="p.status + (p.acao_status ? ' (' + p.acao_status + ')' : '')"></td>
+                  <td class="px-4 py-2 text-xs text-gray-500" x-text="p.resultado"></td>
+                  <td class="px-4 py-2 text-xs text-gray-400" x-text="p.decidido_por"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
     </template>

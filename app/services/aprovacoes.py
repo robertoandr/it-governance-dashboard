@@ -240,7 +240,7 @@ def aprovar(sol: Solicitacao, aprovador: User) -> tuple[bool, str]:
     """
     if sol.status != PENDENTE:
         return False, "Esta solicitação já foi decidida."
-    ok, mensagem, segredo = _executar(sol)
+    ok, mensagem, segredo = _executar(sol, aprovador)
     sol.status = APROVADA if ok else FALHOU
     # O segredo (senha gerada) só volta para quem aprovou; nunca vai ao banco
     sol.resultado = mensagem
@@ -269,7 +269,7 @@ def rejeitar(sol: Solicitacao, aprovador: User, motivo: str) -> None:
     log.info("aprovacoes.rejeitada", id=sol.id, aprovador=aprovador.email)
 
 
-def _executar(sol: Solicitacao) -> tuple[bool, str, str]:
+def _executar(sol: Solicitacao, aprovador: User | None = None) -> tuple[bool, str, str]:
     solicitante = db.session.get(User, sol.solicitante_id) if sol.solicitante_id else None
     if solicitante is None or not solicitante.is_active:
         return False, "Quem pediu não existe mais ou está desativado.", ""
@@ -300,10 +300,14 @@ def _executar(sol: Solicitacao) -> tuple[bool, str, str]:
     # troca o usuário só durante a execução e devolve no fim.
     tinha_usuario = "_login_user" in g
     anterior = g.get("_login_user")
+    # Resolvido antes da troca: ``current_user`` é um proxy e, depois dela, viraria quem pediu
+    aprovador_real = getattr(aprovador, "_get_current_object", lambda: aprovador)()
     try:
         with current_app.test_request_context(sol.caminho, **contexto):
             g._login_user = solicitante
             g._aprovando = True
+            # Quem aprovou, para rotas que registram a aprovação fora daqui (ex.: comentário no Acronis)
+            g._aprovador = aprovador_real
             try:
                 resp = current_app.make_response(view(**_tipar_args(sol)))
             except HTTPException as exc:
@@ -316,6 +320,7 @@ def _executar(sol: Solicitacao) -> tuple[bool, str, str]:
         else:
             g.pop("_login_user", None)
         g.pop("_aprovando", None)
+        g.pop("_aprovador", None)
 
     erros = [m for cat, m in mensagens if cat == "error"]
     outras = [m for cat, m in mensagens if cat != "error"]

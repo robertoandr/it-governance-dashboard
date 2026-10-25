@@ -362,3 +362,16 @@ class CyberSiemAchadoResource(Resource):
         db.session.commit()
         log.info("cyber.siem.achado_status", achado=achado_id, status=status, por=achado.decidido_por)
         return achado.para_dict(), 200
+
+
+@ns.route("/incidentes/agente")
+class CyberAgenteIncidentesResource(Resource):
+    """Agente de incidentes: propostas esperando decisão e as últimas decididas."""
+
+    @ns.doc("get_cyber_agente_incidentes")
+    @require_role("admin", "gestor", pagina="cyber")
+    def get(self) -> dict[str, Any]:
+        """Retorna o painel do agente de incidentes."""
+        from app.services import incidentes_agente
+
+        return incidentes_agente.painel()

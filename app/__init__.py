@@ -77,6 +77,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
         from app.models import aprovacao as _aprovacao_model
+        from app.models import incidente_agente as _incidente_agente_model  # noqa: F401
         from app.models import link as _link_model  # noqa: F401
         from app.models import rede as _rede_model
         from app.models import siem as _siem_model  # noqa: F401
@@ -109,6 +110,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.services import siem_agente
 
     siem_agente.iniciar_agendador(app)
+
+    # Cyber: agente de incidentes tria o EDR do Acronis e propõe (nada executa sem aprovação)
+    from app.services import incidentes_agente
+
+    incidentes_agente.iniciar_agendador(app)
 
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
