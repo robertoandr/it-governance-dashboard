@@ -10,6 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from jobs.acronis_collector import run as collect_acronis
 from jobs.acronis_risk_collector import run as collect_acronis_risk
 from jobs.alert_job import run as run_alerts
+from jobs.cftv_model_collector import credenciais as cftv_credenciais
 from jobs.cftv_model_collector import run as collect_cftv_models
 from jobs.datacenter_temp_collector import collect as collect_datacenter_temp
 from jobs.entra_id_collector import run as collect_entra_id
@@ -99,7 +100,7 @@ if __name__ == "__main__":
         )
         log.info("zabbix_risk_job_registrado")
 
-        if settings.CFTV_CAM_USER and settings.CFTV_CAM_PASS:
+        if cftv_credenciais():
             # Diário: só consulta equipamentos ainda sem modelo
             scheduler.add_job(
                 collect_cftv_models,
@@ -112,7 +113,7 @@ if __name__ == "__main__":
             )
             log.info("cftv_model_job_registrado")
         else:
-            log.warning("cftv_model_job_ignorado", motivo="CFTV_CAM_USER/CFTV_CAM_PASS não configurados")
+            log.warning("cftv_model_job_ignorado", motivo="nenhuma credencial CFTV configurada")
     else:
         log.warning("zabbix_jobs_ignorados", motivo="ZABBIX_URL ou ZABBIX_TOKEN não configurados")
 

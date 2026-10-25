@@ -11,15 +11,25 @@ encontrado, que a página /gov/cftv exibe no drill-down do gravador.
 - Demais / fabricante desconhecido: ONVIF ``GetDeviceInformation`` com
   WS-UsernameToken (PasswordDigest)
 
+### Credencial por equipamento
+
+Cada host traz na tag ``cftv_cred`` qual credencial do ``.env`` ele aceita
+(``padrao``, ``triunfo``, ``triunfo2`` ou ``intelbras``, ver :func:`credenciais`).
+Host sem a tag, ou com credencial não configurada, não é consultado: o job
+nunca "chuta" senha.
+
 ### Proteção contra bloqueio de conta
 
 Câmeras Intelbras bloqueiam o usuário por ~30 min após algumas senhas erradas.
-Por isso: um único protocolo por equipamento, sem nova tentativa após 401, e a
-rodada inteira é abortada se as primeiras ``_LIMITE_AUTH_INICIAL`` respostas
-forem todas 401 (credencial padrão errada). Só equipamentos sem modelo são
-consultados, então depois da primeira rodada o job quase não faz login.
+Por isso:
 
-Credencial: ``CFTV_CAM_USER`` / ``CFTV_CAM_PASS`` (env, via ``config.settings``).
+- um único protocolo e uma única credencial por equipamento, sem nova tentativa após 401;
+- por credencial, os primeiros equipamentos são consultados em série e, se as
+  ``_LIMITE_AUTH_INICIAL`` primeiras respostas que chegaram a validar a senha
+  forem todas 401, o resto do grupo é abortado (erro de conexão não conta);
+- quem recusou recebe a tag ``cftv_cred_recusada`` (``<credencial>:<data>``) e só
+  é tentado de novo depois de ``_DIAS_NOVA_TENTATIVA`` dias ou se a tag
+  ``cftv_cred`` mudar.
 """
 
 from __future__ import annotations
@@ -32,7 +42,7 @@ import sys
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +60,11 @@ _SUBCATS = {"camera", "dvr", "nvr"}
 _TIMEOUT_S = 5
 _WORKERS = 8
 _LIMITE_AUTH_INICIAL = 5
-_TAGS_GERENCIADAS = {"model", "model_source"}
+_MAX_TENTATIVAS_SERIE = 15
+_DIAS_NOVA_TENTATIVA = 7
+_TAG_CRED = "cftv_cred"
+_TAG_RECUSADA = "cftv_cred_recusada"
+_TAGS_GERENCIADAS = {"model", "model_source", _TAG_RECUSADA}
 
 
 class CredencialRecusadaError(Exception):
@@ -67,6 +81,10 @@ class Equipamento:
     vendor: str
     tags: tuple[tuple[str, str], ...]
 
+    def tag(self, nome: str) -> str:
+        """Valor da tag ``nome`` do host (vazio se não existir)."""
+        return next((v for t, v in self.tags if t == nome), "")
+
 
 @dataclass(frozen=True)
 class Resultado:
@@ -76,6 +94,52 @@ class Resultado:
     model: str = ""
     fonte: str = ""
     erro: str = ""
+
+
+# ── Credenciais ──────────────────────────────────────────────────────────────
+
+
+def credenciais() -> dict[str, tuple[str, str]]:
+    """Credenciais configuradas no ambiente, pela chave usada na tag ``cftv_cred``.
+
+    No Triunfo o usuário é o mesmo (``CFTV_CAM_USER``) e há duas senhas.
+    Chaves sem usuário ou senha ficam de fora.
+    """
+    pares = {
+        "padrao": (settings.CFTV_CAM_PADRAO_USER, settings.CFTV_CAM_PADRAO_PASS),
+        "triunfo": (settings.CFTV_CAM_USER, settings.CFTV_CAM_TRIUNFO_PASS),
+        "triunfo2": (settings.CFTV_CAM_USER, settings.CFTV_CAM_TRIUNFO_PASS2),
+        "intelbras": (settings.INTELBRAS_HTTP_USER, settings.INTELBRAS_HTTP_PASSWORD),
+    }
+    return {chave: par for chave, par in pares.items() if par[0] and par[1]}
+
+
+def selecionar(
+    equipamentos: list[Equipamento], creds: dict[str, tuple[str, str]], hoje: date
+) -> tuple[list[Equipamento], dict[str, int]]:
+    """Separa quem será consultado hoje e conta os pulados por motivo."""
+    escolhidos: list[Equipamento] = []
+    pulados: dict[str, int] = {}
+    for eq in equipamentos:
+        cred = eq.tag(_TAG_CRED)
+        motivo = ""
+        if not cred:
+            motivo = "sem_tag_cred"
+        elif cred not in creds:
+            motivo = "cred_nao_configurada"
+        else:
+            cred_recusada, _, data_recusa = eq.tag(_TAG_RECUSADA).partition(":")
+            try:
+                recusada_em = date.fromisoformat(data_recusa) if cred_recusada == cred else None
+            except ValueError:
+                recusada_em = None
+            if recusada_em and (hoje - recusada_em).days < _DIAS_NOVA_TENTATIVA:
+                motivo = "recusada_recente"
+        if motivo:
+            pulados[motivo] = pulados.get(motivo, 0) + 1
+        else:
+            escolhidos.append(eq)
+    return escolhidos, pulados
 
 
 # ── Zabbix ────────────────────────────────────────────────────────────────────
@@ -145,6 +209,13 @@ def gravar_modelo(resultado: Resultado) -> None:
     tags = [{"tag": t, "value": v} for t, v in eq.tags if t not in _TAGS_GERENCIADAS]
     tags.append({"tag": "model", "value": resultado.model})
     tags.append({"tag": "model_source", "value": resultado.fonte})
+    _zbx("host.update", {"hostid": eq.hostid, "tags": tags})
+
+
+def gravar_recusa(eq: Equipamento, hoje: date) -> None:
+    """Marca o host com ``cftv_cred_recusada=<credencial>:<data>`` preservando as demais tags."""
+    tags = [{"tag": t, "value": v} for t, v in eq.tags if t != _TAG_RECUSADA]
+    tags.append({"tag": _TAG_RECUSADA, "value": f"{eq.tag(_TAG_CRED)}:{hoje.isoformat()}"})
     _zbx("host.update", {"hostid": eq.hostid, "tags": tags})
 
 
@@ -248,45 +319,67 @@ def consultar(eq: Equipamento, usuario: str, senha: str) -> Resultado:
 # ── Orquestração ──────────────────────────────────────────────────────────────
 
 
-def coletar(equipamentos: list[Equipamento], usuario: str, senha: str) -> list[Resultado]:
-    """Consulta os equipamentos, abortando se a credencial for recusada logo no início.
+def _coletar_grupo(equipamentos: list[Equipamento], usuario: str, senha: str) -> list[Resultado]:
+    """Consulta equipamentos que usam a mesma credencial, abortando se ela for recusada no início.
 
-    Os primeiros ``_LIMITE_AUTH_INICIAL`` são consultados em série: se todos
-    responderem 401, a credencial padrão está errada e o restante nem é tentado.
+    Os primeiros são consultados em série até ``_LIMITE_AUTH_INICIAL`` respostas
+    que validaram a senha (modelo lido ou 401), no máximo ``_MAX_TENTATIVAS_SERIE``
+    equipamentos. Se todas essas respostas forem 401, o restante nem é tentado.
     """
-    iniciais = equipamentos[:_LIMITE_AUTH_INICIAL]
-    resultados = [consultar(eq, usuario, senha) for eq in iniciais]
-    if iniciais and all(r.erro == "auth" for r in resultados):
-        log.error("cftv_model_credencial_recusada", testados=len(iniciais), abortado=True)
+    resultados: list[Resultado] = []
+    decisivos: list[Resultado] = []
+    for eq in equipamentos[:_MAX_TENTATIVAS_SERIE]:
+        r = consultar(eq, usuario, senha)
+        resultados.append(r)
+        if r.model or r.erro in {"auth", "vazio"}:
+            decisivos.append(r)
+        if len(decisivos) == _LIMITE_AUTH_INICIAL:
+            break
+    if decisivos and all(r.erro == "auth" for r in decisivos):
+        log.error("cftv_model_credencial_recusada", testados=len(resultados), abortado=True)
         return resultados
     with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
-        resultados += list(pool.map(lambda eq: consultar(eq, usuario, senha), equipamentos[_LIMITE_AUTH_INICIAL:]))
+        resultados += list(pool.map(lambda eq: consultar(eq, usuario, senha), equipamentos[len(resultados) :]))
+    return resultados
+
+
+def coletar(equipamentos: list[Equipamento], creds: dict[str, tuple[str, str]]) -> list[Resultado]:
+    """Consulta cada equipamento só com a credencial da sua tag ``cftv_cred``."""
+    grupos: dict[str, list[Equipamento]] = {}
+    for eq in equipamentos:
+        grupos.setdefault(eq.tag(_TAG_CRED), []).append(eq)
+    resultados: list[Resultado] = []
+    for cred, eqs in grupos.items():
+        usuario, senha = creds[cred]
+        resultados += _coletar_grupo(eqs, usuario, senha)
     return resultados
 
 
 def run() -> None:
     """Entry point para o APScheduler."""
-    usuario = settings.CFTV_CAM_USER
-    senha = settings.CFTV_CAM_PASS
-    if not (settings.ZABBIX_URL and settings.ZABBIX_TOKEN and usuario and senha):
-        log.warning("cftv_model_ignorado", motivo="ZABBIX_* ou CFTV_CAM_USER/CFTV_CAM_PASS não configurados")
+    creds = credenciais()
+    if not (settings.ZABBIX_URL and settings.ZABBIX_TOKEN and creds):
+        log.warning("cftv_model_ignorado", motivo="ZABBIX_* ou nenhuma credencial CFTV configurada")
         return
 
     try:
-        equipamentos = listar_sem_modelo()
+        sem_modelo = listar_sem_modelo()
     except (requests.RequestException, RuntimeError) as exc:
         log.error("cftv_model_listagem_falhou", erro=str(exc))
         return
-    log.info("cftv_model_coleta_iniciada", sem_modelo=len(equipamentos))
+    hoje = datetime.now(UTC).date()
+    equipamentos, pulados = selecionar(sem_modelo, creds, hoje)
+    log.info("cftv_model_coleta_iniciada", sem_modelo=len(sem_modelo), consultar=len(equipamentos), pulados=pulados)
 
-    resultados = coletar(equipamentos, usuario, senha)
+    resultados = coletar(equipamentos, creds)
     gravados = 0
     for r in resultados:
-        if not r.model:
-            continue
         try:
-            gravar_modelo(r)
-            gravados += 1
+            if r.model:
+                gravar_modelo(r)
+                gravados += 1
+            elif r.erro == "auth":
+                gravar_recusa(r.equipamento, hoje)
         except (requests.RequestException, RuntimeError) as exc:
             log.warning("cftv_model_gravacao_falhou", host=r.equipamento.host, erro=str(exc))
 
