@@ -79,6 +79,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         from app.models import aprovacao as _aprovacao_model
         from app.models import link as _link_model  # noqa: F401
         from app.models import rede as _rede_model
+        from app.models import siem as _siem_model  # noqa: F401
         from app.models import tarefas as _tarefas_model  # noqa: F401
         from app.models import trigger_resolucao as _trigger_resolucao_model  # noqa: F401
         from app.models import unidade as _unidade_model
@@ -103,6 +104,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.services import cftv_verificacao
 
     cftv_verificacao.iniciar_agendador(app)
+
+    # Cyber: agente SIEM lê os logs dos FortiGate e analisa em segundo plano (um worker só)
+    from app.services import siem_agente
+
+    siem_agente.iniciar_agendador(app)
 
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
