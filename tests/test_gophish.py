@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -122,3 +124,77 @@ def test_pagina_cyber_tem_aba_phishing(authed_client, monkeypatch: pytest.Monkey
     _mock_fontes(monkeypatch)
     html = authed_client.get("/gov/cyber").get_data(as_text=True)
     assert "Phishing" in html and "/api/v1/cyber/phishing" in html
+
+
+# ── Escrita (montar e disparar campanhas) ───────────────────────────────────
+
+
+@respx.mock
+def test_listar_smtp_devolve_nomes(credenciais: None) -> None:
+    respx.get(f"{_URL}/api/smtp/").mock(
+        return_value=httpx.Response(200, json=[{"name": "M365"}, {"name": "Teste"}, {"id": 3}])
+    )
+    assert gophish.listar_smtp() == ["M365", "Teste"]
+
+
+def test_criar_smtp_exige_campos(credenciais: None) -> None:
+    with pytest.raises(gophish.PhishingError):
+        gophish.criar_smtp("", "h", "u", "s", "r")
+
+
+@respx.mock
+def test_criar_smtp_posta_perfil(credenciais: None) -> None:
+    rota = respx.post(f"{_URL}/api/smtp/").mock(return_value=httpx.Response(201, json={"id": 1}))
+    gophish.criar_smtp("M365", "smtp.office365.com:587", "u@x", "senha", "TI <ti@x>")
+    corpo = json.loads(rota.calls.last.request.content)
+    assert corpo["interface_type"] == "SMTP" and corpo["from_address"] == "TI <ti@x>"
+
+
+@respx.mock
+def test_garantir_material_cria_quando_falta(credenciais: None) -> None:
+    respx.get(f"{_URL}/api/templates/").mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{_URL}/api/pages/").mock(return_value=httpx.Response(200, json=[]))
+    pt = respx.post(f"{_URL}/api/templates/").mock(return_value=httpx.Response(201, json={"id": 1}))
+    pp = respx.post(f"{_URL}/api/pages/").mock(return_value=httpx.Response(201, json={"id": 1}))
+    gophish.garantir_material("https://noc/phishing/educativo")
+    assert pt.called and pp.called
+    pagina = json.loads(pp.calls.last.request.content)
+    assert pagina["capture_credentials"] is True and pagina["capture_passwords"] is False
+
+
+@respx.mock
+def test_garantir_material_nao_duplica(credenciais: None) -> None:
+    respx.get(f"{_URL}/api/templates/").mock(return_value=httpx.Response(200, json=[{"name": gophish.TEMPLATE}]))
+    respx.get(f"{_URL}/api/pages/").mock(return_value=httpx.Response(200, json=[{"name": gophish.LANDING}]))
+    pt = respx.post(f"{_URL}/api/templates/")
+    pp = respx.post(f"{_URL}/api/pages/")
+    gophish.garantir_material("https://noc/educativo")
+    assert not pt.called and not pp.called
+
+
+def test_criar_grupo_exige_email_valido(credenciais: None) -> None:
+    with pytest.raises(gophish.PhishingError):
+        gophish.criar_grupo("grupo", ["sem-arroba", "   "])
+
+
+@respx.mock
+def test_criar_grupo_monta_alvos(credenciais: None) -> None:
+    rota = respx.post(f"{_URL}/api/groups/").mock(return_value=httpx.Response(201, json={"id": 1}))
+    gophish.criar_grupo("Piloto", ["a@x.com", "ruim", "b@x.com"])
+    corpo = json.loads(rota.calls.last.request.content)
+    assert [t["email"] for t in corpo["targets"]] == ["a@x.com", "b@x.com"]
+
+
+def test_disparar_campanha_exige_campos(credenciais: None) -> None:
+    with pytest.raises(gophish.PhishingError):
+        gophish.disparar_campanha("c", "g", "", "http://x")
+
+
+@respx.mock
+def test_disparar_campanha_usa_material_fixo(credenciais: None) -> None:
+    rota = respx.post(f"{_URL}/api/campaigns/").mock(return_value=httpx.Response(201, json={"id": 42}))
+    cid = gophish.disparar_campanha("Piloto", "Piloto — alvos", "M365", "http://172.29.2.11:8080/")
+    assert cid == 42
+    corpo = json.loads(rota.calls.last.request.content)
+    assert corpo["template"]["name"] == gophish.TEMPLATE and corpo["page"]["name"] == gophish.LANDING
+    assert corpo["url"] == "http://172.29.2.11:8080"

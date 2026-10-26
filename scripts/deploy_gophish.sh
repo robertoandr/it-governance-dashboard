@@ -7,8 +7,9 @@
 # - Container ligado à rede do dashboard, para o app ler a API como
 #   https://gophish:3333 (certificado autoassinado → GOPHISH_VERIFY_TLS=0).
 # - Dados num volume próprio (gophish_data): sobrevivem a recriação.
-# - A porta da landing page (o link do e-mail) NÃO é publicada aqui; isso é
-#   decidido ao montar a 1ª campanha real (host/porta/TLS no nginx).
+# - Landing page (o link do e-mail) publicada na rede interna em
+#   ${LAN_IP}:8080 — é a URL que vai na campanha do piloto. Em produção
+#   geral, trocar por um host com TLS no nginx.
 #
 # Rodar numa janela de manutenção. Idempotente: recriar não perde dados.
 set -euo pipefail
@@ -17,6 +18,7 @@ IMAGEM="gophish/gophish:0.12.1"
 NOME="gophish"
 REDE="it-governance-dashboard_itgov-net"
 VOLUME="gophish_data"
+LAN_IP="${LAN_IP:-172.29.2.11}"   # IP interno onde a landing fica acessível
 
 if ! docker network inspect "$REDE" >/dev/null 2>&1; then
   echo "Rede $REDE não existe. Confira 'docker network ls' e ajuste REDE no script." >&2
@@ -31,6 +33,7 @@ docker run -d \
   --restart unless-stopped \
   --network "$REDE" \
   -p 127.0.0.1:3333:3333 \
+  -p "${LAN_IP}:8080:80" \
   -v "$VOLUME":/opt/gophish \
   "$IMAGEM"
 
@@ -50,4 +53,8 @@ Próximos passos (manuais, no console do GoPhish por túnel SSH):
        GOPHISH_API_KEY=<a chave copiada>
        GOPHISH_VERIFY_TLS=0
   5. Recriar o app:  docker compose up -d app
+
+Daí em diante, tudo pelo dashboard (aba Cyber > Phishing): criar o perfil de
+envio, montar e disparar a campanha. No piloto, a URL da landing é
+http://LAN_IP:8080 (o link que vai no e-mail). Não é preciso abrir o console.
 FIM

@@ -49,6 +49,47 @@
           }
         },
         pct: function (v) { return (v * 100).toFixed(1) + '%'; },
+        podeGerenciarPhish: {{ 'true' if pode_gerenciar_phishing else 'false' }},
+        perfisSmtp: {{ perfis_smtp | tojson }},
+        phishOcupado: false,
+        novaCampanha: {nome: '', smtp: '', url: '', emails: ''},
+        novoSmtp: {nome: '', host: 'smtp.office365.com:587', usuario: '', senha: '', remetente: ''},
+        mostrarSmtp: false,
+        phishPost: async function (url, corpo) {
+          this.phishOcupado = true;
+          let resposta = null;
+          try {
+            const r = await fetch(url, {method: 'POST', credentials: 'same-origin',
+              headers: {'Content-Type': 'application/json'}, body: JSON.stringify(corpo || {})});
+            resposta = await r.json();
+            if (resposta.pendente) { alert(resposta.mensagem); }
+            else if (!resposta.ok) { alert(resposta.error || 'Falhou'); }
+          } catch (e) {
+            alert('Falha de comunicação com o servidor');
+          }
+          this.phishOcupado = false;
+          return resposta;
+        },
+        criarSmtp: async function () {
+          const r = await this.phishPost('/gov/cyber/phishing/smtp', this.novoSmtp);
+          if (r && r.ok) {
+            this.perfisSmtp.push(this.novoSmtp.nome);
+            this.novaCampanha.smtp = this.novoSmtp.nome;
+            this.mostrarSmtp = false;
+            this.novoSmtp = {nome: '', host: 'smtp.office365.com:587', usuario: '', senha: '', remetente: ''};
+          }
+        },
+        dispararCampanha: async function () {
+          const c = this.novaCampanha;
+          if (!c.nome || !c.smtp || !c.url || !c.emails) { alert('Preencha nome, perfil, URL e e-mails.'); return; }
+          const n = (c.emails.match(/@/g) || []).length;
+          if (!confirm('Disparar "' + c.nome + '" para ' + n + ' alvo(s)?')) { return; }
+          const r = await this.phishPost('/gov/cyber/phishing/disparar', c);
+          if (r && (r.ok || r.pendente)) {
+            this.novaCampanha = {nome: '', smtp: '', url: '', emails: ''};
+            this.carregarPhishing();
+          }
+        },
         carregarSiem: async function () {
           this.siemCarregando = true;
           this.siemErro = '';
@@ -605,6 +646,41 @@
     </p>
 
     <div x-show="phishErro" class="rounded bg-red-50 text-red-700 text-sm px-4 py-3 mb-4" x-text="phishErro"></div>
+
+    {% if pode_gerenciar_phishing %}
+    <div class="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-slate-200">Nova campanha</h3>
+        <button type="button" class="text-xs text-blue-600" @click="mostrarSmtp = !mostrarSmtp"
+                x-text="mostrarSmtp ? 'fechar perfil de envio' : '+ perfil de envio (SMTP)'"></button>
+      </div>
+
+      <div x-show="mostrarSmtp" x-cloak class="grid md:grid-cols-2 gap-2 mb-4 p-3 rounded bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700">
+        <input x-model="novoSmtp.nome" placeholder="Nome do perfil (ex.: M365 Avisos TI)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+        <input x-model="novoSmtp.host" placeholder="smtp.office365.com:587" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+        <input x-model="novoSmtp.usuario" placeholder="Usuário SMTP" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+        <input x-model="novoSmtp.senha" type="password" placeholder="Senha (ou senha de app)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+        <input x-model="novoSmtp.remetente" placeholder="De: Avisos TI <avisos-ti@empresa>" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2">
+        <div class="md:col-span-2 text-right">
+          <button type="button" class="text-sm bg-gray-700 text-white px-3 py-1.5 rounded" :disabled="phishOcupado" @click="criarSmtp()">Salvar perfil</button>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-2">
+        <input x-model="novaCampanha.nome" placeholder="Nome da campanha (ex.: Piloto TI — out/2026)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+        <select x-model="novaCampanha.smtp" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
+          <option value="">Perfil de envio…</option>
+          <template x-for="p in perfisSmtp" :key="p"><option :value="p" x-text="p"></option></template>
+        </select>
+        <input x-model="novaCampanha.url" placeholder="URL pública da landing (ex.: http://172.29.2.11:8080)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2">
+        <textarea x-model="novaCampanha.emails" rows="3" placeholder="E-mails dos alvos, separados por vírgula ou quebra de linha" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2"></textarea>
+      </div>
+      <div class="flex items-center justify-between mt-3">
+        <span class="text-xs text-gray-400">Isca: senha M365 expirando. A landing não guarda a senha digitada. O disparo passa pela fila de aprovação.</span>
+        <button type="button" class="text-sm bg-blue-600 text-white px-4 py-1.5 rounded" :disabled="phishOcupado" @click="dispararCampanha()">Disparar</button>
+      </div>
+    </div>
+    {% endif %}
 
     <template x-if="phish && !phish.configurado">
       <div class="rounded border border-dashed border-gray-300 dark:border-slate-600 px-4 py-6 text-sm text-gray-500">
