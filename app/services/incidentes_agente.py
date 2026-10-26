@@ -66,7 +66,7 @@ log = structlog.get_logger(__name__)
 INTERVALO_TRIAGEM = timedelta(minutes=30)
 INTERVALO_ACOMPANHAMENTO = timedelta(minutes=5)
 LOTE_POR_RODADA = 20
-LOTE_IA = 5  # lote de 10 estourou 180 s no OmniRoute (25/10)
+LOTE_IA = 3  # 10 estourou 180 s; 5 levou até 200 s no OmniRoute (25-26/10)
 URL_ANTIGA = timedelta(days=30)
 CATEGORIAS_URL = frozenset({"URL_BLOCKED", "WEBSITE_URL_BLOCKED"})
 STATUS_ACAO_FINAIS = frozenset({"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "SKIPPED", "CANCELLED", "TIMEOUT"})
@@ -203,7 +203,7 @@ def perguntar_ia(lote: list[dict[str, Any]]) -> Any:
                 {"role": "user", "content": json.dumps(lote, ensure_ascii=False, default=str)},
             ],
         },
-        timeout=240,
+        timeout=300,
     )
     resp.raise_for_status()
     texto = resp.json()["choices"][0]["message"]["content"] or ""
