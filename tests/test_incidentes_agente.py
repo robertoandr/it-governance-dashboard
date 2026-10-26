@@ -223,6 +223,23 @@ def test_triagem_ia_falhando_cai_nas_regras(banco, com_ia, monkeypatch: pytest.M
     assert PropostaIncidente.query.one().fonte == "regra"
 
 
+def test_triagem_ia_falhando_para_e_deixa_investigar_para_a_proxima(
+    banco, com_ia, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    abertos = [_inc("ok", deteccoes=[_det(True)]), *[_inc(f"p{n}", deteccoes=[_det(False)]) for n in range(5)]]
+    _api_falsa(monkeypatch, abertos, {i.incident_id: i for i in abertos})
+    pergunta = MagicMock(side_effect=requests.ReadTimeout("lenta"))
+    monkeypatch.setattr(ia, "perguntar_ia", pergunta)
+    ia.triar(_AGORA)
+    assert pergunta.call_count == 1  # não insiste nos outros lotes
+    assert [p.incident_id for p in PropostaIncidente.query.all()] == ["ok"]  # só a decisão objetiva da regra
+
+    pergunta.side_effect = None
+    pergunta.return_value = {"propostas": []}
+    ia.triar(_AGORA)
+    assert PropostaIncidente.query.count() == 6  # os pendentes voltaram e foram triados
+
+
 def test_triagem_marca_obsoleta_e_reanalisa_so_o_que_mudou(banco, sem_ia, monkeypatch: pytest.MonkeyPatch) -> None:
     _api_falsa(monkeypatch, [_inc("a"), _inc("b")], {"a": _inc("a"), "b": _inc("b")})
     ia.triar(_AGORA)

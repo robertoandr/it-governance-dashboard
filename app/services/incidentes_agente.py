@@ -312,11 +312,15 @@ def triar(agora: datetime | None = None) -> dict[str, Any]:
                 )
                 da_ia |= validar_propostas(resposta, lote)  # type: ignore[arg-type]
             except (requests.RequestException, ValueError, KeyError) as exc:
+                # IA lenta ou fora: não insiste nos outros lotes; o que ficou sem análise volta na próxima rodada
                 erro_ia = f"{type(exc).__name__}: {exc}"[:200]
-                log.warning("incidentes_agente.ia_falhou", erro=erro_ia)
+                log.warning("incidentes_agente.ia_falhou", erro=erro_ia, lote=i // LOTE_IA)
+                break
 
     for base in pendentes:
         if base.incident_id not in regras:
+            continue
+        if erro_ia and base.incident_id not in da_ia and regras[base.incident_id][0] == INVESTIGAR:
             continue
         inc = detalhes[base.incident_id]
         if base.incident_id in da_ia:
