@@ -503,7 +503,8 @@ def cyber_phishing_smtp() -> object:
             str(f.get("remetente", "")).strip(),
         )
     except gophish.PhishingError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        log.info("cyber.phishing.smtp_invalido", erro=str(exc))
+        return jsonify({"ok": False, "error": "Preencha nome, host, usuário e remetente."}), 400
     except httpx.HTTPError:
         return jsonify({"ok": False, "error": "Não deu para criar o perfil no GoPhish."}), 502
     log.info("cyber.phishing.smtp_criado", por=current_user.email)
@@ -539,7 +540,8 @@ def cyber_phishing_disparar() -> object:
         gophish.criar_grupo(grupo, emails)
         cid = gophish.disparar_campanha(nome, grupo, smtp, url)
     except gophish.PhishingError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        log.info("cyber.phishing.disparo_invalido", erro=str(exc))
+        return jsonify({"ok": False, "error": "Informe nome, perfil de envio, URL e ao menos um e-mail válido."}), 400
     except httpx.HTTPError:
         return jsonify({"ok": False, "error": "Não deu para disparar a campanha no GoPhish."}), 502
     log.info("cyber.phishing.disparada", por=_quem_decide(), campanha=cid)
