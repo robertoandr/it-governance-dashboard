@@ -375,3 +375,16 @@ class CyberAgenteIncidentesResource(Resource):
         from app.services import incidentes_agente
 
         return incidentes_agente.painel()
+
+
+@ns.route("/phishing")
+class CyberPhishingResource(Resource):
+    """Campanhas de phishing simulado do GoPhish (somente leitura)."""
+
+    @ns.doc("get_cyber_phishing")
+    @require_role("admin", "gestor", pagina="cyber")
+    def get(self) -> dict[str, Any]:
+        """Retorna as campanhas e o resumo geral das simulações de phishing."""
+        from itgov.services import gophish
+
+        return gophish.painel()
