@@ -25,9 +25,19 @@ import httpx
 import structlog
 from pydantic import BaseModel
 
+from itgov.services import phishing_material
+
 log = structlog.get_logger(__name__)
 
 _TIMEOUT = httpx.Timeout(20.0)
+
+# Nomes fixos do material no GoPhish (criados uma vez, reaproveitados).
+TEMPLATE = "Senha M365 expirando"
+LANDING = "Login M365 (simulação)"
+
+
+class PhishingError(ValueError):
+    """Dado inválido para montar ou disparar uma campanha."""
 
 
 class CampanhaPhish(BaseModel):
@@ -159,3 +169,155 @@ def painel() -> dict[str, Any]:
         ],
         "resumo": resumo,
     }
+
+
+# ── Escrita: montar e disparar campanhas (gerenciado pelo dashboard) ─────────
+
+
+def _existe(cliente: httpx.Client, caminho: str, nome: str) -> bool:
+    """Diz se já há um objeto com esse ``name`` no GoPhish (idempotência por nome)."""
+    resp = cliente.get(caminho)
+    resp.raise_for_status()
+    return any(item.get("name") == nome for item in resp.json() or [])
+
+
+def listar_smtp() -> list[str]:
+    """Nomes dos perfis de envio (Sending Profiles) cadastrados no GoPhish.
+
+    Raises:
+        httpx.HTTPError: Falha de rede ou HTTP.
+    """
+    with _cliente() as cliente:
+        resp = cliente.get("/api/smtp/")
+        resp.raise_for_status()
+        return [str(p.get("name", "")) for p in resp.json() or [] if p.get("name")]
+
+
+def criar_smtp(nome: str, host: str, usuario: str, senha: str, remetente: str) -> None:
+    """Cria um perfil de envio (SMTP autenticado, ex.: M365).
+
+    Args:
+        nome: Nome do perfil no GoPhish.
+        host: ``host:porta`` do SMTP (ex.: ``smtp.office365.com:587``).
+        usuario: Usuário do SMTP.
+        senha: Senha (ou senha de app) do SMTP.
+        remetente: Endereço "De" (ex.: ``Avisos TI <avisos-ti@empresa>``).
+
+    Raises:
+        PhishingError: Campo obrigatório vazio.
+        httpx.HTTPError: Falha de rede ou HTTP.
+    """
+    if not (nome and host and usuario and remetente):
+        raise PhishingError("Nome, host, usuário e remetente são obrigatórios.")
+    with _cliente() as cliente:
+        resp = cliente.post(
+            "/api/smtp/",
+            json={
+                "name": nome,
+                "interface_type": "SMTP",
+                "host": host,
+                "username": usuario,
+                "password": senha,
+                "from_address": remetente,
+                "ignore_cert_errors": True,
+            },
+        )
+        resp.raise_for_status()
+    log.info("gophish.smtp_criado", nome=nome)
+
+
+def garantir_material(url_educativa: str) -> None:
+    """Garante que o template de e-mail e a landing existem no GoPhish.
+
+    A landing registra o envio mas **não guarda a senha**
+    (``capture_passwords=False``) e, depois do envio, manda a pessoa para a
+    página educativa.
+
+    Args:
+        url_educativa: Para onde redirecionar após o envio do formulário.
+
+    Raises:
+        httpx.HTTPError: Falha de rede ou HTTP.
+    """
+    with _cliente() as cliente:
+        if not _existe(cliente, "/api/templates/", TEMPLATE):
+            cliente.post(
+                "/api/templates/",
+                json={
+                    "name": TEMPLATE,
+                    "subject": phishing_material.ASSUNTO,
+                    "html": phishing_material.EMAIL_HTML,
+                    "text": "Sua senha corporativa expira em 24 horas. Acesse {{.URL}} para mantê-la.",
+                },
+            ).raise_for_status()
+            log.info("gophish.template_criado", nome=TEMPLATE)
+        if not _existe(cliente, "/api/pages/", LANDING):
+            cliente.post(
+                "/api/pages/",
+                json={
+                    "name": LANDING,
+                    "html": phishing_material.LANDING_HTML,
+                    "capture_credentials": True,
+                    "capture_passwords": False,
+                    "redirect_url": url_educativa,
+                },
+            ).raise_for_status()
+            log.info("gophish.landing_criada", nome=LANDING)
+
+
+def criar_grupo(nome: str, emails: list[str]) -> None:
+    """Cria (ou recria) o grupo de alvos com os e-mails dados.
+
+    Args:
+        nome: Nome do grupo.
+        emails: Endereços dos alvos.
+
+    Raises:
+        PhishingError: Sem nome ou sem nenhum e-mail válido.
+        httpx.HTTPError: Falha de rede ou HTTP.
+    """
+    alvos = [{"email": e.strip(), "first_name": "", "last_name": "", "position": ""} for e in emails if "@" in e]
+    if not nome or not alvos:
+        raise PhishingError("Informe um nome e ao menos um e-mail válido.")
+    with _cliente() as cliente:
+        resp = cliente.post("/api/groups/", json={"name": nome, "targets": alvos})
+        resp.raise_for_status()
+    log.info("gophish.grupo_criado", nome=nome, alvos=len(alvos))
+
+
+def disparar_campanha(nome: str, grupo: str, smtp: str, url: str) -> int:
+    """Cria a campanha no GoPhish e já a lança.
+
+    O template e a landing são os fixos (``garantir_material`` deve ter rodado).
+
+    Args:
+        nome: Nome da campanha.
+        grupo: Nome do grupo de alvos.
+        smtp: Nome do perfil de envio.
+        url: Endereço público onde a landing é servida (vai no link do e-mail).
+
+    Returns:
+        Id da campanha criada.
+
+    Raises:
+        PhishingError: Campo obrigatório vazio.
+        httpx.HTTPError: Falha de rede ou HTTP.
+    """
+    if not (nome and grupo and smtp and url):
+        raise PhishingError("Nome, grupo, perfil de envio e URL são obrigatórios.")
+    with _cliente() as cliente:
+        resp = cliente.post(
+            "/api/campaigns/",
+            json={
+                "name": nome,
+                "template": {"name": TEMPLATE},
+                "page": {"name": LANDING},
+                "smtp": {"name": smtp},
+                "url": url.rstrip("/"),
+                "groups": [{"name": grupo}],
+            },
+        )
+        resp.raise_for_status()
+        cid = int(resp.json().get("id", 0))
+    log.info("gophish.campanha_disparada", nome=nome, id=cid, grupo=grupo)
+    return cid

@@ -34,6 +34,8 @@ class User(UserMixin, db.Model):
     super_admin: bool = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     # Liberado para abrir o painel da TV (/gov/tv e /gov/v1…v6). Admin sempre pode.
     ver_painel_tv: bool = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
+    # Liberado para gerenciar as campanhas de phishing simulado (aba Cyber). Admin sempre pode.
+    gerencia_phishing: bool = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     # Ajustes de permissão que fogem do perfil: {"cftv": "alterar", "zendesk": "nenhum"}
     permissoes_json: str = db.Column("permissoes", db.Text, nullable=False, default="{}", server_default="{}")
     created_at: datetime = db.Column(
@@ -56,6 +58,11 @@ class User(UserMixin, db.Model):
     def pode_ver_painel_tv(self) -> bool:
         """Admin sempre vê o painel da TV; os demais só se liberados no cadastro."""
         return self.role == "admin" or bool(self.ver_painel_tv)
+
+    @property
+    def pode_gerenciar_phishing(self) -> bool:
+        """Admin sempre gerencia o phishing; os demais só se liberados no cadastro."""
+        return self.role == "admin" or bool(self.gerencia_phishing)
 
     @property
     def permissoes(self) -> dict[str, str]:
@@ -151,6 +158,15 @@ def garantir_coluna_painel_tv(engine: Engine | None = None) -> None:
         engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
     """
     _garantir_coluna("ver_painel_tv", engine)
+
+
+def garantir_coluna_phishing(engine: Engine | None = None) -> None:
+    """Cria a coluna ``users.gerencia_phishing`` em bancos anteriores a ela (idempotente).
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    _garantir_coluna("gerencia_phishing", engine)
 
 
 def garantir_coluna_permissoes(engine: Engine | None = None) -> None:
