@@ -45,6 +45,11 @@ def _resumo_painel_tv(user_id: int) -> str:
     return f"Usuários: {acao} o painel da TV para {_alvo(user_id)}"
 
 
+def _resumo_phishing(user_id: int) -> str:
+    acao = "liberar" if request.form.get("gerencia_phishing") == "1" else "bloquear"
+    return f"Usuários: {acao} a gestão de phishing para {_alvo(user_id)}"
+
+
 _PADRAO = "padrao"
 
 
@@ -106,7 +111,13 @@ def create_user():
         flash(f"Email '{email}' já está em uso.", "error")
         return redirect(url_for("users.list_users"))
 
-    user = User(name=name, email=email, role=role, ver_painel_tv=bool(request.form.get("ver_painel_tv")))
+    user = User(
+        name=name,
+        email=email,
+        role=role,
+        ver_painel_tv=bool(request.form.get("ver_painel_tv")),
+        gerencia_phishing=bool(request.form.get("gerencia_phishing")),
+    )
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -228,6 +239,28 @@ def toggle_painel_tv(user_id: int):
     db.session.commit()
     estado = "liberado" if user.ver_painel_tv else "bloqueado"
     flash(f"Painel da TV {estado} para '{user.name}'.", "success")
+    return redirect(url_for("users.list_users"))
+
+
+@bp.route("/users/<int:user_id>/phishing", methods=["POST"])
+@login_required
+@require_role("admin")
+@requer_aprovacao(_resumo_phishing)
+def toggle_phishing(user_id: int):
+    """Libera (``gerencia_phishing=1``) ou bloqueia a gestão de phishing para o usuário."""
+    user = db.session.get(User, user_id)
+    if user is None:
+        flash("Usuário não encontrado.", "error")
+        return redirect(url_for("users.list_users"))
+
+    if user.role == "admin":
+        flash("Admin sempre gerencia o phishing.", "error")
+        return redirect(url_for("users.list_users"))
+
+    user.gerencia_phishing = request.form.get("gerencia_phishing") == "1"
+    db.session.commit()
+    estado = "liberada" if user.gerencia_phishing else "bloqueada"
+    flash(f"Gestão de phishing {estado} para '{user.name}'.", "success")
     return redirect(url_for("users.list_users"))
 
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import httpx
 import structlog
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -357,10 +358,18 @@ def cyber_incidentes() -> str:
     ``ACRONIS_BASE_URL`` a página não é exposta.
     """
     from itgov.api.v1.cyber import filtrar_incidentes, get_cached_cyber
-    from itgov.services import acronis_cyber
+    from itgov.services import acronis_cyber, gophish
 
     if not os.getenv("ACRONIS_BASE_URL"):
         abort(404)
+
+    pode_phishing = bool(current_user.pode_gerenciar_phishing)
+    perfis_smtp: list[str] = []
+    if pode_phishing and gophish.configurado():
+        try:
+            perfis_smtp = gophish.listar_smtp()
+        except httpx.HTTPError:
+            log.warning("cyber.phishing.smtp_indisponivel")
 
     dados = get_cached_cyber()
     severidade = request.args.get("severidade") or None
@@ -377,7 +386,180 @@ def cyber_incidentes() -> str:
         severidades=severidades,
         filtro={"severidade": severidade or "", "tipo": tipo or "", "q": busca or ""},
         investigacao_ativa=acronis_cyber.configurado(),
+        pode_gerenciar_phishing=pode_phishing,
+        perfis_smtp=perfis_smtp,
     )
+
+
+def _proposta_ou_404(proposta_id: int) -> Any:
+    from app.extensions import db
+    from app.models.incidente_agente import PropostaIncidente
+
+    proposta = db.session.get(PropostaIncidente, proposta_id)
+    if proposta is None:
+        abort(404)
+    return proposta
+
+
+def _quem_decide() -> str:
+    """Quem aprovou: o super admin (direto ou pela fila) e, pela fila, também quem pediu."""
+    from flask import g
+
+    if g.get("_aprovando"):
+        aprovador = g.get("_aprovador")
+        return f"{getattr(aprovador, 'email', 'super admin')} (pedido de {current_user.email})"
+    return str(current_user.email)
+
+
+def _resumo_proposta(proposta_id: int) -> str:
+    p = _proposta_ou_404(proposta_id)
+    alvo = p.acao if p.decisao == "acao" else p.decisao
+    return f"Cyber: {alvo} no incidente da máquina {p.maquina}"
+
+
+@bp.route("/cyber/incidentes/propostas/<int:proposta_id>/aprovar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_proposta)
+def cyber_aprovar_proposta(proposta_id: int) -> object:
+    """Executa no Acronis a proposta do agente de incidentes.
+
+    Quem não é super admin só pede: o pedido vai para a fila de aprovação.
+    """
+    from flask import jsonify
+
+    from app.services import incidentes_agente
+
+    proposta = _proposta_ou_404(proposta_id)
+    try:
+        incidentes_agente.executar(proposta, _quem_decide())
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
+    return jsonify(
+        {"ok": proposta.status == "executada", "proposta": proposta.para_dict(), "error": proposta.resultado}
+    )
+
+
+def _resumo_lote() -> str:
+    corpo = request.get_json(silent=True) or {}
+    return f"Cyber: encerrar/falso positivo em lote ({len(corpo.get('ids') or [])} incidentes)"
+
+
+@bp.route("/cyber/incidentes/propostas/aprovar-lote", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_lote)
+def cyber_aprovar_lote() -> object:
+    """Executa em lote as propostas de encerrar/falso positivo escolhidas (corpo ``{"ids": [...]}``)."""
+    from flask import jsonify
+
+    from app.models.incidente_agente import PropostaIncidente
+    from app.services import incidentes_agente
+
+    ids = [int(i) for i in (request.get_json(silent=True) or {}).get("ids") or [] if str(i).isdigit()][:500]
+    if not ids:
+        return jsonify({"ok": False, "error": "nenhuma proposta escolhida"}), 400
+    propostas = PropostaIncidente.query.filter(PropostaIncidente.id.in_(ids)).all()
+    contagem = incidentes_agente.executar_lote(propostas, _quem_decide())
+    return jsonify({"ok": contagem["falhas"] == 0, **contagem})
+
+
+@bp.route("/cyber/incidentes/propostas/<int:proposta_id>/rejeitar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+def cyber_rejeitar_proposta(proposta_id: int) -> object:
+    """Descarta a proposta do agente (nada é feito no Acronis)."""
+    from flask import jsonify
+
+    from app.services import incidentes_agente
+
+    proposta = _proposta_ou_404(proposta_id)
+    try:
+        incidentes_agente.rejeitar(proposta, str(current_user.email))
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
+    return jsonify({"ok": True, "proposta": proposta.para_dict()})
+
+
+# ── Phishing: gestão das campanhas (quem pode é liberado em Usuários) ────────
+
+
+def _exige_gestao_phishing() -> None:
+    if not current_user.pode_gerenciar_phishing:
+        abort(403)
+
+
+@bp.route("/cyber/phishing/smtp", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+def cyber_phishing_smtp() -> object:
+    """Cria um perfil de envio (SMTP) no GoPhish."""
+    from flask import jsonify
+
+    from itgov.services import gophish
+
+    _exige_gestao_phishing()
+    f = request.get_json(silent=True) or {}
+    try:
+        gophish.criar_smtp(
+            str(f.get("nome", "")).strip(),
+            str(f.get("host", "")).strip(),
+            str(f.get("usuario", "")).strip(),
+            str(f.get("senha", "")),
+            str(f.get("remetente", "")).strip(),
+        )
+    except gophish.PhishingError as exc:
+        log.info("cyber.phishing.smtp_invalido", erro=str(exc))
+        return jsonify({"ok": False, "error": "Preencha nome, host, usuário e remetente."}), 400
+    except httpx.HTTPError:
+        return jsonify({"ok": False, "error": "Não deu para criar o perfil no GoPhish."}), 502
+    log.info("cyber.phishing.smtp_criado", por=current_user.email)
+    return jsonify({"ok": True})
+
+
+def _resumo_disparo() -> str:
+    corpo = request.get_json(silent=True) or {}
+    emails = [e for e in str(corpo.get("emails", "")).replace(";", ",").replace("\n", ",").split(",") if "@" in e]
+    return f"Phishing: disparar campanha '{str(corpo.get('nome', '')).strip()}' para {len(emails)} alvo(s)"
+
+
+@bp.route("/cyber/phishing/disparar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_disparo)
+def cyber_phishing_disparar() -> object:
+    """Monta o grupo e dispara a campanha de phishing (passa pela fila de aprovação)."""
+    from flask import jsonify
+
+    from itgov.services import gophish
+
+    _exige_gestao_phishing()
+    f = request.get_json(silent=True) or {}
+    nome = str(f.get("nome", "")).strip()
+    smtp = str(f.get("smtp", "")).strip()
+    url = str(f.get("url", "")).strip()
+    emails = [e.strip() for e in str(f.get("emails", "")).replace(";", ",").replace("\n", ",").split(",") if "@" in e]
+    educativa = request.url_root.rstrip("/") + url_for("dashboards.phishing_educativo")
+    try:
+        gophish.garantir_material(educativa)
+        grupo = f"{nome} — alvos"
+        gophish.criar_grupo(grupo, emails)
+        cid = gophish.disparar_campanha(nome, grupo, smtp, url)
+    except gophish.PhishingError as exc:
+        log.info("cyber.phishing.disparo_invalido", erro=str(exc))
+        return jsonify({"ok": False, "error": "Informe nome, perfil de envio, URL e ao menos um e-mail válido."}), 400
+    except httpx.HTTPError:
+        return jsonify({"ok": False, "error": "Não deu para disparar a campanha no GoPhish."}), 502
+    log.info("cyber.phishing.disparada", por=_quem_decide(), campanha=cid)
+    return jsonify({"ok": True, "campanha_id": cid})
+
+
+@bp.route("/phishing/educativo")
+def phishing_educativo() -> str:
+    """Página aberta a quem cai na simulação (sem login): explica que era um teste."""
+    from itgov.services import phishing_material
+
+    return phishing_material.EDUCATIVA_HTML
 
 
 @bp.route("/zabbix")
