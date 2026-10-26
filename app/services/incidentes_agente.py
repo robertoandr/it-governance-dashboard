@@ -54,7 +54,7 @@ from app.models.incidente_agente import (
     REJEITADA,
 )
 from itgov.services import acronis_edr
-from itgov.services.acronis_edr import IncidenteEdr, IncidenteNaoEncontradoError
+from itgov.services.acronis_edr import AcaoNaoPermitidaError, IncidenteEdr, IncidenteNaoEncontradoError
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -344,6 +344,33 @@ class PropostaNaoExecutavelError(ValueError):
     """A proposta não está esperando decisão ou é só "investigar"."""
 
 
+_MOTIVOS_HTTP = {
+    401: "O Acronis recusou a credencial (HTTP 401).",
+    403: "A credencial do Acronis não tem permissão para esta ação (HTTP 403).",
+    404: "O Acronis não achou o incidente (HTTP 404).",
+    409: "O Acronis recusou: o incidente mudou de estado (HTTP 409).",
+    410: "O incidente já não existe no Acronis (HTTP 410).",
+    429: "O Acronis limitou as chamadas (HTTP 429); tente de novo mais tarde.",
+}
+
+
+def _motivo(exc: Exception) -> str:
+    """Mensagem fixa para a tela; o detalhe da exceção vai só para o log."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        codigo = exc.response.status_code
+        for conhecido, texto in _MOTIVOS_HTTP.items():
+            if codigo == conhecido:
+                return texto
+        return "O Acronis devolveu erro HTTP; detalhes no log do app."
+    if isinstance(exc, httpx.HTTPError):
+        return "Falha de rede ao falar com o Acronis; detalhes no log do app."
+    if isinstance(exc, IncidenteNaoEncontradoError):
+        return "O incidente já não existe no Acronis."
+    if isinstance(exc, AcaoNaoPermitidaError):
+        return "O Acronis não oferece mais esta ação para o incidente."
+    return "O Acronis não aceitou a ação; detalhes no log do app."
+
+
 def _comentario(p: PropostaIncidente, usuario: str) -> str:
     rotulo = {ENCERRAR: "Encerrar", FALSO_POSITIVO: "Falso positivo", ACAO: f"Ação {p.acao}"}.get(p.decisao, p.decisao)
     return f"[Dashboard Governança TI] {rotulo}, aprovado por {usuario}. {p.justificativa}"[:1000]
@@ -378,8 +405,8 @@ def executar(p: PropostaIncidente, usuario: str, agora: datetime | None = None) 
         p.status = EXECUTADA
     except (httpx.HTTPError, IncidenteNaoEncontradoError, ValueError) as exc:
         p.status = FALHOU
-        p.resultado = f"{type(exc).__name__}: {exc}"[:500]
-        log.warning("incidentes_agente.execucao_falhou", proposta=p.id, erro=p.resultado)
+        p.resultado = _motivo(exc)
+        log.warning("incidentes_agente.execucao_falhou", proposta=p.id, erro=f"{type(exc).__name__}: {exc}"[:500])
     p.decidido_por, p.decidido_em = usuario, agora
     db.session.commit()
     log.info("incidentes_agente.executada", proposta=p.id, decisao=p.decisao, status=p.status, por=usuario)
@@ -407,7 +434,8 @@ def executar_lote(propostas: list[PropostaIncidente], usuario: str, agora: datet
                 [(p.incident_id, p.customer_id) for p in grupo], estado, comentario
             )
         except (httpx.HTTPError, ValueError) as exc:
-            erros = {p.incident_id: f"{type(exc).__name__}: {exc}"[:300] for p in grupo}
+            log.warning("incidentes_agente.lote_falhou", estado=estado, erro=f"{type(exc).__name__}: {exc}"[:500])
+            erros = {p.incident_id: _motivo(exc) for p in grupo}
         for p in grupo:
             erro = erros.get(p.incident_id, "")
             p.status = FALHOU if erro else EXECUTADA

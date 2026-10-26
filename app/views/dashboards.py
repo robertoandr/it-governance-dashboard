@@ -416,8 +416,8 @@ def cyber_aprovar_proposta(proposta_id: int) -> object:
     proposta = _proposta_ou_404(proposta_id)
     try:
         incidentes_agente.executar(proposta, _quem_decide())
-    except incidentes_agente.PropostaNaoExecutavelError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 409
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
     return jsonify(
         {"ok": proposta.status == "executada", "proposta": proposta.para_dict(), "error": proposta.resultado}
     )
@@ -459,8 +459,8 @@ def cyber_rejeitar_proposta(proposta_id: int) -> object:
     proposta = _proposta_ou_404(proposta_id)
     try:
         incidentes_agente.rejeitar(proposta, str(current_user.email))
-    except incidentes_agente.PropostaNaoExecutavelError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 409
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
     return jsonify({"ok": True, "proposta": proposta.para_dict()})
 
 

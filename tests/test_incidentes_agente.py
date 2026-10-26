@@ -284,7 +284,16 @@ def test_executar_falha_fica_registrada(banco, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(ia.acronis_edr, "detalhe", lambda iid, c: _inc(iid))  # ação não oferecida mais
     p = _proposta(ACAO, "PROCESS_STOP")
     ia.executar(p, "roberto@x", _AGORA)
-    assert p.status == FALHOU and "AcaoNaoPermitidaError" in p.resultado
+    assert p.status == FALHOU and p.resultado == "O Acronis não oferece mais esta ação para o incidente."
+
+
+def test_executar_http_403_mostra_mensagem_fixa_sem_detalhe(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    resposta = httpx.Response(403, text="segredo interno", request=httpx.Request("PUT", "https://acronis/x"))
+    erro = httpx.HTTPStatusError("403 com detalhe interno", request=resposta.request, response=resposta)
+    monkeypatch.setattr(ia.acronis_edr, "atualizar_estado", MagicMock(side_effect=erro))
+    p = _proposta()
+    ia.executar(p, "roberto@x", _AGORA)
+    assert p.status == FALHOU and "HTTP 403" in p.resultado and "detalhe interno" not in p.resultado
 
 
 def test_executar_incidente_que_sumiu_conta_como_feito(banco, monkeypatch: pytest.MonkeyPatch) -> None:
