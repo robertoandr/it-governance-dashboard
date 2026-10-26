@@ -33,7 +33,22 @@
             this.carregarSiem();
             if (!this.siemTimer) { this.siemTimer = setInterval(() => { if (this.aba === 'siem') { this.carregarSiem(); } }, 60000); }
           }
+          if (nome === 'phishing' && !this.phish) { this.carregarPhishing(); }
         },
+        phishUrl: '/api/v1/cyber/phishing',
+        phish: null,
+        phishErro: '',
+        carregarPhishing: async function () {
+          this.phishErro = '';
+          try {
+            const r = await fetch(this.phishUrl, {credentials: 'same-origin'});
+            if (!r.ok) { throw new Error(r.status); }
+            this.phish = await r.json();
+          } catch (e) {
+            this.phishErro = 'Falha ao carregar as campanhas de phishing.';
+          }
+        },
+        pct: function (v) { return (v * 100).toFixed(1) + '%'; },
         carregarSiem: async function () {
           this.siemCarregando = true;
           this.siemErro = '';
@@ -200,6 +215,11 @@
             :class="ehAba('agente') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
             class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
       Agente de incidentes
+    </button>
+    <button type="button" @click="irPara('phishing')"
+            :class="ehAba('phishing') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
+            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
+      Phishing
     </button>
   </div>
 
@@ -573,6 +593,81 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </template>
+  </div>
+
+  {# ============================= ABA PHISHING ============================== #}
+  <div x-show="ehAba('phishing')" x-cloak>
+    <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
+      Simulações de phishing (GoPhish). Mede quantos clicaram no link e quantos reportaram o e-mail como suspeito.
+      Quanto maior a taxa de reporte e menor a de clique, melhor.
+    </p>
+
+    <div x-show="phishErro" class="rounded bg-red-50 text-red-700 text-sm px-4 py-3 mb-4" x-text="phishErro"></div>
+
+    <template x-if="phish && !phish.configurado">
+      <div class="rounded border border-dashed border-gray-300 dark:border-slate-600 px-4 py-6 text-sm text-gray-500">
+        O GoPhish ainda não está configurado. Defina <code>GOPHISH_API_URL</code> e <code>GOPHISH_API_KEY</code> no ambiente.
+      </div>
+    </template>
+
+    <template x-if="phish && phish.configurado && phish.erro">
+      <div class="rounded bg-amber-50 text-amber-800 text-sm px-4 py-3" x-text="phish.erro"></div>
+    </template>
+
+    <template x-if="phish && phish.configurado && !phish.erro">
+      <div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <div class="rounded-lg bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 p-4">
+            <div class="text-2xl font-bold text-gray-800 dark:text-slate-100" x-text="phish.resumo.campanhas"></div>
+            <div class="text-xs text-gray-500">Campanhas</div>
+          </div>
+          <div class="rounded-lg bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 p-4">
+            <div class="text-2xl font-bold text-gray-800 dark:text-slate-100" x-text="phish.resumo.alvos"></div>
+            <div class="text-xs text-gray-500">Alvos</div>
+          </div>
+          <div class="rounded-lg bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 p-4">
+            <div class="text-2xl font-bold text-red-600" x-text="pct(phish.resumo.taxa_clique)"></div>
+            <div class="text-xs text-gray-500">Taxa de clique</div>
+          </div>
+          <div class="rounded-lg bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 p-4">
+            <div class="text-2xl font-bold text-green-600" x-text="pct(phish.resumo.taxa_reporte)"></div>
+            <div class="text-xs text-gray-500">Taxa de reporte</div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700" x-show="phish.campanhas.length">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 dark:bg-slate-900/50 text-xs text-gray-500 uppercase">
+              <tr>
+                <th class="px-4 py-2 text-left">Campanha</th>
+                <th class="px-4 py-2 text-left">Status</th>
+                <th class="px-4 py-2 text-right">Alvos</th>
+                <th class="px-4 py-2 text-right">Clicaram</th>
+                <th class="px-4 py-2 text-right">Caíram</th>
+                <th class="px-4 py-2 text-right">Reportaram</th>
+                <th class="px-4 py-2 text-right">Clique</th>
+                <th class="px-4 py-2 text-right">Reporte</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+              <template x-for="c in phish.campanhas" :key="c.id">
+                <tr>
+                  <td class="px-4 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="c.nome"></td>
+                  <td class="px-4 py-2 text-xs text-gray-500" x-text="c.status"></td>
+                  <td class="px-4 py-2 text-right" x-text="c.alvos"></td>
+                  <td class="px-4 py-2 text-right" x-text="c.clicaram"></td>
+                  <td class="px-4 py-2 text-right font-semibold text-red-600" x-text="c.enviaram_dados"></td>
+                  <td class="px-4 py-2 text-right font-semibold text-green-600" x-text="c.reportaram"></td>
+                  <td class="px-4 py-2 text-right text-xs" x-text="pct(c.taxa_clique)"></td>
+                  <td class="px-4 py-2 text-right text-xs" x-text="pct(c.taxa_reporte)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p x-show="!phish.campanhas.length" class="text-sm text-gray-400">Nenhuma campanha ainda.</p>
       </div>
     </template>
   </div>
