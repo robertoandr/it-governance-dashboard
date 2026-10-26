@@ -374,6 +374,96 @@ def cyber_incidentes() -> str:
     )
 
 
+def _proposta_ou_404(proposta_id: int) -> Any:
+    from app.extensions import db
+    from app.models.incidente_agente import PropostaIncidente
+
+    proposta = db.session.get(PropostaIncidente, proposta_id)
+    if proposta is None:
+        abort(404)
+    return proposta
+
+
+def _quem_decide() -> str:
+    """Quem aprovou: o super admin (direto ou pela fila) e, pela fila, também quem pediu."""
+    from flask import g
+
+    if g.get("_aprovando"):
+        aprovador = g.get("_aprovador")
+        return f"{getattr(aprovador, 'email', 'super admin')} (pedido de {current_user.email})"
+    return str(current_user.email)
+
+
+def _resumo_proposta(proposta_id: int) -> str:
+    p = _proposta_ou_404(proposta_id)
+    alvo = p.acao if p.decisao == "acao" else p.decisao
+    return f"Cyber: {alvo} no incidente da máquina {p.maquina}"
+
+
+@bp.route("/cyber/incidentes/propostas/<int:proposta_id>/aprovar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_proposta)
+def cyber_aprovar_proposta(proposta_id: int) -> object:
+    """Executa no Acronis a proposta do agente de incidentes.
+
+    Quem não é super admin só pede: o pedido vai para a fila de aprovação.
+    """
+    from flask import jsonify
+
+    from app.services import incidentes_agente
+
+    proposta = _proposta_ou_404(proposta_id)
+    try:
+        incidentes_agente.executar(proposta, _quem_decide())
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
+    return jsonify(
+        {"ok": proposta.status == "executada", "proposta": proposta.para_dict(), "error": proposta.resultado}
+    )
+
+
+def _resumo_lote() -> str:
+    corpo = request.get_json(silent=True) or {}
+    return f"Cyber: encerrar/falso positivo em lote ({len(corpo.get('ids') or [])} incidentes)"
+
+
+@bp.route("/cyber/incidentes/propostas/aprovar-lote", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_lote)
+def cyber_aprovar_lote() -> object:
+    """Executa em lote as propostas de encerrar/falso positivo escolhidas (corpo ``{"ids": [...]}``)."""
+    from flask import jsonify
+
+    from app.models.incidente_agente import PropostaIncidente
+    from app.services import incidentes_agente
+
+    ids = [int(i) for i in (request.get_json(silent=True) or {}).get("ids") or [] if str(i).isdigit()][:500]
+    if not ids:
+        return jsonify({"ok": False, "error": "nenhuma proposta escolhida"}), 400
+    propostas = PropostaIncidente.query.filter(PropostaIncidente.id.in_(ids)).all()
+    contagem = incidentes_agente.executar_lote(propostas, _quem_decide())
+    return jsonify({"ok": contagem["falhas"] == 0, **contagem})
+
+
+@bp.route("/cyber/incidentes/propostas/<int:proposta_id>/rejeitar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+def cyber_rejeitar_proposta(proposta_id: int) -> object:
+    """Descarta a proposta do agente (nada é feito no Acronis)."""
+    from flask import jsonify
+
+    from app.services import incidentes_agente
+
+    proposta = _proposta_ou_404(proposta_id)
+    try:
+        incidentes_agente.rejeitar(proposta, str(current_user.email))
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
+    return jsonify({"ok": True, "proposta": proposta.para_dict()})
+
+
 @bp.route("/zabbix")
 @login_required
 @require_role("admin", "gestor", "operador", pagina="zabbix")
