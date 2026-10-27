@@ -51,8 +51,9 @@
         pct: function (v) { return (v * 100).toFixed(1) + '%'; },
         podeGerenciarPhish: {{ 'true' if pode_gerenciar_phishing else 'false' }},
         perfisSmtp: {{ perfis_smtp | tojson }},
+        iscasPhishing: {{ iscas_phishing | tojson }},
         phishOcupado: false,
-        novaCampanha: {nome: '', smtp: '', url: '', emails: ''},
+        novaCampanha: {nome: '', smtp: '', url: '', emails: '', isca: '{{ isca_phishing_padrao }}'},
         novoSmtp: {nome: '', host: 'smtp.office365.com:587', usuario: '', senha: '', remetente: ''},
         mostrarSmtp: false,
         phishPost: async function (url, corpo) {
@@ -86,7 +87,7 @@
           if (!confirm('Disparar "' + c.nome + '" para ' + n + ' alvo(s)?')) { return; }
           const r = await this.phishPost('/gov/cyber/phishing/disparar', c);
           if (r && (r.ok || r.pendente)) {
-            this.novaCampanha = {nome: '', smtp: '', url: '', emails: ''};
+            this.novaCampanha = {nome: '', smtp: '', url: '', emails: '', isca: '{{ isca_phishing_padrao }}'};
             this.carregarPhishing();
           }
         },
@@ -672,11 +673,14 @@
           <option value="">Perfil de envio…</option>
           <template x-for="p in perfisSmtp" :key="p"><option :value="p" x-text="p"></option></template>
         </select>
+        <select x-model="novaCampanha.isca" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2">
+          <template x-for="i in iscasPhishing" :key="i.id"><option :value="i.id" x-text="'Isca: ' + i.rotulo"></option></template>
+        </select>
         <input x-model="novaCampanha.url" placeholder="URL pública da landing (ex.: http://172.29.2.11:8080)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2">
         <textarea x-model="novaCampanha.emails" rows="3" placeholder="E-mails dos alvos, separados por vírgula ou quebra de linha" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2"></textarea>
       </div>
       <div class="flex items-center justify-between mt-3">
-        <span class="text-xs text-gray-400">Isca: senha M365 expirando. A landing não guarda a senha digitada. O disparo passa pela fila de aprovação.</span>
+        <span class="text-xs text-gray-400">A landing não guarda a senha digitada. O disparo passa pela fila de aprovação.</span>
         <button type="button" class="text-sm bg-blue-600 text-white px-4 py-1.5 rounded" :disabled="phishOcupado" @click="dispararCampanha()">Disparar</button>
       </div>
     </div>

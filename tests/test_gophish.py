@@ -8,9 +8,11 @@ import httpx
 import pytest
 import respx
 
-from itgov.services import gophish
+from itgov.services import gophish, phishing_material
 
 _URL = "https://gophish-teste:3333"
+_M365 = phishing_material.ISCAS[phishing_material.ISCA_SENHA_M365]
+_RH = phishing_material.ISCAS[phishing_material.ISCA_RH_PREMIO]
 
 
 @pytest.fixture
@@ -156,19 +158,40 @@ def test_garantir_material_cria_quando_falta(credenciais: None) -> None:
     respx.get(f"{_URL}/api/pages/").mock(return_value=httpx.Response(200, json=[]))
     pt = respx.post(f"{_URL}/api/templates/").mock(return_value=httpx.Response(201, json={"id": 1}))
     pp = respx.post(f"{_URL}/api/pages/").mock(return_value=httpx.Response(201, json={"id": 1}))
-    gophish.garantir_material("https://noc/phishing/educativo")
+    gophish.garantir_material(phishing_material.ISCA_SENHA_M365, "https://noc/phishing/educativo")
     assert pt.called and pp.called
     pagina = json.loads(pp.calls.last.request.content)
+    assert pagina["name"] == _M365.landing_nome
     assert pagina["capture_credentials"] is True and pagina["capture_passwords"] is False
 
 
 @respx.mock
+def test_garantir_material_rh_nao_captura_credenciais(credenciais: None) -> None:
+    respx.get(f"{_URL}/api/templates/").mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{_URL}/api/pages/").mock(return_value=httpx.Response(200, json=[]))
+    pt = respx.post(f"{_URL}/api/templates/").mock(return_value=httpx.Response(201, json={"id": 1}))
+    pp = respx.post(f"{_URL}/api/pages/").mock(return_value=httpx.Response(201, json={"id": 1}))
+    gophish.garantir_material(phishing_material.ISCA_RH_PREMIO, "https://noc/phishing/educativo/rh-premio-surpresa")
+    template = json.loads(pt.calls.last.request.content)
+    pagina = json.loads(pp.calls.last.request.content)
+    assert template["name"] == _RH.template_nome and template["subject"] == _RH.assunto
+    # Isca do RH não guarda NADA do que a pessoa digita (nem senha, nem nome/e-mail).
+    assert pagina["name"] == _RH.landing_nome
+    assert pagina["capture_credentials"] is False and pagina["capture_passwords"] is False
+
+
+def test_garantir_material_isca_desconhecida(credenciais: None) -> None:
+    with pytest.raises(gophish.PhishingError):
+        gophish.garantir_material("nao-existe", "https://noc/educativo")
+
+
+@respx.mock
 def test_garantir_material_nao_duplica(credenciais: None) -> None:
-    respx.get(f"{_URL}/api/templates/").mock(return_value=httpx.Response(200, json=[{"name": gophish.TEMPLATE}]))
-    respx.get(f"{_URL}/api/pages/").mock(return_value=httpx.Response(200, json=[{"name": gophish.LANDING}]))
+    respx.get(f"{_URL}/api/templates/").mock(return_value=httpx.Response(200, json=[{"name": _M365.template_nome}]))
+    respx.get(f"{_URL}/api/pages/").mock(return_value=httpx.Response(200, json=[{"name": _M365.landing_nome}]))
     pt = respx.post(f"{_URL}/api/templates/")
     pp = respx.post(f"{_URL}/api/pages/")
-    gophish.garantir_material("https://noc/educativo")
+    gophish.garantir_material(phishing_material.ISCA_SENHA_M365, "https://noc/educativo")
     assert not pt.called and not pp.called
 
 
@@ -187,14 +210,41 @@ def test_criar_grupo_monta_alvos(credenciais: None) -> None:
 
 def test_disparar_campanha_exige_campos(credenciais: None) -> None:
     with pytest.raises(gophish.PhishingError):
-        gophish.disparar_campanha("c", "g", "", "http://x")
+        gophish.disparar_campanha("c", "g", "", "http://x", phishing_material.ISCA_SENHA_M365)
+
+
+def test_disparar_campanha_rejeita_isca_desconhecida(credenciais: None) -> None:
+    with pytest.raises(gophish.PhishingError):
+        gophish.disparar_campanha("c", "g", "M365", "http://x", "nao-existe")
 
 
 @respx.mock
-def test_disparar_campanha_usa_material_fixo(credenciais: None) -> None:
+def test_disparar_campanha_usa_material_da_isca(credenciais: None) -> None:
     rota = respx.post(f"{_URL}/api/campaigns/").mock(return_value=httpx.Response(201, json={"id": 42}))
-    cid = gophish.disparar_campanha("Piloto", "Piloto — alvos", "M365", "http://172.29.2.11:8080/")
+    cid = gophish.disparar_campanha(
+        "Piloto", "Piloto — alvos", "M365", "http://172.29.2.11:8080/", phishing_material.ISCA_SENHA_M365
+    )
     assert cid == 42
     corpo = json.loads(rota.calls.last.request.content)
-    assert corpo["template"]["name"] == gophish.TEMPLATE and corpo["page"]["name"] == gophish.LANDING
+    assert corpo["template"]["name"] == _M365.template_nome and corpo["page"]["name"] == _M365.landing_nome
     assert corpo["url"] == "http://172.29.2.11:8080"
+
+
+@respx.mock
+def test_disparar_campanha_rh_usa_material_do_rh(credenciais: None) -> None:
+    rota = respx.post(f"{_URL}/api/campaigns/").mock(return_value=httpx.Response(201, json={"id": 7}))
+    gophish.disparar_campanha(
+        "Piloto RH", "Piloto RH — alvos", "RH", "http://172.29.2.11:8080", phishing_material.ISCA_RH_PREMIO
+    )
+    corpo = json.loads(rota.calls.last.request.content)
+    assert corpo["template"]["name"] == _RH.template_nome and corpo["page"]["name"] == _RH.landing_nome
+
+
+def test_opcoes_lista_as_duas_iscas() -> None:
+    ids = {o["id"] for o in phishing_material.opcoes()}
+    assert phishing_material.ISCA_SENHA_M365 in ids and phishing_material.ISCA_RH_PREMIO in ids
+
+
+def test_obter_cai_na_padrao_quando_vazio_e_none_quando_invalida() -> None:
+    assert phishing_material.obter("").id == phishing_material.ISCA_PADRAO
+    assert phishing_material.obter("xpto") is None

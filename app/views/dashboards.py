@@ -358,7 +358,7 @@ def cyber_incidentes() -> str:
     ``ACRONIS_BASE_URL`` a página não é exposta.
     """
     from itgov.api.v1.cyber import filtrar_incidentes, get_cached_cyber
-    from itgov.services import acronis_cyber, gophish
+    from itgov.services import acronis_cyber, gophish, phishing_material
 
     if not os.getenv("ACRONIS_BASE_URL"):
         abort(404)
@@ -388,6 +388,8 @@ def cyber_incidentes() -> str:
         investigacao_ativa=acronis_cyber.configurado(),
         pode_gerenciar_phishing=pode_phishing,
         perfis_smtp=perfis_smtp,
+        iscas_phishing=phishing_material.opcoes(),
+        isca_phishing_padrao=phishing_material.ISCA_PADRAO,
     )
 
 
@@ -518,9 +520,16 @@ def cyber_phishing_smtp() -> object:
 
 
 def _resumo_disparo() -> str:
+    from itgov.services import phishing_material
+
     corpo = request.get_json(silent=True) or {}
     emails = [e for e in str(corpo.get("emails", "")).replace(";", ",").replace("\n", ",").split(",") if "@" in e]
-    return f"Phishing: disparar campanha '{str(corpo.get('nome', '')).strip()}' para {len(emails)} alvo(s)"
+    isca = phishing_material.obter(str(corpo.get("isca", "")).strip())
+    rotulo = isca.rotulo if isca else "?"
+    return (
+        f"Phishing: disparar campanha '{str(corpo.get('nome', '')).strip()}' "
+        f"(isca: {rotulo}) para {len(emails)} alvo(s)"
+    )
 
 
 @bp.route("/cyber/phishing/disparar", methods=["POST"])
@@ -538,13 +547,14 @@ def cyber_phishing_disparar() -> object:
     nome = str(f.get("nome", "")).strip()
     smtp = str(f.get("smtp", "")).strip()
     url = str(f.get("url", "")).strip()
+    isca = str(f.get("isca", "")).strip()
     emails = [e.strip() for e in str(f.get("emails", "")).replace(";", ",").replace("\n", ",").split(",") if "@" in e]
-    educativa = request.url_root.rstrip("/") + url_for("dashboards.phishing_educativo")
+    educativa = request.url_root.rstrip("/") + url_for("dashboards.phishing_educativo", isca=isca)
     try:
-        gophish.garantir_material(educativa)
+        gophish.garantir_material(isca, educativa)
         grupo = f"{nome} — alvos"
         gophish.criar_grupo(grupo, emails)
-        cid = gophish.disparar_campanha(nome, grupo, smtp, url)
+        cid = gophish.disparar_campanha(nome, grupo, smtp, url, isca)
     except gophish.PhishingError as exc:
         log.info("cyber.phishing.disparo_invalido", erro=str(exc))
         return jsonify({"ok": False, "error": "Informe nome, perfil de envio, URL e ao menos um e-mail válido."}), 400
@@ -555,11 +565,16 @@ def cyber_phishing_disparar() -> object:
 
 
 @bp.route("/phishing/educativo")
-def phishing_educativo() -> str:
-    """Página aberta a quem cai na simulação (sem login): explica que era um teste."""
+@bp.route("/phishing/educativo/<isca>")
+def phishing_educativo(isca: str | None = None) -> str:
+    """Página aberta a quem cai na simulação (sem login): explica que era um teste.
+
+    Args:
+        isca: Id da isca; se vazio ou desconhecido, usa a página educativa padrão.
+    """
     from itgov.services import phishing_material
 
-    return phishing_material.EDUCATIVA_HTML
+    return phishing_material.educativa_html(isca)
 
 
 @bp.route("/zabbix")

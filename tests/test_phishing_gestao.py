@@ -22,6 +22,19 @@ def test_pagina_educativa_e_publica(factory_client) -> None:
     assert "simulação" in resp.get_data(as_text=True)
 
 
+def test_pagina_educativa_do_rh_fala_de_premio(factory_client) -> None:
+    resp = factory_client.get("/gov/phishing/educativo/rh-premio-surpresa")
+    assert resp.status_code == 200
+    corpo = resp.get_data(as_text=True)
+    assert "teste de phishing" in corpo and "prêmio" in corpo
+
+
+def test_educativa_com_isca_invalida_cai_na_padrao(factory_client) -> None:
+    resp = factory_client.get("/gov/phishing/educativo/xpto")
+    assert resp.status_code == 200
+    assert "simulação" in resp.get_data(as_text=True)
+
+
 def test_aba_phishing_tem_gestao_para_admin(authed_client, monkeypatch: pytest.MonkeyPatch) -> None:
     from itgov.services import gophish
     from tests.test_cyber_page import _mock_fontes
@@ -31,6 +44,8 @@ def test_aba_phishing_tem_gestao_para_admin(authed_client, monkeypatch: pytest.M
     _mock_fontes(monkeypatch)
     html = authed_client.get("/gov/cyber").get_data(as_text=True)
     assert "Nova campanha" in html and "/gov/cyber/phishing/disparar" in html
+    # O seletor de isca é alimentado pelo JSON das iscas, que inclui a do RH.
+    assert "rh-premio-surpresa" in html
 
 
 def test_smtp_e_disparo_exigem_login(factory_client) -> None:

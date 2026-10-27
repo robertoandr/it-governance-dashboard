@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cyber — Phishing:** segunda isca **"RH — prêmio surpresa"** (e-mail do RH convidando a se inscrever num sorteio) e **seletor de isca** na aba Phishing, ao lado da isca "senha do M365 expirando". Cada isca tem e-mail, landing e página educativa próprios; a landing do RH **não guarda nada do que é digitado** (`capture_credentials=False`), só registra que a pessoa caiu. Página educativa agora é por isca (`/gov/phishing/educativo/<isca>`)
+
 ### Changed
 - Rota e item de menu `/gov/ciberseguranca` renomeados para **Cybersegurança** em `/gov/cyberseguranca` (com redirecionamento 301 de `/gov/ciberseguranca` e `/gov/backup` e compatibilidade reversa de permissões)
 
