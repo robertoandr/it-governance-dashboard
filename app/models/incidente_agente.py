@@ -12,7 +12,14 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+import structlog
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
+
 from app.extensions import db
+
+log = structlog.get_logger(__name__)
 
 # Decisões que o agente pode propor
 ENCERRAR = "encerrar"
@@ -28,6 +35,15 @@ FALHOU = "falhou"
 REJEITADA = "rejeitada"
 OBSOLETA = "obsoleta"  # o incidente foi resolvido/encerrado por fora antes da decisão
 STATUS = (PROPOSTA, EXECUTADA, FALHOU, REJEITADA, OBSOLETA)
+
+# Colunas criadas depois da tabela (bancos antigos ganham no start, ver ``garantir_colunas``)
+_COLUNAS_NOVAS = (
+    ("desisolar_activity_id", "VARCHAR(80) NOT NULL DEFAULT ''"),
+    ("desisolar_status", "VARCHAR(40) NOT NULL DEFAULT ''"),
+    ("desisolar_resultado", "VARCHAR(500) NOT NULL DEFAULT ''"),
+    ("desisolado_por", "VARCHAR(160) NOT NULL DEFAULT ''"),
+    ("desisolado_em", "DATETIME"),
+)
 
 
 def _agora() -> datetime:
@@ -63,6 +79,12 @@ class PropostaIncidente(db.Model):
     analisado_em: datetime = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora)
     decidido_por: str = db.Column(db.String(120), nullable=False, default="")
     decidido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Desisolar a máquina depois de um WORKLOAD_ISOLATE executado (também só com aprovação)
+    desisolar_activity_id: str = db.Column(db.String(80), nullable=False, default="")
+    desisolar_status: str = db.Column(db.String(40), nullable=False, default="")
+    desisolar_resultado: str = db.Column(db.String(500), nullable=False, default="")
+    desisolado_por: str = db.Column(db.String(160), nullable=False, default="")
+    desisolado_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
     @property
     def deteccoes(self) -> list[dict[str, object]]:
@@ -98,4 +120,35 @@ class PropostaIncidente(db.Model):
             "analisado_em": self.analisado_em.isoformat() if self.analisado_em else None,
             "decidido_por": self.decidido_por,
             "decidido_em": self.decidido_em.isoformat() if self.decidido_em else None,
+            "desisolar_status": self.desisolar_status,
+            "desisolar_resultado": self.desisolar_resultado,
+            "desisolado_por": self.desisolado_por,
+            "desisolado_em": self.desisolado_em.isoformat() if self.desisolado_em else None,
         }
+
+
+def garantir_colunas(engine: Engine | None = None) -> None:
+    """Adiciona as colunas de desisolar em bancos anteriores a elas (idempotente).
+
+    Com vários workers subindo juntos, outro pode ter criado a coluna entre a
+    inspeção e o ALTER; o erro de coluna duplicada é ignorado.
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    engine = engine or db.engine
+    tabela = PropostaIncidente.__tablename__
+    inspetor = inspect(engine)
+    if not inspetor.has_table(tabela):
+        return
+    existentes = {c["name"] for c in inspetor.get_columns(tabela)}
+    for nome, ddl in _COLUNAS_NOVAS:
+        if nome in existentes:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {ddl}"))
+            log.info("incidentes_agente.coluna_adicionada", coluna=nome)
+        except OperationalError as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise

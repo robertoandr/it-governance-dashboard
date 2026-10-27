@@ -488,3 +488,112 @@ def test_pagina_cyber_tem_aba_agente_de_incidentes(authed_client, monkeypatch: p
     _mock_fontes(monkeypatch)
     html = authed_client.get("/gov/cyber").get_data(as_text=True)
     assert "Agente de incidentes" in html and "/api/v1/cyber/incidentes/agente" in html
+
+
+# ── desisolar ───────────────────────────────────────────────────────────────
+
+
+def _isolada(iid: str = "iso", maquina: str = "", acao_status: str = "SUCCEEDED", quando: datetime = _AGORA) -> Any:
+    p = _proposta(ACAO, ia.ISOLAR, iid=iid)
+    p.status, p.acao_status, p.decidido_em = EXECUTADA, acao_status, quando
+    if maquina:
+        p.maquina = maquina
+    db.session.commit()
+    return p
+
+
+def test_isolada_considera_so_isolamento_aplicado(banco) -> None:
+    assert ia.isolada(_isolada("ok"))
+    assert ia.isolada(_isolada("tarde", acao_status="TIMED_OUT"))  # pode ter isolado quando a máquina voltou
+    assert not ia.isolada(_isolada("falha", acao_status="FAILED"))
+    parar = _proposta(ACAO, "PROCESS_STOP", iid="stop")
+    parar.status = EXECUTADA
+    assert not ia.isolada(parar)
+
+
+def test_desisolar_dispara_no_acronis_com_comentario(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    chamadas: list[tuple] = []
+    monkeypatch.setattr(ia.acronis_edr, "detalhe", lambda iid, c: _inc(iid, acoes={ia.DESISOLAR: "w1"}))
+    monkeypatch.setattr(ia.acronis_edr, "executar_acao", lambda inc, acao, com: chamadas.append((acao, com)) or "act-d")
+    p = _isolada()
+    ia.desisolar(p, "roberto@x", _AGORA)
+    assert (p.desisolar_status, p.desisolar_activity_id, p.desisolado_por) == ("QUEUED", "act-d", "roberto@x")
+    assert chamadas[0][0] == "WORKLOAD_DEISOLATE" and "aprovado por roberto@x" in chamadas[0][1]
+    assert ia.desisolando(p)
+    with pytest.raises(ia.PropostaNaoExecutavelError):  # não dispara duas vezes
+        ia.desisolar(p, "roberto@x")
+
+
+def test_desisolar_nao_oferecido_fica_registrado(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ia.acronis_edr, "detalhe", lambda iid, c: _inc(iid))
+    p = _isolada()
+    ia.desisolar(p, "roberto@x", _AGORA)
+    assert p.desisolar_status == "FAILED" and "console do Acronis" in p.desisolar_resultado
+    assert ia.isolada(p) and not ia.desisolando(p)  # continua na lista para tentar de novo
+
+
+def test_desisolar_so_maquina_isolada(banco) -> None:
+    with pytest.raises(ia.PropostaNaoExecutavelError):
+        ia.desisolar(_proposta(ACAO, ia.ISOLAR, iid="nao-executada"), "x")
+
+
+def test_acompanhar_desisolar_tira_a_maquina_da_lista(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    antiga = _isolada("old", maquina="pc-1", quando=_AGORA - timedelta(days=1))
+    nova = _isolada("new", maquina="pc-1")
+    nova.desisolar_activity_id, nova.desisolar_status = "act-d", "QUEUED"
+    db.session.commit()
+    monkeypatch.setattr(ia.acronis_edr, "status_acao", lambda iid, c, act: "SUCCEEDED")
+    assert ia.acompanhar_acoes() == 1
+    assert nova.desisolar_status == "SUCCEEDED" and not ia.isolada(nova) and not ia.isolada(antiga)
+    assert ia.painel()["isoladas"] == []
+
+
+def test_painel_lista_uma_linha_por_maquina(banco, sem_ia) -> None:
+    _isolada("a1", maquina="pc-1", quando=_AGORA - timedelta(days=1))
+    recente = _isolada("a2", maquina="pc-1")
+    _isolada("b1", maquina="pc-2", acao_status="FAILED")
+    isoladas = ia.painel()["isoladas"]
+    assert [(p["id"], p["maquina"], p["desisolando"]) for p in isoladas] == [(recente.id, "pc-1", False)]
+
+
+def test_desisolar_pela_rota_so_com_aprovacao(sem_contexto, super_client, gestor_client, monkeypatch) -> None:
+    app = sem_contexto
+    disparos: list[str] = []
+    monkeypatch.setattr(acronis_edr, "detalhe", lambda iid, c: _inc(iid, acoes={ia.DESISOLAR: "w1"}))
+    monkeypatch.setattr(acronis_edr, "executar_acao", lambda inc, acao, com: disparos.append(com) or "act-d")
+    with app.app_context():
+        pid = _isolada().id
+    resp = gestor_client.post(f"/gov/cyber/incidentes/propostas/{pid}/desisolar", json={})
+    assert resp.status_code == 202 and resp.get_json()["pendente"] is True
+    assert disparos == []  # nada no Acronis sem aprovação
+    with app.app_context():
+        sol = Solicitacao.query.filter_by(status=PENDENTE).one()
+        sol_id, resumo = sol.id, sol.resumo
+    assert resumo == "Cyber: desisolar a máquina pc-iso"
+    super_client.post(f"/gov/aprovacoes/{sol_id}/aprovar")
+    p = _ler(app, pid)
+    assert p["desisolar_status"] == "QUEUED"
+    assert p["desisolado_por"] == "pytest-super-cyber@test.local (pedido de pytest-gestor-cyber@test.local)"
+    assert "aprovado por pytest-super-cyber@test.local" in disparos[0]
+    resp = super_client.post(f"/gov/cyber/incidentes/propostas/{pid}/desisolar", json={})
+    assert resp.status_code == 409  # já desisolando
+
+
+def test_garantir_colunas_em_banco_antigo(tmp_path) -> None:
+    from sqlalchemy import create_engine, inspect, text
+
+    from app.models.incidente_agente import garantir_colunas
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'antigo.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE cyber_propostas_incidente (id INTEGER PRIMARY KEY)"))
+    garantir_colunas(engine)
+    garantir_colunas(engine)  # idempotente
+    colunas = {c["name"] for c in inspect(engine).get_columns("cyber_propostas_incidente")}
+    assert {
+        "desisolar_activity_id",
+        "desisolar_status",
+        "desisolar_resultado",
+        "desisolado_por",
+        "desisolado_em",
+    } <= colunas

@@ -19,6 +19,9 @@ contexto da máquina. A resposta da IA só é aceita no formato esperado.
 de aprovação (``@requer_aprovacao``): para quem não é super admin o pedido vai
 para a fila; o super admin aprova e a ação acontece, com comentário no
 incidente dizendo quem aprovou.
+
+Máquina isolada (``WORKLOAD_ISOLATE`` executado) aparece em "Máquinas isoladas"
+com o botão de desisolar (``desisolar``), que passa pela mesma aprovação.
 """
 
 from __future__ import annotations
@@ -72,7 +75,14 @@ LOTE_POR_RODADA = 20
 LOTE_IA = 1
 URL_ANTIGA = timedelta(days=30)
 CATEGORIAS_URL = frozenset({"URL_BLOCKED", "WEBSITE_URL_BLOCKED"})
-STATUS_ACAO_FINAIS = frozenset({"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "SKIPPED", "CANCELLED", "TIMEOUT"})
+STATUS_ACAO_FINAIS = frozenset(
+    {"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "SKIPPED", "CANCELLED", "TIMEOUT", "TIMED_OUT"}
+)
+STATUS_ACAO_OK = frozenset({"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS"})
+ISOLAR = "WORKLOAD_ISOLATE"
+DESISOLAR = "WORKLOAD_DEISOLATE"
+# Isolamento que com certeza não aconteceu; TIMED_OUT fica na lista (a máquina pode ter isolado depois)
+ISOLAMENTO_NAO_APLICADO = frozenset({"FAILED", "SKIPPED", "CANCELLED"})
 
 _TRAVA = os.path.join(tempfile.gettempdir(), "itgov-incidentes-agente.lock")
 
@@ -419,6 +429,49 @@ def executar(p: PropostaIncidente, usuario: str, agora: datetime | None = None) 
     log.info("incidentes_agente.executada", proposta=p.id, decisao=p.decisao, status=p.status, por=usuario)
 
 
+def isolada(p: PropostaIncidente) -> bool:
+    """A proposta isolou a máquina e ninguém desisolou ainda?"""
+    return (
+        p.decisao == ACAO
+        and p.acao == ISOLAR
+        and p.status == EXECUTADA
+        and p.acao_status not in ISOLAMENTO_NAO_APLICADO
+        and p.desisolar_status not in STATUS_ACAO_OK
+    )
+
+
+def desisolando(p: PropostaIncidente) -> bool:
+    """Já há um desisolar disparado e ainda sem resultado?"""
+    return bool(p.desisolar_status) and p.desisolar_status not in STATUS_ACAO_FINAIS
+
+
+def desisolar(p: PropostaIncidente, usuario: str, agora: datetime | None = None) -> None:
+    """Dispara no Acronis o desisolamento da máquina isolada pela proposta. Requer app context.
+
+    Só roda a partir da rota de aprovação, como ``executar``.
+
+    Raises:
+        PropostaNaoExecutavelError: A máquina não está isolada pela proposta ou já está desisolando.
+    """
+    from app.extensions import db
+
+    if not isolada(p) or desisolando(p):
+        raise PropostaNaoExecutavelError(f"proposta {p.id} não tem máquina isolada para desisolar")
+    comentario = f"[Dashboard Governança TI] Desisolar a máquina {p.maquina}, aprovado por {usuario}."[:1000]
+    try:
+        inc = acronis_edr.detalhe(p.incident_id, p.customer_id)  # o Acronis informa o workload a desisolar
+        p.desisolar_activity_id = acronis_edr.executar_acao(inc, DESISOLAR, comentario)
+        p.desisolar_status = "QUEUED"
+        p.desisolar_resultado = "Desisolar disparado no Acronis."
+    except (httpx.HTTPError, IncidenteNaoEncontradoError, ValueError) as exc:
+        p.desisolar_status = "FAILED"
+        p.desisolar_resultado = f"{_motivo(exc)} Se precisar, desisole pelo console do Acronis."[:500]
+        log.warning("incidentes_agente.desisolar_falhou", proposta=p.id, erro=f"{type(exc).__name__}: {exc}"[:500])
+    p.desisolado_por, p.desisolado_em = usuario, agora or _agora()
+    db.session.commit()
+    log.info("incidentes_agente.desisolar", proposta=p.id, maquina=p.maquina, status=p.desisolar_status, por=usuario)
+
+
 def executar_lote(propostas: list[PropostaIncidente], usuario: str, agora: datetime | None = None) -> dict[str, int]:
     """Executa em lote propostas de encerrar/falso positivo (uma chamada por estado). Requer app context.
 
@@ -484,8 +537,38 @@ def acompanhar_acoes() -> int:
             p.acao_status = acronis_edr.status_acao(p.incident_id, p.customer_id, p.activity_id)[:40]
         except httpx.HTTPError as exc:
             log.warning("incidentes_agente.status_falhou", proposta=p.id, erro=str(exc)[:200])
+    desisolar_andamento = PropostaIncidente.query.filter(
+        PropostaIncidente.desisolar_activity_id != "",
+        PropostaIncidente.desisolar_status.notin_(STATUS_ACAO_FINAIS),
+    ).all()
+    for p in desisolar_andamento:
+        try:
+            p.desisolar_status = acronis_edr.status_acao(p.incident_id, p.customer_id, p.desisolar_activity_id)[:40]
+        except httpx.HTTPError as exc:
+            log.warning("incidentes_agente.status_falhou", proposta=p.id, erro=str(exc)[:200])
+            continue
+        if p.desisolar_status in STATUS_ACAO_OK:
+            p.desisolar_resultado = "Máquina desisolada no Acronis."
+            _desisolar_irmas(p)
+        elif p.desisolar_status in STATUS_ACAO_FINAIS:
+            p.desisolar_resultado = (
+                f"O Acronis não desisolou ({p.desisolar_status}). Tente de novo ou desisole pelo console."
+            )
     db.session.commit()
-    return len(andamento)
+    return len(andamento) + len(desisolar_andamento)
+
+
+def _desisolar_irmas(p: PropostaIncidente) -> None:
+    """Outros isolamentos da mesma máquina saem da lista junto: a máquina é uma só."""
+    from app.models.incidente_agente import PropostaIncidente
+
+    for outra in PropostaIncidente.query.filter(
+        PropostaIncidente.maquina == p.maquina, PropostaIncidente.id != p.id
+    ).all():
+        if isolada(outra):
+            outra.desisolar_status = p.desisolar_status
+            outra.desisolar_resultado = f"Desisolada junto com a proposta #{p.id}."
+            outra.desisolado_por, outra.desisolado_em = p.desisolado_por, p.desisolado_em
 
 
 # ── Consulta para a tela ────────────────────────────────────────────────────
@@ -519,7 +602,24 @@ def painel() -> dict[str, Any]:
         "por_decisao": {d: contagem.get(d, 0) for d in DECISOES},
         "esperando": [p.para_dict() for p in esperando],
         "decididas": [p.para_dict() for p in decididas],
+        "isoladas": _isoladas(),
     }
+
+
+def _isoladas() -> list[dict[str, Any]]:
+    """Máquinas isoladas pelo agente (uma linha por máquina, o isolamento mais recente)."""
+    from app.models.incidente_agente import PropostaIncidente
+
+    candidatas = (
+        PropostaIncidente.query.filter_by(decisao=ACAO, acao=ISOLAR, status=EXECUTADA)
+        .order_by(PropostaIncidente.decidido_em.desc())
+        .all()
+    )
+    por_maquina: dict[str, dict[str, Any]] = {}
+    for p in candidatas:
+        if isolada(p) and p.maquina not in por_maquina:
+            por_maquina[p.maquina] = p.para_dict() | {"desisolando": desisolando(p)}
+    return list(por_maquina.values())
 
 
 # ── Agendador ───────────────────────────────────────────────────────────────
