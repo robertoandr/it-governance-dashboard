@@ -17,6 +17,12 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Suporte a testes em Windows
+if sys.platform == "win32":
+    from unittest.mock import MagicMock
+
+    sys.modules.setdefault("fcntl", MagicMock())
+
 
 # ─────────────────────────────────────────────────────────────────────
 # 🔐 OPS_PIN: setar ANTES de qualquer import dos módulos

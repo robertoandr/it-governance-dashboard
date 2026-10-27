@@ -89,6 +89,9 @@ class User(UserMixin, db.Model):
         if self.super_admin:
             return perm.ALTERAR
         ajuste = self.permissoes.get(pagina)
+        if ajuste is None and pagina in ("cyberseguranca", "ciberseguranca"):
+            outro = "ciberseguranca" if pagina == "cyberseguranca" else "cyberseguranca"
+            ajuste = self.permissoes.get(outro)
         if ajuste in perm.NIVEIS:
             return ajuste
         conhecida = perm.POR_CHAVE.get(pagina)
@@ -111,6 +114,9 @@ class User(UserMixin, db.Model):
         if self.super_admin:
             return True
         ajuste = self.permissoes.get(pagina)
+        if ajuste is None and pagina in ("cyberseguranca", "ciberseguranca"):
+            outro = "ciberseguranca" if pagina == "cyberseguranca" else "cyberseguranca"
+            ajuste = self.permissoes.get(outro)
         if ajuste in perm.NIVEIS:
             return perm.basta(ajuste, nivel)
         if padrao is not None:

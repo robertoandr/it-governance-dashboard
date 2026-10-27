@@ -209,7 +209,7 @@ REGRAS: dict[str, Regra] = {
     "backup_coverage": Regra(
         100,
         "Incluir no Acronis as máquinas que ainda não têm plano de proteção.",
-        "Cibersegurança",
+        "Cybersegurança",
         onde_endpoint="dashboards.acronis_backup",
     ),
     # Gestão de recursos
