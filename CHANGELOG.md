@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Rota e item de menu `/gov/ciberseguranca` renomeados para **Cybersegurança** em `/gov/cyberseguranca` (com redirecionamento 301 de `/gov/ciberseguranca` e `/gov/backup` e compatibilidade reversa de permissões)
 
+## [2.2.0] - 2026-10-26
+
+Módulo Cyber ganha agentes de IA e simulação de phishing.
+
+### Added
+- **Cyber — Agente SIEM:** analisa os logs dos FortiGate a cada poucos minutos, levanta achados com IA (via OmniRoute) e avisa no WhatsApp os graves, cruzando com o Acronis (#323); item e trigger no Zabbix para o alerta (`infra-setup/13_cyber_siem.py`)
+- **Cyber — Agente de incidentes (Acronis EDR):** triagem por regras + IA que propõe encerrar, agir ou investigar; toda ação passa pela fila de aprovação (#331)
+- **Cyber — Phishing (GoPhish):** leitura das campanhas com taxa de clique e de reporte (#333) e gestão pelo dashboard — criar perfil de envio, montar e disparar a campanha (disparo pela fila de aprovação), com acesso liberado por usuário na coluna "Phishing" (#334)
+- **Menu:** item "Cyber" na barra lateral, no grupo Segurança (#324)
+
+### Fixed
+- **Cyber:** rotas do agente e do phishing não expõem texto de exceção ao usuário (CodeQL)
+- **Cyber — Agente de incidentes:** não insiste na IA quando ela está lenta e retoma na rodada seguinte (#332); manda 1 incidente por vez para a IA, para não estourar o timeout na combo lenta (#335)
+
 ## [2.1.0] - 2026-10-09
 
 Versão final da V2 "Governança de TI 360": revisão página por página de 30/09 e

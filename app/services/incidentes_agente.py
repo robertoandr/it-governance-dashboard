@@ -66,7 +66,10 @@ log = structlog.get_logger(__name__)
 INTERVALO_TRIAGEM = timedelta(minutes=30)
 INTERVALO_ACOMPANHAMENTO = timedelta(minutes=5)
 LOTE_POR_RODADA = 20
-LOTE_IA = 3  # 10 estourou 180 s; 5 levou até 200 s no OmniRoute (25-26/10)
+# 1 incidente por chamada: na combo high-availability (único acesso da chave; Claude caído
+# → tudo no gemini) 1 incidente leva ~27 s, mas 3 chegaram a 154 s e, com a variância do
+# OmniRoute, estouraram os 300 s em produção (26/10). Um por vez mantém folga grande.
+LOTE_IA = 1
 URL_ANTIGA = timedelta(days=30)
 CATEGORIAS_URL = frozenset({"URL_BLOCKED", "WEBSITE_URL_BLOCKED"})
 STATUS_ACAO_FINAIS = frozenset({"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "SKIPPED", "CANCELLED", "TIMEOUT"})
