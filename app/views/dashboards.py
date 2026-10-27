@@ -442,6 +442,37 @@ def cyber_aprovar_proposta(proposta_id: int) -> object:
     )
 
 
+def _resumo_desisolar(proposta_id: int) -> str:
+    return f"Cyber: desisolar a máquina {_proposta_ou_404(proposta_id).maquina}"
+
+
+@bp.route("/cyber/incidentes/propostas/<int:proposta_id>/desisolar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_desisolar)
+def cyber_desisolar(proposta_id: int) -> object:
+    """Desisola no Acronis a máquina que a proposta isolou.
+
+    Quem não é super admin só pede: o pedido vai para a fila de aprovação.
+    """
+    from flask import jsonify
+
+    from app.services import incidentes_agente
+
+    proposta = _proposta_ou_404(proposta_id)
+    try:
+        incidentes_agente.desisolar(proposta, _quem_decide())
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Esta máquina não está isolada ou já está sendo desisolada."}), 409
+    return jsonify(
+        {
+            "ok": proposta.desisolar_status != "FAILED",
+            "proposta": proposta.para_dict(),
+            "error": proposta.desisolar_resultado,
+        }
+    )
+
+
 def _resumo_lote() -> str:
     corpo = request.get_json(silent=True) or {}
     return f"Cyber: encerrar/falso positivo em lote ({len(corpo.get('ids') or [])} incidentes)"

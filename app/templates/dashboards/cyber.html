@@ -180,6 +180,12 @@
         agRejeitar: function (ev) {
           this._agPost('/gov/cyber/incidentes/propostas/' + ev.currentTarget.dataset.id + '/rejeitar');
         },
+        agDesisolar: function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          const p = this.ag.isoladas.find((x) => String(x.id) === id);
+          if (!p || !confirm('Desisolar a máquina ' + p.maquina + '? Ela volta a ter acesso à rede.')) { return; }
+          this._agPost('/gov/cyber/incidentes/propostas/' + id + '/desisolar');
+        },
         agAprovarLote: function () {
           if (!this.agMarcados.length || !confirm('Aprovar ' + this.agMarcados.length + ' proposta(s) de encerrar/falso positivo?')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/aprovar-lote', {ids: this.agMarcados});
@@ -576,6 +582,36 @@
                   class="px-3 py-1.5 text-xs rounded-lg bg-green-600 text-white disabled:opacity-40"
                   x-text="'Aprovar ' + agMarcados.length + ' marcada(s)'"></button>
           <button type="button" @click="carregarAgente" class="ml-auto px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white">Atualizar</button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow mb-6 dark:bg-slate-800" x-show="ag.isoladas && ag.isoladas.length">
+          <div class="px-5 pt-4 pb-2">
+            <h3 class="font-semibold text-gray-800 dark:text-slate-100">Máquinas isoladas (<span x-text="ag.isoladas.length"></span>)</h3>
+            <p class="text-xs text-gray-500 dark:text-slate-400">
+              Isoladas pelo agente. Desisolar devolve o acesso à rede e só acontece com aprovação do super admin
+              (o pedido de quem não é super admin vai para a fila de aprovação).
+            </p>
+          </div>
+          <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+              <template x-for="p in ag.isoladas" :key="p.id">
+                <tr>
+                  <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="p.maquina"></td>
+                  <td class="px-4 py-2 text-xs text-gray-500" x-text="'isolada em ' + dataHora(p.decidido_em) + ' · ' + (p.acao_status || '—')"></td>
+                  <td class="px-4 py-2 text-xs text-gray-500"
+                      x-text="p.desisolar_status ? 'desisolar: ' + p.desisolar_status + ' · ' + p.desisolar_resultado + (p.desisolado_por ? ' (' + p.desisolado_por + ')' : '') : ''"></td>
+                  <td class="px-5 py-2 text-right whitespace-nowrap">
+                    <a :href="p.link" target="_blank" rel="noopener" x-show="p.link" class="text-xs text-blue-600 hover:underline mr-3">Abrir no Acronis</a>
+                    <button type="button" @click="agDesisolar" :data-id="p.id" :disabled="agOcupado || p.desisolando"
+                            class="px-3 py-1 text-xs rounded-lg bg-orange-600 text-white disabled:opacity-40"
+                            x-text="p.desisolando ? 'Desisolando…' : 'Desisolar'"></button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          </div>
         </div>
 
         <p x-show="agLista().length === 0" class="text-sm text-gray-400">Nenhuma proposta esperando decisão.</p>

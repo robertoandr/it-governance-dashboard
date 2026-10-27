@@ -77,7 +77,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
         from app.models import aprovacao as _aprovacao_model
-        from app.models import incidente_agente as _incidente_agente_model  # noqa: F401
+        from app.models import incidente_agente as _incidente_agente_model
         from app.models import link as _link_model  # noqa: F401
         from app.models import rede as _rede_model
         from app.models import siem as _siem_model  # noqa: F401
@@ -88,6 +88,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
         db.create_all()
         _unidade_model.garantir_colunas()
+        _incidente_agente_model.garantir_colunas()
         _rede_model.garantir_coluna_ia_modelo()
         _unidade_model.seed_unidades()
         _user_model.garantir_coluna_super_admin()
