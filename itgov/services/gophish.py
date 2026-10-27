@@ -31,10 +31,6 @@ log = structlog.get_logger(__name__)
 
 _TIMEOUT = httpx.Timeout(20.0)
 
-# Nomes fixos do material no GoPhish (criados uma vez, reaproveitados).
-TEMPLATE = "Senha M365 expirando"
-LANDING = "Login M365 (simulação)"
-
 
 class PhishingError(ValueError):
     """Dado inválido para montar ou disparar uma campanha."""
@@ -226,43 +222,49 @@ def criar_smtp(nome: str, host: str, usuario: str, senha: str, remetente: str) -
     log.info("gophish.smtp_criado", nome=nome)
 
 
-def garantir_material(url_educativa: str) -> None:
-    """Garante que o template de e-mail e a landing existem no GoPhish.
+def garantir_material(isca_id: str, url_educativa: str) -> None:
+    """Garante que o template de e-mail e a landing da isca existem no GoPhish.
 
-    A landing registra o envio mas **não guarda a senha**
-    (``capture_passwords=False``) e, depois do envio, manda a pessoa para a
-    página educativa.
+    A landing **nunca guarda a senha** (``capture_passwords=False``) e, quando a
+    isca tem ``captura_credenciais=False``, também não guarda nenhum outro campo
+    digitado — só registra que a pessoa enviou o formulário. Depois do envio, a
+    pessoa é mandada para a página educativa.
 
     Args:
+        isca_id: Id da isca (ver :mod:`itgov.services.phishing_material`).
         url_educativa: Para onde redirecionar após o envio do formulário.
 
     Raises:
+        PhishingError: Isca desconhecida.
         httpx.HTTPError: Falha de rede ou HTTP.
     """
+    isca = phishing_material.obter(isca_id)
+    if isca is None:
+        raise PhishingError("Isca de phishing desconhecida.")
     with _cliente() as cliente:
-        if not _existe(cliente, "/api/templates/", TEMPLATE):
+        if not _existe(cliente, "/api/templates/", isca.template_nome):
             cliente.post(
                 "/api/templates/",
                 json={
-                    "name": TEMPLATE,
-                    "subject": phishing_material.ASSUNTO,
-                    "html": phishing_material.EMAIL_HTML,
-                    "text": "Sua senha corporativa expira em 24 horas. Acesse {{.URL}} para mantê-la.",
+                    "name": isca.template_nome,
+                    "subject": isca.assunto,
+                    "html": isca.email_html,
+                    "text": isca.email_text,
                 },
             ).raise_for_status()
-            log.info("gophish.template_criado", nome=TEMPLATE)
-        if not _existe(cliente, "/api/pages/", LANDING):
+            log.info("gophish.template_criado", nome=isca.template_nome)
+        if not _existe(cliente, "/api/pages/", isca.landing_nome):
             cliente.post(
                 "/api/pages/",
                 json={
-                    "name": LANDING,
-                    "html": phishing_material.LANDING_HTML,
-                    "capture_credentials": True,
+                    "name": isca.landing_nome,
+                    "html": isca.landing_html,
+                    "capture_credentials": isca.captura_credenciais,
                     "capture_passwords": False,
                     "redirect_url": url_educativa,
                 },
             ).raise_for_status()
-            log.info("gophish.landing_criada", nome=LANDING)
+            log.info("gophish.landing_criada", nome=isca.landing_nome)
 
 
 def criar_grupo(nome: str, emails: list[str]) -> None:
@@ -285,33 +287,38 @@ def criar_grupo(nome: str, emails: list[str]) -> None:
     log.info("gophish.grupo_criado", nome=nome, alvos=len(alvos))
 
 
-def disparar_campanha(nome: str, grupo: str, smtp: str, url: str) -> int:
-    """Cria a campanha no GoPhish e já a lança.
+def disparar_campanha(nome: str, grupo: str, smtp: str, url: str, isca_id: str) -> int:
+    """Cria a campanha no GoPhish e já a lança, usando o material da isca.
 
-    O template e a landing são os fixos (``garantir_material`` deve ter rodado).
+    O template e a landing da isca devem existir (``garantir_material`` deve ter
+    rodado antes com a mesma isca).
 
     Args:
         nome: Nome da campanha.
         grupo: Nome do grupo de alvos.
         smtp: Nome do perfil de envio.
         url: Endereço público onde a landing é servida (vai no link do e-mail).
+        isca_id: Id da isca (ver :mod:`itgov.services.phishing_material`).
 
     Returns:
         Id da campanha criada.
 
     Raises:
-        PhishingError: Campo obrigatório vazio.
+        PhishingError: Campo obrigatório vazio ou isca desconhecida.
         httpx.HTTPError: Falha de rede ou HTTP.
     """
     if not (nome and grupo and smtp and url):
         raise PhishingError("Nome, grupo, perfil de envio e URL são obrigatórios.")
+    isca = phishing_material.obter(isca_id)
+    if isca is None:
+        raise PhishingError("Isca de phishing desconhecida.")
     with _cliente() as cliente:
         resp = cliente.post(
             "/api/campaigns/",
             json={
                 "name": nome,
-                "template": {"name": TEMPLATE},
-                "page": {"name": LANDING},
+                "template": {"name": isca.template_nome},
+                "page": {"name": isca.landing_nome},
                 "smtp": {"name": smtp},
                 "url": url.rstrip("/"),
                 "groups": [{"name": grupo}],
@@ -319,5 +326,5 @@ def disparar_campanha(nome: str, grupo: str, smtp: str, url: str) -> int:
         )
         resp.raise_for_status()
         cid = int(resp.json().get("id", 0))
-    log.info("gophish.campanha_disparada", nome=nome, id=cid, grupo=grupo)
+    log.info("gophish.campanha_disparada", nome=nome, id=cid, grupo=grupo, isca=isca.id)
     return cid
