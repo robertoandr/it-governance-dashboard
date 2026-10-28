@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CFTV — Credencial:** o `/gov/cftv` agora mostra o **status de credencial** de cada câmera/gravador (badge "credencial recusada" / "senha padrão" / "pendente", com total no topo), a partir das tags que o coletor de modelos já grava. Admin ganha o botão **Padronizar senha**, que troca a senha do equipamento para a padrão via API da câmera (Intelbras/Dahua), **só onde já há acesso** e passando pela **fila de aprovação do super admin** (como o desisolar do Cyber). Equipamento que recusa a credencial não tem troca remota (precisa reset físico/console) e aparece como "sem acesso". Nunca "chuta" senha, para não disparar o bloqueio de conta das Intelbras.
 - **Cyber — Phishing:** segunda isca **"RH — prêmio surpresa"** (e-mail do RH convidando a se inscrever num sorteio) e **seletor de isca** na aba Phishing, ao lado da isca "senha do M365 expirando". Cada isca tem e-mail, landing e página educativa próprios; a landing do RH **não guarda nada do que é digitado** (`capture_credentials=False`), só registra que a pessoa caiu. Página educativa agora é por isca (`/gov/phishing/educativo/<isca>`)
 
 ### Changed

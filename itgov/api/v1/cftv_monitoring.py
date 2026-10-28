@@ -62,6 +62,38 @@ def _zbx(method: str, params: dict[str, Any] | list[dict[str, Any]]) -> Any:
     return data["result"]
 
 
+def _cred_info(tags: dict[str, str]) -> dict[str, Any]:
+    """Status da credencial do equipamento, a partir das tags do coletor de modelos.
+
+    O ``cftv_model_collector`` grava ``cftv_cred`` (qual credencial o host aceita),
+    ``model`` quando a credencial foi aceita e ``cftv_cred_recusada=<cred>:<data>``
+    quando levou 401. Derivamos daí um status legível para o /gov/cftv.
+
+    Args:
+        tags: Tags do host no Zabbix (tag → valor).
+
+    Returns:
+        ``{"cred": str, "cred_recusada": {"cred", "data"} | None, "cred_status": str}``
+        com ``cred_status`` em ``recusada`` | ``ok`` | ``pendente`` | ``sem_cred``.
+    """
+    cred = tags.get("cftv_cred", "")
+    recusada_raw = tags.get("cftv_cred_recusada", "")
+    recusada: dict[str, str] | None = None
+    if recusada_raw:
+        parte = recusada_raw.split(":", 1)
+        recusada = {"cred": parte[0], "data": parte[1] if len(parte) > 1 else ""}
+
+    if recusada:
+        status = "recusada"
+    elif not cred:
+        status = "sem_cred"
+    elif tags.get("model"):
+        status = "ok"
+    else:
+        status = "pendente"
+    return {"cred": cred, "cred_recusada": recusada, "cred_status": status}
+
+
 def _buscar_cftv() -> dict:
     # ── 1. Grupos CFTV ───────────────────────────────────────────────────────
     groups = _zbx(
@@ -202,6 +234,7 @@ def _buscar_cftv() -> dict:
                 "loja": tags.get("loja", ""),
                 "vendor": tags.get("vendor", ""),
                 "model": tags.get("model", ""),
+                **_cred_info(tags),
                 "status": status,
                 "problems": problems_by_host.get(hid, 0),
                 "offline_desde": offline_desde.get(hid),
@@ -436,6 +469,7 @@ def montar_visao(
     return {
         **resumo,
         "por_tipo": totais_por_tipo(todos),
+        "cred_recusada_total": sum(1 for d in todos if d.get("cred_status") == "recusada"),
         "cards": cards,
         "sedes": _totais_por_sede(grupos, unidades, sede_por_unidade or {}),
         # Quem mais caiu no período, só entre os dispositivos do recorte

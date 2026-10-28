@@ -35,6 +35,33 @@
 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ e[0] }}">{{ e[1] }}</span>
 {% endmacro %}
 
+{% macro cred_badge(st) %}
+{% set estilos = {
+  'recusada': ('bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', '🔑 credencial recusada'),
+  'ok': ('bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', '🔑 senha padrão'),
+  'pendente': ('bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300', '🔑 cred. pendente'),
+} %}
+{% if st in estilos %}{% set e = estilos[st] %}
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ e[0] }}">{{ e[1] }}</span>
+{% endif %}
+{% endmacro %}
+
+{# Botão (só admin) para trocar a senha do equipamento para a padrão, via fila de aprovação. #}
+{% macro padronizar_form(d) %}
+{% if eh_admin and d.ip and d.cred_status in ('ok', 'pendente') and d.cred != 'padrao' %}
+<form method="POST" action="{{ url_for('dashboards.cftv_padronizar_senha') }}" class="inline">
+  <input type="hidden" name="host" value="{{ d.host }}">
+  <input type="hidden" name="ip" value="{{ d.ip }}">
+  <input type="hidden" name="vendor" value="{{ d.vendor }}">
+  <input type="hidden" name="cred_atual" value="{{ d.cred }}">
+  <button type="submit" data-confirm="Padronizar a senha de {{ d.name }}? Isso troca a senha diretamente no equipamento."
+          class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">padronizar senha</button>
+</form>
+{% elif eh_admin and d.cred_status == 'recusada' %}
+<span class="text-[10px] text-slate-400" title="Sem acesso remoto: precisa de reset físico ou do console da câmera">sem acesso</span>
+{% endif %}
+{% endmacro %}
+
 {% macro barra(s) %}
 <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
   {% if s.total > 0 %}
@@ -192,6 +219,12 @@
     {{ stat_card('Manutenção / sem dados', visao.maint ~ ' / ' ~ visao.nodata, 'text-yellow-600', none) }}
   </div>
 
+  {% if visao.cred_recusada_total %}
+  <div class="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 px-4 py-2 text-sm text-red-700 dark:text-red-400">
+    🔑 {{ visao.cred_recusada_total }} equipamento{{ 's' if visao.cred_recusada_total != 1 }} com <b>credencial recusada</b> — a senha padrão não é aceita (sem acesso remoto; precisa reset físico/console).
+  </div>
+  {% endif %}
+
   {% if visao.por_tipo %}
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-label="Dispositivos por tipo">
     {% for t in visao.por_tipo %}
@@ -289,6 +322,7 @@
         <div class="text-right flex-shrink-0">
           {{ status_badge(c.gravador_host.status) }}
           <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{ c.gravador_host.ip }}</p>
+          <div class="mt-0.5">{{ cred_badge(c.gravador_host.cred_status) }} {{ padronizar_form(c.gravador_host) }}</div>
           {% set sn = c.gravador_host.snmp %}
           {% if sn %}
           <p class="text-[10px] mt-0.5 {% if sn.status == 'ok' %}text-green-600{% elif sn.status == 'falha' %}text-red-600{% else %}text-slate-400{% endif %}"
@@ -387,7 +421,7 @@
                 <td class="py-1 pr-2 text-slate-500">
                   {% if d.model %}{{ d.vendor }} {{ d.model }}{% else %}{{ d.vendor or '—' }}{% endif %}
                 </td>
-                <td class="py-1 pr-2">{{ status_badge(d.status) }}</td>
+                <td class="py-1 pr-2 whitespace-nowrap">{{ status_badge(d.status) }} {{ cred_badge(d.cred_status) }} {{ padronizar_form(d) }}</td>
                 <td class="py-1 text-right font-mono {% if d.historico and d.historico.quedas >= 5 %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}"
                     {% if d.historico %}title="{{ d.historico.tempo }} offline no total"{% endif %}>{{ d.historico.quedas if d.historico else '—' }}</td>
               </tr>

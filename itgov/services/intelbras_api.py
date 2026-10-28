@@ -18,6 +18,7 @@ chama deve guardar a credencial que falhou e não insistir (``AcessoNegadoError`
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from datetime import datetime
 
@@ -192,6 +193,40 @@ def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> Lei
         titulos=titulos,
         cameras=cameras,
     )
+
+
+def trocar_senha(ip: str, usuario: str, senha_atual: str, senha_nova: str, timeout: float = 8.0) -> None:
+    """Troca a senha do usuário no gravador/câmera Intelbras/Dahua (CGI ``userManager``).
+
+    Autentica com a credencial atual (conferida pelo nº de série em :func:`_autenticar`)
+    e grava a nova senha no mesmo usuário — não cria usuário nem muda o nome, só a senha.
+
+    Args:
+        ip: IP do equipamento.
+        usuario: Usuário atual, mantido.
+        senha_atual: Senha que o equipamento aceita hoje.
+        senha_nova: Nova senha a gravar.
+        timeout: Segundos por requisição.
+
+    Raises:
+        AcessoNegadoError: Credencial atual recusada (401).
+        httpx.HTTPError: Aparelho fora do ar ou recusou a troca.
+        ValueError: ``ip`` não é um endereço IP válido.
+    """
+    # Valida e normaliza o IP antes de montar a URL (corta SSRF: o alvo nunca é
+    # um valor arbitrário vindo do formulário, só um IP bem-formado).
+    ip = str(ipaddress.ip_address(ip))
+    base = f"http://{ip}/cgi-bin"
+    with httpx.Client(timeout=timeout) as c:
+        auth, _ = _autenticar(c, ip, usuario, senha_atual)
+        r = c.get(
+            f"{base}/userManager.cgi",
+            params={"action": "modifyPassword", "name": usuario, "pwd": senha_nova, "pwdOld": senha_atual},
+            auth=auth,
+        )
+        if r.status_code == 401:
+            raise AcessoNegadoError(ip)
+        r.raise_for_status()
 
 
 _FORMATO_HORA = "%Y-%m-%d %H:%M:%S"
