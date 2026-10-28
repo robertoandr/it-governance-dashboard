@@ -85,6 +85,13 @@ def test_sem_credencial_atual(com_creds: None) -> None:
     assert padronizar_senha(host="c", ip="10.0.0.9", vendor="intelbras", cred_atual="triunfo")["status"] == "sem_cred"
 
 
+def test_ip_invalido_nao_faz_request(monkeypatch: pytest.MonkeyPatch, com_creds: None) -> None:
+    ultima = _captura(monkeypatch)
+    r = padronizar_senha(host="c", ip="10.0.0.9; rm -rf /", vendor="intelbras", cred_atual="centro")
+    assert r["status"] == "erro"
+    assert ultima() == ()  # não montou URL nem chamou a câmera
+
+
 def test_sem_padrao(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CFTV_CAM_PADRAO_USER", raising=False)
     monkeypatch.delenv("CFTV_CAM_PADRAO_PASS", raising=False)

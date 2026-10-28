@@ -12,6 +12,7 @@ A ação é disparada pela fila de aprovação (ver ``app.views.dashboards`` e
 
 from __future__ import annotations
 
+import ipaddress
 import os
 
 import httpx
@@ -57,6 +58,10 @@ def padronizar_senha(host: str, ip: str, vendor: str, cred_atual: str) -> dict[s
         ``{"status": ..., "detalhe": ...}`` com ``status`` em ``ok`` | ``ja_padrao`` |
         ``recusada`` | ``nao_suportado`` | ``sem_cred`` | ``sem_padrao`` | ``erro``.
     """
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return {"status": "erro", "detalhe": f"IP inválido: '{ip}'"}
     padrao = _cred("padrao")
     if not padrao:
         return {"status": "sem_padrao", "detalhe": "credencial padrão não configurada no servidor"}

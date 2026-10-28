@@ -18,6 +18,7 @@ chama deve guardar a credencial que falhou e não insistir (``AcessoNegadoError`
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from datetime import datetime
 
@@ -210,7 +211,11 @@ def trocar_senha(ip: str, usuario: str, senha_atual: str, senha_nova: str, timeo
     Raises:
         AcessoNegadoError: Credencial atual recusada (401).
         httpx.HTTPError: Aparelho fora do ar ou recusou a troca.
+        ValueError: ``ip`` não é um endereço IP válido.
     """
+    # Valida e normaliza o IP antes de montar a URL (corta SSRF: o alvo nunca é
+    # um valor arbitrário vindo do formulário, só um IP bem-formado).
+    ip = str(ipaddress.ip_address(ip))
     base = f"http://{ip}/cgi-bin"
     with httpx.Client(timeout=timeout) as c:
         auth, _ = _autenticar(c, ip, usuario, senha_atual)
