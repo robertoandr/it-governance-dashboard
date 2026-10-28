@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Rota e item de menu `/gov/ciberseguranca` renomeados para **Cybersegurança** em `/gov/cyberseguranca` (com redirecionamento 301 de `/gov/ciberseguranca` e `/gov/backup` e compatibilidade reversa de permissões)
 
+### Fixed
+- **nginx:** `https://noc.grupogadens.com.br/` (raiz nua) dava 404 — agora redireciona para `/gov/`, que leva à tela de login quando não há sessão
+
 ## [2.2.0] - 2026-10-26
 
 Módulo Cyber ganha agentes de IA e simulação de phishing.
