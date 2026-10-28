@@ -1005,6 +1005,29 @@ def cftv_gravador_nome() -> object:
     return _voltar_cftv()
 
 
+@bp.route("/cftv/padronizar-senha", methods=["POST"])
+@login_required
+@require_role("admin", pagina="cftv")
+@requer_aprovacao(lambda: f"CFTV: padronizar a senha de {request.form.get('host', '')} ({request.form.get('ip', '')})")
+def cftv_padronizar_senha() -> object:
+    """Troca a senha de um equipamento CFTV para a padrão (só admin; passa pela fila de aprovação).
+
+    Só age onde já temos acesso (credencial aceita, tag ``cftv_cred``); em ``recusada``
+    não há como trocar remotamente — precisa reset físico/console.
+    """
+    from app.services.cftv_credencial import padronizar_senha
+
+    host = request.form.get("host", "").strip()
+    ip = request.form.get("ip", "").strip()
+    vendor = request.form.get("vendor", "").strip()
+    cred_atual = request.form.get("cred_atual", "").strip()
+    if not host or not ip:
+        abort(400)
+    resultado = padronizar_senha(host=host, ip=ip, vendor=vendor, cred_atual=cred_atual)
+    flash(f"{host}: {resultado['detalhe']}", "success" if resultado["status"] == "ok" else "error")
+    return _voltar_cftv()
+
+
 @bp.route("/cftv/gravador/canais", methods=["POST"])
 @login_required
 @require_role("admin", pagina="cftv")
