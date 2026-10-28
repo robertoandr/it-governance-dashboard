@@ -57,8 +57,9 @@
   <button type="submit" data-confirm="Padronizar a senha de {{ d.name }}? Isso troca a senha diretamente no equipamento."
           class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">padronizar senha</button>
 </form>
-{% elif eh_admin and d.cred_status == 'recusada' %}
-<span class="text-[10px] text-slate-400" title="Sem acesso remoto: precisa de reset físico ou do console da câmera">sem acesso</span>
+{% elif eh_admin and d.ip and d.cred_status == 'recusada' %}
+<a href="http://{{ d.ip }}/" target="_blank" rel="noopener noreferrer" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+   title="Sem acesso remoto: reset físico ou pelo console da câmera">abrir console ↗</a>
 {% endif %}
 {% endmacro %}
 
@@ -219,10 +220,58 @@
     {{ stat_card('Manutenção / sem dados', visao.maint ~ ' / ' ~ visao.nodata, 'text-yellow-600', none) }}
   </div>
 
-  {% if visao.cred_recusada_total %}
-  <div class="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 px-4 py-2 text-sm text-red-700 dark:text-red-400">
-    🔑 {{ visao.cred_recusada_total }} equipamento{{ 's' if visao.cred_recusada_total != 1 }} com <b>credencial recusada</b> — a senha padrão não é aceita (sem acesso remoto; precisa reset físico/console).
-  </div>
+  {% if visao.cred_recusada_list %}
+  <details class="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 px-4 py-2 text-sm text-red-700 dark:text-red-400">
+    <summary class="cursor-pointer">
+      🔑 {{ visao.cred_recusada_total }} equipamento{{ 's' if visao.cred_recusada_total != 1 }} com <b>credencial recusada</b> — a senha padrão não é aceita (sem acesso remoto; precisa reset físico/console). <span class="underline">Ver um a um</span>
+    </summary>
+    <p class="text-xs text-red-600/80 dark:text-red-400/80 mt-2 mb-2">
+      Abra o console do equipamento, faça o reset (ou entre com a senha antiga) e grave a senha padrão. Depois clique em
+      <b>Já resetei — testar</b>: o painel faz uma única tentativa com a senha padrão e, se der certo, libera o equipamento para a coleta.
+    </p>
+    <div class="overflow-x-auto bg-white dark:bg-slate-800 rounded-lg">
+      <table class="w-full text-xs" aria-label="Equipamentos com credencial recusada">
+        <thead>
+          <tr class="border-b border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 uppercase">
+            <th class="text-left py-1 px-2 font-medium">Dispositivo</th>
+            <th class="text-left py-1 pr-2 font-medium">IP</th>
+            <th class="text-left py-1 pr-2 font-medium">Tipo</th>
+            <th class="text-left py-1 pr-2 font-medium">Gravador</th>
+            <th class="text-left py-1 pr-2 font-medium">Credencial tentada</th>
+            <th class="text-left py-1 pr-2 font-medium">Recusada em</th>
+            {% if eh_admin %}<th class="text-right py-1 px-2 font-medium">Ações</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-700/50 text-slate-600 dark:text-slate-300">
+          {% for d in visao.cred_recusada_list %}
+          <tr>
+            <td class="py-1.5 px-2 font-medium text-slate-700 dark:text-slate-200">{{ d.name }}</td>
+            <td class="py-1.5 pr-2 font-mono">{{ d.ip or '—' }}</td>
+            <td class="py-1.5 pr-2">{{ d.subcat }}</td>
+            <td class="py-1.5 pr-2">{{ d.gravador or 'Stand Alone' }}</td>
+            <td class="py-1.5 pr-2">{{ d.cred_recusada.cred if d.cred_recusada else '—' }}</td>
+            <td class="py-1.5 pr-2 whitespace-nowrap">{{ d.cred_recusada.data if d.cred_recusada and d.cred_recusada.data else '—' }}</td>
+            {% if eh_admin %}
+            <td class="py-1.5 px-2 text-right whitespace-nowrap">
+              {% if d.ip %}
+              <a href="http://{{ d.ip }}/" target="_blank" rel="noopener noreferrer"
+                 class="text-blue-600 dark:text-blue-400 hover:underline">abrir console ↗</a>
+              <form method="POST" action="{{ url_for('dashboards.cftv_retestar_senha') }}" class="inline ml-2">
+                <input type="hidden" name="host" value="{{ d.host }}">
+                <input type="hidden" name="ip" value="{{ d.ip }}">
+                <input type="hidden" name="vendor" value="{{ d.vendor }}">
+                <button type="submit" data-confirm="Testar a senha padrão em {{ d.name }}? Faz uma única tentativa de login."
+                        class="text-green-700 dark:text-green-400 hover:underline">já resetei — testar</button>
+              </form>
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
   {% endif %}
 
   {% if visao.por_tipo %}

@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import ipaddress
 import os
+from datetime import date
 
 import httpx
 import requests
 import structlog
 
-from itgov.services.intelbras_api import AcessoNegadoError, trocar_senha
+from itgov.services.intelbras_api import AcessoNegadoError, testar_credencial, trocar_senha
 
 log = structlog.get_logger(__name__)
 
@@ -32,8 +33,9 @@ _CRED_ENV: dict[str, tuple[str, str]] = {
     "intelbras": ("INTELBRAS_HTTP_USER", "INTELBRAS_HTTP_PASSWORD"),
 }
 
-# Fabricantes com troca de senha automática (CGI Intelbras/Dahua).
-_VENDORS_CGI = {"intelbras", "dahua"}
+# Fabricantes com troca de senha automática (CGI Intelbras/Dahua). Vazio: gravadores
+# Intelbras cadastrados sem a tag ``vendor``.
+_VENDORS_CGI = {"intelbras", "dahua", ""}
 
 
 def _cred(nome: str) -> tuple[str, str] | None:
@@ -106,3 +108,56 @@ def _marcar_padrao_no_zabbix(host: str) -> None:
         _zbx("host.update", {"hostid": alvo["hostid"], "tags": tags})
     except (requests.RequestException, RuntimeError, KeyError, ValueError) as exc:
         log.warning("cftv_padronizar_tag_falhou", host=host, erro=str(exc))
+
+
+def retestar_padrao(host: str, ip: str, vendor: str) -> dict[str, str]:
+    """Depois do reset físico/console, confere se o equipamento já aceita a senha padrão.
+
+    Faz **uma** tentativa de login com a credencial padrão (não chuta outras). Se
+    aceitar, marca ``cftv_cred=padrao`` e tira ``cftv_cred_recusada`` — o coletor de
+    modelos volta a ler o equipamento na próxima rodada. Se recusar, renova a data da
+    recusa (o coletor espera de novo antes de tentar).
+
+    Returns:
+        ``{"status": ..., "detalhe": ...}`` com ``status`` em ``ok`` | ``recusada`` |
+        ``nao_suportado`` | ``sem_padrao`` | ``erro``.
+    """
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return {"status": "erro", "detalhe": f"IP inválido: '{ip}'"}
+    padrao = _cred("padrao")
+    if not padrao:
+        return {"status": "sem_padrao", "detalhe": "credencial padrão não configurada no servidor"}
+    if vendor.strip().lower() not in _VENDORS_CGI:
+        return {"status": "nao_suportado", "detalhe": f"teste automático indisponível para '{vendor}'"}
+
+    try:
+        testar_credencial(ip, *padrao)
+    except AcessoNegadoError:
+        _marcar_recusa_no_zabbix(host)
+        log.warning("cftv_retestar_recusada", host=host, ip=ip)
+        return {"status": "recusada", "detalhe": "a senha padrão ainda é recusada — confira o reset no console"}
+    except httpx.HTTPError as exc:
+        log.warning("cftv_retestar_falhou", host=host, ip=ip, erro=str(exc))
+        return {"status": "erro", "detalhe": f"o equipamento não respondeu: {exc}"}
+
+    _marcar_padrao_no_zabbix(host)
+    log.info("cftv_retestar_ok", host=host, ip=ip)
+    return {"status": "ok", "detalhe": "senha padrão aceita — credencial liberada"}
+
+
+def _marcar_recusa_no_zabbix(host: str) -> None:
+    """Melhor esforço: renova ``cftv_cred_recusada=padrao:<hoje>`` no host."""
+    try:
+        from itgov.api.v1.cftv_monitoring import _zbx
+
+        achados = _zbx("host.get", {"output": ["hostid"], "selectTags": "extend", "filter": {"host": [host]}})
+        if not achados:
+            return
+        alvo = achados[0]
+        tags = [t for t in alvo.get("tags", []) if t["tag"] != "cftv_cred_recusada"]
+        tags.append({"tag": "cftv_cred_recusada", "value": f"padrao:{date.today().isoformat()}"})
+        _zbx("host.update", {"hostid": alvo["hostid"], "tags": tags})
+    except (requests.RequestException, RuntimeError, KeyError, ValueError) as exc:
+        log.warning("cftv_retestar_tag_falhou", host=host, erro=str(exc))
