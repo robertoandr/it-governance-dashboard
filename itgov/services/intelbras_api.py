@@ -195,6 +195,19 @@ def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> Lei
     )
 
 
+def testar_credencial(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> None:
+    """Uma única tentativa de login (nº de série) — não insiste, para não bloquear o usuário.
+
+    Raises:
+        AcessoNegadoError: Credencial recusada (401).
+        httpx.HTTPError: Aparelho fora do ar.
+        ValueError: ``ip`` não é um endereço IP válido.
+    """
+    ip = str(ipaddress.ip_address(ip))
+    with httpx.Client(timeout=timeout) as c:
+        _autenticar(c, ip, usuario, senha)
+
+
 def trocar_senha(ip: str, usuario: str, senha_atual: str, senha_nova: str, timeout: float = 8.0) -> None:
     """Troca a senha do usuário no gravador/câmera Intelbras/Dahua (CGI ``userManager``).
 

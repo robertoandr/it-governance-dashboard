@@ -1028,6 +1028,25 @@ def cftv_padronizar_senha() -> object:
     return _voltar_cftv()
 
 
+@bp.route("/cftv/retestar-senha", methods=["POST"])
+@login_required
+@require_role("admin", pagina="cftv")
+def cftv_retestar_senha() -> object:
+    """Depois do reset físico/console, testa a senha padrão uma vez e libera o equipamento.
+
+    Sem fila de aprovação: só faz um login de leitura (nada muda no equipamento).
+    """
+    from app.services.cftv_credencial import retestar_padrao
+
+    host = request.form.get("host", "").strip()
+    ip = request.form.get("ip", "").strip()
+    if not host or not ip:
+        abort(400)
+    resultado = retestar_padrao(host=host, ip=ip, vendor=request.form.get("vendor", "").strip())
+    flash(f"{host}: {resultado['detalhe']}", "success" if resultado["status"] == "ok" else "error")
+    return _voltar_cftv()
+
+
 @bp.route("/cftv/gravador/canais", methods=["POST"])
 @login_required
 @require_role("admin", pagina="cftv")

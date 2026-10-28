@@ -470,6 +470,9 @@ def montar_visao(
         **resumo,
         "por_tipo": totais_por_tipo(todos),
         "cred_recusada_total": sum(1 for d in todos if d.get("cred_status") == "recusada"),
+        "cred_recusada_list": sorted(
+            (d for d in todos if d.get("cred_status") == "recusada"), key=lambda d: (d["gravador"], d["name"])
+        ),
         "cards": cards,
         "sedes": _totais_por_sede(grupos, unidades, sede_por_unidade or {}),
         # Quem mais caiu no período, só entre os dispositivos do recorte
