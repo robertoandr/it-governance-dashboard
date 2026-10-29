@@ -196,7 +196,11 @@ def test_marcar_padrao_tira_recusa_e_invalida_cache(monkeypatch: pytest.MonkeyPa
     def zbx(metodo: str, params: dict) -> list[dict]:
         chamadas.append((metodo, params))
         if metodo == "host.get":
-            return [{"hostid": "42", "tags": [{"tag": "cftv_cred_recusada", "value": "padrao:2026-10-28"}]}]
+            # o Zabbix 7 devolve "automatic" junto, e o host.update recusa esse campo
+            return [{"hostid": "42", "tags": [
+                {"tag": "vendor", "value": "intelbras", "automatic": "0"},
+                {"tag": "cftv_cred_recusada", "value": "padrao:2026-10-28", "automatic": "0"},
+            ]}]  # fmt: skip
         return []
 
     invalidou: list[bool] = []
@@ -204,7 +208,10 @@ def test_marcar_padrao_tira_recusa_e_invalida_cache(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(cftv_monitoring, "invalidar_cache_cftv", lambda: invalidou.append(True))
     cftv_credencial._marcar_padrao_no_zabbix("cam-adm-hauer-ch10")
 
-    assert chamadas[-1] == ("host.update", {"hostid": "42", "tags": [{"tag": "cftv_cred", "value": "padrao"}]})
+    assert chamadas[0][1]["selectTags"] == ["tag", "value"]
+    assert chamadas[-1] == ("host.update", {"hostid": "42", "tags": [
+        {"tag": "vendor", "value": "intelbras"}, {"tag": "cftv_cred", "value": "padrao"},
+    ]})  # fmt: skip
     assert invalidou == [True]
 
 

@@ -94,16 +94,21 @@ def padronizar_senha(host: str, ip: str, vendor: str, cred_atual: str) -> dict[s
     return {"status": "ok", "detalhe": "senha padronizada com sucesso"}
 
 
+def _tag(t: dict[str, str]) -> dict[str, str]:
+    """Só ``tag`` e ``value``: o ``host.update`` recusa campos de leitura como ``automatic``."""
+    return {"tag": t["tag"], "value": t.get("value", "")}
+
+
 def _marcar_padrao_no_zabbix(host: str) -> None:
     """Melhor esforço: marca ``cftv_cred=padrao`` e remove ``cftv_cred_recusada`` no host."""
     try:
         from itgov.api.v1.cftv_monitoring import _zbx, invalidar_cache_cftv
 
-        achados = _zbx("host.get", {"output": ["hostid"], "selectTags": "extend", "filter": {"host": [host]}})
+        achados = _zbx("host.get", {"output": ["hostid"], "selectTags": ["tag", "value"], "filter": {"host": [host]}})
         if not achados:
             return
         alvo = achados[0]
-        tags = [t for t in alvo.get("tags", []) if t["tag"] not in ("cftv_cred", "cftv_cred_recusada")]
+        tags = [_tag(t) for t in alvo.get("tags", []) if t["tag"] not in ("cftv_cred", "cftv_cred_recusada")]
         tags.append({"tag": "cftv_cred", "value": "padrao"})
         _zbx("host.update", {"hostid": alvo["hostid"], "tags": tags})
         invalidar_cache_cftv()  # o equipamento sai da lista de recusados já no redirect
@@ -153,11 +158,11 @@ def _marcar_recusa_no_zabbix(host: str) -> None:
     try:
         from itgov.api.v1.cftv_monitoring import _zbx, invalidar_cache_cftv
 
-        achados = _zbx("host.get", {"output": ["hostid"], "selectTags": "extend", "filter": {"host": [host]}})
+        achados = _zbx("host.get", {"output": ["hostid"], "selectTags": ["tag", "value"], "filter": {"host": [host]}})
         if not achados:
             return
         alvo = achados[0]
-        tags = [t for t in alvo.get("tags", []) if t["tag"] != "cftv_cred_recusada"]
+        tags = [_tag(t) for t in alvo.get("tags", []) if t["tag"] != "cftv_cred_recusada"]
         tags.append({"tag": "cftv_cred_recusada", "value": f"padrao:{date.today().isoformat()}"})
         _zbx("host.update", {"hostid": alvo["hostid"], "tags": tags})
         invalidar_cache_cftv()
