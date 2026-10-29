@@ -299,7 +299,7 @@ services:
       PENTEST_ALVOS: "${PENTEST_ALVOS:-{}}"
       STRIX_LLM: "${STRIX_LLM:-}"
       LLM_API_KEY: "${LLM_API_KEY:-}"
-      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+      LLM_API_BASE: "${LLM_API_BASE:-}"
       PENTEST_WORK_DIR: "/data"
       PENTEST_TIMEOUT_S: "${PENTEST_TIMEOUT_S:-3600}"
       PENTEST_POLL_S: "${PENTEST_POLL_S:-10}"
