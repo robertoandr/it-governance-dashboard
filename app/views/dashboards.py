@@ -348,16 +348,15 @@ def acronis_backup() -> str:
     return render_template("dashboards/acronis_backup.html", data=data)
 
 
-@bp.route("/cyber")
-@login_required
-@require_role("admin", "gestor", pagina="cyber")
-def cyber_incidentes() -> str:
-    """Render módulo Cyber: investigação de incidentes + NOC de segurança.
+def _contexto_cyber() -> dict[str, Any]:
+    """Contexto compartilhado pelas páginas do módulo Cyber.
 
-    Somente leitura. Depende do Acronis (mesma fonte da Cybersegurança); sem
-    ``ACRONIS_BASE_URL`` a página não é exposta.
+    Reúne o que o template ``cyber.html`` precisa em qualquer página (KPIs, NOC,
+    estado do phishing e da investigação ao vivo). As views acrescentam só o que é
+    específico da sua página (ex.: os incidentes filtrados). Depende do Acronis
+    (mesma fonte da Cybersegurança); sem ``ACRONIS_BASE_URL`` o módulo não é exposto.
     """
-    from itgov.api.v1.cyber import filtrar_incidentes, get_cached_cyber
+    from itgov.api.v1.cyber import get_cached_cyber
     from itgov.services import acronis_cyber, gophish, phishing_material
 
     if not os.getenv("ACRONIS_BASE_URL"):
@@ -372,24 +371,106 @@ def cyber_incidentes() -> str:
             log.warning("cyber.phishing.smtp_indisponivel")
 
     dados = get_cached_cyber()
+    return {
+        "dados": dados,
+        "kpis": dados["kpis"],
+        "noc": dados["noc"],
+        "total_incidentes": len(dados["incidentes"]),
+        "investigacao_ativa": acronis_cyber.configurado(),
+        "pode_gerenciar_phishing": pode_phishing,
+        "perfis_smtp": perfis_smtp,
+        "iscas_phishing": phishing_material.opcoes(),
+        "isca_phishing_padrao": phishing_material.ISCA_PADRAO,
+    }
+
+
+@bp.route("/cyber")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber() -> Response:
+    """Endereço do módulo: abre a primeira página (Incidentes)."""
+    return redirect(url_for("dashboards.cyber_incidentes"), code=301)
+
+
+@bp.route("/cyber/incidentes")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_incidentes() -> str:
+    """Página Incidentes: lista filtrável dos incidentes do Acronis (InfluxDB)."""
+    from itgov.api.v1.cyber import filtrar_incidentes
+
+    ctx = _contexto_cyber()
+    incidentes_raw = ctx["dados"]["incidentes"]
     severidade = request.args.get("severidade") or None
     tipo = request.args.get("tipo") or None
     busca = request.args.get("q") or None
-    incidentes = filtrar_incidentes(dados["incidentes"], severidade=severidade, tipo=tipo, busca=busca)
-    severidades = sorted({str(i.get("severity", "")).strip() for i in dados["incidentes"] if i.get("severity")})
+    incidentes = filtrar_incidentes(incidentes_raw, severidade=severidade, tipo=tipo, busca=busca)
+    severidades = sorted({str(i.get("severity", "")).strip() for i in incidentes_raw if i.get("severity")})
     return render_template(
         "dashboards/cyber.html",
-        kpis=dados["kpis"],
-        noc=dados["noc"],
+        pagina="incidentes",
         incidentes=incidentes,
-        total_incidentes=len(dados["incidentes"]),
         severidades=severidades,
         filtro={"severidade": severidade or "", "tipo": tipo or "", "q": busca or ""},
-        investigacao_ativa=acronis_cyber.configurado(),
-        pode_gerenciar_phishing=pode_phishing,
-        perfis_smtp=perfis_smtp,
-        iscas_phishing=phishing_material.opcoes(),
-        isca_phishing_padrao=phishing_material.ISCA_PADRAO,
+        **ctx,
+    )
+
+
+@bp.route("/cyber/noc")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_noc() -> str:
+    """Página NOC de Segurança: visão correlacionada Acronis + Zabbix + FortiGate."""
+    return render_template("dashboards/cyber.html", pagina="noc", **_contexto_cyber())
+
+
+@bp.route("/cyber/live")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_live() -> str:
+    """Página Investigação ao vivo: incidentes consultados direto na API Acronis."""
+    return render_template("dashboards/cyber.html", pagina="live", **_contexto_cyber())
+
+
+@bp.route("/cyber/siem")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_siem() -> str:
+    """Página Agente SIEM: leitura/análise dos logs dos FortiGate."""
+    return render_template("dashboards/cyber.html", pagina="siem", **_contexto_cyber())
+
+
+@bp.route("/cyber/agentes")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_agentes() -> str:
+    """Página Agente de incidentes: propostas do agente e máquinas isoladas."""
+    return render_template("dashboards/cyber.html", pagina="agente", **_contexto_cyber())
+
+
+@bp.route("/cyber/phishing")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_phishing() -> str:
+    """Página Phishing: simulações do GoPhish (clique × reporte)."""
+    return render_template("dashboards/cyber.html", pagina="phishing", **_contexto_cyber())
+
+
+@bp.route("/cyber/pentest")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_pentest() -> str:
+    """Página Pentest: lança e acompanha varreduras do Strix contra alvos da allowlist."""
+    from app.services import pentest_strix
+
+    ctx = _contexto_cyber()
+    return render_template(
+        "dashboards/cyber.html",
+        pagina="pentest",
+        pentest_alvos=pentest_strix.alvos(),
+        pentest_runs=pentest_strix.listar(),
+        pode_pentest=current_user.role == "admin",
+        **ctx,
     )
 
 
@@ -512,6 +593,57 @@ def cyber_rejeitar_proposta(proposta_id: int) -> object:
     except incidentes_agente.PropostaNaoExecutavelError:
         return jsonify({"ok": False, "error": "Esta proposta já foi decidida ou é só para investigar."}), 409
     return jsonify({"ok": True, "proposta": proposta.para_dict()})
+
+
+# ── Pentest (Strix): lançar, cancelar e acompanhar ──────────────────────────
+
+
+@bp.route("/cyber/pentest/lancar", methods=["POST"])
+@login_required
+@require_role("admin", pagina="cyber")
+@requer_aprovacao(lambda: f"Cyber: pentest (Strix) no alvo {request.form.get('alvo', '')}")
+def cyber_pentest_lancar() -> object:
+    """Enfileira um pentest contra um alvo da allowlist (passa pela fila de aprovação).
+
+    O alvo é validado contra ``PENTEST_ALVOS``: chave fora da allowlist → 400. Só o
+    worker ``itgov-strix`` executa; aqui apenas a linha é criada.
+    """
+    from app.services import pentest_strix
+
+    chave = request.form.get("alvo", "").strip()
+    if pentest_strix.alvo_valido(chave) is None:
+        abort(400)
+    run = pentest_strix.lancar(chave, solicitado_por=str(current_user.email), aprovado_por=_quem_decide())
+    flash(f"Pentest enfileirado para {run.alvo_label}. Acompanhe o andamento aqui.", "success")
+    return redirect(url_for("dashboards.cyber_pentest"))
+
+
+@bp.route("/cyber/pentest/<int:run_id>/cancelar", methods=["POST"])
+@login_required
+@require_role("admin", pagina="cyber")
+def cyber_pentest_cancelar(run_id: int) -> object:
+    """Cancela um pentest ainda pendente/na fila/rodando."""
+    from app.services import pentest_strix
+
+    if pentest_strix.cancelar(run_id):
+        flash("Pentest cancelado.", "success")
+    else:
+        flash("Não foi possível cancelar (o pentest já terminou).", "error")
+    return redirect(url_for("dashboards.cyber_pentest"))
+
+
+@bp.route("/cyber/pentest/status")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_pentest_status() -> object:
+    """Lista os runs em JSON, para o polling da página."""
+    from flask import jsonify
+
+    from app.services import pentest_strix
+
+    if not os.getenv("ACRONIS_BASE_URL"):
+        abort(404)
+    return jsonify({"runs": pentest_strix.listar()})
 
 
 # ── Phishing: gestão das campanhas (quem pode é liberado em Usuários) ────────

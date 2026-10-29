@@ -79,6 +79,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         from app.models import aprovacao as _aprovacao_model
         from app.models import incidente_agente as _incidente_agente_model
         from app.models import link as _link_model  # noqa: F401
+        from app.models import pentest as _pentest_model  # noqa: F401
         from app.models import rede as _rede_model
         from app.models import siem as _siem_model  # noqa: F401
         from app.models import tarefas as _tarefas_model  # noqa: F401

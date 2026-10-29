@@ -42,7 +42,7 @@ def test_aba_phishing_tem_gestao_para_admin(authed_client, monkeypatch: pytest.M
     monkeypatch.setenv("ACRONIS_BASE_URL", "https://acronis.test")
     monkeypatch.setattr(gophish, "configurado", lambda: False)
     _mock_fontes(monkeypatch)
-    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    html = authed_client.get("/gov/cyber/phishing").get_data(as_text=True)
     assert "Nova campanha" in html and "/gov/cyber/phishing/disparar" in html
     # O seletor de isca é alimentado pelo JSON das iscas, que inclui a do RH.
     assert "rh-premio-surpresa" in html

@@ -124,7 +124,7 @@ def test_pagina_cyber_tem_aba_phishing(authed_client, monkeypatch: pytest.Monkey
 
     monkeypatch.setenv("ACRONIS_BASE_URL", "https://acronis.test")
     _mock_fontes(monkeypatch)
-    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    html = authed_client.get("/gov/cyber/phishing").get_data(as_text=True)
     assert "Phishing" in html and "/api/v1/cyber/phishing" in html
 
 

@@ -349,5 +349,5 @@ def test_pagina_cyber_tem_aba_agente_siem(authed_client, monkeypatch: pytest.Mon
 
     monkeypatch.setenv("ACRONIS_BASE_URL", "https://acronis.test")
     _mock_fontes(monkeypatch)
-    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    html = authed_client.get("/gov/cyber/siem").get_data(as_text=True)
     assert "Agente SIEM" in html and "/api/v1/cyber/siem" in html
