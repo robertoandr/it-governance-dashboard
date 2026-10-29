@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
 import threading
 import time
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -28,13 +30,26 @@ log = structlog.get_logger(__name__)
 
 _CACHE_TTL = 120  # 2 minutos — dados operacionais de câmeras mudam rápido
 
+# O gunicorn roda vários workers, cada um com seu cache. Invalidar só a memória do
+# worker que atendeu o POST deixaria os outros mostrando o dado velho por até 2 min;
+# a data deste arquivo avisa todos os workers de que o cache ficou velho.
+_MARCA_INVALIDADO = Path(tempfile.gettempdir()) / "itgov-cftv-cache.invalidado"
+
 _lock = threading.Lock()
 _cache_data: dict | None = None
 _cache_ts: float = 0.0
+_cache_carregado_em: float = 0.0  # time.time() do início da busca que gerou o cache
+
+
+def _invalidado_depois_da_carga() -> bool:
+    try:
+        return _MARCA_INVALIDADO.stat().st_mtime >= _cache_carregado_em
+    except OSError:
+        return False
 
 
 def _cache_valido() -> bool:
-    return _cache_data is not None and (time.monotonic() - _cache_ts) < _CACHE_TTL
+    return _cache_data is not None and (time.monotonic() - _cache_ts) < _CACHE_TTL and not _invalidado_depois_da_carga()
 
 
 def _zbx(method: str, params: dict[str, Any] | list[dict[str, Any]]) -> Any:
@@ -634,13 +649,14 @@ def get_cached_historico_quedas() -> dict[str, dict]:
 
 def get_cached_cftv_summary() -> dict:
     """Retorna dispositivos CFTV do Zabbix com cache TTL 2min."""
-    global _cache_data, _cache_ts
+    global _cache_data, _cache_ts, _cache_carregado_em
     with _lock:
         if _cache_valido():
             log.debug("cftv_monitoring.cache.hit")
             return _cache_data  # type: ignore[return-value]
 
     log.info("cftv_monitoring.cache.miss")
+    inicio = time.time()
     try:
         dados = _buscar_cftv()
     except Exception as exc:
@@ -649,11 +665,19 @@ def get_cached_cftv_summary() -> dict:
     with _lock:
         _cache_data = dados
         _cache_ts = time.monotonic()
+        _cache_carregado_em = inicio
     return dados
 
 
 def invalidar_cache_cftv() -> None:
-    """Descarta o cache de dispositivos (após alterar um host no Zabbix pelo dashboard)."""
+    """Descarta o cache de dispositivos (após alterar um host no Zabbix pelo dashboard).
+
+    Vale para todos os workers: além da memória deste, renova a data do arquivo-marca.
+    """
     global _cache_data, _cache_ts
     with _lock:
         _cache_data, _cache_ts = None, 0.0
+    try:
+        _MARCA_INVALIDADO.touch()
+    except OSError as exc:
+        log.warning("cftv_monitoring.invalidar_marca_falhou", erro=str(exc))

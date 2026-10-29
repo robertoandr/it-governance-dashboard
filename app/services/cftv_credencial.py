@@ -97,7 +97,7 @@ def padronizar_senha(host: str, ip: str, vendor: str, cred_atual: str) -> dict[s
 def _marcar_padrao_no_zabbix(host: str) -> None:
     """Melhor esforço: marca ``cftv_cred=padrao`` e remove ``cftv_cred_recusada`` no host."""
     try:
-        from itgov.api.v1.cftv_monitoring import _zbx
+        from itgov.api.v1.cftv_monitoring import _zbx, invalidar_cache_cftv
 
         achados = _zbx("host.get", {"output": ["hostid"], "selectTags": "extend", "filter": {"host": [host]}})
         if not achados:
@@ -106,6 +106,7 @@ def _marcar_padrao_no_zabbix(host: str) -> None:
         tags = [t for t in alvo.get("tags", []) if t["tag"] not in ("cftv_cred", "cftv_cred_recusada")]
         tags.append({"tag": "cftv_cred", "value": "padrao"})
         _zbx("host.update", {"hostid": alvo["hostid"], "tags": tags})
+        invalidar_cache_cftv()  # o equipamento sai da lista de recusados já no redirect
     except (requests.RequestException, RuntimeError, KeyError, ValueError) as exc:
         log.warning("cftv_padronizar_tag_falhou", host=host, erro=str(exc))
 
@@ -150,7 +151,7 @@ def retestar_padrao(host: str, ip: str, vendor: str) -> dict[str, str]:
 def _marcar_recusa_no_zabbix(host: str) -> None:
     """Melhor esforço: renova ``cftv_cred_recusada=padrao:<hoje>`` no host."""
     try:
-        from itgov.api.v1.cftv_monitoring import _zbx
+        from itgov.api.v1.cftv_monitoring import _zbx, invalidar_cache_cftv
 
         achados = _zbx("host.get", {"output": ["hostid"], "selectTags": "extend", "filter": {"host": [host]}})
         if not achados:
@@ -159,5 +160,6 @@ def _marcar_recusa_no_zabbix(host: str) -> None:
         tags = [t for t in alvo.get("tags", []) if t["tag"] != "cftv_cred_recusada"]
         tags.append({"tag": "cftv_cred_recusada", "value": f"padrao:{date.today().isoformat()}"})
         _zbx("host.update", {"hostid": alvo["hostid"], "tags": tags})
+        invalidar_cache_cftv()
     except (requests.RequestException, RuntimeError, KeyError, ValueError) as exc:
         log.warning("cftv_retestar_tag_falhou", host=host, erro=str(exc))
