@@ -12,7 +12,7 @@ Config por ambiente:
 - ``PENTEST_DB_URL``: banco do dashboard (padrão: o SQLite do app,
   ``sqlite:////app/data/app.db``, com o volume ``app_data`` montado).
 - ``PENTEST_ALVOS``: allowlist (JSON), idêntica à do app.
-- ``STRIX_LLM`` / ``LLM_API_KEY`` / ``LLM_BASE_URL``: LLM do Strix (OmniRoute).
+- ``STRIX_LLM`` / ``LLM_API_KEY`` / ``LLM_API_BASE``: LLM do Strix (OmniRoute).
 - ``PENTEST_WORK_DIR`` (padrão ``/data``; o Strix grava em ``<dir>/strix_runs``),
   ``PENTEST_TIMEOUT_S`` (padrão 3600), ``PENTEST_POLL_S`` (padrão 10).
 """
