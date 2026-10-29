@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cyber:** o item "Cyber" do menu lateral agora aponta para `/gov/cyber` (que abre Incidentes); sem novos itens de topo — a navegação das páginas fica dentro do módulo.
 
 ### Fixed (CFTV)
+- **CFTV — Reteste aceito não tirava o equipamento da lista:** o **já resetei — testar** confirmava a senha padrão ("credencial liberada"), mas a troca da tag no Zabbix falhava (`unexpected parameter "automatic"`): o `host.get` com `selectTags: "extend"` devolve o campo `automatic`, que o `host.update` recusa. Agora só `tag`/`value` são lidos e regravados — vale para o reteste (aceito ou recusado) e para o **Padronizar senha**.
 - **CFTV — Credencial liberada sai da lista na hora:** depois de **já resetei — testar** com sucesso ("senha padrão aceita — credencial liberada"), o equipamento continuava na lista de credenciais recusadas por até 2 min — o `/gov/cftv` lia de um cache que não era descartado, e cada um dos 4 workers do gunicorn tinha o seu. Agora a troca de tag no Zabbix invalida o cache de **todos** os workers (arquivo-marca em disco), e o equipamento some da lista já no redirect. Vale também para o **Padronizar senha** e para o reteste recusado (data da recusa renovada).
 
 ### Added (CFTV)
