@@ -99,3 +99,9 @@ OTEL_SERVICE_NAME = _env("OTEL_SERVICE_NAME", "itgov", required=False)
 OTEL_SERVICE_VERSION = _env("OTEL_SERVICE_VERSION", "dev", required=False)
 OTEL_ENVIRONMENT = _env("OTEL_ENVIRONMENT", "development", required=False)
 OTEL_ENDPOINT = _env("OTEL_ENDPOINT", "localhost:4317", required=False)
+
+# ── Pentest (Strix) — allowlist de alvos do módulo Cyber
+# Só é possível lançar pentest contra alvos declarados aqui (nunca uma URL livre do
+# formulário). Formato JSON: {"chave": {"label": "...", "url": "https://..."}}.
+# Ex.: PENTEST_ALVOS='{"dashboard":{"label":"Dashboard de Governança","url":"https://172.29.2.11"}}'
+PENTEST_ALVOS = _env("PENTEST_ALVOS", "{}", required=False)

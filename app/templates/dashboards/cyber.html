@@ -9,7 +9,30 @@
   document.addEventListener('alpine:init', function () {
     Alpine.data('cyberPage', function () {
       return {
-        aba: 'incidentes',
+        aba: '{{ pagina }}',
+        iniciarPagina: function () {
+          if (this.aba === 'live' && this.liveConfigurado) { this.carregarLive(); }
+          if (this.aba === 'agente') { this.carregarAgente(); }
+          if (this.aba === 'siem') {
+            this.carregarSiem();
+            if (!this.siemTimer) { this.siemTimer = setInterval(() => { if (this.aba === 'siem') { this.carregarSiem(); } }, 60000); }
+          }
+          if (this.aba === 'phishing') { this.carregarPhishing(); }
+          if (this.aba === 'pentest') {
+            this.carregarPentest();
+            if (!this.pentestTimer) { this.pentestTimer = setInterval(() => { if (this.aba === 'pentest') { this.carregarPentest(); } }, 15000); }
+          }
+        },
+        pentestRuns: {{ pentest_runs | tojson if pentest_runs is defined else '[]' }},
+        pentestTimer: null,
+        carregarPentest: async function () {
+          try {
+            const r = await fetch('/gov/cyber/pentest/status', {credentials: 'same-origin'});
+            if (!r.ok) { throw new Error(r.status); }
+            const d = await r.json();
+            this.pentestRuns = d.runs || [];
+          } catch (e) { /* mantém a lista renderizada pelo servidor */ }
+        },
         liveUrl: '/api/v1/cyber/incidentes/live',
         liveConfigurado: {{ 'true' if investigacao_ativa else 'false' }},
         liveCarregado: false,
@@ -226,7 +249,7 @@
 </div>
 {% endmacro %}
 
-<div x-data="cyberPage">
+<div x-data="cyberPage" x-init="iniciarPagina()">
 
   <div class="mb-4">
     <h1 class="text-xl font-bold text-gray-800 dark:text-slate-100">Cyber</h1>
@@ -237,42 +260,32 @@
     </p>
   </div>
 
-  {# --- Abas --- #}
-  <div class="flex gap-2 border-b border-gray-200 dark:border-slate-700 mb-5">
-    <button type="button" @click="irPara('incidentes')"
-            :class="ehAba('incidentes') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
-            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
-      Incidentes ({{ total_incidentes }})
-    </button>
-    <button type="button" @click="irPara('noc')"
-            :class="ehAba('noc') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
-            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
-      NOC de Segurança
-    </button>
-    <button type="button" @click="irPara('live')"
-            :class="ehAba('live') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
-            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
-      Investigação ao vivo
-    </button>
-    <button type="button" @click="irPara('siem')"
-            :class="ehAba('siem') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
-            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
-      Agente SIEM
-    </button>
-    <button type="button" @click="irPara('agente')"
-            :class="ehAba('agente') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
-            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
-      Agente de incidentes
-    </button>
-    <button type="button" @click="irPara('phishing')"
-            :class="ehAba('phishing') ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'"
-            class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px">
-      Phishing
-    </button>
+  {# --- Páginas do módulo (cada aba é uma URL própria) --- #}
+  {% set abas = [
+    ('incidentes', 'dashboards.cyber_incidentes', 'Incidentes (' ~ total_incidentes ~ ')'),
+    ('noc', 'dashboards.cyber_noc', 'NOC de Segurança'),
+    ('live', 'dashboards.cyber_live', 'Investigação ao vivo'),
+    ('siem', 'dashboards.cyber_siem', 'Agente SIEM'),
+    ('agente', 'dashboards.cyber_agentes', 'Agente de incidentes'),
+    ('phishing', 'dashboards.cyber_phishing', 'Phishing'),
+    ('pentest', 'dashboards.cyber_pentest', 'Pentest'),
+  ] %}
+  <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 mb-5">
+    {% for chave, rota, rotulo in abas %}
+    <a href="{{ url_for(rota) }}"
+       class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px {% if pagina == chave %}border-blue-600 text-blue-600{% else %}border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-slate-300{% endif %}">
+      {{ rotulo }}
+    </a>
+    {% endfor %}
   </div>
 
   {# ============================= ABA INCIDENTES ============================ #}
   <div x-show="ehAba('incidentes')">
+    {# Variáveis só da página Incidentes; as outras páginas renderizam o mesmo
+       template, então damos defaults para o Jinja não quebrar. #}
+    {% set severidades = severidades | default([]) %}
+    {% set incidentes = incidentes | default([]) %}
+    {% set filtro = filtro | default({'severidade': '', 'tipo': '', 'q': ''}) %}
 
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
       {{ stat_card('Agentes protegidos', kpis.total_agents, 'text-gray-800 dark:text-slate-100', none) }}
@@ -786,6 +799,104 @@
         <p x-show="!phish.campanhas.length" class="text-sm text-gray-400">Nenhuma campanha ainda.</p>
       </div>
     </template>
+  </div>
+
+  {# ============================== ABA PENTEST ============================= #}
+  <div x-show="ehAba('pentest')" x-cloak>
+    <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
+      Pentest automatizado com o <strong>Strix</strong> contra os <strong>ativos próprios</strong> da allowlist
+      (nunca um alvo arbitrário). Cada varredura é executada por um worker isolado e
+      <strong>passa pela fila de aprovação do super admin</strong>: quem não é super admin envia o pedido;
+      o super admin aprova e o worker executa. Use só em sistemas que você está autorizado a testar.
+    </p>
+
+    {% if pode_pentest %}
+      {% if pentest_alvos %}
+      <form method="POST" action="{{ url_for('dashboards.cyber_pentest_lancar') }}"
+            class="flex flex-wrap items-end gap-3 mb-6 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 p-4">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1 dark:text-slate-400">Alvo (allowlist)</label>
+          <select name="alvo" required
+                  class="rounded-lg border-gray-300 text-sm dark:bg-slate-800 dark:border-slate-600">
+            {% for chave, alvo in pentest_alvos.items() %}
+            <option value="{{ chave }}">{{ alvo.label }} — {{ alvo.url }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" data-confirm="Lançar o pentest no alvo selecionado? A varredura passa pela fila de aprovação do super admin."
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+          Lançar pentest
+        </button>
+        <span class="text-xs text-gray-400">Uma varredura por vez; o resultado aparece abaixo quando terminar.</span>
+      </form>
+      {% else %}
+      <div class="rounded border border-dashed border-gray-300 dark:border-slate-600 px-4 py-6 text-sm text-gray-500 mb-6">
+        Nenhum alvo na allowlist. Defina <code>PENTEST_ALVOS</code> no ambiente — um JSON
+        <code>{"chave": {"label": "...", "url": "https://..."}}</code> com os seus próprios ativos.
+      </div>
+      {% endif %}
+    {% endif %}
+
+    <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 dark:bg-slate-700/50">
+          <tr class="text-left text-xs text-gray-500 uppercase tracking-wide dark:text-slate-400">
+            <th class="px-4 py-3">Quando</th>
+            <th class="px-4 py-3">Alvo</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3">Achados</th>
+            <th class="px-4 py-3">Por</th>
+            <th class="px-4 py-3 text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+          <template x-for="r in pentestRuns" :key="r.id">
+            <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/40 align-top">
+              <td class="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-slate-400" x-text="dataHora(r.criado_em)"></td>
+              <td class="px-4 py-3">
+                <p class="font-medium text-gray-800 dark:text-slate-100" x-text="r.alvo_label"></p>
+                <p class="text-xs text-gray-400 font-mono" x-text="r.alvo_url"></p>
+              </td>
+              <td class="px-4 py-3">
+                <span class="px-2 py-0.5 rounded-full text-xs font-semibold"
+                      :class="{
+                        'pendente': 'bg-gray-100 text-gray-600', 'aprovado': 'bg-blue-100 text-blue-700',
+                        'rodando': 'bg-yellow-100 text-yellow-800', 'concluido': 'bg-green-100 text-green-700',
+                        'falhou': 'bg-red-100 text-red-700', 'cancelado': 'bg-gray-100 text-gray-500'}[r.status]"
+                      x-text="r.status"></span>
+                <span class="text-xs text-gray-400 ml-1" x-show="r.exit_code !== null" x-text="'exit ' + r.exit_code"></span>
+              </td>
+              <td class="px-4 py-3">
+                <template x-if="Object.keys(r.achados || {}).length">
+                  <div class="flex flex-wrap gap-1">
+                    <template x-for="sev in ['critica','alta','media','baixa','info']" :key="sev">
+                      <span x-show="r.achados[sev]" class="px-1.5 py-0.5 rounded text-[10px] font-semibold" :class="corSeveridade(sev)"
+                            x-text="r.achados[sev] + ' ' + sev"></span>
+                    </template>
+                  </div>
+                </template>
+                <span x-show="!Object.keys(r.achados || {}).length" class="text-gray-400">—</span>
+                <p class="text-xs text-gray-400 mt-1" x-show="r.relatorio_path" x-text="r.relatorio_path"></p>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-500 dark:text-slate-400" x-text="r.aprovado_por || r.solicitado_por"></td>
+              <td class="px-4 py-3 text-right whitespace-nowrap">
+                {% if pode_pentest %}
+                <template x-if="['pendente','aprovado','rodando'].includes(r.status)">
+                  <form method="POST" :action="'/gov/cyber/pentest/' + r.id + '/cancelar'" class="inline">
+                    <button type="submit" data-confirm="Cancelar este pentest?"
+                            class="text-xs text-red-600 dark:text-red-400 hover:underline">cancelar</button>
+                  </form>
+                </template>
+                {% endif %}
+              </td>
+            </tr>
+          </template>
+          <template x-if="!pentestRuns.length">
+            <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Nenhum pentest ainda.</td></tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </div>

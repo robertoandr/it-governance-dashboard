@@ -17,6 +17,7 @@ volumes:
   influxdb_config:
   grafana_data:
   collector_data:
+  strix_runs:
 
 services:
 
@@ -276,5 +277,36 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    networks:
+      - itgov-net
+
+  # ─── Pentest worker (Strix) — perfil pentest ────────────────────────────────
+  # ATENÇÃO: este é o ÚNICO container com acesso ao socket do Docker (o Strix sobe
+  # containers-sandbox para rodar as varreduras). Suba só em janela de manutenção,
+  # ciente de que o socket amplia a superfície de ataque nesta VM. O app NÃO tem o
+  # socket: ele só enfileira runs no banco, que este worker executa.
+  strix:
+    build:
+      context: ./strix-worker
+      dockerfile: Dockerfile
+    image: itgov-strix:latest
+    container_name: itgov-strix
+    profiles: ["pentest"]
+    restart: unless-stopped
+    environment:
+      # Mesmo SQLite do app (volume app_data): é por ele que chega a fila.
+      PENTEST_DB_URL: "sqlite:////app/data/app.db"
+      PENTEST_ALVOS: "${PENTEST_ALVOS:-{}}"
+      STRIX_LLM: "${STRIX_LLM:-}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+      PENTEST_WORK_DIR: "/data"
+      PENTEST_TIMEOUT_S: "${PENTEST_TIMEOUT_S:-3600}"
+      PENTEST_POLL_S: "${PENTEST_POLL_S:-10}"
+      TZ: "${TZ:-America/Sao_Paulo}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - strix_runs:/data/strix_runs
+      - app_data:/app/data
     networks:
       - itgov-net

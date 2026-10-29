@@ -1,4 +1,4 @@
-"""Módulo Cyber: página /gov/cyber, helpers de investigação e correlação NOC."""
+"""Módulo Cyber: páginas /gov/cyber/*, helpers de investigação e correlação NOC."""
 
 from __future__ import annotations
 
@@ -168,12 +168,12 @@ def test_pagina_cyber_e_somente_leitura() -> None:
 
 def test_pagina_cyber_404_sem_acronis(authed_client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ACRONIS_BASE_URL", raising=False)
-    assert authed_client.get("/gov/cyber").status_code == 404
+    assert authed_client.get("/gov/cyber/incidentes").status_code == 404
 
 
 def test_pagina_cyber_renderiza_abas_e_incidentes(authed_client, com_acronis: None, monkeypatch) -> None:
     _mock_fontes(monkeypatch)
-    resp = authed_client.get("/gov/cyber")
+    resp = authed_client.get("/gov/cyber/incidentes")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert "NOC de Segurança" in html
@@ -183,7 +183,7 @@ def test_pagina_cyber_renderiza_abas_e_incidentes(authed_client, com_acronis: No
 
 def test_pagina_cyber_filtra_por_severidade(authed_client, com_acronis: None, monkeypatch) -> None:
     _mock_fontes(monkeypatch)
-    html = authed_client.get("/gov/cyber?severidade=critical").get_data(as_text=True)
+    html = authed_client.get("/gov/cyber/incidentes?severidade=critical").get_data(as_text=True)
     assert "pc-rh-01" in html
     assert "pc-fin-02" not in html
 
@@ -253,16 +253,55 @@ def test_pagina_cyber_mostra_aviso_quando_live_nao_configurado(authed_client, co
     from itgov.services import acronis_cyber
 
     monkeypatch.setattr(acronis_cyber, "configurado", lambda: False)
-    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    html = authed_client.get("/gov/cyber/live").get_data(as_text=True)
     assert "Investigação ao vivo" in html
     assert "ACRONIS_CYBER_CLIENT_ID" in html
 
 
 def test_menu_lateral_tem_link_para_cyber(authed_client, com_acronis: None, monkeypatch) -> None:
     _mock_fontes(monkeypatch)
-    html = authed_client.get("/gov/cyber").get_data(as_text=True)
+    html = authed_client.get("/gov/cyber/incidentes").get_data(as_text=True)
     inicio = html.index('<nav class="flex-1 py-3')
     menu = html[inicio : html.index("</nav>", inicio)]
     assert 'href="/gov/cyber"' in menu
     assert 'href="/gov/cyberseguranca"' in menu
     assert "Cybersegurança" in menu
+
+
+# ── Páginas separadas do módulo ──────────────────────────────────────────────
+
+
+def test_cyber_raiz_redireciona_para_incidentes(authed_client, com_acronis: None) -> None:
+    resp = authed_client.get("/gov/cyber")
+    assert resp.status_code == 301
+    assert resp.headers["Location"].endswith("/gov/cyber/incidentes")
+
+
+@pytest.mark.parametrize(
+    ("caminho", "pagina"),
+    [
+        ("/gov/cyber/incidentes", "incidentes"),
+        ("/gov/cyber/noc", "noc"),
+        ("/gov/cyber/live", "live"),
+        ("/gov/cyber/siem", "siem"),
+        ("/gov/cyber/agentes", "agente"),
+        ("/gov/cyber/phishing", "phishing"),
+        ("/gov/cyber/pentest", "pentest"),
+    ],
+)
+def test_cada_pagina_renderiza_e_abre_na_propria_aba(
+    authed_client, com_acronis: None, monkeypatch, caminho: str, pagina: str
+) -> None:
+    _mock_fontes(monkeypatch)
+    resp = authed_client.get(caminho)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert f"aba: '{pagina}'" in html
+    # A navegação entre páginas é por link, com todas as 7 páginas.
+    for destino in ("incidentes", "noc", "live", "siem", "agentes", "phishing", "pentest"):
+        assert f'href="/gov/cyber/{destino}"' in html
+
+
+def test_paginas_exigem_login(factory_client) -> None:
+    assert factory_client.get("/gov/cyber/noc").status_code == 302
+    assert factory_client.get("/gov/cyber/pentest").status_code == 302
