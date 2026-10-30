@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rota e item de menu `/gov/ciberseguranca` renomeados para **Cybersegurança** em `/gov/cyberseguranca` (com redirecionamento 301 de `/gov/ciberseguranca` e `/gov/backup` e compatibilidade reversa de permissões)
 
 ### Fixed
+- **Cyber — Pentest (Strix) travado em "aprovado":** o worker do Strix fazia o poll da fila (`cyber_pentest_runs`) no mesmo `app.db` SQLite do app, mas o `create_engine` não tinha `busy_timeout` — qualquer escrita concorrente do app devolvia `database is locked` e o pentest aprovado nunca saía da fila. O engine SQLite do worker agora espera pelo lock (`busy_timeout=30s` + WAL), então a varredura é pega em segundos.
 - **nginx:** `https://noc.grupogadens.com.br/` (raiz nua) dava 404 — agora redireciona para `/gov/`, que leva à tela de login quando não há sessão
 
 ## [2.2.0] - 2026-10-26
