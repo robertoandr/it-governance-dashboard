@@ -209,6 +209,12 @@
           if (!p || !confirm('Desisolar a máquina ' + p.maquina + '? Ela volta a ter acesso à rede.')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/' + id + '/desisolar');
         },
+        agReisolar: function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          const p = this.ag.isoladas.find((x) => String(x.id) === id);
+          if (!p || !confirm('Refazer o isolamento da máquina ' + p.maquina + '? O isolamento anterior deu timeout.')) { return; }
+          this._agPost('/gov/cyber/incidentes/propostas/' + id + '/reisolar');
+        },
         agAprovarLote: function () {
           if (!this.agMarcados.length || !confirm('Aprovar ' + this.agMarcados.length + ' proposta(s) de encerrar/falso positivo?')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/aprovar-lote', {ids: this.agMarcados});
@@ -242,7 +248,7 @@
 
 {% block content %}
 {% macro stat_card(label, value, color, sub) %}
-<div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+<div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
   <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">{{ label }}</p>
   <p class="text-3xl font-bold {{ color }}">{{ value }}</p>
   {% if sub %}<p class="text-xs text-gray-400 mt-1">{{ sub }}</p>{% endif %}
@@ -325,7 +331,7 @@
          class="px-4 py-2 text-sm text-gray-500 hover:underline dark:text-slate-400">Limpar</a>
     </form>
 
-    <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+    <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
       <table class="min-w-full text-sm">
         <thead class="bg-gray-50 dark:bg-slate-700/50">
           <tr class="text-left text-xs text-gray-500 uppercase tracking-wide dark:text-slate-400">
@@ -374,7 +380,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
       {# Acronis #}
-      <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+      <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
         <h3 class="font-semibold text-gray-800 mb-3 dark:text-slate-100">Acronis Cyber Protect</h3>
         <ul class="text-sm space-y-2 text-gray-600 dark:text-slate-300">
           <li class="flex justify-between"><span>Incidentes não mitigados</span><span class="font-semibold {{ 'text-red-600' if noc.acronis.incidents_not_mitigated > 0 else 'text-green-600' }}">{{ noc.acronis.incidents_not_mitigated }}</span></li>
@@ -385,7 +391,7 @@
       </div>
 
       {# Zabbix #}
-      <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+      <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
         <h3 class="font-semibold text-gray-800 mb-3 dark:text-slate-100">Zabbix — problemas ativos</h3>
         {% if noc.zabbix.enabled %}
           <p class="text-3xl font-bold {{ 'text-red-600' if noc.zabbix.total > 0 else 'text-green-600' }}">{{ noc.zabbix.total }}</p>
@@ -401,7 +407,7 @@
       </div>
 
       {# FortiGate #}
-      <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+      <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
         <h3 class="font-semibold text-gray-800 mb-3 dark:text-slate-100">FortiGate</h3>
         {% if noc.forti.total > 0 %}
           <ul class="text-sm space-y-2 text-gray-600 dark:text-slate-300">
@@ -447,7 +453,7 @@
     <p x-show="liveCarregado && !liveCarregando && liveIncidentes.length === 0 && !liveErro" x-cloak
        class="text-sm text-gray-400">Nenhum incidente ativo.</p>
 
-    <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+    <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
       <template x-for="inc in liveIncidentes" :key="inc.incident_id">
         <div class="border-b border-gray-100 dark:border-slate-700 last:border-0">
           <button type="button" @click="toggleTimeline" :data-id="inc.incident_id"
@@ -494,21 +500,21 @@
     <template x-if="siem">
       <div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+          <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Última análise</p>
             <p class="text-lg font-bold text-gray-800 dark:text-slate-100"
                x-text="siem.ultima_analise ? dataHora(siem.ultima_analise.em) : 'ainda não rodou'"></p>
             <p class="text-xs text-gray-400 mt-1" x-show="siem.ultima_analise"
                x-text="siem.ultima_analise ? siem.ultima_analise.eventos + ' eventos · ' + siem.ultima_analise.achados + ' achado(s)' : ''"></p>
           </div>
-          <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+          <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <p class="text-xs text-gray-500 mb-1 dark:text-slate-400">Análise por IA</p>
             <p class="text-lg font-bold" :class="siem.ia ? 'text-green-600' : 'text-gray-500'"
                x-text="siem.ia ? 'Ligada' : 'Desligada (só regras)'"></p>
             <p class="text-xs text-red-600 mt-1" x-show="siem.ultima_analise && siem.ultima_analise.erro"
                x-text="siem.ultima_analise ? siem.ultima_analise.erro : ''"></p>
           </div>
-          <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800 sm:col-span-2">
+          <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4 sm:col-span-2">
             <p class="text-xs text-gray-500 mb-2 dark:text-slate-400">Eventos de segurança guardados nas últimas 24 h</p>
             <div class="flex flex-wrap gap-4">
               <template x-for="par in volumes()" :key="par[0]">
@@ -526,7 +532,7 @@
 
         <div class="space-y-3">
           <template x-for="a in siem.achados" :key="a.id">
-            <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800" :class="a.ativo ? '' : 'opacity-60'">
+            <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4" :class="a.ativo ? '' : 'opacity-60'">
               <div class="flex flex-wrap items-center gap-2 mb-2">
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold uppercase" :class="corSeveridade(a.severidade)"
                       x-text="a.severidade"></span>
@@ -570,7 +576,7 @@
     <template x-if="ag">
       <div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-          <div class="bg-white rounded-xl shadow p-4 dark:bg-slate-800 col-span-2">
+          <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-3.5 col-span-2">
             <p class="text-xs text-gray-500 dark:text-slate-400">Última triagem</p>
             <p class="text-lg font-bold text-gray-800 dark:text-slate-100" x-text="ag.ultima_triagem ? dataHora(ag.ultima_triagem) : 'ainda não rodou'"></p>
             <p class="text-xs mt-1" :class="ag.ia ? 'text-green-600' : 'text-gray-500'" x-text="ag.ia ? 'IA ligada' : 'IA desligada (só regras)'"></p>
@@ -597,7 +603,7 @@
           <button type="button" @click="carregarAgente" class="ml-auto px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white">Atualizar</button>
         </div>
 
-        <div class="bg-white rounded-xl shadow mb-6 dark:bg-slate-800" x-show="ag.isoladas && ag.isoladas.length">
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 mb-5" x-show="ag.isoladas && ag.isoladas.length">
           <div class="px-5 pt-4 pb-2">
             <h3 class="font-semibold text-gray-800 dark:text-slate-100">Máquinas isoladas (<span x-text="ag.isoladas.length"></span>)</h3>
             <p class="text-xs text-gray-500 dark:text-slate-400">
@@ -616,7 +622,11 @@
                       x-text="p.desisolar_status ? 'desisolar: ' + p.desisolar_status + ' · ' + p.desisolar_resultado + (p.desisolado_por ? ' (' + p.desisolado_por + ')' : '') : ''"></td>
                   <td class="px-5 py-2 text-right whitespace-nowrap">
                     <a :href="p.link" target="_blank" rel="noopener" x-show="p.link" class="text-xs text-blue-600 hover:underline mr-3">Abrir no Acronis</a>
-                    <button type="button" @click="agDesisolar" :data-id="p.id" :disabled="agOcupado || p.desisolando"
+                    <button type="button" @click="agReisolar" :data-id="p.id"
+                            x-show="p.pode_reisolar || p.isolando" :disabled="agOcupado || p.isolando"
+                            class="px-3 py-1 text-xs rounded-lg bg-amber-600 text-white disabled:opacity-40 mr-2"
+                            x-text="p.isolando ? 'Isolando…' : 'Refazer isolamento'"></button>
+                    <button type="button" @click="agDesisolar" :data-id="p.id" :disabled="agOcupado || p.desisolando || p.isolando"
                             class="px-3 py-1 text-xs rounded-lg bg-orange-600 text-white disabled:opacity-40"
                             x-text="p.desisolando ? 'Desisolando…' : 'Desisolar'"></button>
                   </td>
@@ -631,7 +641,7 @@
 
         <div class="space-y-3">
           <template x-for="p in agLista()" :key="p.id">
-            <div class="bg-white rounded-xl shadow p-5 dark:bg-slate-800">
+            <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
               <div class="flex flex-wrap items-center gap-2 mb-2">
                 <input type="checkbox" :value="p.id" x-model.number="agMarcados" x-show="agEmLote(p)" class="rounded">
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold" :class="agCor(p.decisao)"
@@ -667,7 +677,7 @@
         </div>
 
         <h3 class="font-semibold text-gray-800 dark:text-slate-100 mt-8 mb-2" x-show="ag.decididas.length">Últimas decisões</h3>
-        <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800" x-show="ag.decididas.length">
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden" x-show="ag.decididas.length">
           <table class="min-w-full text-sm">
             <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
               <template x-for="p in ag.decididas" :key="p.id">
@@ -837,7 +847,7 @@
       {% endif %}
     {% endif %}
 
-    <div class="bg-white rounded-xl shadow overflow-hidden dark:bg-slate-800">
+    <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
       <table class="min-w-full text-sm">
         <thead class="bg-gray-50 dark:bg-slate-700/50">
           <tr class="text-left text-xs text-gray-500 uppercase tracking-wide dark:text-slate-400">

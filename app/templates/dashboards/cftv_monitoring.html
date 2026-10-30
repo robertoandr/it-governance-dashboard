@@ -17,32 +17,32 @@
 {% set eh_admin = pode('cftv', 'alterar', ('admin',)) %}
 
 {% macro stat_card(label, value, color, sub) %}
-<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
-  <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{ label }}</p>
-  <p class="text-3xl font-bold {{ color }}">{{ value }}</p>
-  {% if sub %}<p class="text-xs text-slate-400 mt-1">{{ sub }}</p>{% endif %}
+<div class="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 hover:border-slate-300 dark:hover:border-slate-700 transition">
+  <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{{ label }}</p>
+  <p class="text-2xl font-bold font-mono tracking-tight {{ color }}">{{ value }}</p>
+  {% if sub %}<p class="text-xs font-mono text-slate-400 dark:text-slate-500 mt-1">{{ sub }}</p>{% endif %}
 </div>
 {% endmacro %}
 
 {% macro status_badge(st) %}
 {% set estilos = {
-  'up': ('bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', 'online'),
-  'down': ('bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', 'offline'),
-  'maint': ('bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', 'manutenção'),
-  'nodata': ('bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300', 'sem dados'),
+  'up': ('bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60', 'online'),
+  'down': ('bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/60', 'offline'),
+  'maint': ('bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/60', 'manutenção'),
+  'nodata': ('bg-slate-50 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700', 'sem dados'),
 } %}
 {% set e = estilos.get(st, estilos['nodata']) %}
-<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ e[0] }}">{{ e[1] }}</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-medium {{ e[0] }}">{{ e[1] }}</span>
 {% endmacro %}
 
 {% macro cred_badge(st) %}
 {% set estilos = {
-  'recusada': ('bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', '🔑 credencial recusada'),
-  'ok': ('bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', '🔑 senha padrão'),
-  'pendente': ('bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300', '🔑 cred. pendente'),
+  'recusada': ('bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/60', '🔑 credencial recusada'),
+  'ok': ('bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60', '🔑 senha padrão'),
+  'pendente': ('bg-slate-50 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700', '🔑 cred. pendente'),
 } %}
 {% if st in estilos %}{% set e = estilos[st] %}
-<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ e[0] }}">{{ e[1] }}</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-medium {{ e[0] }}">{{ e[1] }}</span>
 {% endif %}
 {% endmacro %}
 
@@ -64,12 +64,12 @@
 {% endmacro %}
 
 {% macro barra(s) %}
-<div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+<div class="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
   {% if s.total > 0 %}
-  <div class="h-full bg-green-500" style="width:{{ (s.up / s.total * 100) | round(1) }}%"></div>
-  <div class="h-full bg-red-500" style="width:{{ (s.down / s.total * 100) | round(1) }}%"></div>
-  <div class="h-full bg-yellow-400" style="width:{{ (s.maint / s.total * 100) | round(1) }}%"></div>
-  <div class="h-full bg-slate-300 dark:bg-slate-500" style="width:{{ (s.nodata / s.total * 100) | round(1) }}%"></div>
+  <div class="h-full bg-emerald-500" style="width:{{ (s.up / s.total * 100) | round(1) }}%"></div>
+  <div class="h-full bg-rose-500" style="width:{{ (s.down / s.total * 100) | round(1) }}%"></div>
+  <div class="h-full bg-amber-400" style="width:{{ (s.maint / s.total * 100) | round(1) }}%"></div>
+  <div class="h-full bg-slate-300 dark:bg-slate-600" style="width:{{ (s.nodata / s.total * 100) | round(1) }}%"></div>
   {% endif %}
 </div>
 {% endmacro %}
