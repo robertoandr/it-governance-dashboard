@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Cyber — Pentest (Strix) travado em "aprovado":** o worker do Strix fazia o poll da fila (`cyber_pentest_runs`) no mesmo `app.db` SQLite do app, mas o `create_engine` não tinha `busy_timeout` — qualquer escrita concorrente do app devolvia `database is locked` e o pentest aprovado nunca saía da fila. O engine SQLite do worker agora espera pelo lock (`busy_timeout=30s` + WAL), então a varredura é pega em segundos.
+- **Rede — Switch Intelbras caía como câmera:** na descoberta do `/gov/rede`, qualquer equipamento Intelbras com SNMP era classificado como "camera", porque a regra testava o fabricante (Intelbras/Hikvision/Dahua) **antes** de reconhecer equipamento de rede. Os switches Intelbras são OEM H3C e reportam `INTELBRAS Platform Software` / `Comware` na descrição SNMP — agora esses sinais (e `h3c`, `procurve`, `jetstream`) classificam como **switch** antes do teste de câmera. Câmera/DVR Intelbras (VIP, MHDX…) continuam como câmera.
 - **nginx:** `https://noc.grupogadens.com.br/` (raiz nua) dava 404 — agora redireciona para `/gov/`, que leva à tela de login quando não há sessão
 
 ## [2.2.0] - 2026-10-26
