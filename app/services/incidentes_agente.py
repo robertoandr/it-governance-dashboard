@@ -83,6 +83,8 @@ ISOLAR = "WORKLOAD_ISOLATE"
 DESISOLAR = "WORKLOAD_DEISOLATE"
 # Isolamento que com certeza não aconteceu; TIMED_OUT fica na lista (a máquina pode ter isolado depois)
 ISOLAMENTO_NAO_APLICADO = frozenset({"FAILED", "SKIPPED", "CANCELLED"})
+# Isolamento incerto: o Acronis deu timeout, então vale a pena disparar de novo
+ISOLAMENTO_INCERTO = frozenset({"TIMEOUT", "TIMED_OUT"})
 
 _TRAVA = os.path.join(tempfile.gettempdir(), "itgov-incidentes-agente.lock")
 
@@ -445,6 +447,20 @@ def desisolando(p: PropostaIncidente) -> bool:
     return bool(p.desisolar_status) and p.desisolar_status not in STATUS_ACAO_FINAIS
 
 
+def isolando(p: PropostaIncidente) -> bool:
+    """O isolamento foi disparado e ainda não teve resultado final no Acronis?"""
+    return p.acao == ISOLAR and bool(p.acao_status) and p.acao_status not in STATUS_ACAO_FINAIS
+
+
+def pode_reisolar(p: PropostaIncidente) -> bool:
+    """Isolou mas o Acronis deu timeout — dá para disparar o isolamento de novo?
+
+    Só quando a máquina ainda consta como isolada, o isolamento ficou incerto
+    (timeout) e ninguém pediu desisolar.
+    """
+    return isolada(p) and p.acao_status in ISOLAMENTO_INCERTO and not p.desisolar_status
+
+
 def desisolar(p: PropostaIncidente, usuario: str, agora: datetime | None = None) -> None:
     """Dispara no Acronis o desisolamento da máquina isolada pela proposta. Requer app context.
 
@@ -470,6 +486,39 @@ def desisolar(p: PropostaIncidente, usuario: str, agora: datetime | None = None)
     p.desisolado_por, p.desisolado_em = usuario, agora or _agora()
     db.session.commit()
     log.info("incidentes_agente.desisolar", proposta=p.id, maquina=p.maquina, status=p.desisolar_status, por=usuario)
+
+
+def reisolar(p: PropostaIncidente, usuario: str, agora: datetime | None = None) -> None:
+    """Dispara de novo no Acronis o isolamento que deu timeout. Requer app context.
+
+    Só roda a partir da rota de aprovação, como ``desisolar``. Reaproveita os
+    campos da ação (``activity_id``/``acao_status``): o acompanhamento volta a
+    seguir o isolamento.
+
+    Raises:
+        PropostaNaoExecutavelError: O isolamento não está incerto (timeout) ou já
+            foi pedido desisolar.
+    """
+    from app.extensions import db
+
+    if not pode_reisolar(p):
+        raise PropostaNaoExecutavelError(f"proposta {p.id} não tem isolamento em timeout para refazer")
+    comentario = (
+        f"[Dashboard Governança TI] Isolar de novo a máquina {p.maquina} "
+        f"(isolamento anterior deu timeout), aprovado por {usuario}."
+    )[:1000]
+    try:
+        inc = acronis_edr.detalhe(p.incident_id, p.customer_id)  # ações oferecidas agora
+        p.activity_id = acronis_edr.executar_acao(inc, ISOLAR, comentario)
+        p.acao_status = "QUEUED"
+        p.resultado = "Isolamento disparado de novo no Acronis."
+    except (httpx.HTTPError, IncidenteNaoEncontradoError, ValueError) as exc:
+        # Mantém o acao_status de timeout para a máquina seguir na lista e permitir nova tentativa.
+        p.resultado = f"{_motivo(exc)} Se precisar, isole pelo console do Acronis."[:500]
+        log.warning("incidentes_agente.reisolar_falhou", proposta=p.id, erro=f"{type(exc).__name__}: {exc}"[:500])
+    p.decidido_por, p.decidido_em = usuario, agora or _agora()
+    db.session.commit()
+    log.info("incidentes_agente.reisolar", proposta=p.id, maquina=p.maquina, status=p.acao_status, por=usuario)
 
 
 def executar_lote(propostas: list[PropostaIncidente], usuario: str, agora: datetime | None = None) -> dict[str, int]:
@@ -618,7 +667,11 @@ def _isoladas() -> list[dict[str, Any]]:
     por_maquina: dict[str, dict[str, Any]] = {}
     for p in candidatas:
         if isolada(p) and p.maquina not in por_maquina:
-            por_maquina[p.maquina] = p.para_dict() | {"desisolando": desisolando(p)}
+            por_maquina[p.maquina] = p.para_dict() | {
+                "desisolando": desisolando(p),
+                "isolando": isolando(p),
+                "pode_reisolar": pode_reisolar(p),
+            }
     return list(por_maquina.values())
 
 

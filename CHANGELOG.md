@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - **Cyber — Páginas separadas:** as abas do módulo Cyber (Incidentes, NOC de Segurança, Investigação ao vivo, Agente SIEM, Agente de incidentes, Phishing) viraram **páginas com URL própria** (`/gov/cyber/incidentes`, `/gov/cyber/noc`, `/gov/cyber/live`, `/gov/cyber/siem`, `/gov/cyber/agentes`, `/gov/cyber/phishing`), bookmarkáveis; `/gov/cyber` redireciona (301) para Incidentes. A navegação entre elas passou de abas client-side para links; o conteúdo de cada página é renderizado pelo servidor.
 - **Cyber — Pentest (Strix):** nova página `/gov/cyber/pentest` para rodar varreduras de pentest com o [Strix](https://github.com/usestrix/strix) contra os **ativos próprios da allowlist** (`PENTEST_ALVOS`, nunca um alvo arbitrário — o formulário só manda a chave, a URL nunca vem do cliente; validada na rota **e** revalidada pelo worker). Lançar é restrito a admin e **passa pela fila de aprovação do super admin**. A execução fica num **container dedicado `itgov-strix`** (perfil `pentest`, o único com acesso ao socket do Docker; o app só enfileira no banco). Uma varredura por vez, com timeout; o resultado (status, contagem por severidade, relatório) aparece na própria página via polling. O container não sobe num `up` normal — precisa de janela de manutenção.
 
@@ -35,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Módulo Cyber ganha agentes de IA e simulação de phishing.
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - **Cyber — Agente SIEM:** analisa os logs dos FortiGate a cada poucos minutos, levanta achados com IA (via OmniRoute) e avisa no WhatsApp os graves, cruzando com o Acronis (#323); item e trigger no Zabbix para o alerta (`infra-setup/13_cyber_siem.py`)
 - **Cyber — Agente de incidentes (Acronis EDR):** triagem por regras + IA que propõe encerrar, agir ou investigar; toda ação passa pela fila de aprovação (#331)
 - **Cyber — Phishing (GoPhish):** leitura das campanhas com taxa de clique e de reporte (#333) e gestão pelo dashboard — criar perfil de envio, montar e disparar a campanha (disparo pela fila de aprovação), com acesso liberado por usuário na coluna "Phishing" (#334)
@@ -50,6 +52,7 @@ Versão final da V2 "Governança de TI 360": revisão página por página de 30/
 conferência final de 08–09/10/2026.
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - **Usuários:** super admin que aprova alterações de cadastro e configuração (#251), aviso para quem pediu quando o pedido vai para aprovação e quando é decidido (#278) e permissões por usuário, página a página (#279)
 - **Rede:** descoberta pelo Zabbix com novos na rede, nomenclatura e latência por unidade (#253); FortiGates pela API, com SD-WAN, WANs e DHCP/ARP (#254); topologia lógica por unidade e geral (#255)
 - **CFTV:** drill-down por sede, renomear e unir gravador duplicado (#249), histórico de quedas (#250), SNMP v2c/v3 dos gravadores no Zabbix (#266) e cadastro de gravador novo
@@ -77,6 +80,7 @@ conferência final de 08–09/10/2026.
 ## [1.1.0] - 2026-06-06
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - Kubernetes liveness and readiness probes (`GET /api/health`, `GET /api/health/ready`) with parallel async dependency checks and per-check timeouts (#134)
 - `k8s/deployment.yaml` with `startupProbe` + `livenessProbe` + `readinessProbe` configured for Flask/Gunicorn boot characteristics
 - Asset inventory CRUD endpoints (`/api/v1/ativos`) with SQLite-backed persistence
@@ -93,6 +97,7 @@ conferência final de 08–09/10/2026.
 ## [1.0.0] - 2026-05-31
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - Supplier and contract management module with SLA tracking and breach alerting
 - Zabbix, Zendesk, and Microsoft Graph integrations
 - Flask-RESTX API with Swagger documentation at `/api/`

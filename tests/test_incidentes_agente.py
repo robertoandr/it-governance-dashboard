@@ -579,6 +579,58 @@ def test_desisolar_pela_rota_so_com_aprovacao(sem_contexto, super_client, gestor
     assert resp.status_code == 409  # já desisolando
 
 
+def test_pode_reisolar_so_timeout(banco) -> None:
+    assert ia.pode_reisolar(_isolada("t1", acao_status="TIMEOUT"))
+    assert ia.pode_reisolar(_isolada("t2", acao_status="TIMED_OUT"))
+    assert not ia.pode_reisolar(_isolada("ok", acao_status="SUCCEEDED"))
+    assert not ia.pode_reisolar(_isolada("fail", acao_status="FAILED"))
+    pediu_desisolar = _isolada("t3", acao_status="TIMED_OUT")
+    pediu_desisolar.desisolar_status = "QUEUED"
+    assert not ia.pode_reisolar(pediu_desisolar)
+
+
+def test_reisolar_dispara_no_acronis_com_comentario(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    chamadas: list[tuple] = []
+    monkeypatch.setattr(ia.acronis_edr, "detalhe", lambda iid, c: _inc(iid, acoes={ia.ISOLAR: "w1"}))
+    monkeypatch.setattr(
+        ia.acronis_edr, "executar_acao", lambda inc, acao, com: chamadas.append((acao, com)) or "act-reiso"
+    )
+    p = _isolada("t1", acao_status="TIMED_OUT")
+    ia.reisolar(p, "roberto@x", _AGORA)
+    assert (p.acao_status, p.activity_id, p.decidido_por) == ("QUEUED", "act-reiso", "roberto@x")
+    assert chamadas[0][0] == "WORKLOAD_ISOLATE" and "aprovado por roberto@x" in chamadas[0][1]
+    assert ia.isolando(p)
+    with pytest.raises(ia.PropostaNaoExecutavelError):
+        ia.reisolar(p, "roberto@x")
+
+
+def test_reisolar_so_se_pode_reisolar(banco) -> None:
+    with pytest.raises(ia.PropostaNaoExecutavelError):
+        ia.reisolar(_isolada("ok", acao_status="SUCCEEDED"), "x")
+
+
+def test_reisolar_pela_rota_so_com_aprovacao(sem_contexto, super_client, gestor_client, monkeypatch) -> None:
+    app = sem_contexto
+    disparos: list[str] = []
+    monkeypatch.setattr(acronis_edr, "detalhe", lambda iid, c: _inc(iid, acoes={ia.ISOLAR: "w1"}))
+    monkeypatch.setattr(acronis_edr, "executar_acao", lambda inc, acao, com: disparos.append(com) or "act-reiso")
+    with app.app_context():
+        pid = _isolada("t1", acao_status="TIMED_OUT").id
+    resp = gestor_client.post(f"/gov/cyber/incidentes/propostas/{pid}/reisolar", json={})
+    assert resp.status_code == 202 and resp.get_json()["pendente"] is True
+    assert disparos == []
+    with app.app_context():
+        sol = Solicitacao.query.filter_by(status=PENDENTE).one()
+        sol_id, resumo = sol.id, sol.resumo
+    assert resumo == "Cyber: isolar de novo a máquina pc-t1 (timeout)"
+    super_client.post(f"/gov/aprovacoes/{sol_id}/aprovar")
+    p = _ler(app, pid)
+    assert p["acao_status"] == "QUEUED"
+    assert "aprovado por pytest-super-cyber@test.local" in disparos[0]
+    resp = super_client.post(f"/gov/cyber/incidentes/propostas/{pid}/reisolar", json={})
+    assert resp.status_code == 409
+
+
 def test_garantir_colunas_em_banco_antigo(tmp_path) -> None:
     from sqlalchemy import create_engine, inspect, text
 
