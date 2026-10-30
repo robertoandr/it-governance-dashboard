@@ -12,7 +12,7 @@ Config por ambiente:
 - ``PENTEST_DB_URL``: banco do dashboard (padrão: o SQLite do app,
   ``sqlite:////app/data/app.db``, com o volume ``app_data`` montado).
 - ``PENTEST_ALVOS``: allowlist (JSON), idêntica à do app.
-- ``STRIX_LLM`` / ``LLM_API_KEY`` / ``LLM_BASE_URL``: LLM do Strix (OmniRoute).
+- ``STRIX_LLM`` / ``LLM_API_KEY`` / ``LLM_API_BASE``: LLM do Strix (OmniRoute).
 - ``PENTEST_WORK_DIR`` (padrão ``/data``; o Strix grava em ``<dir>/strix_runs``),
   ``PENTEST_TIMEOUT_S`` (padrão 3600), ``PENTEST_POLL_S`` (padrão 10).
 """
@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, select, update
+from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, event, select, update
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from strix_run import resumir_achados, status_do_exit, url_do_alvo
@@ -165,10 +165,38 @@ def _processar(engine: Engine, run: dict[str, Any]) -> None:
     log.info("strix.terminou", run_id=run_id, status=status_do_exit(code), exit_code=code, achados=achados)
 
 
+def _criar_engine(dsn: str) -> Engine:
+    """Cria o engine da fila, com espera por lock quando o banco é SQLite.
+
+    O app e o worker compartilham o mesmo ``app.db``. Sem ``busy_timeout`` o
+    worker recebe ``database is locked`` em qualquer escrita concorrente do app
+    e o pentest nunca sai de "aprovado". O ``timeout`` do driver sqlite3 define
+    o ``busy_timeout``; um listener reforça o WAL e o timeout a cada conexão.
+
+    Args:
+        dsn: URL de conexão (SQLite por padrão).
+
+    Returns:
+        Engine configurado para conviver com o app no mesmo arquivo.
+    """
+    if dsn.startswith("sqlite"):
+        engine = create_engine(dsn, pool_pre_ping=True, connect_args={"timeout": 30})
+
+        @event.listens_for(engine, "connect")
+        def _pragmas(dbapi_conn: Any, _rec: Any) -> None:
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA busy_timeout=30000")
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.close()
+
+        return engine
+    return create_engine(dsn, pool_pre_ping=True)
+
+
 def main() -> int:
     """Loop do worker: um run por vez, consultando a fila a cada ``PENTEST_POLL_S``."""
     dsn = os.getenv("PENTEST_DB_URL", "sqlite:////app/data/app.db")
-    engine = create_engine(dsn, pool_pre_ping=True)
+    engine = _criar_engine(dsn)
     log.info("strix.worker_no_ar", runs_dir=str(_RUNS_DIR), timeout_s=_TIMEOUT_S)
     while True:
         try:

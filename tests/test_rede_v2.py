@@ -67,6 +67,15 @@ def test_hosts_da_descoberta_agrupa_por_ip_e_cruza_com_zabbix() -> None:
     [
         ({"snmp_descr": "FortiGate-60F v7.2", "has_snmp": True}, "firewall"),
         ({"snmp_descr": "Cisco IOS Software, C2960", "has_snmp": True}, "switch"),
+        # Switch Intelbras (OEM H3C): reporta "Platform Software", não é câmera.
+        (
+            {"snmp_descr": "INTELBRAS Platform Software, Software Version 7.1.070, Release 6358P04", "has_snmp": True},
+            "switch",
+        ),
+        ({"snmp_descr": "H3C Comware Platform Software", "has_snmp": True}, "switch"),
+        # Câmera/DVR Intelbras continuam câmera (sem termo de rede na descrição).
+        ({"snmp_descr": "Intelbras VIP 3230 B", "has_snmp": True}, "camera"),
+        ({"snmp_descr": "Intelbras MHDX 1108 DVR", "has_snmp": True}, "camera"),
         ({"snmp_descr": "UniFi AP-AC-Pro", "has_snmp": True}, "ap"),
         ({"snmp_descr": "Hardware: Intel64 - Software: Windows 10", "has_snmp": True}, "endpoint"),
         ({"snmp_descr": "Linux srv 5.15", "has_snmp": True}, "servidor"),

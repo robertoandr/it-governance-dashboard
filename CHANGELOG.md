@@ -8,11 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - **Cyber — Páginas separadas:** as abas do módulo Cyber (Incidentes, NOC de Segurança, Investigação ao vivo, Agente SIEM, Agente de incidentes, Phishing) viraram **páginas com URL própria** (`/gov/cyber/incidentes`, `/gov/cyber/noc`, `/gov/cyber/live`, `/gov/cyber/siem`, `/gov/cyber/agentes`, `/gov/cyber/phishing`), bookmarkáveis; `/gov/cyber` redireciona (301) para Incidentes. A navegação entre elas passou de abas client-side para links; o conteúdo de cada página é renderizado pelo servidor.
 - **Cyber — Pentest (Strix):** nova página `/gov/cyber/pentest` para rodar varreduras de pentest com o [Strix](https://github.com/usestrix/strix) contra os **ativos próprios da allowlist** (`PENTEST_ALVOS`, nunca um alvo arbitrário — o formulário só manda a chave, a URL nunca vem do cliente; validada na rota **e** revalidada pelo worker). Lançar é restrito a admin e **passa pela fila de aprovação do super admin**. A execução fica num **container dedicado `itgov-strix`** (perfil `pentest`, o único com acesso ao socket do Docker; o app só enfileira no banco). Uma varredura por vez, com timeout; o resultado (status, contagem por severidade, relatório) aparece na própria página via polling. O container não sobe num `up` normal — precisa de janela de manutenção.
 
 ### Changed
+- **Frontend — Redesign Modelo B (Linear Aesthetic):** modernização do design da dashboard (`https://noc.grupogadens.com.br/`) com foco em eliminar elementos genéricos de IA (cards volumosos e sombras difusas). Adoção de superfícies carvão suave (`#0A0A0C` e `#121215`), bordas hairline de 1px (`#222228`), tipografia tabular para métricas de telemetria e alinhamento visual com a marca institucional Grupo Gadens (`#C41E24`). Atualização dos templates `tema_gadens.html`, `base.html`, `topbar.html`, `sidebar.html`, `overview.html`, `cftv_monitoring.html` e `cyber.html`.
 - **Cyber:** o item "Cyber" do menu lateral agora aponta para `/gov/cyber` (que abre Incidentes); sem novos itens de topo — a navegação das páginas fica dentro do módulo.
+
+### Fixed (CFTV)
+- **CFTV — Reteste aceito não tirava o equipamento da lista:** o **já resetei — testar** confirmava a senha padrão ("credencial liberada"), mas a troca da tag no Zabbix falhava (`unexpected parameter "automatic"`): o `host.get` com `selectTags: "extend"` devolve o campo `automatic`, que o `host.update` recusa. Agora só `tag`/`value` são lidos e regravados — vale para o reteste (aceito ou recusado) e para o **Padronizar senha**.
+- **CFTV — Credencial liberada sai da lista na hora:** depois de **já resetei — testar** com sucesso ("senha padrão aceita — credencial liberada"), o equipamento continuava na lista de credenciais recusadas por até 2 min — o `/gov/cftv` lia de um cache que não era descartado, e cada um dos 4 workers do gunicorn tinha o seu. Agora a troca de tag no Zabbix invalida o cache de **todos** os workers (arquivo-marca em disco), e o equipamento some da lista já no redirect. Vale também para o **Padronizar senha** e para o reteste recusado (data da recusa renovada).
+
+### Added (Zabbix)
+- **Zabbix → GDesk:** os alertas passam a abrir chamado **também no GDesk** (`POST /api/public/tickets`), no mesmo evento que já abre no Zendesk — Zendesk segue intacto. Novo media type webhook "GDesk" (`infra-setup/gdesk/alerta.js`) ligado à ação 12, com script idempotente `infra-setup/14_create_gdesk_alert.py`. Abre chamado só em problema novo (recovery/ack ignorados — a API pública do GDesk hoje só cria), dedup por tag do evento (`gdesk_ticket`), severidade→prioridade (desastre→urgente, alta→alta, média/aviso→normal, info→baixa) e fila/URL/chave em macros (`{$GDESK.URL}`, `{$GDESK.QUEUE_ID}`, `{$GDESK.APIKEY}` secreta)
 
 ### Added (CFTV)
 - **CFTV — Credencial recusada um a um:** a faixa "N equipamentos com credencial recusada" do `/gov/cftv` agora abre a **lista de cada câmera/gravador** (IP, tipo, gravador, credencial tentada, data da recusa). Para o admin, cada linha tem **abrir console ↗** (interface web do equipamento, para o reset) e **já resetei — testar**, que faz **uma única** tentativa de login com a senha padrão: se aceitar, marca `cftv_cred=padrao` e tira a recusa (o coletor volta a ler o equipamento); se recusar, renova a data da recusa. Só leitura no equipamento, por isso sem fila de aprovação.
@@ -23,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rota e item de menu `/gov/ciberseguranca` renomeados para **Cybersegurança** em `/gov/cyberseguranca` (com redirecionamento 301 de `/gov/ciberseguranca` e `/gov/backup` e compatibilidade reversa de permissões)
 
 ### Fixed
+- **Cyber — Pentest (Strix) travado em "aprovado":** o worker do Strix fazia o poll da fila (`cyber_pentest_runs`) no mesmo `app.db` SQLite do app, mas o `create_engine` não tinha `busy_timeout` — qualquer escrita concorrente do app devolvia `database is locked` e o pentest aprovado nunca saía da fila. O engine SQLite do worker agora espera pelo lock (`busy_timeout=30s` + WAL), então a varredura é pega em segundos.
+- **Rede — Switch Intelbras caía como câmera:** na descoberta do `/gov/rede`, qualquer equipamento Intelbras com SNMP era classificado como "camera", porque a regra testava o fabricante (Intelbras/Hikvision/Dahua) **antes** de reconhecer equipamento de rede. Os switches Intelbras são OEM H3C e reportam `INTELBRAS Platform Software` / `Comware` na descrição SNMP — agora esses sinais (e `h3c`, `procurve`, `jetstream`) classificam como **switch** antes do teste de câmera. Câmera/DVR Intelbras (VIP, MHDX…) continuam como câmera.
 - **nginx:** `https://noc.grupogadens.com.br/` (raiz nua) dava 404 — agora redireciona para `/gov/`, que leva à tela de login quando não há sessão
 
 ## [2.2.0] - 2026-10-26
@@ -30,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Módulo Cyber ganha agentes de IA e simulação de phishing.
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - **Cyber — Agente SIEM:** analisa os logs dos FortiGate a cada poucos minutos, levanta achados com IA (via OmniRoute) e avisa no WhatsApp os graves, cruzando com o Acronis (#323); item e trigger no Zabbix para o alerta (`infra-setup/13_cyber_siem.py`)
 - **Cyber — Agente de incidentes (Acronis EDR):** triagem por regras + IA que propõe encerrar, agir ou investigar; toda ação passa pela fila de aprovação (#331)
 - **Cyber — Phishing (GoPhish):** leitura das campanhas com taxa de clique e de reporte (#333) e gestão pelo dashboard — criar perfil de envio, montar e disparar a campanha (disparo pela fila de aprovação), com acesso liberado por usuário na coluna "Phishing" (#334)
@@ -45,6 +57,7 @@ Versão final da V2 "Governança de TI 360": revisão página por página de 30/
 conferência final de 08–09/10/2026.
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - **Usuários:** super admin que aprova alterações de cadastro e configuração (#251), aviso para quem pediu quando o pedido vai para aprovação e quando é decidido (#278) e permissões por usuário, página a página (#279)
 - **Rede:** descoberta pelo Zabbix com novos na rede, nomenclatura e latência por unidade (#253); FortiGates pela API, com SD-WAN, WANs e DHCP/ARP (#254); topologia lógica por unidade e geral (#255)
 - **CFTV:** drill-down por sede, renomear e unir gravador duplicado (#249), histórico de quedas (#250), SNMP v2c/v3 dos gravadores no Zabbix (#266) e cadastro de gravador novo
@@ -72,6 +85,7 @@ conferência final de 08–09/10/2026.
 ## [1.1.0] - 2026-06-06
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - Kubernetes liveness and readiness probes (`GET /api/health`, `GET /api/health/ready`) with parallel async dependency checks and per-check timeouts (#134)
 - `k8s/deployment.yaml` with `startupProbe` + `livenessProbe` + `readinessProbe` configured for Flask/Gunicorn boot characteristics
 - Asset inventory CRUD endpoints (`/api/v1/ativos`) with SQLite-backed persistence
@@ -88,6 +102,7 @@ conferência final de 08–09/10/2026.
 ## [1.0.0] - 2026-05-31
 
 ### Added
+- **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
 - Supplier and contract management module with SLA tracking and breach alerting
 - Zabbix, Zendesk, and Microsoft Graph integrations
 - Flask-RESTX API with Swagger documentation at `/api/`

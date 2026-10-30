@@ -554,6 +554,37 @@ def cyber_desisolar(proposta_id: int) -> object:
     )
 
 
+def _resumo_reisolar(proposta_id: int) -> str:
+    return f"Cyber: isolar de novo a máquina {_proposta_ou_404(proposta_id).maquina} (timeout)"
+
+
+@bp.route("/cyber/incidentes/propostas/<int:proposta_id>/reisolar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_reisolar)
+def cyber_reisolar(proposta_id: int) -> object:
+    """Dispara de novo o isolamento que deu timeout no Acronis.
+
+    Quem não é super admin só pede: o pedido vai para a fila de aprovação.
+    """
+    from flask import jsonify
+
+    from app.services import incidentes_agente
+
+    proposta = _proposta_ou_404(proposta_id)
+    try:
+        incidentes_agente.reisolar(proposta, _quem_decide())
+    except incidentes_agente.PropostaNaoExecutavelError:
+        return jsonify({"ok": False, "error": "Este isolamento não está em timeout para refazer."}), 409
+    return jsonify(
+        {
+            "ok": proposta.acao_status != "FAILED",
+            "proposta": proposta.para_dict(),
+            "error": proposta.resultado,
+        }
+    )
+
+
 def _resumo_lote() -> str:
     corpo = request.get_json(silent=True) or {}
     return f"Cyber: encerrar/falso positivo em lote ({len(corpo.get('ids') or [])} incidentes)"

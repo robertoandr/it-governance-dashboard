@@ -31,6 +31,11 @@ _VENDORS_IMPRESSORA = ("ricoh", "lexmark", "brother", "epson", "kyocera", "xerox
 _VENDORS_SWITCH = ("cisco", "mikrotik", "routeros", "huawei", "juniper", "tp-link", "d-link", "switch", "3com")
 _VENDORS_CAMERA = ("hikvision", "intelbras", "dahua")
 _VENDORS_AP = ("ubiquiti", "unifi", "aruba", "ruckus")
+# Sinais de equipamento de rede na descrição SNMP — inclusive de marcas que
+# também fazem câmera. Os switches Intelbras são OEM H3C e reportam
+# "INTELBRAS Platform Software" / "Comware", então sem isto todo Intelbras com
+# SNMP caía em "camera".
+_DESCR_SWITCH = (*_VENDORS_SWITCH, "comware", "platform software", "h3c", "procurve", "jetstream")
 
 # Grupo do host no Zabbix → (tipo, rótulo do motivo)
 _GRUPOS = (
@@ -169,10 +174,12 @@ def classificar(host: dict[str, Any]) -> tuple[str, str]:
             return "firewall", "descrição SNMP Fortinet"
         if any(v in descr for v in _VENDORS_AP):
             return "ap", "descrição SNMP de access point"
+        # Switch antes de câmera: um Intelbras com "Platform Software"/"Comware"
+        # é switch, não câmera (câmera/DVR nunca reporta esses termos).
+        if any(v in descr for v in _DESCR_SWITCH):
+            return "switch", "descrição SNMP de equipamento de rede"
         if any(v in descr for v in _VENDORS_CAMERA):
             return "camera", "descrição SNMP de câmera/DVR"
-        if any(v in descr for v in _VENDORS_SWITCH):
-            return "switch", "descrição SNMP de equipamento de rede"
         if "windows" in descr:
             return ("servidor", "SNMP Windows com RDP") if 3389 in portas else ("endpoint", "SNMP Windows")
         if "linux" in descr:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import time
 from collections.abc import Callable, Iterator
 
 import pytest
@@ -183,3 +185,53 @@ def test_visao_lista_recusadas_uma_a_uma(monkeypatch: pytest.MonkeyPatch) -> Non
     v = cftv_monitoring.montar_visao(dados, {}, {}, {})
     assert v["cred_recusada_total"] == 2
     assert [d["host"] for d in v["cred_recusada_list"]] == ["cam-a", "cam-b"]
+
+
+# ── equipamento liberado sai da lista sem esperar o cache de 2 min ─────────────
+def test_marcar_padrao_tira_recusa_e_invalida_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    from itgov.api.v1 import cftv_monitoring
+
+    chamadas: list[tuple[str, dict]] = []
+
+    def zbx(metodo: str, params: dict) -> list[dict]:
+        chamadas.append((metodo, params))
+        if metodo == "host.get":
+            # o Zabbix 7 devolve "automatic" junto, e o host.update recusa esse campo
+            return [{"hostid": "42", "tags": [
+                {"tag": "vendor", "value": "intelbras", "automatic": "0"},
+                {"tag": "cftv_cred_recusada", "value": "padrao:2026-10-28", "automatic": "0"},
+            ]}]  # fmt: skip
+        return []
+
+    invalidou: list[bool] = []
+    monkeypatch.setattr(cftv_monitoring, "_zbx", zbx)
+    monkeypatch.setattr(cftv_monitoring, "invalidar_cache_cftv", lambda: invalidou.append(True))
+    cftv_credencial._marcar_padrao_no_zabbix("cam-adm-hauer-ch10")
+
+    assert chamadas[0][1]["selectTags"] == ["tag", "value"]
+    assert chamadas[-1] == ("host.update", {"hostid": "42", "tags": [
+        {"tag": "vendor", "value": "intelbras"}, {"tag": "cftv_cred", "value": "padrao"},
+    ]})  # fmt: skip
+    assert invalidou == [True]
+
+
+def test_invalidacao_vale_para_outros_workers(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """A marca em disco derruba o cache mesmo do worker que não atendeu o POST."""
+    from itgov.api.v1 import cftv_monitoring
+
+    buscas: list[int] = []
+    monkeypatch.setattr(cftv_monitoring, "_MARCA_INVALIDADO", tmp_path / "marca")
+    monkeypatch.setattr(cftv_monitoring, "_buscar_cftv", lambda: buscas.append(1) or {"devices": []})
+    monkeypatch.setattr(cftv_monitoring, "_cache_data", None)
+
+    cftv_monitoring.get_cached_cftv_summary()
+    cftv_monitoring.get_cached_cftv_summary()
+    assert len(buscas) == 1  # segunda leitura veio do cache
+
+    # outro worker invalidou: só a marca muda, a memória deste worker continua cheia
+    marca = tmp_path / "marca"
+    marca.touch()
+    os.utime(marca, (time.time() + 1, time.time() + 1))  # mtime do kernel é "coarse"; fixa depois da carga
+    assert cftv_monitoring._cache_data is not None
+    cftv_monitoring.get_cached_cftv_summary()
+    assert len(buscas) == 2
