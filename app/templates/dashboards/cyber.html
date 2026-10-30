@@ -209,6 +209,12 @@
           if (!p || !confirm('Desisolar a máquina ' + p.maquina + '? Ela volta a ter acesso à rede.')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/' + id + '/desisolar');
         },
+        agReisolar: function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          const p = this.ag.isoladas.find((x) => String(x.id) === id);
+          if (!p || !confirm('Refazer o isolamento da máquina ' + p.maquina + '? O isolamento anterior deu timeout.')) { return; }
+          this._agPost('/gov/cyber/incidentes/propostas/' + id + '/reisolar');
+        },
         agAprovarLote: function () {
           if (!this.agMarcados.length || !confirm('Aprovar ' + this.agMarcados.length + ' proposta(s) de encerrar/falso positivo?')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/aprovar-lote', {ids: this.agMarcados});
@@ -616,7 +622,11 @@
                       x-text="p.desisolar_status ? 'desisolar: ' + p.desisolar_status + ' · ' + p.desisolar_resultado + (p.desisolado_por ? ' (' + p.desisolado_por + ')' : '') : ''"></td>
                   <td class="px-5 py-2 text-right whitespace-nowrap">
                     <a :href="p.link" target="_blank" rel="noopener" x-show="p.link" class="text-xs text-blue-600 hover:underline mr-3">Abrir no Acronis</a>
-                    <button type="button" @click="agDesisolar" :data-id="p.id" :disabled="agOcupado || p.desisolando"
+                    <button type="button" @click="agReisolar" :data-id="p.id"
+                            x-show="p.pode_reisolar || p.isolando" :disabled="agOcupado || p.isolando"
+                            class="px-3 py-1 text-xs rounded-lg bg-amber-600 text-white disabled:opacity-40 mr-2"
+                            x-text="p.isolando ? 'Isolando…' : 'Refazer isolamento'"></button>
+                    <button type="button" @click="agDesisolar" :data-id="p.id" :disabled="agOcupado || p.desisolando || p.isolando"
                             class="px-3 py-1 text-xs rounded-lg bg-orange-600 text-white disabled:opacity-40"
                             x-text="p.desisolando ? 'Desisolando…' : 'Desisolar'"></button>
                   </td>
