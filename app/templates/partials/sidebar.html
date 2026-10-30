@@ -1,35 +1,41 @@
 <!-- Brand -->
-<div class="px-4 py-4 border-b border-slate-700 dark:border-slate-800 flex items-center gap-2 flex-shrink-0">
-  <div class="w-9 h-8 flex items-center justify-center flex-shrink-0">
-    <img src="{{ url_for('static', filename='img/gadens-simbolo-escuro.png') }}" alt="Grupo Gadens" width="36" height="25" class="w-9 h-auto">
+<div class="px-4 py-3.5 border-b border-slate-800 flex items-center gap-2.5 flex-shrink-0">
+  <div class="w-8 h-8 flex items-center justify-center flex-shrink-0">
+    <img src="{{ url_for('static', filename='img/gadens-simbolo-escuro.png') }}" alt="Grupo Gadens" width="32" height="22" class="w-8 h-auto">
   </div>
-  <span class="leading-tight truncate" x-show="sidebarOpen"><span class="block font-bold text-sm text-white">Governança de TI 360</span><span class="block text-[11px] text-slate-400">Grupo Gadens</span></span>
+  <span class="leading-tight truncate" x-show="sidebarOpen">
+    <span class="flex items-center gap-1.5 font-bold text-xs text-white">
+      Governança 360
+      <span class="text-[9px] uppercase px-1 py-0.2 rounded bg-gadens-600 text-white font-mono">NOC</span>
+    </span>
+    <span class="block text-[11px] text-slate-400">Grupo Gadens</span>
+  </span>
 </div>
 
 <nav class="flex-1 py-3 overflow-y-auto">
 
   {% macro nav_item(href, icon_path, label, soon=false) %}
   <a href="{{ href if not soon else '#' }}"
-     class="flex items-center gap-3 mx-2 px-3 py-2 rounded-lg transition-colors
+     class="flex items-center gap-2.5 mx-2 px-2.5 py-1.5 rounded-md transition-colors text-xs font-medium
             {% if not soon and (request.path == href or request.path.startswith(href ~ '/')) %}
-              bg-gadens-600 text-white
+              bg-gadens-600/15 text-white border-l-2 border-gadens-600 font-semibold shadow-sm
             {% elif soon %}
               text-slate-500 cursor-default
             {% else %}
-              text-slate-300 hover:bg-slate-700 hover:text-white
+              text-slate-400 hover:bg-slate-800/60 hover:text-white
             {% endif %}">
-    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon_path }}"/>
     </svg>
-    <span class="text-sm truncate flex-1" x-show="sidebarOpen">{{ label }}</span>
+    <span class="truncate flex-1" x-show="sidebarOpen">{{ label }}</span>
     {% if soon %}
-    <span class="text-[9px] bg-slate-700 text-slate-400 rounded px-1 flex-shrink-0" x-show="sidebarOpen">em breve</span>
+    <span class="text-[9px] bg-slate-800 text-slate-500 border border-slate-700/50 rounded px-1 flex-shrink-0" x-show="sidebarOpen">em breve</span>
     {% endif %}
   </a>
   {% endmacro %}
 
   {% macro group_label(label) %}
-  <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-5 pt-4 pb-1"
+  <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-4 pt-3 pb-1"
      x-show="sidebarOpen">{{ label }}</p>
   {% endmacro %}
 
@@ -115,7 +121,7 @@
 
   {# Usuarios: admin only #}
   {% if current_user.is_authenticated and current_user.role == 'admin' %}
-  <div class="mx-2 mt-4 mb-1 border-t border-slate-700"></div>
+  <div class="mx-2 mt-3 mb-1 border-t border-slate-800"></div>
   {{ nav_item(url_for('users.list_users'), 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', 'Usuários') }}
   {% endif %}
 

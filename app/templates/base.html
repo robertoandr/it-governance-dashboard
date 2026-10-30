@@ -46,13 +46,13 @@
     <meta name="msapplication-TileColor" content="#c41e24">
 
 </head>
-<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans">
 
 <div class="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
 
   <!-- Sidebar -->
   <aside :class="sidebarClass"
-         class="bg-slate-800 dark:bg-slate-950 text-white flex-shrink-0 flex flex-col transition-all duration-200 print:hidden"
+         class="bg-slate-900 dark:bg-slate-950 text-white border-r border-slate-200 dark:border-slate-800 flex-shrink-0 flex flex-col transition-all duration-200 print:hidden"
          x-cloak>
     {% include "partials/sidebar.html" %}
   </aside>
@@ -101,10 +101,10 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700
+    <footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800
                    px-6 py-2 text-xs text-slate-400 flex justify-between items-center">
       <span>{{ app_name }} &mdash; v{{ app_version }}</span>
-      <span id="footer-last-update" class="text-slate-300 dark:text-slate-600"></span>
+      <span id="footer-last-update" class="text-slate-400 dark:text-slate-500 font-mono"></span>
       <span>Desenvolvido por R A Dias Techfusion</span>
     </footer>
     <script nonce="{{ csp_nonce() }}">
