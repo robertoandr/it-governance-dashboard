@@ -11,7 +11,7 @@ PyYAML>=6.0.3
 
 # Security middleware (Sprint 10D)
 flask-talisman>=1.1.0
-flask-limiter>=3.5.0
+flask-limiter>=3.12
 structlog>=24.1.0
 
 # Integration HTTP client + models (Sprint 10E)
