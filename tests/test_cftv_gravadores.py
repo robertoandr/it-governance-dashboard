@@ -863,3 +863,72 @@ def test_buscar_cftv_traz_canais_snmp_dos_gravadores() -> None:
     assert devices["DVR-X"]["canais_snmp"] == {"2": {"status": "Connected"}}
     assert devices["DVR-X"]["status_canal_confiavel"] is False
     assert devices["cam-x-ch01"]["canais_snmp"] == {} and devices["cam-x-ch01"]["status_canal_confiavel"] is True
+
+
+def test_cftv_detalhes_gravadores_e_canais_falhas(authed_client, factory_app, com_zabbix: None) -> None:
+    from app.models.unidade import CanalCftv
+
+    with factory_app.app_context():
+        DvrUnidade.query.filter(DvrUnidade.dvr.in_(["DVR-1", "Sede_4_3_2_Loja"])).delete(synchronize_session=False)
+        CanalCftv.query.filter_by(ip_gravador="172.29.11.17", canal=28).delete(synchronize_session=False)
+        db.session.commit()
+
+        # Gravador 1: com host no Zabbix e detalhes preenchidos
+        db.session.add(DvrUnidade(dvr="DVR-1", modelo="NVD 1432", serie="DKX0004487547", canais=32, unidade_id=None))
+        # Gravador 2: sem host no Zabbix (avulso)
+        db.session.add(
+            DvrUnidade(dvr="Sede_4_3_2_Loja", modelo="iNVD 3032", serie="DYY0011254964", canais=32, unidade_id=None)
+        )
+        # Canal com falha de imagem (auditoria)
+        db.session.add(
+            CanalCftv(
+                ip_gravador="172.29.11.17",
+                canal=28,
+                situacao="ativo",
+                analogica=0,
+                imagem="sem",
+                origem="auditoria-dvrs-xlsx",
+            )
+        )
+        db.session.commit()
+
+    dados = {
+        "enabled": True,
+        "devices": [
+            {
+                "host": "dvr-1",
+                "name": "DVR 1",
+                "ip": "172.29.11.17",
+                "subcat": "dvr",
+                "andar": "1",
+                "gravador": "DVR-1",
+                "is_gravador": True,
+                "canal": "",
+                "loja": "",
+                "vendor": "Intelbras",
+                "model": "",
+                "status": "up",
+                "problems": 0,
+            }
+        ],
+    }
+
+    try:
+        with patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value=dados):
+            html = authed_client.get("/gov/cftv?ver=gravadores").get_data(as_text=True)
+
+        # Verifica se os detalhes do modelo e série aparecem nos cards
+        assert "NVD 1432" in html
+        assert "DKX0004487547" in html
+        assert "iNVD 3032" in html
+        assert "DYY0011254964" in html
+        # Gravador sem host no Zabbix aparece na lista de cards
+        assert "Sede_4_3_2_Loja" in html
+        # Falha de imagem registrada na auditoria aparece no card
+        assert "sem imagem na" in html
+        assert "canal 28" in html
+    finally:
+        with factory_app.app_context():
+            DvrUnidade.query.filter(DvrUnidade.dvr.in_(["DVR-1", "Sede_4_3_2_Loja"])).delete(synchronize_session=False)
+            CanalCftv.query.filter_by(ip_gravador="172.29.11.17", canal=28).delete(synchronize_session=False)
+            db.session.commit()

@@ -890,6 +890,44 @@ def _visao_cftv(filtro_raw: str) -> _VisaoCftv:
         sede_por_unidade=sede_por_unidade,
         quedas=get_cached_historico_quedas(),
     )
+    # Inclui gravadores cadastrados em dvr_unidades que não possuem host no Zabbix
+    gravadores_existentes = {c["gravador"] for c in visao["cards"] if c["gravador"]}
+    for v in vinculos:
+        if (
+            v.acesso != ACESSO_NUVEM
+            and v.dvr not in gravadores_existentes
+            and (
+                filtro is None
+                or (filtro == SEM_UNIDADE and v.unidade_id is None)
+                or (isinstance(filtro, set) and v.unidade_id in filtro)
+            )
+        ):
+            visao["cards"].append(
+                {
+                    "gravador": v.dvr,
+                    "titulo": v.apelido or v.dvr,
+                    "nome_zabbix": v.dvr,
+                    "apelido": v.apelido or "",
+                    "unidos": [],
+                    "gravador_host": None,
+                    "unidade_id": v.unidade_id,
+                    "unidade": nomes.get(v.unidade_id, "") if v.unidade_id is not None else "",
+                    "vendors": [v.modelo.split()[0]] if v.modelo else [],
+                    "dispositivos": [],
+                    "total": 0,
+                    "up": 0,
+                    "down": 0,
+                    "nodata": 0,
+                    "maint": 0,
+                    "disabled": 0,
+                    "up_pct": 0,
+                    "modelo": v.modelo or "",
+                    "serie": v.serie or "",
+                    "canais_capacidade": v.canais,
+                    "canais": None,
+                    "inventario": [],
+                }
+            )
     _canais_dos_gravadores(visao, vinculos, nomes, sede_por_unidade)
     mapa = {u.id: u.nome_mapa or u.nome for u in todas}
     for c in visao["cards"]:
@@ -911,7 +949,13 @@ def cftv_monitoring() -> str:
     filtro_raw = request.args.get("unidade", "")
     todas, unidades, nomes, filtro, vinculos, data, visao = _visao_cftv(filtro_raw)
     nuvem = [
-        {"dvr": v.dvr, "unidade": nomes.get(v.unidade_id, ""), "modelo": v.modelo, "serie": v.serie}
+        {
+            "dvr": v.dvr,
+            "unidade": nomes.get(v.unidade_id, ""),
+            "modelo": v.modelo,
+            "serie": v.serie,
+            "canais": v.canais,
+        }
         for v in sorted(vinculos, key=lambda v: v.dvr.lower())
         if v.acesso == ACESSO_NUVEM
         and (
@@ -963,8 +1007,20 @@ def _canais_dos_gravadores(
     from flask import current_app
 
     from app.services import cftv_gravadores, cftv_verificacao
+    from itgov.api.v1.cftv_monitoring import MAPA_IP_DVR
 
     manual = {v.dvr: v.canais for v in vinculos if v.canais}
+    modelos = {v.dvr: v.modelo for v in vinculos if v.modelo}
+    series = {v.dvr: v.serie for v in vinculos if v.serie}
+    for v in vinculos:
+        if v.apelido:
+            if v.canais and v.apelido not in manual:
+                manual[v.apelido] = v.canais
+            if v.modelo and v.apelido not in modelos:
+                modelos[v.apelido] = v.modelo
+            if v.serie and v.apelido not in series:
+                series[v.apelido] = v.serie
+
     alvos = []
     for c in visao["cards"]:
         host = c.get("gravador_host") or {}
@@ -983,7 +1039,15 @@ def _canais_dos_gravadores(
     livres_por_sede: dict[int | None, int] = {}
     for c in visao["cards"]:
         ip = (c.get("gravador_host") or {}).get("ip", "")
-        c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(c["gravador"]), cadastro.get(ip))
+        dvr_key = c.get("gravador") or ""
+        alvo_dvr = dvr_key
+        if alvo_dvr not in modelos and ip in MAPA_IP_DVR:
+            alvo_dvr = MAPA_IP_DVR[ip]
+
+        c["modelo"] = modelos.get(alvo_dvr) or (c.get("gravador_host") or {}).get("model") or ""
+        c["serie"] = series.get(alvo_dvr) or ""
+        c["canais_capacidade"] = manual.get(alvo_dvr)
+        c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(alvo_dvr), cadastro.get(ip))
         c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip), cadastro.get(ip), verificacao.get(ip))
         if c["canais"]:
             sede = sede_por_unidade.get(c["unidade_id"], c["unidade_id"]) if c["unidade_id"] is not None else None
@@ -1124,6 +1188,8 @@ def cftv_gravador_nuvem() -> object:
     vinculo.unidade_id = unidade_id
     vinculo.modelo = f.get("modelo", "").strip()[:80]
     vinculo.serie = f.get("serie", "").strip()[:40]
+    canais_raw = f.get("canais", "").strip()
+    vinculo.canais = int(canais_raw) if canais_raw.isdigit() else None
     db.session.commit()
     log.info("cftv.gravador_nuvem", gravador=nome, unidade_id=unidade_id, user=current_user.email)
     flash(f"{nome} salvo como gravador pela nuvem.", "success")

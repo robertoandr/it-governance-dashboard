@@ -30,6 +30,30 @@ log = structlog.get_logger(__name__)
 
 _CACHE_TTL = 120  # 2 minutos — dados operacionais de câmeras mudam rápido
 
+# Mapeamento determinístico de IP para o nome canônico do DVR no Zabbix e dvr_unidades
+MAPA_IP_DVR: dict[str, str] = {
+    "172.29.11.17": "DVR-1",
+    "172.29.11.18": "DVR-2",
+    "172.29.11.19": "DVR-3",
+    "172.17.1.206": "Triunfo 2",
+    "172.17.1.248": "Triunfo 4",
+    "172.17.12.10": "Triunfo 5",
+    "10.41.103.51": "Térreo",
+    "10.41.100.211": "R3",
+    "10.41.100.212": "Corredor técnico",
+    "10.41.100.251": "ADM HAUER",
+    "10.41.102.198": "Loja Útil",
+    "10.41.102.75": "Shopping 1",
+    "10.41.102.172": "Shopping novo",
+    "10.41.100.165": "Shopping_Estoque",
+    "10.41.100.11": "Shopping_Ext_1_Monitoramento",
+    "10.41.100.115": "Shopping_Ext_2",
+    "10.41.100.174": "Shopping_praça_cancelas",
+    "10.41.100.95": "Shopping_Superior",
+    "172.17.1.151": "Triunfo_1_Folha",
+    "172.17.1.201": "Triunfo_3_Adm",
+}
+
 # O gunicorn roda vários workers, cada um com seu cache. Invalidar só a memória do
 # worker que atendeu o POST deixaria os outros mostrando o dado velho por até 2 min;
 # a data deste arquivo avisa todos os workers de que o cache ficou velho.

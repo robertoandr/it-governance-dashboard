@@ -29,6 +29,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from datetime import UTC, datetime
 
+from itgov.api.v1.cftv_monitoring import MAPA_IP_DVR
+
 PADRAO_PLANILHA = "/srv/compartilhado/Dvrs.xlsx"
 ABA_ALVO = "Atualizado "
 CONTAINER_PADRAO = "itgov-app"
@@ -173,44 +175,63 @@ def aplicar_no_banco(conn: sqlite3.Connection, dvrs_ops: list[dict], canais_ops:
         canais = d["total_canais"]
         eh_nuvem = d["eh_nuvem"]
         unidade_nuvem = d["unidade_id"]
+        ip = d.get("ip", "")
 
-        dvr_key = None
-        for k, v in vinculos.items():
-            if norm(nome) in (norm(k), norm(v["apelido"] or "")):
-                dvr_key = k
-                break
+        # Resolução determinística por IP primeiro; fallback para nome/apelido
+        dvr_key = MAPA_IP_DVR.get(ip)
+        if not dvr_key:
+            for k, v in vinculos.items():
+                if norm(nome) in (norm(k), norm(v["apelido"] or "")):
+                    dvr_key = k
+                    break
+
+        # Limpa registro duplicado/fantasma criado com o nome da planilha (ex.: Sede_9_8)
+        if dvr_key and nome != dvr_key and nome in vinculos:
+            c.execute("DELETE FROM dvr_unidades WHERE dvr = ?", (nome,))
+            vinculos.pop(nome, None)
+
+        alvo_dvr = dvr_key or nome
+        unidade_padrao = (
+            3
+            if ("sede" in nome.lower() or "dvr" in alvo_dvr.lower())
+            else (
+                1
+                if ("shopping" in nome.lower() or alvo_dvr in ("Térreo", "R3", "Corredor técnico", "Loja Útil"))
+                else (
+                    4
+                    if ("triunfo" in nome.lower() or "triunfo" in alvo_dvr.lower())
+                    else (2 if "autoshop" in nome.lower() else None)
+                )
+            )
+        )
 
         if eh_nuvem:
-            if dvr_key:
+            if alvo_dvr in vinculos:
                 c.execute(
                     "UPDATE dvr_unidades SET modelo=?, serie=?, canais=?, acesso='nuvem', unidade_id=? WHERE dvr=?",
-                    (modelo, serie, canais, unidade_nuvem, dvr_key),
+                    (modelo, serie, canais, unidade_nuvem, alvo_dvr),
                 )
             else:
                 c.execute(
                     "INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) "
                     "VALUES (?, ?, '', '', ?, 'nuvem', ?, ?)",
-                    (nome, unidade_nuvem, canais, modelo, serie),
+                    (alvo_dvr, unidade_nuvem, canais, modelo, serie),
                 )
+                vinculos[alvo_dvr] = {"dvr": alvo_dvr, "unidade_id": unidade_nuvem}
             total_dvrs_atualizados += 1
-        elif dvr_key:
+        elif alvo_dvr in vinculos:
             c.execute(
                 "UPDATE dvr_unidades SET modelo=?, serie=?, canais=? WHERE dvr=?",
-                (modelo, serie, canais, dvr_key),
+                (modelo, serie, canais, alvo_dvr),
             )
             total_dvrs_atualizados += 1
         else:
-            # Gravador local novo
-            unidade_id = (
-                3
-                if "sede" in nome.lower()
-                else (1 if "shopping" in nome.lower() else (4 if "triunfo" in nome.lower() else None))
-            )
             c.execute(
                 "INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) "
                 "VALUES (?, ?, '', '', ?, '', ?, ?)",
-                (nome, unidade_id, canais, modelo, serie),
+                (alvo_dvr, unidade_padrao, canais, modelo, serie),
             )
+            vinculos[alvo_dvr] = {"dvr": alvo_dvr, "unidade_id": unidade_padrao}
             total_dvrs_atualizados += 1
 
     # Atualizar canais com falha em cftv_canais
@@ -272,6 +293,7 @@ import json, sqlite3
 from datetime import datetime, timezone
 
 data = json.loads({payload!r})
+mapa_ip = {MAPA_IP_DVR!r}
 conn = sqlite3.connect('/app/data/app.db', timeout=60.0)
 c = conn.cursor()
 c.execute('PRAGMA busy_timeout = 60000;')
@@ -292,25 +314,36 @@ for d in data['dvrs']:
     canais = d['total_canais']
     eh_nuvem = d['eh_nuvem']
     unidade_nuvem = d['unidade_id']
+    ip = d.get('ip', '')
 
-    dvr_key = None
-    for k, v in vinculos.items():
-        if norm(nome) in (norm(k), norm(v['apelido'] or '')):
-            dvr_key = k
-            break
+    dvr_key = mapa_ip.get(ip)
+    if not dvr_key:
+        for k, v in vinculos.items():
+            if norm(nome) in (norm(k), norm(v['apelido'] or '')):
+                dvr_key = k
+                break
+
+    # Limpa registro duplicado/fantasma com o nome da planilha
+    if dvr_key and nome != dvr_key and nome in vinculos:
+        c.execute('DELETE FROM dvr_unidades WHERE dvr = ?', (nome,))
+        vinculos.pop(nome, None)
+
+    alvo_dvr = dvr_key or nome
+    unidade_padrao = 3 if ('sede' in nome.lower() or 'dvr' in alvo_dvr.lower()) else (1 if ('shopping' in nome.lower() or alvo_dvr in ('Térreo', 'R3', 'Corredor técnico', 'Loja Útil')) else (4 if ('triunfo' in nome.lower() or 'triunfo' in alvo_dvr.lower()) else (2 if 'autoshop' in nome.lower() else None)))
 
     if eh_nuvem:
-        if dvr_key:
-            c.execute('UPDATE dvr_unidades SET modelo=?, serie=?, canais=?, acesso=\"nuvem\", unidade_id=? WHERE dvr=?', (modelo, serie, canais, unidade_nuvem, dvr_key))
+        if alvo_dvr in vinculos:
+            c.execute('UPDATE dvr_unidades SET modelo=?, serie=?, canais=?, acesso=\"nuvem\", unidade_id=? WHERE dvr=?', (modelo, serie, canais, unidade_nuvem, alvo_dvr))
         else:
-            c.execute('INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) VALUES (?, ?, \"\", \"\", ?, \"nuvem\", ?, ?)', (nome, unidade_nuvem, canais, modelo, serie))
+            c.execute('INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) VALUES (?, ?, \"\", \"\", ?, \"nuvem\", ?, ?)', (alvo_dvr, unidade_nuvem, canais, modelo, serie))
+            vinculos[alvo_dvr] = {{'dvr': alvo_dvr, 'unidade_id': unidade_nuvem}}
         d_count += 1
-    elif dvr_key:
-        c.execute('UPDATE dvr_unidades SET modelo=?, serie=?, canais=? WHERE dvr=?', (modelo, serie, canais, dvr_key))
+    elif alvo_dvr in vinculos:
+        c.execute('UPDATE dvr_unidades SET modelo=?, serie=?, canais=? WHERE dvr=?', (modelo, serie, canais, alvo_dvr))
         d_count += 1
     else:
-        unidade_id = 3 if 'sede' in nome.lower() else (1 if 'shopping' in nome.lower() else (4 if 'triunfo' in nome.lower() else None))
-        c.execute('INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) VALUES (?, ?, \"\", \"\", ?, \"\", ?, ?)', (nome, unidade_id, canais, modelo, serie))
+        c.execute('INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) VALUES (?, ?, \"\", \"\", ?, \"\", ?, ?)', (alvo_dvr, unidade_padrao, canais, modelo, serie))
+        vinculos[alvo_dvr] = {{'dvr': alvo_dvr, 'unidade_id': unidade_padrao}}
         d_count += 1
 
 c_count = 0
@@ -326,6 +359,13 @@ for ch in data['canais']:
 
 conn.commit()
 conn.close()
+
+try:
+    from itgov.api.v1.cftv_monitoring import invalidar_cache_cftv
+    invalidar_cache_cftv()
+except Exception:
+    pass
+
 print(f'SUCESSO_PROD: {{d_count}} gravadores sincronizados e {{c_count}} canais com falha registrados.')
 """
         cmd = ["docker", "exec", "-i", args.container, "python3", "-c", script_code]
