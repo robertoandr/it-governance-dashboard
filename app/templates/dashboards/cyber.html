@@ -726,7 +726,7 @@
         <input x-model="novoSmtp.host" placeholder="smtp.office365.com:587" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
         <input x-model="novoSmtp.usuario" placeholder="Usuário SMTP" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
         <input x-model="novoSmtp.senha" type="password" placeholder="Senha (ou senha de app)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700">
-        <input x-model="novoSmtp.remetente" placeholder="De: Avisos TI <avisos-ti@empresa>" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2">
+        <input x-model="novoSmtp.remetente" placeholder="E-mail do remetente (ex.: avisos-ti@grupogadens.com.br)" class="text-sm px-2 py-1.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 md:col-span-2">
         <div class="md:col-span-2 text-right">
           <button type="button" class="text-sm bg-gray-700 text-white px-3 py-1.5 rounded" :disabled="phishOcupado" @click="criarSmtp()">Salvar perfil</button>
         </div>

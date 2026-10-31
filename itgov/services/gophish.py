@@ -17,6 +17,7 @@ Tudo aqui é leitura: nenhuma chamada altera o GoPhish.
 
 from __future__ import annotations
 
+import email.utils
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -189,6 +190,18 @@ def listar_smtp() -> list[str]:
         return [str(p.get("name", "")) for p in resp.json() or [] if p.get("name")]
 
 
+def _sanitizar_email_remetente(remetente: str) -> str:
+    """Extrai apenas o e-mail puro (sem display name, 'De:' ou < >).
+
+    O GoPhish exige estritamente um endereço de e-mail puro (ex.:
+    'avisos@empresa.com') no campo ``from_address``. Display names RFC 5322
+    geram erro 500 no daemon do GoPhish.
+    """
+    _, addr = email.utils.parseaddr(remetente.strip())
+    limpo = addr.strip() if addr else remetente.strip()
+    return limpo.strip("<>").strip()
+
+
 def criar_smtp(nome: str, host: str, usuario: str, senha: str, remetente: str) -> None:
     """Cria um perfil de envio (SMTP autenticado, ex.: M365).
 
@@ -197,14 +210,19 @@ def criar_smtp(nome: str, host: str, usuario: str, senha: str, remetente: str) -
         host: ``host:porta`` do SMTP (ex.: ``smtp.office365.com:587``).
         usuario: Usuário do SMTP.
         senha: Senha (ou senha de app) do SMTP.
-        remetente: Endereço "De" (ex.: ``Avisos TI <avisos-ti@empresa>``).
+        remetente: Endereço "De" (ex.: ``avisos-ti@empresa.com``). Formatos com
+            display name (ex.: ``Avisos TI <avisos-ti@empresa.com>``) são
+            sanitizados para o e-mail puro, exigido pelo GoPhish.
 
     Raises:
-        PhishingError: Campo obrigatório vazio.
+        PhishingError: Campo obrigatório vazio ou e-mail inválido.
         httpx.HTTPError: Falha de rede ou HTTP.
     """
-    if not (nome and host and usuario and remetente):
+    remetente_limpo = _sanitizar_email_remetente(remetente)
+    if not (nome and host and usuario and remetente_limpo):
         raise PhishingError("Nome, host, usuário e remetente são obrigatórios.")
+    if "@" not in remetente_limpo:
+        raise PhishingError("Endereço de e-mail do remetente inválido.")
     with _cliente() as cliente:
         resp = cliente.post(
             "/api/smtp/",
@@ -214,7 +232,7 @@ def criar_smtp(nome: str, host: str, usuario: str, senha: str, remetente: str) -
                 "host": host,
                 "username": usuario,
                 "password": senha,
-                "from_address": remetente,
+                "from_address": remetente_limpo,
                 "ignore_cert_errors": True,
             },
         )

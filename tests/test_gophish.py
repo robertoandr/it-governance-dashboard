@@ -144,12 +144,18 @@ def test_criar_smtp_exige_campos(credenciais: None) -> None:
         gophish.criar_smtp("", "h", "u", "s", "r")
 
 
+def test_criar_smtp_rejeita_email_sem_arroba(credenciais: None) -> None:
+    with pytest.raises(gophish.PhishingError, match="e-mail"):
+        gophish.criar_smtp("M365", "smtp.office365.com:587", "u", "s", "apenas-texto")
+
+
 @respx.mock
-def test_criar_smtp_posta_perfil(credenciais: None) -> None:
+def test_criar_smtp_posta_perfil_com_remetente_sanitizado(credenciais: None) -> None:
     rota = respx.post(f"{_URL}/api/smtp/").mock(return_value=httpx.Response(201, json={"id": 1}))
-    gophish.criar_smtp("M365", "smtp.office365.com:587", "u@x", "senha", "TI <ti@x>")
+    # Formatos RFC 5322 e prefixos "De:" devem ser sanitizados para o e-mail puro que o GoPhish aceita
+    gophish.criar_smtp("M365", "smtp.office365.com:587", "u@x", "senha", "De: Avisos TI <ti@x.com>")
     corpo = json.loads(rota.calls.last.request.content)
-    assert corpo["interface_type"] == "SMTP" and corpo["from_address"] == "TI <ti@x>"
+    assert corpo["interface_type"] == "SMTP" and corpo["from_address"] == "ti@x.com"
 
 
 @respx.mock

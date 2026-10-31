@@ -706,7 +706,12 @@ def cyber_phishing_smtp() -> object:
         )
     except gophish.PhishingError as exc:
         log.info("cyber.phishing.smtp_invalido", erro=str(exc))
-        return jsonify({"ok": False, "error": "Preencha nome, host, usuário e remetente."}), 400
+        msg = (
+            "Informe um e-mail de remetente válido (ex.: avisos-ti@empresa.com)."
+            if "e-mail" in str(exc).lower()
+            else "Preencha nome, host, usuário e remetente."
+        )
+        return jsonify({"ok": False, "error": msg}), 400
     except httpx.HTTPError:
         return jsonify({"ok": False, "error": "Não deu para criar o perfil no GoPhish."}), 502
     log.info("cyber.phishing.smtp_criado", por=current_user.email)
