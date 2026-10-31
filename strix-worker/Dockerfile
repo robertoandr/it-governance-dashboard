@@ -4,7 +4,7 @@ FROM python:3.12-slim
 
 # CLI do Docker (o daemon é o do host, via socket montado) + pipx para o Strix.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        docker.io pipx ca-certificates \
+        docker-cli docker.io pipx ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.local/bin:${PATH}"
