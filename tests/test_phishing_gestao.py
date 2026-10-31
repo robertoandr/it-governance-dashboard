@@ -52,3 +52,32 @@ def test_smtp_e_disparo_exigem_login(factory_client) -> None:
     # Rotas do dashboard: sem sessão, o login_required redireciona para o login.
     assert factory_client.post("/gov/cyber/phishing/smtp", json={}).status_code == 302
     assert factory_client.post("/gov/cyber/phishing/disparar", json={}).status_code == 302
+
+
+def test_criar_smtp_rota_valida_campos_obrigatorios(authed_client) -> None:
+    resp = authed_client.post("/gov/cyber/phishing/smtp", json={"nome": "P"})
+    assert resp.status_code == 400
+    assert "Preencha" in resp.get_json()["error"]
+
+
+def test_criar_smtp_rota_rejeita_remetente_sem_arroba(authed_client) -> None:
+    resp = authed_client.post(
+        "/gov/cyber/phishing/smtp",
+        json={"nome": "P", "host": "smtp.test:587", "usuario": "u", "senha": "s", "remetente": "invalido"},
+    )
+    assert resp.status_code == 400
+    assert "e-mail" in resp.get_json()["error"].lower()
+
+
+def test_criar_smtp_rota_sucesso(authed_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    from itgov.services import gophish
+
+    chamado = []
+    monkeypatch.setattr(gophish, "criar_smtp", lambda *args: chamado.append(args))
+    resp = authed_client.post(
+        "/gov/cyber/phishing/smtp",
+        json={"nome": "P", "host": "smtp.test:587", "usuario": "u", "senha": "s", "remetente": "avisos@test.com"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True}
+    assert len(chamado) == 1
