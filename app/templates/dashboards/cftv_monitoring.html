@@ -117,7 +117,7 @@
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
         <thead class="text-left text-slate-500 dark:text-slate-400">
-          <tr><th class="py-1 pr-3 font-medium">Gravador</th><th class="py-1 pr-3 font-medium">Unidade</th><th class="py-1 pr-3 font-medium">Modelo</th><th class="py-1 pr-3 font-medium">Série / Cloud</th>{% if eh_admin %}<th></th>{% endif %}</tr>
+          <tr><th class="py-1 pr-3 font-medium">Gravador</th><th class="py-1 pr-3 font-medium">Unidade</th><th class="py-1 pr-3 font-medium">Modelo</th><th class="py-1 pr-3 font-medium">Série / Cloud</th><th class="py-1 pr-3 font-medium">Canais</th>{% if eh_admin %}<th></th>{% endif %}</tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
           {% for g in nuvem %}
@@ -126,6 +126,7 @@
             <td class="py-1.5 pr-3">{{ g.unidade or '—' }}</td>
             <td class="py-1.5 pr-3">{{ g.modelo or '—' }}</td>
             <td class="py-1.5 pr-3 font-mono">{{ g.serie or '—' }}</td>
+            <td class="py-1.5 pr-3">{{ g.canais or '—' }}</td>
             {% if eh_admin %}
             <td class="py-1.5 text-right">
               <form method="POST" action="{{ url_for('dashboards.cftv_gravador_nuvem') }}">
@@ -156,6 +157,7 @@
         </select>
         <input name="modelo" maxlength="80" placeholder="Modelo (ex.: MHDX 1108)" aria-label="Modelo" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
         <input name="serie" maxlength="40" placeholder="Nº de série / Cloud" aria-label="Número de série" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
+        <input name="canais" type="number" min="1" max="256" placeholder="Canais (ex.: 16)" aria-label="Quantidade de canais" class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-100 px-2 py-1 text-xs">
         <div class="sm:col-span-2"><button type="submit" class="text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md px-3 py-1.5">Salvar</button>
           <span class="text-[10px] text-slate-400 ml-2">Mesmo nome = altera o cadastro.</span></div>
       </form>
@@ -359,6 +361,13 @@
             {% if c.unidade %}{{ c.unidade }}{% else %}<span class="text-amber-600 dark:text-amber-400">Sem unidade</span>{% endif %}
             {% if c.vendors %} · {{ c.vendors | join(', ') }}{% endif %}
           </p>
+          {% if c.modelo or c.serie %}
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+            {% if c.modelo %}<span class="font-medium">{{ c.modelo }}</span>{% endif %}
+            {% if c.serie %}<span class="text-slate-400 font-mono text-[10px]"> · S/N: {{ c.serie }}</span>{% endif %}
+            {% if c.canais_capacidade %}<span class="text-slate-400 text-[10px]"> · {{ c.canais_capacidade }} canais</span>{% endif %}
+          </p>
+          {% endif %}
           {% if c.apelido %}<p class="text-[10px] text-slate-400 mt-0.5" title="Nome no Zabbix">Zabbix: {{ c.nome_zabbix }}</p>{% endif %}
           {% if c.unidos %}<p class="text-[10px] text-slate-400 mt-0.5">Unido com: {{ c.unidos | join(', ') }}</p>{% endif %}
           {% if c.mapa_unidade and pode('mapa_cameras') %}
@@ -399,8 +408,12 @@
       </div>
 
       {% set k = c.canais %}
-      {% if k %}
+      {% set sem_imagem = c.inventario | selectattr('sem_imagem') | rejectattr('imagem', 'in', ['ok', 'sem_resposta', 'chapada']) | list %}
+      {% set sem_imagem_auto = c.inventario | selectattr('imagem', 'in', ['sem_resposta', 'chapada']) | list %}
+      {% set sem_gravar = c.inventario | selectattr('gravacao', 'in', ['parada', 'desligada']) | list %}
+      {% if k or sem_imagem or sem_imagem_auto or sem_gravar %}
       <div class="rounded-lg bg-slate-50 dark:bg-slate-700/40 px-3 py-2 text-xs space-y-1">
+        {% if k %}
         <p class="text-slate-600 dark:text-slate-300">
           <span class="font-semibold text-slate-800 dark:text-slate-100">{{ k.total }}</span> canais
           · {{ k.usados }} em uso{% if k.analogicas %} ({{ k.analogicas }} analógica{{ 's' if k.analogicas != 1 }}){% endif %}
@@ -413,28 +426,30 @@
           {% for x in k.sem_video %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
-        {% set sem_gravar = c.inventario | selectattr('gravacao', 'in', ['parada', 'desligada']) | list %}
+        {% elif c.canais_capacidade %}
+        <p class="text-slate-600 dark:text-slate-300">
+          <span class="font-semibold text-slate-800 dark:text-slate-100">{{ c.canais_capacidade }}</span> canais (capacidade do gravador)
+        </p>
+        {% endif %}
         {% if sem_gravar %}
         <p class="text-red-700 dark:text-red-400 font-medium" title="Verificação automática no gravador (a cada 30 min): nenhum arquivo gravado nos últimos 30 min, ou gravação desligada">{{ sem_gravar | length }} cana{{ 'is' if sem_gravar | length != 1 else 'l' }} sem gravar:</p>
         <ul class="text-red-700 dark:text-red-400 flex flex-wrap gap-x-3 gap-y-0.5">
           {% for x in sem_gravar %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}{% if x.gravacao == 'desligada' %} (desligada){% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
-        {% set sem_imagem_auto = c.inventario | selectattr('imagem', 'in', ['sem_resposta', 'chapada']) | list %}
         {% if sem_imagem_auto %}
         <p class="text-red-700 dark:text-red-400 font-medium" title="Verificação automática (fotos às 8h, 11h, 14h e 17h): câmera não entrega imagem ou a imagem é uma tela chapada">{{ sem_imagem_auto | length }} câmera{{ 's' if sem_imagem_auto | length != 1 }} sem imagem agora:</p>
         <ul class="text-red-700 dark:text-red-400 flex flex-wrap gap-x-3 gap-y-0.5">
           {% for x in sem_imagem_auto %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
-        {% set sem_imagem = c.inventario | selectattr('sem_imagem') | rejectattr('imagem', 'in', ['ok', 'sem_resposta', 'chapada']) | list %}
         {% if sem_imagem %}
         <p class="text-amber-700 dark:text-amber-400 font-medium" title="Câmera ligada, mas sem imagem útil na conferência no local">{{ sem_imagem | length }} câmera{{ 's' if sem_imagem | length != 1 }} sem imagem na conferência:</p>
         <ul class="text-amber-700 dark:text-amber-400 flex flex-wrap gap-x-3 gap-y-0.5">
           {% for x in sem_imagem %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
-        {% if k.erro %}<p class="text-[10px] text-amber-600 dark:text-amber-400">Gravador não respondeu à API: {{ k.erro }}</p>{% endif %}
+        {% if k and k.erro %}<p class="text-[10px] text-amber-600 dark:text-amber-400">Gravador não respondeu à API: {{ k.erro }}</p>{% endif %}
       </div>
       {% elif c.gravador_host %}
       <p class="text-[11px] text-slate-400">Canais livres: ainda sem leitura do gravador{% if eh_admin %} — informe a quantidade em "Editar gravador"{% endif %}.</p>
