@@ -42,6 +42,8 @@ build
 *.p12
 *.pfx
 nginx/certs/
+docker/nginx/
+docker/observability/
 
 # Logs & temp
 *.log

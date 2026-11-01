@@ -868,8 +868,15 @@ def test_buscar_cftv_traz_canais_snmp_dos_gravadores() -> None:
 def test_cftv_detalhes_gravadores_e_canais_falhas(authed_client, factory_app, com_zabbix: None) -> None:
     from app.models.unidade import CanalCftv
 
+    gravadores = ["DVR-1", "Sede_4_3_2_Loja"]
     with factory_app.app_context():
-        DvrUnidade.query.filter(DvrUnidade.dvr.in_(["DVR-1", "Sede_4_3_2_Loja"])).delete(synchronize_session=False)
+        # Guarda os vínculos do seed (ex.: DVR-1 → Sede) para restaurar no fim e
+        # não contaminar outros testes que dependem deles.
+        originais = [
+            {c.name: getattr(r, c.name) for c in DvrUnidade.__table__.columns if c.name != "id"}
+            for r in DvrUnidade.query.filter(DvrUnidade.dvr.in_(gravadores)).all()
+        ]
+        DvrUnidade.query.filter(DvrUnidade.dvr.in_(gravadores)).delete(synchronize_session=False)
         CanalCftv.query.filter_by(ip_gravador="172.29.11.17", canal=28).delete(synchronize_session=False)
         db.session.commit()
 
@@ -929,6 +936,7 @@ def test_cftv_detalhes_gravadores_e_canais_falhas(authed_client, factory_app, co
         assert "canal 28" in html
     finally:
         with factory_app.app_context():
-            DvrUnidade.query.filter(DvrUnidade.dvr.in_(["DVR-1", "Sede_4_3_2_Loja"])).delete(synchronize_session=False)
+            DvrUnidade.query.filter(DvrUnidade.dvr.in_(gravadores)).delete(synchronize_session=False)
             CanalCftv.query.filter_by(ip_gravador="172.29.11.17", canal=28).delete(synchronize_session=False)
+            db.session.add_all(DvrUnidade(**dados_orig) for dados_orig in originais)
             db.session.commit()
