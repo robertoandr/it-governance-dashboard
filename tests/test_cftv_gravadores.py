@@ -940,3 +940,45 @@ def test_cftv_detalhes_gravadores_e_canais_falhas(authed_client, factory_app, co
             CanalCftv.query.filter_by(ip_gravador="172.29.11.17", canal=28).delete(synchronize_session=False)
             db.session.add_all(DvrUnidade(**dados_orig) for dados_orig in originais)
             db.session.commit()
+
+
+def test_cftv_avulso_com_nome_parecido_nao_duplica_card(authed_client, factory_app, com_zabbix: None) -> None:
+    """Registro de dvr_unidades com o nome da planilha não vira um segundo card vazio."""
+    fantasmas = ["Dvr_1", "Gravação Extra"]
+    with factory_app.app_context():
+        DvrUnidade.query.filter(DvrUnidade.dvr.in_(fantasmas)).delete(synchronize_session=False)
+        # "Dvr_1" normalizado é igual ao gravador "DVR-1" que tem host no Zabbix
+        db.session.add(DvrUnidade(dvr="Dvr_1", modelo="FANTASMA 111", unidade_id=None))
+        # Marcado como duplicado de outro gravador: também não aparece sozinho
+        db.session.add(DvrUnidade(dvr="Gravação Extra", modelo="FANTASMA 222", duplicado_de="DVR-1", unidade_id=None))
+        db.session.commit()
+
+    dados = {
+        "enabled": True,
+        "devices": [
+            {
+                "host": "dvr-1",
+                "name": "DVR 1",
+                "ip": "172.29.11.17",
+                "subcat": "dvr",
+                "andar": "1",
+                "gravador": "DVR-1",
+                "is_gravador": True,
+                "canal": "",
+                "loja": "",
+                "vendor": "Intelbras",
+                "model": "",
+                "status": "up",
+                "problems": 0,
+            }
+        ],
+    }
+    try:
+        with patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value=dados):
+            html = authed_client.get("/gov/cftv?ver=gravadores").get_data(as_text=True)
+        assert "FANTASMA 111" not in html
+        assert "FANTASMA 222" not in html
+    finally:
+        with factory_app.app_context():
+            DvrUnidade.query.filter(DvrUnidade.dvr.in_(fantasmas)).delete(synchronize_session=False)
+            db.session.commit()

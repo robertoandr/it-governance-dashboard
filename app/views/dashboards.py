@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import unicodedata
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, NamedTuple
 from uuid import UUID
@@ -890,12 +891,22 @@ def _visao_cftv(filtro_raw: str) -> _VisaoCftv:
         sede_por_unidade=sede_por_unidade,
         quedas=get_cached_historico_quedas(),
     )
-    # Inclui gravadores cadastrados em dvr_unidades que não possuem host no Zabbix
-    gravadores_existentes = {c["gravador"] for c in visao["cards"] if c["gravador"]}
+    # Inclui gravadores cadastrados em dvr_unidades que não possuem host no Zabbix.
+    # Compara por nome normalizado (sem acento, caixa, espaço ou "_") contra nome,
+    # título e apelido dos cards existentes: um registro com o nome da planilha
+    # (ex.: "Shopping_Novo" para o gravador "Shopping novo") não vira card duplicado.
+    gravadores_existentes = {
+        _nome_normalizado(nome)
+        for c in visao["cards"]
+        if c["gravador"]
+        for nome in (c["gravador"], c.get("titulo"), c.get("apelido"), c.get("nome_zabbix"))
+        if nome
+    }
     for v in vinculos:
         if (
             v.acesso != ACESSO_NUVEM
-            and v.dvr not in gravadores_existentes
+            and not v.duplicado_de
+            and _nome_normalizado(v.dvr) not in gravadores_existentes
             and (
                 filtro is None
                 or (filtro == SEM_UNIDADE and v.unidade_id is None)
@@ -1684,6 +1695,19 @@ def mapa_cameras_dispositivos() -> object:
 @login_required
 def network_redirect():
     return redirect(url_for("dashboards.rede_monitoring"))
+
+
+def _nome_normalizado(nome: str) -> str:
+    """Reduz um nome de gravador às letras e dígitos, sem acento e em minúsculas.
+
+    Args:
+        nome: nome como está no Zabbix, na planilha ou em ``dvr_unidades``.
+
+    Returns:
+        A chave de comparação (``"Shopping_praça cancelas"`` → ``"shoppingpracacancelas"``).
+    """
+    sem_acento = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode()
+    return "".join(ch for ch in sem_acento.lower() if ch.isalnum())
 
 
 def _filtro_unidade(raw: str, unidades: list, sem_unidade: str) -> set[int] | str | None:
