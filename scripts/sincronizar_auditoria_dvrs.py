@@ -20,11 +20,14 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import inspect
+import json
 import os
 import re
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
 from datetime import UTC, datetime
@@ -43,10 +46,15 @@ GRAVADORES_NUVEM: dict[str, int | None] = {
     "Casa_Praia": None,  # Residencial / sem unidade
 }
 
+# Gravadores desativados: não são cadastrados mesmo estando na planilha, e o
+# registro antigo é apagado de dvr_unidades (decisão do usuário em 01/11/2026).
+GRAVADORES_DESATIVADOS: frozenset[str] = frozenset({"k2"})
+
 
 def norm(s: str) -> str:
     """Normaliza string para comparação alfanumérica insensível a maiúsculas/espaços/acentos."""
-    return "".join(c for c in (s or "").lower() if c.isalnum())
+    sem_acento = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
+    return "".join(c for c in sem_acento.lower() if c.isalnum())
 
 
 def extrair_dados_planilha(caminho_xlsx: str) -> list[dict[str, str]]:
@@ -112,8 +120,11 @@ def gerar_operacoes(rows: list[dict[str, str]]) -> tuple[list[dict], list[dict]]
     dvrs_ops: list[dict] = []
     canais_ops: list[dict] = []
 
+    desativados = {norm(n) for n in GRAVADORES_DESATIVADOS}
     for r in rows:
         nome = r.get("A", "")
+        if norm(nome) in desativados:
+            continue
         tipo = r.get("B", "")
         modelo = r.get("C", "")
         serie = r.get("G", "")
@@ -165,6 +176,11 @@ def aplicar_no_banco(conn: sqlite3.Connection, dvrs_ops: list[dict], canais_ops:
     db_dvrs = c.execute("SELECT id, dvr, unidade_id, apelido FROM dvr_unidades").fetchall()
     vinculos = {r[1]: {"id": r[0], "dvr": r[1], "unidade_id": r[2], "apelido": r[3]} for r in db_dvrs}
 
+    desativados = {norm(n) for n in GRAVADORES_DESATIVADOS}
+    for k in [k for k in vinculos if norm(k) in desativados]:
+        c.execute("DELETE FROM dvr_unidades WHERE dvr = ?", (k,))
+        vinculos.pop(k, None)
+
     total_dvrs_atualizados = 0
     agora_iso = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
 
@@ -185,12 +201,19 @@ def aplicar_no_banco(conn: sqlite3.Connection, dvrs_ops: list[dict], canais_ops:
                     dvr_key = k
                     break
 
-        # Limpa registro duplicado/fantasma criado com o nome da planilha (ex.: Sede_9_8)
-        if dvr_key and nome != dvr_key and nome in vinculos:
-            c.execute("DELETE FROM dvr_unidades WHERE dvr = ?", (nome,))
-            vinculos.pop(nome, None)
-
         alvo_dvr = dvr_key or nome
+        # Mantém um registro só por gravador: apaga os que diferem só em acento,
+        # caixa, espaço ou "_" (ex.: "Shopping_Novo" ao lado de "Shopping novo"),
+        # herdando a unidade quando o registro mantido não tem uma.
+        chaves = {norm(nome), norm(alvo_dvr)}
+        for outro in [k for k in vinculos if k != alvo_dvr and norm(k) in chaves]:
+            if alvo_dvr in vinculos and vinculos[outro].get("unidade_id") is not None:
+                c.execute(
+                    "UPDATE dvr_unidades SET unidade_id = COALESCE(unidade_id, ?) WHERE dvr = ?",
+                    (vinculos[outro]["unidade_id"], alvo_dvr),
+                )
+            c.execute("DELETE FROM dvr_unidades WHERE dvr = ?", (outro,))
+            vinculos.pop(outro, None)
         unidade_padrao = (
             3
             if ("sede" in nome.lower() or "dvr" in alvo_dvr.lower())
@@ -257,6 +280,42 @@ def aplicar_no_banco(conn: sqlite3.Connection, dvrs_ops: list[dict], canais_ops:
     return total_dvrs_atualizados, total_canais_atualizados
 
 
+def codigo_container(dvrs_ops: list[dict], canais_ops: list[dict]) -> str:
+    """Monta o código Python que aplica as operações no banco do container.
+
+    Args:
+        dvrs_ops: operações de gravadores geradas por ``gerar_operacoes``.
+        canais_ops: operações de canais com falha geradas por ``gerar_operacoes``.
+
+    Returns:
+        Código para ``python3 -c`` dentro do container de produção.
+    """
+    payload = json.dumps({"dvrs": dvrs_ops, "canais": canais_ops})
+    # Roda no container o MESMO código de aplicar_no_banco (sem cópia à mão),
+    # para a regra de duplicados e desativados valer igual nos dois caminhos.
+    return "\n".join(
+        [
+            "import json, sqlite3, unicodedata",
+            "from datetime import UTC, datetime",
+            f"MAPA_IP_DVR = {MAPA_IP_DVR!r}",
+            f"GRAVADORES_DESATIVADOS = frozenset({sorted(GRAVADORES_DESATIVADOS)!r})",
+            inspect.getsource(norm),
+            inspect.getsource(aplicar_no_banco),
+            f"data = json.loads({payload!r})",
+            "conn = sqlite3.connect('/app/data/app.db', timeout=60.0)",
+            "conn.execute('PRAGMA busy_timeout = 60000;')",
+            "d_count, c_count = aplicar_no_banco(conn, data['dvrs'], data['canais'])",
+            "conn.close()",
+            "try:",
+            "    from itgov.api.v1.cftv_monitoring import invalidar_cache_cftv",
+            "    invalidar_cache_cftv()",
+            "except ImportError:",
+            "    pass",
+            "print(f'SUCESSO_PROD: {d_count} gravadores sincronizados e {c_count} canais com falha registrados.')",
+        ]
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sincroniza auditoria de DVRs da planilha para o banco de dados")
     parser.add_argument("--planilha", default=PADRAO_PLANILHA, help="Caminho do arquivo Dvrs.xlsx")
@@ -284,90 +343,7 @@ def main() -> int:
 
     if args.container:
         print(f"Aplicando no container de produção '{args.container}'...")
-        # Gerar script Python para execução dentro do container
-        import json
-
-        payload = json.dumps({"dvrs": dvrs_ops, "canais": canais_ops})
-        script_code = f"""
-import json, sqlite3
-from datetime import datetime, timezone
-
-data = json.loads({payload!r})
-mapa_ip = {MAPA_IP_DVR!r}
-conn = sqlite3.connect('/app/data/app.db', timeout=60.0)
-c = conn.cursor()
-c.execute('PRAGMA busy_timeout = 60000;')
-
-db_dvrs = c.execute('SELECT id, dvr, unidade_id, apelido FROM dvr_unidades').fetchall()
-vinculos = {{r[1]: {{'id': r[0], 'dvr': r[1], 'unidade_id': r[2], 'apelido': r[3]}} for r in db_dvrs}}
-
-def norm(s):
-    return ''.join(ch for ch in (s or '').lower() if ch.isalnum())
-
-d_count = 0
-agora = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
-
-for d in data['dvrs']:
-    nome = d['nome']
-    modelo = d['modelo']
-    serie = d['serie']
-    canais = d['total_canais']
-    eh_nuvem = d['eh_nuvem']
-    unidade_nuvem = d['unidade_id']
-    ip = d.get('ip', '')
-
-    dvr_key = mapa_ip.get(ip)
-    if not dvr_key:
-        for k, v in vinculos.items():
-            if norm(nome) in (norm(k), norm(v['apelido'] or '')):
-                dvr_key = k
-                break
-
-    # Limpa registro duplicado/fantasma com o nome da planilha
-    if dvr_key and nome != dvr_key and nome in vinculos:
-        c.execute('DELETE FROM dvr_unidades WHERE dvr = ?', (nome,))
-        vinculos.pop(nome, None)
-
-    alvo_dvr = dvr_key or nome
-    unidade_padrao = 3 if ('sede' in nome.lower() or 'dvr' in alvo_dvr.lower()) else (1 if ('shopping' in nome.lower() or alvo_dvr in ('Térreo', 'R3', 'Corredor técnico', 'Loja Útil')) else (4 if ('triunfo' in nome.lower() or 'triunfo' in alvo_dvr.lower()) else (2 if 'autoshop' in nome.lower() else None)))
-
-    if eh_nuvem:
-        if alvo_dvr in vinculos:
-            c.execute('UPDATE dvr_unidades SET modelo=?, serie=?, canais=?, acesso=\"nuvem\", unidade_id=? WHERE dvr=?', (modelo, serie, canais, unidade_nuvem, alvo_dvr))
-        else:
-            c.execute('INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) VALUES (?, ?, \"\", \"\", ?, \"nuvem\", ?, ?)', (alvo_dvr, unidade_nuvem, canais, modelo, serie))
-            vinculos[alvo_dvr] = {{'dvr': alvo_dvr, 'unidade_id': unidade_nuvem}}
-        d_count += 1
-    elif alvo_dvr in vinculos:
-        c.execute('UPDATE dvr_unidades SET modelo=?, serie=?, canais=? WHERE dvr=?', (modelo, serie, canais, alvo_dvr))
-        d_count += 1
-    else:
-        c.execute('INSERT INTO dvr_unidades (dvr, unidade_id, apelido, duplicado_de, canais, acesso, modelo, serie) VALUES (?, ?, \"\", \"\", ?, \"\", ?, ?)', (alvo_dvr, unidade_padrao, canais, modelo, serie))
-        vinculos[alvo_dvr] = {{'dvr': alvo_dvr, 'unidade_id': unidade_padrao}}
-        d_count += 1
-
-c_count = 0
-for ch in data['canais']:
-    ip = ch['ip_gravador']
-    canal = ch['canal']
-    existente = c.execute('SELECT id FROM cftv_canais WHERE ip_gravador=? AND canal=?', (ip, canal)).fetchone()
-    if existente:
-        c.execute('UPDATE cftv_canais SET situacao=\"ativo\", imagem=\"sem\", origem=\"auditoria-dvrs-xlsx\", conferido_em=? WHERE id=?', (agora, existente[0]))
-    else:
-        c.execute('INSERT INTO cftv_canais (ip_gravador, canal, situacao, analogica, ip_camera, equipamento, imagem, origem, conferido_em) VALUES (?, ?, \"ativo\", 0, \"\", \"\", \"sem\", \"auditoria-dvrs-xlsx\", ?)', (ip, canal, agora))
-    c_count += 1
-
-conn.commit()
-conn.close()
-
-try:
-    from itgov.api.v1.cftv_monitoring import invalidar_cache_cftv
-    invalidar_cache_cftv()
-except Exception:
-    pass
-
-print(f'SUCESSO_PROD: {{d_count}} gravadores sincronizados e {{c_count}} canais com falha registrados.')
-"""
+        script_code = codigo_container(dvrs_ops, canais_ops)
         cmd = ["docker", "exec", "-i", args.container, "python3", "-c", script_code]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode != 0:
