@@ -78,6 +78,8 @@ def test_textos_longos_sao_cortados() -> None:
         ({"level": "notice", "logdesc": "SSL VPN tunnel up"}, True),
         ({"level": "notice", "type": "utm", "subtype": "webfilter", "logdesc": "URL", "action": "blocked"}, True),
         ({"level": "notice", "type": "utm", "subtype": "webfilter", "logdesc": "URL", "action": "passthrough"}, False),
+        ({"level": "error", "logdesc": "Progress IPsec phase 1", "action": "negotiate"}, False),
+        ({"level": "error", "logdesc": "IPsec phase 1 error", "action": "negotiate"}, True),
     ],
 )
 def test_relevante(campos: dict[str, Any], esperado: bool) -> None:
@@ -188,3 +190,30 @@ def test_regras_ordenam_do_mais_grave() -> None:
 def test_sem_eventos_sem_achados() -> None:
     assert sf.resumir([]) == {}
     assert sf.achados_por_regra({}, minutos=15) == []
+
+
+# ── agrupar (erros de fase 1 do IPsec) ───────────────────────────────────────
+
+
+def _ipsec(i: int, peer: str) -> sf.EventoSiem:
+    return _ev(i, level="error", logdesc="IPsec phase 1 error", action="negotiate", remip=peer, user="")
+
+
+def test_agrupar_junta_ipsec_por_origem_e_fica_com_o_mais_recente() -> None:
+    outros = [_ev(100), _ev(101)]
+    eventos = [_ipsec(i, "200.1.1.1") for i in range(5)] + [_ipsec(9, "200.2.2.2")] + outros
+    agrupados = sf.agrupar(eventos)
+    ipsec = {e.origem_ip: e for e in agrupados if e.descricao == "IPsec phase 1 error"}
+    assert {ip: e.repeticoes for ip, e in ipsec.items()} == {"200.1.1.1": 5, "200.2.2.2": 1}
+    assert ipsec["200.1.1.1"].eventtime == _ipsec(4, "200.1.1.1").eventtime
+    assert [e for e in agrupados if e.descricao != "IPsec phase 1 error"] == outros
+
+
+def test_resumir_e_regra_contam_as_repeticoes() -> None:
+    eventos = sf.agrupar([_ipsec(i, "200.1.1.1") for i in range(60)] + [_ev(100)])
+    assert len(eventos) == 2
+    r = sf.resumir(eventos)["Sede"]
+    assert r["eventos"] == 61
+    assert r["ipsec_falhas_por_peer"] == [["200.1.1.1", 60]]
+    achados = sf.achados_por_regra(sf.resumir(eventos), 15)
+    assert any(a.assinatura == "ipsec-falhando-200.1.1.1" for a in achados)

@@ -55,6 +55,9 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         APP_ENVIRONMENT=settings.app.environment,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{_users_db}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Vários workers e agentes em segundo plano escrevem no mesmo SQLite: espera
+        # até 30 s pela trava de escrita em vez dos 5 s padrão ("database is locked").
+        SQLALCHEMY_ENGINE_OPTIONS={"connect_args": {"timeout": 30}},
         # Nomes próprios: o Mapa de Câmeras (proxy em /mapa-cameras/, mesmo
         # domínio) também usa cookie de sessão, e "session" colidiria.
         SESSION_COOKIE_NAME="itgov_session",
@@ -82,7 +85,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         from app.models import link as _link_model  # noqa: F401
         from app.models import pentest as _pentest_model  # noqa: F401
         from app.models import rede as _rede_model
-        from app.models import siem as _siem_model  # noqa: F401
+        from app.models import siem as _siem_model
         from app.models import tarefas as _tarefas_model  # noqa: F401
         from app.models import trigger_resolucao as _trigger_resolucao_model  # noqa: F401
         from app.models import unidade as _unidade_model
@@ -91,6 +94,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
         db.create_all()
         _unidade_model.garantir_colunas()
         _incidente_agente_model.garantir_colunas()
+        _siem_model.garantir_colunas()
         _rede_model.garantir_coluna_ia_modelo()
         _unidade_model.seed_unidades()
         _user_model.garantir_coluna_super_admin()

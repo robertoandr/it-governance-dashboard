@@ -126,7 +126,7 @@ def coletar(agora: datetime | None = None) -> dict[str, int]:
                 novos += siem_fortigate.ler_novos(fw, tipo, desde)
             except (requests.RequestException, ValueError) as exc:
                 log.warning("siem_agente.leitura_falhou", fortigate=fw["nome"], tipo=tipo, erro=str(exc)[:200])
-        relevantes = {ev.chave: ev for ev in novos if siem_fortigate.relevante(ev)}
+        relevantes = {ev.chave: ev for ev in siem_fortigate.agrupar(e for e in novos if siem_fortigate.relevante(e))}
         if relevantes:
             existentes = {
                 c for (c,) in db.session.query(SiemEvento.chave).filter(SiemEvento.chave.in_(list(relevantes)))

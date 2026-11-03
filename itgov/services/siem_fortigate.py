@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 from collections import Counter
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -70,6 +71,7 @@ class EventoSiem(BaseModel):
         acao: ``action`` (``blocked``, ``ssl-login-fail``...).
         motivo: ``reason``.
         mensagem: ``msg``/URL/ataque, resumido.
+        repeticoes: Quantos eventos iguais esta linha representa (ver ``agrupar``).
     """
 
     chave: str
@@ -85,6 +87,7 @@ class EventoSiem(BaseModel):
     acao: str = ""
     motivo: str = ""
     mensagem: str = ""
+    repeticoes: int = 1
 
 
 def _texto(valor: Any, limite: int) -> str:
@@ -133,13 +136,58 @@ def normalizar(fortigate: str, raw: dict[str, Any]) -> EventoSiem | None:
 
 
 def relevante(ev: EventoSiem) -> bool:
-    """O evento interessa à segurança? Rotina (SD-WAN ok, DHCP, progresso) fica de fora."""
+    """O evento interessa à segurança? Rotina (SD-WAN ok, DHCP, progresso) fica de fora.
+
+    O progresso da negociação IPsec ("Progress IPsec phase 1") vem com nível
+    ``error`` e era quase metade dos eventos da Sede: não diz nada além do erro de fase 1.
+    """
+    if ev.descricao.lower().startswith("progress "):
+        return False
     if ev.nivel in _NIVEIS_RELEVANTES:
         return True
     descricao = ev.descricao.lower()
     if any(trecho in descricao for trecho in _DESCRICOES_RELEVANTES):
         return True
     return ev.tipo == "utm" and ev.acao.lower() in _ACOES_BLOQUEIO
+
+
+_AGRUPAVEL = "ipsec phase 1 error"
+
+
+def _somar(pares: Iterable[tuple[str, int]]) -> Counter[str]:
+    total: Counter[str] = Counter()
+    for chave, n in pares:
+        total[chave] += n
+    return total
+
+
+def agrupar(eventos: Iterable[EventoSiem]) -> list[EventoSiem]:
+    """Junta os erros de fase 1 do IPsec numa linha por FortiGate e origem.
+
+    Um peer com túnel mal configurado gera dezenas de erros por minuto, todos
+    iguais. Fica o mais recente (mantém o ``eventtime`` para a paginação), com
+    o total em ``repeticoes``; os demais eventos passam como estão.
+
+    Args:
+        eventos: Eventos relevantes de uma leitura.
+
+    Returns:
+        Os eventos, com os erros de IPsec agrupados.
+    """
+    saida: list[EventoSiem] = []
+    grupos: dict[tuple[str, str], EventoSiem] = {}
+    for ev in eventos:
+        if ev.descricao.lower() != _AGRUPAVEL:
+            saida.append(ev)
+            continue
+        chave = (ev.fortigate, ev.origem_ip)
+        atual = grupos.get(chave)
+        if atual is None:
+            grupos[chave] = ev
+            continue
+        maior, menor = (ev, atual) if ev.eventtime > atual.eventtime else (atual, ev)
+        grupos[chave] = maior.model_copy(update={"repeticoes": maior.repeticoes + menor.repeticoes})
+    return saida + list(grupos.values())
 
 
 def ler_novos(fw: dict[str, str], tipo: str, desde_eventtime: int) -> list[EventoSiem]:
@@ -216,12 +264,12 @@ def resumir(eventos: list[EventoSiem]) -> dict[str, dict[str, Any]]:
         admin_falha = [e for e, d in zip(evs, desc, strict=True) if "admin login failed" in d]
         admin_ok = [e for e, d in zip(evs, desc, strict=True) if "admin login successful" in d]
         config = [e for e, d in zip(evs, desc, strict=True) if "configured" in d or "object attribute" in d]
-        ipsec = [e for e, d in zip(evs, desc, strict=True) if d == "ipsec phase 1 error"]
+        ipsec = [e for e, d in zip(evs, desc, strict=True) if d == _AGRUPAVEL]
         web = [e for e in evs if e.subtipo == "webfilter"]
         ameacas = [e for e in evs if e.subtipo in ("ips", "virus", "anomaly")]
         resumo[fw] = {
-            "eventos": len(evs),
-            "por_tipo": _top(Counter(f"{e.subtipo}/{e.nivel}/{e.descricao}" for e in evs), 12),
+            "eventos": sum(e.repeticoes for e in evs),
+            "por_tipo": _top(_somar((f"{e.subtipo}/{e.nivel}/{e.descricao}", e.repeticoes) for e in evs), 12),
             "vpn_ssl_falhas": {
                 "total": len(falhas),
                 "ips_distintos": len({e.origem_ip for e in falhas}),
@@ -240,7 +288,7 @@ def resumir(eventos: list[EventoSiem]) -> dict[str, dict[str, Any]]:
                 {f"{e.usuario} de {e.origem_ip}" for e in admin_ok if e.origem_ip and not _privado(e.origem_ip)}
             )[:8],
             "config_alterada": [f"{e.usuario}: {e.mensagem[:140]}" for e in config[:10]],
-            "ipsec_falhas_por_peer": _top(Counter(e.origem_ip for e in ipsec), 6),
+            "ipsec_falhas_por_peer": _top(_somar((e.origem_ip, e.repeticoes) for e in ipsec), 6),
             "web_erros_fortiguard": sum(
                 1 for e in web if "rating error" in e.mensagem.lower() or e.descricao == "ftgd_err"
             ),

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Cyber — Isolar máquina só pelo Acronis:** a quarentena do IP no FortiGate foi retirada (os tokens dos FortiGates são só de leitura e a decisão é não isolar por lá). Sem incidente aberto no Acronis que permita isolar, o pedido é recusado sem gravar nada, com a orientação de isolar pelo console. Sai `FORTIGATE_<UNIDADE>_TOKEN_ESCRITA` do `.env.example`.
+
+### Fixed
+- **Cyber — Agente SIEM com "database is locked":** o app esperava só 5 s pela trava de escrita do SQLite; agora espera até 30 s. O agente de incidentes não segura mais a trava enquanto fala com o Acronis e a IA (grava antes das chamadas HTTP).
+- **Cyber — Ruído de IPsec no SIEM:** "Progress IPsec phase 1" (nível `error`, quase metade dos eventos da Sede) deixa de ser guardado, e os "IPsec phase 1 error" viram uma linha por FortiGate e origem a cada coleta, com o total em `repeticoes` (nova coluna, criada sozinha na subida). Contagens e a regra "Túnel IPsec falhando" somam as repetições. O banco parava de crescer ~60 mil linhas/dia.
+
 ### Added
 - **Cyber — Isolar máquina (qualquer uma):** na página Agente de incidentes (`/gov/cyber/agentes`), novo campo **Isolar máquina** (nome ou IP + motivo). Se a máquina tem incidente aberto no EDR do Acronis que oferece `WORKLOAD_ISOLATE`, isola pelo agente (a API do Acronis só isola a partir de incidente); senão, coloca o IP em **quarentena no FortiGate** cuja rede contém o IP (`monitor/user/banned/add_users`, sem prazo — corta internet e outras VLANs; a mesma VLAN continua alcançando). Isolar e **Liberar rede** passam pela fila de aprovação do super admin; lista de isoladas + histórico (tabela `cyber_isolamentos`). Proteções: gateways dos FortiGates, IPs públicos e `ISOLAR_IPS_PROTEGIDOS` nunca vão para quarentena; a mesma máquina não é isolada duas vezes. A quarentena usa `FORTIGATE_<UNIDADE>_TOKEN_ESCRITA` (o token de leitura é recusado com 403 e a tela diz o que configurar).
 - **Cyber — Refazer isolamento em timeout:** quando o isolamento no Acronis terminava em timeout (`TIMED_OUT`/`TIMEOUT`), a máquina permanecia na lista de isoladas sem opção de tentar de novo. Agora o painel exibe o botão **Refazer isolamento** para máquinas com isolamento incerto, disparando novamente a ação `WORKLOAD_ISOLATE` via fila de aprovação do super admin.
