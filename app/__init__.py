@@ -80,6 +80,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     # local variable "app" to the Python package, shadowing the Flask instance.
     with app.app_context():
         from app.models import aprovacao as _aprovacao_model
+        from app.models import cftv_ip as _cftv_ip_model  # noqa: F401
         from app.models import incidente_agente as _incidente_agente_model
         from app.models import isolamento as _isolamento_model  # noqa: F401
         from app.models import link as _link_model  # noqa: F401
@@ -113,6 +114,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     from app.services import cftv_verificacao
 
     cftv_verificacao.iniciar_agendador(app)
+
+    # CFTV: de hora em hora lê os gravadores e corrige no Zabbix o IP das câmeras que mudaram
+    from app.services import cftv_ip_sync
+
+    cftv_ip_sync.iniciar_agendador(app)
 
     # Cyber: agente SIEM lê os logs dos FortiGate e analisa em segundo plano (um worker só)
     from app.services import siem_agente

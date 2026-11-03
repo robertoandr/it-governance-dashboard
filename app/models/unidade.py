@@ -187,6 +187,8 @@ class GravadorAcesso(db.Model):
     leitura: str = db.Column(db.Text, nullable=False, default="", server_default="")
     erro: str = db.Column(db.String(255), nullable=False, default="", server_default="")
     lido_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Última leitura que deu certo (``leitura`` é dela); ``lido_em`` conta também as recusadas
+    lido_ok_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 class CanalCftv(db.Model):
@@ -371,9 +373,14 @@ _COLUNAS_NOVAS_DVR: tuple[tuple[str, str], ...] = (
     ("serie", "VARCHAR(40) NOT NULL DEFAULT ''"),
 )
 
+_COLUNAS_NOVAS_ACESSO: tuple[tuple[str, str], ...] = (("lido_ok_em", "DATETIME"),)
+
 
 def garantir_colunas(engine: Engine | None = None) -> None:
-    """Adiciona às tabelas ``unidades`` e ``dvr_unidades`` as colunas que faltam.
+    """Adiciona às tabelas ``unidades``, ``dvr_unidades`` e ``gravador_acessos`` as colunas que faltam.
+
+    Ao criar ``gravador_acessos.lido_ok_em``, preenche com ``lido_em`` as leituras
+    sem erro (as que estão com erro ficam sem data: não se sabe quando deram certo).
 
     Com vários workers subindo juntos, outro pode ter criado a coluna entre a
     inspeção e o ALTER; o erro de coluna duplicada é ignorado.
@@ -388,6 +395,7 @@ def garantir_colunas(engine: Engine | None = None) -> None:
     for tabela, colunas in (
         (Unidade.__tablename__, _COLUNAS_NOVAS),
         (DvrUnidade.__tablename__, _COLUNAS_NOVAS_DVR),
+        (GravadorAcesso.__tablename__, _COLUNAS_NOVAS_ACESSO),
     ):
         if not inspetor.has_table(tabela):
             continue
@@ -398,6 +406,13 @@ def garantir_colunas(engine: Engine | None = None) -> None:
             try:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {ddl}"))
+                    if (tabela, nome) == (GravadorAcesso.__tablename__, "lido_ok_em"):
+                        conn.execute(
+                            text(
+                                "UPDATE gravador_acessos SET lido_ok_em = lido_em "
+                                "WHERE erro = '' AND leitura != '' AND lido_em IS NOT NULL"
+                            )
+                        )
                 log.info("unidades.coluna_adicionada", tabela=tabela, coluna=nome)
             except OperationalError as exc:
                 if "duplicate column" not in str(exc).lower():

@@ -32,7 +32,7 @@ def sem_credenciais(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
 
 
 def _acesso(**kw: object) -> SimpleNamespace:
-    base = {"credencial": "", "falhas": "{}", "leitura": "", "erro": "", "lido_em": None}
+    base = {"credencial": "", "falhas": "{}", "leitura": "", "erro": "", "lido_em": None, "lido_ok_em": None}
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -81,8 +81,8 @@ def test_ordem_credenciais(sem_credenciais: pytest.MonkeyPatch) -> None:
 
     assert cg.ordem_credenciais(centro=True) == ["centro", "padrao", "principal"]
     assert cg.ordem_credenciais(centro=False, nome="Shopping_1") == ["padrao", "principal"]
-    # Com credencial própria, só ela é tentada (não gasta tentativas com outras)
-    assert cg.ordem_credenciais(centro=False, nome="Triunfo_4_Extrato") == [cg.PROPRIA]
+    # Com credencial própria, ela vem primeiro; as gerais ficam no rodízio se ela for recusada
+    assert cg.ordem_credenciais(centro=False, nome="Triunfo_4_Extrato") == [cg.PROPRIA, "padrao", "principal"]
     assert cg._usuario_senha(cg.PROPRIA, "Triunfo_4_Extrato") == ("padrao", "x")
 
 
@@ -106,6 +106,38 @@ def test_ler_um_guarda_leitura_e_credencial(padrao_e_principal: None) -> None:
     assert acesso.credencial == "padrao"
     assert LeituraGravador.model_validate_json(acesso.leitura).canais == 32
     assert acesso.lido_em == _AGORA
+
+
+def test_ler_um_marca_lido_ok_em_so_quando_da_certo(padrao_e_principal: None) -> None:
+    acesso = _acesso()
+    with patch.object(cg, "ler_gravador", return_value=LeituraGravador(canais=8)):
+        cg.ler_um("10.0.0.1", False, acesso, _AGORA)
+    assert acesso.lido_ok_em == _AGORA
+    depois = _AGORA + cg.ESPERA_FALHA + timedelta(hours=1)
+    with patch.object(cg, "ler_gravador", side_effect=AcessoNegadoError("x")):
+        cg.ler_um("10.0.0.1", False, acesso, depois)
+    # A leitura antiga fica, com a data dela; lido_em é a tentativa recusada
+    assert acesso.lido_ok_em == _AGORA and acesso.lido_em == depois and acesso.leitura
+
+
+def test_propria_recusada_passa_para_as_gerais_e_triunfo(sem_credenciais: pytest.MonkeyPatch) -> None:
+    m = sem_credenciais
+    m.setenv("CFTV_CAM_USER", "u")
+    m.setenv("CFTV_CAM_TRIUNFO_PASS", "t1")
+    m.setenv("CFTV_CAM_TRIUNFO_PASS2", "t2")
+    m.setenv("CFTV_DVR_TRIUNFO_4_EXTRATO_PASS", "x")
+    m.setenv("CFTV_CAM_PADRAO_USER", "u")
+    assert cg.ordem_credenciais(False, "Triunfo_4_Extrato") == [cg.PROPRIA, "triunfo", "triunfo2"]
+    # Fora do Triunfo, as senhas do Triunfo não entram
+    assert "triunfo" not in cg.ordem_credenciais(False, "Shopping_1")
+    acesso = _acesso()
+    with patch.object(cg, "ler_gravador", side_effect=AcessoNegadoError("x")) as ler:
+        cg.ler_um("10.0.0.1", False, acesso, _AGORA, "Triunfo_4_Extrato")
+    assert ler.call_args.args[1:] == ("u", "x")
+    with patch.object(cg, "ler_gravador", return_value=LeituraGravador()) as ler:
+        cg.ler_um("10.0.0.1", False, acesso, _AGORA + cg.ESPERA_RECUSA + timedelta(minutes=1), "Triunfo_4_Extrato")
+    ler.assert_called_once_with("10.0.0.1", "u", "t1")
+    assert acesso.credencial == "triunfo"
 
 
 def test_ler_um_para_na_primeira_recusa(padrao_e_principal: None) -> None:
@@ -184,6 +216,20 @@ def test_canais_pela_leitura_do_gravador() -> None:
     # Canal 7 tem nome de fábrica e está sem vídeo: livre, não alerta
     assert k["sem_video"] == [{"canal": 2, "nome": "Portão"}]
     assert k["usados"] == 7 and k["livres"] == 1
+
+
+def test_canais_sem_nenhuma_fonte_de_uso_ficam_desconhecidos() -> None:
+    card = {"dispositivos": [], "gravador_host": {"model": "DS-7632NXI-K2"}}
+    k = cg.canais_do_card(card, {"leitura": None, "erro": "credencial recusada"}, None)
+    assert (k["total"], k["usados"], k["livres"]) == (32, None, None)
+    assert k["erro"] == "credencial recusada"
+
+
+def test_canais_com_leitura_antiga_trazem_erro_e_data() -> None:
+    ok = datetime(2026, 10, 1, tzinfo=UTC)
+    acesso = {"leitura": LeituraGravador(canais=8), "erro": "credencial recusada", "lido_ok_em": ok}
+    k = cg.canais_do_card(_card("1"), acesso, None)
+    assert (k["erro"], k["lido_ok_em"]) == ("credencial recusada", ok)
 
 
 def test_canais_manual_e_pelo_modelo() -> None:

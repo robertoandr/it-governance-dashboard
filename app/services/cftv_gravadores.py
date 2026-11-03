@@ -7,7 +7,13 @@ Credenciais (variáveis de ambiente):
   ``Triunfo_2_Folha2`` → ``CFTV_DVR_TRIUNFO_2_FOLHA2_PASS``). O campo que faltar
   vem da padrão. Quando existe, é a única tentada naquele gravador;
 - gerais, nesta ordem: Sede Centro ``CFTV_CAM_CENTRO_*``; depois ``CFTV_CAM_PADRAO_*``,
-  ``CFTV_CAM_*`` e ``INTELBRAS_HTTP_USER``/``INTELBRAS_HTTP_PASSWORD``.
+  ``CFTV_CAM_*`` e ``INTELBRAS_HTTP_USER``/``INTELBRAS_HTTP_PASSWORD``; nos
+  gravadores do Triunfo, também ``CFTV_CAM_USER`` com ``CFTV_CAM_TRIUNFO_PASS``
+  e ``CFTV_CAM_TRIUNFO_PASS2``. A própria vem primeiro; se o gravador recusar,
+  as gerais entram no rodízio (uma por vez, ver abaixo).
+
+``lido_ok_em`` guarda a última leitura que deu certo: quando a senha passa a
+ser recusada, a tela mostra a leitura antiga com a data, em vez de parecer atual.
 
 A que funcionou fica guardada por IP; a que falhou não é tentada de novo por
 ``ESPERA_FALHA``. O aparelho bloqueia o usuário depois de algumas recusas
@@ -18,11 +24,13 @@ A leitura roda numa thread, no máximo a cada ``INTERVALO`` por gravador.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import threading
 import unicodedata
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -49,7 +57,10 @@ CREDENCIAIS: dict[str, tuple[str, str]] = {
     "padrao": ("CFTV_CAM_PADRAO_USER", "CFTV_CAM_PADRAO_PASS"),
     "principal": ("CFTV_CAM_USER", "CFTV_CAM_PASS"),
     "intelbras": ("INTELBRAS_HTTP_USER", "INTELBRAS_HTTP_PASSWORD"),
+    "triunfo": ("CFTV_CAM_USER", "CFTV_CAM_TRIUNFO_PASS"),
+    "triunfo2": ("CFTV_CAM_USER", "CFTV_CAM_TRIUNFO_PASS2"),
 }
+_SO_TRIUNFO = ("triunfo", "triunfo2")
 PROPRIA = "propria"
 INTERVALO = timedelta(minutes=5)
 ESPERA_FALHA = timedelta(hours=6)
@@ -90,11 +101,15 @@ def credencial_propria(nome: str) -> tuple[str, str] | None:
 
 
 def ordem_credenciais(centro: bool, nome: str = "") -> list[str]:
-    """Credenciais configuradas, na ordem de tentativa."""
-    if credencial_propria(nome):
-        return [PROPRIA]
+    """Credenciais configuradas, na ordem de tentativa (a própria primeiro, se houver).
+
+    As do Triunfo (``CFTV_CAM_TRIUNFO_PASS*``) só entram em gravador do Triunfo.
+    """
     ordem = ["centro", "padrao", "principal", "intelbras"] if centro else ["padrao", "principal", "intelbras"]
-    return [n for n in ordem if os.getenv(CREDENCIAIS[n][0]) and os.getenv(CREDENCIAIS[n][1])]
+    if "triunfo" in nome.lower():
+        ordem += list(_SO_TRIUNFO)
+    gerais = [n for n in ordem if os.getenv(CREDENCIAIS[n][0]) and os.getenv(CREDENCIAIS[n][1])]
+    return ([PROPRIA] if credencial_propria(nome) else []) + gerais
 
 
 def _usuario_senha(credencial: str, nome: str = "") -> tuple[str, str]:
@@ -150,6 +165,7 @@ def ler_um(ip: str, centro: bool, acesso: Any, agora: datetime, nome: str = "") 
             break
         falhas.pop(credencial, None)
         acesso.credencial, acesso.leitura, acesso.erro = credencial, leitura.model_dump_json(), ""
+        acesso.lido_ok_em = agora
         break
     if not tentou:
         acesso.erro = "nenhuma credencial aceita" if ordem else "nenhuma credencial configurada"
@@ -188,6 +204,30 @@ def atualizar(gravadores: list[Alvo]) -> int:
     return lidos
 
 
+def alvos_dos_cards(cards: list[dict[str, Any]]) -> list[Alvo]:
+    """Gravadores a ler a partir dos cards de ``montar_visao``.
+
+    Só Intelbras fala a API; noutros (ex.: NVR Hikvision) cada tentativa contaria
+    como senha errada.
+    """
+    alvos = []
+    for c in cards:
+        host = c.get("gravador_host") or {}
+        vendor = (host.get("vendor") or "").lower()
+        if host.get("ip") and (not vendor or "intelbras" in vendor):
+            alvos.append(
+                Alvo(host["ip"], (c.get("unidade") or "").lower().startswith("sede centro"), c.get("titulo", ""))
+            )
+    return alvos
+
+
+@contextlib.contextmanager
+def ocupado() -> Iterator[None]:
+    """Segura a vez de ler (espera a leitura em segundo plano deste worker terminar)."""
+    with _ocupado:
+        yield
+
+
 def disparar(app: Flask, gravadores: list[Alvo]) -> None:
     """Atualiza em segundo plano (uma thread por vez por worker)."""
     if not gravadores or not _ocupado.acquire(blocking=False):
@@ -206,7 +246,11 @@ def disparar(app: Flask, gravadores: list[Alvo]) -> None:
 
 
 def leituras() -> dict[str, dict[str, Any]]:
-    """IP → ``{"leitura": LeituraGravador | None, "credencial", "erro", "lido_em"}``."""
+    """IP → ``{"leitura": LeituraGravador | None, "credencial", "erro", "lido_em", "lido_ok_em"}``.
+
+    ``lido_ok_em`` é a última leitura que deu certo (a ``leitura`` é dela);
+    ``lido_em`` é a última tentativa, mesmo recusada.
+    """
     from app.models.unidade import GravadorAcesso
 
     try:
@@ -220,6 +264,7 @@ def leituras() -> dict[str, dict[str, Any]]:
             "credencial": a.credencial,
             "erro": a.erro,
             "lido_em": _utc(a.lido_em),
+            "lido_ok_em": _utc(a.lido_ok_em),
         }
         for a in itens
     }
@@ -274,8 +319,11 @@ def canais_do_card(
         cadastro: Canal → conferência no local (``cadastro_canais()[ip]``).
 
     Returns:
-        ``{"total", "usados", "livres", "sem_video": [{"canal", "nome"}], "analogicas", "fonte", "erro"}``,
-        ou None quando não há como saber a capacidade.
+        ``{"total", "usados", "livres", "sem_video": [{"canal", "nome"}], "analogicas", "fonte", "erro",
+        "lido_ok_em"}``, ou None quando não há como saber a capacidade. ``usados`` e ``livres``
+        ficam None quando não há leitura do gravador, conferência no local, SNMP nem câmera
+        do Zabbix com canal (não dá para saber quais canais estão em uso). ``erro`` vem também quando há leitura antiga (a
+        última tentativa falhou); ``lido_ok_em`` diz de quando é a leitura.
     """
     leitura: LeituraGravador | None = (acesso or {}).get("leitura")
     snmp, _ = _snmp_do_card(card)
@@ -291,15 +339,18 @@ def canais_do_card(
     else:
         return None
     linhas = [x for x in inventario_do_card(card, acesso, cadastro) if x["canal"] <= total]
+    # Sem leitura, conferência, SNMP nem câmera do Zabbix no canal, os livres seriam "todos": desconhecido
+    sabe_uso = leitura is not None or bool(cadastro) or bool(snmp) or bool(linhas)
     return {
         "total": total,
-        "usados": len(linhas),
-        "livres": max(total - len(linhas), 0),
+        "usados": len(linhas) if sabe_uso else None,
+        "livres": max(total - len(linhas), 0) if sabe_uso else None,
         "sem_video": [{"canal": x["canal"], "nome": x["nome"]} for x in linhas if x["sem_video"]],
         "analogicas": sum(1 for x in linhas if x["tipo"] == "analogica"),
         "fonte": fonte,
         "modelo": modelo,
-        "erro": (acesso or {}).get("erro", "") if not leitura else "",
+        "erro": (acesso or {}).get("erro", ""),
+        "lido_ok_em": (acesso or {}).get("lido_ok_em"),
     }
 
 
