@@ -600,8 +600,8 @@ def _resumo_isolar() -> str:
 def cyber_isolar_maquina() -> object:
     """Isola qualquer máquina (corpo ``{"alvo": nome ou IP, "motivo": "..."}``).
 
-    Acronis se a máquina tiver incidente que permita isolar; senão, quarentena
-    do IP no FortiGate. Quem não é super admin só pede: vai para a fila de aprovação.
+    Só pelo Acronis, a partir de incidente da máquina que permita isolar. Quem
+    não é super admin só pede: vai para a fila de aprovação.
     """
     from flask import jsonify
 

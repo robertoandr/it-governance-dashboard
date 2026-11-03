@@ -1,12 +1,9 @@
 """SQLAlchemy model dos isolamentos pedidos à mão no módulo Cyber ("Isolar máquina").
 
 Cada linha é uma máquina isolada a pedido de alguém, fora das propostas do
-agente de incidentes. Dois mecanismos, ver ``app.services.isolamento_maquina``:
-
-- ``acronis``: a máquina tem incidente aberto no EDR que oferece
-  ``WORKLOAD_ISOLATE`` — isolamento de verdade, no agente;
-- ``fortigate``: quarentena do IP no FortiGate da rede (corta internet e
-  tráfego entre VLANs; vizinhos na mesma VLAN continuam alcançando).
+agente de incidentes. Só pelo Acronis: a máquina precisa ter incidente aberto
+no EDR que oferece ``WORKLOAD_ISOLATE`` (ver ``app.services.isolamento_maquina``).
+A coluna ``fortigate`` ficou da quarentena no FortiGate, que foi retirada.
 """
 
 from __future__ import annotations
@@ -16,8 +13,7 @@ from datetime import UTC, datetime
 from app.extensions import db
 
 ACRONIS = "acronis"
-FORTIGATE = "fortigate"
-MECANISMOS = (ACRONIS, FORTIGATE)
+MECANISMOS = (ACRONIS,)
 
 # Situação do isolamento
 ISOLADA = "isolada"
@@ -31,7 +27,7 @@ def _agora() -> datetime:
 
 
 class IsolamentoMaquina(db.Model):
-    """Uma máquina isolada a pedido (Acronis ou quarentena no FortiGate)."""
+    """Uma máquina isolada a pedido (pelo Acronis)."""
 
     __tablename__ = "cyber_isolamentos"
 
