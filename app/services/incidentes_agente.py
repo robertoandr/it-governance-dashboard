@@ -282,6 +282,9 @@ def triar(agora: datetime | None = None) -> dict[str, Any]:
         if p.status == PROPOSTA and p.incident_id not in por_id:
             p.status, p.resultado = OBSOLETA, "Incidente resolvido ou encerrado fora do dashboard."
             obsoletas += 1
+    # Grava já: o que vem a seguir é HTTP (Acronis e IA, até minutos) e não pode
+    # rodar com a trava de escrita do SQLite presa.
+    db.session.commit()
 
     # Novos, ou ainda em proposta mas que mudaram no Acronis
     pendentes = [
@@ -586,6 +589,9 @@ def acompanhar_acoes() -> int:
             p.acao_status = acronis_edr.status_acao(p.incident_id, p.customer_id, p.activity_id)[:40]
         except httpx.HTTPError as exc:
             log.warning("incidentes_agente.status_falhou", proposta=p.id, erro=str(exc)[:200])
+    # Grava antes da próxima consulta: o autoflush prenderia a trava de escrita
+    # do SQLite durante as chamadas ao Acronis do laço seguinte.
+    db.session.commit()
     desisolar_andamento = PropostaIncidente.query.filter(
         PropostaIncidente.desisolar_activity_id != "",
         PropostaIncidente.desisolar_status.notin_(STATUS_ACAO_FINAIS),
@@ -603,6 +609,7 @@ def acompanhar_acoes() -> int:
             p.desisolar_resultado = (
                 f"O Acronis não desisolou ({p.desisolar_status}). Tente de novo ou desisole pelo console."
             )
+        db.session.commit()  # uma por vez: a próxima volta fala com o Acronis
     db.session.commit()
     return len(andamento) + len(desisolar_andamento)
 

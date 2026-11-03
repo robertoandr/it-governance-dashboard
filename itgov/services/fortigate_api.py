@@ -1,4 +1,4 @@
-"""Leitura direta dos FortiGates pela REST API, e a quarentena de IP do "Isolar máquina".
+"""Leitura direta dos FortiGates pela REST API.
 
 Configuração por unidade no ambiente::
 
@@ -49,7 +49,7 @@ def configurados() -> tuple[list[dict[str, str]], list[str]]:
 
     Returns:
         ``(prontos, pendentes)``; cada pronto tem ``nome``, ``url``, ``token``,
-        ``sha256`` e ``token_escrita`` (vazio se não houver token de escrita).
+        e ``sha256``.
     """
     prontos, pendentes = [], []
     for chave, url in sorted(os.environ.items()):
@@ -60,16 +60,7 @@ def configurados() -> tuple[list[dict[str, str]], list[str]]:
         token = os.getenv(f"FORTIGATE_{m.group(1)}_TOKEN", "").strip()
         if token:
             sha256 = os.getenv(f"FORTIGATE_{m.group(1)}_SHA256", "").strip()
-            escrita = os.getenv(f"FORTIGATE_{m.group(1)}_TOKEN_ESCRITA", "").strip()
-            prontos.append(
-                {
-                    "nome": nome,
-                    "url": url.strip().rstrip("/"),
-                    "token": token,
-                    "sha256": sha256,
-                    "token_escrita": escrita,
-                }
-            )
+            prontos.append({"nome": nome, "url": url.strip().rstrip("/"), "token": token, "sha256": sha256})
         else:
             pendentes.append(nome)
     return prontos, pendentes
@@ -404,103 +395,3 @@ def get_cached_clientes() -> list[dict[str, Any]]:
     if not configurados()[0]:
         return []
     return _cache_clientes.get(_buscar_clientes)
-
-
-# ── Quarentena de IP (escrita; só a partir da rota de aprovação) ─────────────
-
-
-class QuarentenaError(Exception):
-    """O FortiGate não aceitou colocar ou tirar o IP da quarentena (detalhe só no log)."""
-
-
-class QuarentenaTokenError(QuarentenaError):
-    """O FortiGate recusou o token (401/403): falta token com escrita."""
-
-
-class QuarentenaRedeError(QuarentenaError):
-    """Não deu para falar com o FortiGate."""
-
-
-def _post(fw: dict[str, str], caminho: str, corpo: dict[str, Any]) -> Any:
-    """POST com o token de escrita (ou o de leitura, se não houver).
-
-    Raises:
-        QuarentenaTokenError: Token recusado (401/403).
-        QuarentenaRedeError: Falha de rede.
-        QuarentenaError: Outro HTTP de erro ou resposta sem ``success``.
-    """
-    try:
-        resp = _requisitar(fw, "POST", caminho, fw.get("token_escrita") or fw["token"], corpo)
-    except requests.RequestException as exc:
-        log.warning("fortigate_api.escrita_rede", fortigate=fw["nome"], caminho=caminho, erro=str(exc)[:300])
-        raise QuarentenaRedeError(fw["nome"]) from exc
-    if resp.status_code in (401, 403):
-        log.warning("fortigate_api.escrita_recusada", fortigate=fw["nome"], caminho=caminho, http=resp.status_code)
-        raise QuarentenaTokenError(fw["nome"])
-    try:
-        dados = resp.json() if resp.status_code < 400 else {}
-    except ValueError:
-        dados = {}
-    if dados.get("status") != "success":
-        log.warning("fortigate_api.escrita_falhou", fortigate=fw["nome"], caminho=caminho, http=resp.status_code)
-        raise QuarentenaError(fw["nome"])
-    return dados.get("results")
-
-
-def variavel_token_escrita(nome: str) -> str:
-    """Nome da variável do token de escrita do FortiGate (``Sede`` → ``FORTIGATE_SEDE_TOKEN_ESCRITA``)."""
-    return f"FORTIGATE_{nome.upper().replace(' ', '_')}_TOKEN_ESCRITA"
-
-
-def por_nome(nome: str) -> dict[str, str] | None:
-    """FortiGate configurado com esse nome (``Sede``, ``Shopping``...)."""
-    return next((fw for fw in configurados()[0] if fw["nome"] == nome), None)
-
-
-def fortigate_da_rede(ip: str) -> tuple[str, str] | None:
-    """Qual FortiGate tem uma rede interna que contém o IP.
-
-    Returns:
-        ``(nome do FortiGate, cidr)`` ou None se nenhum conhece a rede.
-    """
-    alvo = ipaddress.ip_address(ip)
-    for fw in get_cached_fortigates():
-        for rede in fw.get("redes") or []:
-            if alvo in ipaddress.ip_network(rede["cidr"]):
-                return fw.get("unidade") or fw.get("name", ""), rede["cidr"]
-    return None
-
-
-def gateways() -> set[str]:
-    """IPs de gateway das redes internas de todos os FortiGates (nunca podem ir para quarentena)."""
-    return {rede["gateway"] for fw in get_cached_fortigates() for rede in fw.get("redes") or []}
-
-
-def quarentenar(fw: dict[str, str], ip: str) -> None:
-    """Coloca o IP na quarentena do FortiGate, sem prazo (``user/banned/add_users``).
-
-    Raises:
-        QuarentenaError: O FortiGate não aceitou.
-    """
-    _post(fw, "monitor/user/banned/add_users", {"ip_addresses": [ip], "expiry": 0})
-    log.info("fortigate_api.quarentena_adicionada", fortigate=fw["nome"], ip=ip)
-
-
-def liberar_quarentena(fw: dict[str, str], ip: str) -> None:
-    """Tira o IP da quarentena do FortiGate (``user/banned/clear_users``).
-
-    Raises:
-        QuarentenaError: O FortiGate não aceitou.
-    """
-    _post(fw, "monitor/user/banned/clear_users", {"ip_addresses": [ip]})
-    log.info("fortigate_api.quarentena_liberada", fortigate=fw["nome"], ip=ip)
-
-
-def em_quarentena(fw: dict[str, str]) -> set[str]:
-    """IPs que estão na quarentena do FortiGate agora.
-
-    Raises:
-        requests.RequestException: Falha ao falar com o FortiGate.
-        ValueError: Resposta sem ``success``.
-    """
-    return {str(b.get("ipv4_address") or b.get("ipv6_address") or "") for b in _get(fw, "monitor/user/banned") or []}

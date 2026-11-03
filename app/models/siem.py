@@ -2,6 +2,8 @@
 
 - ``SiemEvento``: eventos de segurança lidos da memória dos FortiGate
   (guardados por ``RETENCAO_DIAS``; a memória do FortiGate gira em minutos).
+  Erros repetitivos (fase 1 do IPsec) viram uma linha por origem e rodada,
+  com o total em ``repeticoes``.
 - ``SiemAchado``: o que o agente concluiu (força bruta, admin falhando...),
   com evidência e recomendação. Repetições do mesmo achado somam em
   ``ocorrencias`` em vez de criar linhas novas.
@@ -14,7 +16,14 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+import structlog
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
+
 from app.extensions import db
+
+log = structlog.get_logger(__name__)
 
 NOVO = "novo"
 VISTO = "visto"
@@ -46,6 +55,7 @@ class SiemEvento(db.Model):
     acao: str = db.Column(db.String(40), nullable=False, default="")
     motivo: str = db.Column(db.String(80), nullable=False, default="")
     mensagem: str = db.Column(db.String(300), nullable=False, default="")
+    repeticoes: int = db.Column(db.Integer, nullable=False, default=1, server_default="1")
 
 
 class SiemAchado(db.Model):
@@ -106,3 +116,27 @@ class SiemAnalise(db.Model):
     achados: int = db.Column(db.Integer, nullable=False, default=0)
     ia: bool = db.Column(db.Boolean, nullable=False, default=False)
     erro: str = db.Column(db.String(300), nullable=False, default="")
+
+
+def garantir_colunas(engine: Engine | None = None) -> None:
+    """Adiciona ``siem_eventos.repeticoes`` em bancos anteriores a ela (idempotente).
+
+    Com vários workers subindo juntos, outro pode ter criado a coluna entre a
+    inspeção e o ALTER; o erro de coluna duplicada é ignorado.
+
+    Args:
+        engine: Banco a migrar; padrão é o do Flask-SQLAlchemy.
+    """
+    engine = engine or db.engine
+    inspetor = inspect(engine)
+    if not inspetor.has_table(SiemEvento.__tablename__):
+        return
+    if "repeticoes" in {c["name"] for c in inspetor.get_columns(SiemEvento.__tablename__)}:
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE siem_eventos ADD COLUMN repeticoes INTEGER NOT NULL DEFAULT 1"))
+        log.info("siem.coluna_adicionada", coluna="repeticoes")
+    except OperationalError as exc:
+        if "duplicate column" not in str(exc).lower():
+            raise

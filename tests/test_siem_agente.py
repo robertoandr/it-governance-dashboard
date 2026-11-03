@@ -87,6 +87,37 @@ def test_coleta_guarda_so_relevantes_e_nao_duplica(banco, monkeypatch: pytest.Mo
     assert SiemEvento.query.count() == 10
 
 
+def test_coleta_agrupa_ipsec_e_descarta_progresso(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sa.fortigate_api, "configurados", lambda: (_FWS, []))
+    ipsec = {"level": "error", "logdesc": "IPsec phase 1 error", "action": "negotiate", "remip": "200.1.1.1"}
+    progresso = ipsec | {"logdesc": "Progress IPsec phase 1"}
+    linhas = [_raw(s, **ipsec) for s in range(20, 0, -1)] + [_raw(s, **progresso) for s in range(40, 20, -1)]
+
+    def get(fw: dict[str, str], caminho: str) -> list[dict[str, Any]]:
+        return linhas if caminho.startswith("log/memory/event/system") else []
+
+    monkeypatch.setattr(sf.fortigate_api, "_get", get)
+    assert sa.coletar(_AGORA) == {"Sede": 1}
+    linha = SiemEvento.query.one()
+    assert (linha.descricao, linha.origem_ip, linha.repeticoes) == ("IPsec phase 1 error", "200.1.1.1", 20)
+
+
+def test_garantir_colunas_adiciona_repeticoes(tmp_path) -> None:
+    from sqlalchemy import create_engine, inspect, text
+
+    from app.models.siem import garantir_colunas
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'velho.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE siem_eventos (id INTEGER PRIMARY KEY, chave VARCHAR(32))"))
+        conn.execute(text("INSERT INTO siem_eventos (chave) VALUES ('a')"))
+    garantir_colunas(engine)
+    garantir_colunas(engine)  # idempotente
+    assert "repeticoes" in {c["name"] for c in inspect(engine).get_columns("siem_eventos")}
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT repeticoes FROM siem_eventos")).scalar() == 1
+
+
 def test_coleta_tolera_fortigate_fora_e_apaga_antigos(banco, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sa.fortigate_api, "configurados", lambda: (_FWS, []))
     monkeypatch.setattr(sf.fortigate_api, "_get", MagicMock(side_effect=requests.ConnectTimeout()))

@@ -226,7 +226,7 @@
         isolar: function () {
           const alvo = this.isoAlvo.trim();
           if (!alvo) { alert('Informe o nome ou o IP da máquina.'); return; }
-          if (!confirm('Isolar a máquina ' + alvo + '? Ela perde o acesso à rede (Acronis, se houver incidente que permita; senão quarentena do IP no FortiGate).')) { return; }
+          if (!confirm('Isolar a máquina ' + alvo + '? Ela perde o acesso à rede (pelo Acronis; precisa de incidente aberto que permita isolar).')) { return; }
           this._agPost('/gov/cyber/isolamentos', {alvo: alvo, motivo: this.isoMotivo.trim()});
           this.isoAlvo = ''; this.isoMotivo = '';
         },
@@ -628,8 +628,8 @@
           <div class="px-5 pt-4 pb-3">
             <h3 class="font-semibold text-gray-800 dark:text-slate-100">Isolar máquina</h3>
             <p class="text-xs text-gray-500 dark:text-slate-400 mb-3">
-              Nome (ex.: NT0307261) ou IP. Se a máquina tiver incidente aberto no Acronis que permita isolar, isola pelo agente;
-              senão, coloca o IP em quarentena no FortiGate da rede (corta internet e outras VLANs; a mesma VLAN continua alcançando).
+              Nome (ex.: NT0307261) ou IP. Isola pelo agente do Acronis, que corta a rede da máquina inteira.
+              O Acronis só isola a partir de um incidente aberto da máquina que ofereça isolar.
               Só acontece com aprovação do super admin.
             </p>
             <div class="flex flex-wrap gap-2">
@@ -648,7 +648,7 @@
                 <tr>
                   <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="(r.maquina || r.ip) + (r.maquina && r.ip ? ' (' + r.ip + ')' : '')"></td>
                   <td class="px-4 py-2 text-xs text-gray-500"
-                      x-text="(r.mecanismo === 'acronis' ? 'Acronis · ' + (r.acao_status || '—') : 'FortiGate ' + r.fortigate) + ' · ' + dataHora(r.isolado_em) + ' · ' + r.pedido_por"></td>
+                      x-text="'Acronis · ' + (r.acao_status || '—') + ' · ' + dataHora(r.isolado_em) + ' · ' + r.pedido_por"></td>
                   <td class="px-4 py-2 text-xs text-gray-500" x-text="r.motivo + (r.liberar_status ? ' · liberar: ' + r.liberar_status : '') + ' · ' + r.resultado"></td>
                   <td class="px-5 py-2 text-right whitespace-nowrap">
                     <a :href="r.link" target="_blank" rel="noopener" x-show="r.link" class="text-xs text-blue-600 hover:underline mr-3">Abrir no Acronis</a>

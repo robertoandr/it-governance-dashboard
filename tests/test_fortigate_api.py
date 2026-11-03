@@ -29,7 +29,6 @@ def test_configurados_separa_prontos_e_pendentes(env_fortigates) -> None:
             "url": "https://172.29.3.254:5443",
             "token": "fake-token-sede",
             "sha256": "",
-            "token_escrita": "",
         }
     ]
     assert pendentes == ["Triunfo"]
