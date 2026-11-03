@@ -23,7 +23,15 @@ def env_fortigates(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_configurados_separa_prontos_e_pendentes(env_fortigates) -> None:
     prontos, pendentes = fa.configurados()
-    assert prontos == [{"nome": "Sede", "url": "https://172.29.3.254:5443", "token": "fake-token-sede", "sha256": ""}]
+    assert prontos == [
+        {
+            "nome": "Sede",
+            "url": "https://172.29.3.254:5443",
+            "token": "fake-token-sede",
+            "sha256": "",
+            "token_escrita": "",
+        }
+    ]
     assert pendentes == ["Triunfo"]
 
 
@@ -177,7 +185,7 @@ def test_get_recusa_status_diferente_de_success() -> None:
     resp = requests.Response()
     resp.status_code = 200
     resp._content = b'{"status": "error", "http_status": 403}'
-    with patch.object(fa.requests.Session, "get", return_value=resp) as get, pytest.raises(ValueError):
+    with patch.object(fa.requests.Session, "request", return_value=resp) as get, pytest.raises(ValueError):
         fa._get(fw, "monitor/system/status")
     assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer fake-token"}
 

@@ -221,6 +221,21 @@
           if (!p || !confirm('Refazer o isolamento da máquina ' + p.maquina + '? O isolamento anterior deu timeout.')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/' + id + '/reisolar');
         },
+        isoAlvo: '',
+        isoMotivo: '',
+        isolar: function () {
+          const alvo = this.isoAlvo.trim();
+          if (!alvo) { alert('Informe o nome ou o IP da máquina.'); return; }
+          if (!confirm('Isolar a máquina ' + alvo + '? Ela perde o acesso à rede (Acronis, se houver incidente que permita; senão quarentena do IP no FortiGate).')) { return; }
+          this._agPost('/gov/cyber/isolamentos', {alvo: alvo, motivo: this.isoMotivo.trim()});
+          this.isoAlvo = ''; this.isoMotivo = '';
+        },
+        isoLiberar: function (ev) {
+          const id = ev.currentTarget.dataset.id;
+          const r = this.ag.isolamentos.ativas.find((x) => String(x.id) === id);
+          if (!r || !confirm('Liberar a rede da máquina ' + (r.maquina || r.ip) + '?')) { return; }
+          this._agPost('/gov/cyber/isolamentos/' + id + '/liberar');
+        },
         agAprovarLote: function () {
           if (!this.agMarcados.length || !confirm('Aprovar ' + this.agMarcados.length + ' proposta(s) de encerrar/falso positivo?')) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/aprovar-lote', {ids: this.agMarcados});
@@ -607,6 +622,53 @@
                   class="px-3 py-1.5 text-xs rounded-lg bg-green-600 text-white disabled:opacity-40"
                   x-text="'Aprovar ' + agMarcados.length + ' marcada(s)'"></button>
           <button type="button" @click="carregarAgente" class="ml-auto px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white">Atualizar</button>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 mb-5">
+          <div class="px-5 pt-4 pb-3">
+            <h3 class="font-semibold text-gray-800 dark:text-slate-100">Isolar máquina</h3>
+            <p class="text-xs text-gray-500 dark:text-slate-400 mb-3">
+              Nome (ex.: NT0307261) ou IP. Se a máquina tiver incidente aberto no Acronis que permita isolar, isola pelo agente;
+              senão, coloca o IP em quarentena no FortiGate da rede (corta internet e outras VLANs; a mesma VLAN continua alcançando).
+              Só acontece com aprovação do super admin.
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <input type="text" x-model="isoAlvo" maxlength="200" placeholder="Nome ou IP da máquina"
+                     class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 w-56">
+              <input type="text" x-model="isoMotivo" maxlength="500" placeholder="Motivo (vai para o registro)"
+                     class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-slate-600 dark:bg-slate-800 flex-1 min-w-[12rem]">
+              <button type="button" @click="isolar" :disabled="agOcupado || !isoAlvo.trim()"
+                      class="px-3 py-1.5 text-sm rounded-lg bg-red-600 text-white disabled:opacity-40">Isolar</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto" x-show="ag.isolamentos && ag.isolamentos.ativas.length">
+          <table class="min-w-full text-sm">
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+              <template x-for="r in ag.isolamentos.ativas" :key="r.id">
+                <tr>
+                  <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="(r.maquina || r.ip) + (r.maquina && r.ip ? ' (' + r.ip + ')' : '')"></td>
+                  <td class="px-4 py-2 text-xs text-gray-500"
+                      x-text="(r.mecanismo === 'acronis' ? 'Acronis · ' + (r.acao_status || '—') : 'FortiGate ' + r.fortigate) + ' · ' + dataHora(r.isolado_em) + ' · ' + r.pedido_por"></td>
+                  <td class="px-4 py-2 text-xs text-gray-500" x-text="r.motivo + (r.liberar_status ? ' · liberar: ' + r.liberar_status : '') + ' · ' + r.resultado"></td>
+                  <td class="px-5 py-2 text-right whitespace-nowrap">
+                    <a :href="r.link" target="_blank" rel="noopener" x-show="r.link" class="text-xs text-blue-600 hover:underline mr-3">Abrir no Acronis</a>
+                    <button type="button" @click="isoLiberar" :data-id="r.id" :disabled="agOcupado || r.liberando"
+                            class="px-3 py-1 text-xs rounded-lg bg-orange-600 text-white disabled:opacity-40"
+                            x-text="r.liberando ? 'Liberando…' : 'Liberar rede'"></button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          </div>
+          <details class="px-5 pb-3" x-show="ag.isolamentos && ag.isolamentos.historico.length">
+            <summary class="text-xs text-gray-500 cursor-pointer">Histórico (<span x-text="ag.isolamentos ? ag.isolamentos.historico.length : 0"></span>)</summary>
+            <ul class="text-xs text-gray-500 dark:text-slate-400 mt-2 space-y-1">
+              <template x-for="r in (ag.isolamentos ? ag.isolamentos.historico : [])" :key="r.id">
+                <li x-text="dataHora(r.isolado_em) + ' · ' + (r.maquina || r.ip) + ' · ' + r.mecanismo + ' · ' + r.status + ' · ' + r.resultado + (r.liberado_por ? ' (liberada por ' + r.liberado_por + ')' : '')"></li>
+              </template>
+            </ul>
+          </details>
         </div>
 
         <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 mb-5" x-show="ag.isoladas && ag.isoladas.length">
