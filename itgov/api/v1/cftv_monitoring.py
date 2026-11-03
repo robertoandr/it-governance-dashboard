@@ -256,6 +256,7 @@ def _buscar_cftv() -> dict:
 
         devices.append(
             {
+                "hostid": hid,
                 "host": h["host"],
                 "name": h["name"],
                 "ip": _ip_principal(h.get("interfaces") or []),

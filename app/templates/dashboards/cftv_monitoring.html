@@ -222,6 +222,30 @@
     {{ stat_card('Manutenção / sem dados', visao.maint ~ ' / ' ~ visao.nodata, 'text-yellow-600', none) }}
   </div>
 
+  {% if correcoes_ip %}
+  <details class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm">
+    <summary class="cursor-pointer text-slate-700 dark:text-slate-200">
+      🔁 IP de câmera corrigido no Zabbix pelo agente — {{ correcoes_ip | selectattr('situacao', 'equalto', 'corrigido') | list | length }} das últimas {{ correcoes_ip | length }} <span class="text-xs text-slate-400">(de hora em hora: câmera fora no Zabbix cujo gravador recebe vídeo dela em outro IP)</span>
+    </summary>
+    <div class="overflow-x-auto mt-2">
+      <table class="w-full text-xs">
+        <thead class="text-left text-slate-500 dark:text-slate-400"><tr><th class="py-1 pr-3">Quando</th><th class="pr-3">Câmera</th><th class="pr-3">Gravador / canal</th><th class="pr-3">IP antigo → novo</th><th>Resultado</th></tr></thead>
+        <tbody class="text-slate-700 dark:text-slate-300">
+          {% for r in correcoes_ip %}
+          <tr class="border-t border-slate-100 dark:border-slate-700">
+            <td class="py-1 pr-3 whitespace-nowrap">{{ r.quando.astimezone(tz).strftime('%d/%m %H:%M') }}</td>
+            <td class="pr-3">{{ r.nome or r.host }}</td>
+            <td class="pr-3">{{ r.gravador }} · ch {{ r.canal }}</td>
+            <td class="pr-3 font-mono whitespace-nowrap">{{ r.ip_antigo }} → {{ r.ip_novo }} <span class="text-slate-400">({{ 'API do gravador' if r.fonte == 'api' else 'SNMP' }})</span></td>
+            <td class="{{ 'text-green-700 dark:text-green-400' if r.situacao == 'corrigido' else 'text-amber-700 dark:text-amber-400' }}">{{ r.situacao }}{% if r.situacao != 'corrigido' %} — {{ r.detalhe }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+
   {% if visao.cred_recusada_list %}
   <details class="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 px-4 py-2 text-sm text-red-700 dark:text-red-400">
     <summary class="cursor-pointer">
@@ -416,8 +440,12 @@
         {% if k %}
         <p class="text-slate-600 dark:text-slate-300">
           <span class="font-semibold text-slate-800 dark:text-slate-100">{{ k.total }}</span> canais
+          {% if k.livres is none %}
+          · <span class="font-semibold text-amber-700 dark:text-amber-400" title="Sem leitura do gravador nem conferência no local: não dá para saber quais canais estão em uso">livres: sem leitura</span>
+          {% else %}
           · {{ k.usados }} em uso{% if k.analogicas %} ({{ k.analogicas }} analógica{{ 's' if k.analogicas != 1 }}){% endif %}
           · <span class="font-semibold {{ 'text-green-700 dark:text-green-400' if k.livres else 'text-amber-700 dark:text-amber-400' }}">{{ k.livres }} livre{{ 's' if k.livres != 1 }}</span>
+          {% endif %}
           <span class="text-[10px] text-slate-400" title="De onde veio a quantidade de canais">({{ {'gravador': 'lido do gravador', 'snmp': 'pelo SNMP do gravador', 'modelo': 'pelo modelo ' ~ k.modelo, 'informado': 'informado pelo admin'}[k.fonte] }})</span>
         </p>
         {% if k.sem_video %}
@@ -449,7 +477,12 @@
           {% for x in sem_imagem %}<li>canal {{ x.canal }}{% if x.nome %} · {{ x.nome }}{% endif %}</li>{% endfor %}
         </ul>
         {% endif %}
-        {% if k and k.erro %}<p class="text-[10px] text-amber-600 dark:text-amber-400">Gravador não respondeu à API: {{ k.erro }}</p>{% endif %}
+        {% if k and k.erro %}
+        <p class="text-[10px] text-amber-600 dark:text-amber-400">Gravador não respondeu à API: {{ k.erro }}.
+          {% if k.lido_ok_em %}Canais e câmeras acima são da última leitura boa, de {{ k.lido_ok_em.astimezone(tz).strftime('%d/%m %H:%M') }}.
+          {% elif c.inventario %}Canais e câmeras acima são de uma leitura antiga (data desconhecida) ou da conferência no local.{% endif %}
+        </p>
+        {% endif %}
       </div>
       {% elif c.gravador_host %}
       <p class="text-[11px] text-slate-400">Canais livres: ainda sem leitura do gravador{% if eh_admin %} — informe a quantidade em "Editar gravador"{% endif %}.</p>

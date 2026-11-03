@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **CFTV — IP de câmera corrigido sozinho no Zabbix:** novo agente (`cftv_ip_sync`, um worker só) que de hora em hora lê todos os gravadores e, para cada câmera **fora no Zabbix** cujo gravador recebe vídeo dela em **outro IP** (API Intelbras com leitura de menos de 2 h, ou SNMP `Connected`), troca no Zabbix as interfaces do host que estavam no IP antigo. Recusa IP vazio/de fábrica, fora da rede interna, do próprio gravador ou já usado por outro host CFTV; no máximo 20 trocas por rodada. Cada troca fica registrada e aparece em `/gov/cftv?ver=gravadores`. Acaba com o "câmera fora" falso no WhatsApp quando a câmera muda de IP.
+
+### Fixed
+- **CFTV — Leitura antiga parecendo atual:** quando o gravador passava a recusar a senha, o card seguia mostrando canais e câmeras da última leitura boa sem avisar. Agora `gravador_acessos.lido_ok_em` guarda a data da última leitura que deu certo e o card diz "Canais e câmeras acima são da última leitura boa, de <data>".
+- **CFTV — Canais livres inflados:** gravador sem leitura, conferência, SNMP nem câmera com canal no Zabbix contava todos os canais como livres (ex.: NVR Hikvision e Sede_4_3_2_Loja, 32 cada). Agora mostra "livres: sem leitura" e fica fora da soma.
+- **CFTV — Senha própria recusada travava o gravador:** com `CFTV_DVR_<NOME>_*` configurada, só ela era tentada; recusada, o gravador ficava sem leitura para sempre (Triunfo desde 23/10). Agora a própria vem primeiro e, se recusada, as gerais entram no rodízio (uma por vez, respeitando a espera anti-bloqueio); nos gravadores do Triunfo entram também `CFTV_CAM_TRIUNFO_PASS` e `CFTV_CAM_TRIUNFO_PASS2`.
+
 ### Changed
 - **Cyber — Isolar máquina só pelo Acronis:** a quarentena do IP no FortiGate foi retirada (os tokens dos FortiGates são só de leitura e a decisão é não isolar por lá). Sem incidente aberto no Acronis que permita isolar, o pedido é recusado sem gravar nada, com a orientação de isolar pelo console. Sai `FORTIGATE_<UNIDADE>_TOKEN_ESCRITA` do `.env.example`.
 

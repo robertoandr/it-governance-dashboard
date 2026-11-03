@@ -915,11 +915,13 @@ class _VisaoCftv(NamedTuple):
     visao: dict
 
 
-def _visao_cftv(filtro_raw: str) -> _VisaoCftv:
+def _visao_cftv(filtro_raw: str, disparar_leitura: bool = True) -> _VisaoCftv:
     """Monta a visão do CFTV (cards por gravador, canais e inventário) para um filtro de unidade.
 
     Args:
         filtro_raw: Valor de ``?unidade=`` (id, ``sem`` ou vazio).
+        disparar_leitura: Dispara a leitura dos gravadores em segundo plano
+            (o agente ``cftv_ip_sync`` lê ele mesmo, na hora).
 
     Returns:
         Unidades, filtro, vínculos, resumo do Zabbix e a visão montada.
@@ -1000,7 +1002,7 @@ def _visao_cftv(filtro_raw: str) -> _VisaoCftv:
                     "inventario": [],
                 }
             )
-    _canais_dos_gravadores(visao, vinculos, nomes, sede_por_unidade)
+    _canais_dos_gravadores(visao, vinculos, nomes, sede_por_unidade, disparar_leitura)
     mapa = {u.id: u.nome_mapa or u.nome for u in todas}
     for c in visao["cards"]:
         c["mapa_unidade"] = mapa.get(c["unidade_id"], "") if c["unidade_id"] is not None else ""
@@ -1012,6 +1014,7 @@ def _visao_cftv(filtro_raw: str) -> _VisaoCftv:
 @require_role("admin", "gestor", "operador", pagina="cftv")
 def cftv_monitoring() -> str:
     """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
+    from app.models.cftv_ip import ultimas_correcoes
     from itgov.api.v1.cftv_monitoring import DIAS_HISTORICO, SEM_UNIDADE, formatar_duracao
     from itgov.services.cftv_snmp import AUTH_PROTOCOLOS, NIVEIS, PRIV_PROTOCOLOS
 
@@ -1058,6 +1061,7 @@ def cftv_monitoring() -> str:
             | {v.dvr for v in vinculos if v.acesso != ACESSO_NUVEM}
         ),
         nuvem=nuvem,
+        correcoes_ip=ultimas_correcoes() if ver_gravadores else [],
         filtro=filtro_raw if filtro is not None else "",
         dias_historico=DIAS_HISTORICO,
         agora=time.time(),
@@ -1067,7 +1071,11 @@ def cftv_monitoring() -> str:
 
 
 def _canais_dos_gravadores(
-    visao: dict, vinculos: list[DvrUnidade], nomes: dict[int, str], sede_por_unidade: dict[int, int]
+    visao: dict,
+    vinculos: list[DvrUnidade],
+    nomes: dict[int, str],
+    sede_por_unidade: dict[int, int],
+    disparar_leitura: bool = True,
 ) -> None:
     """Põe em cada card ``canais`` (capacidade, livres, sem vídeo) e ``inventario`` (câmeras por canal).
 
@@ -1093,18 +1101,9 @@ def _canais_dos_gravadores(
             if v.serie and v.apelido not in series:
                 series[v.apelido] = v.serie
 
-    alvos = []
-    for c in visao["cards"]:
-        host = c.get("gravador_host") or {}
-        # Só Intelbras fala essa API; noutros (ex.: NVR Hikvision) cada tentativa conta como senha errada
-        vendor = (host.get("vendor") or "").lower()
-        if host.get("ip") and (not vendor or "intelbras" in vendor):
-            alvos.append(
-                cftv_gravadores.Alvo(
-                    host["ip"], (c.get("unidade") or "").lower().startswith("sede centro"), c.get("titulo", "")
-                )
-            )
-    cftv_gravadores.disparar(current_app._get_current_object(), alvos)  # type: ignore[attr-defined]
+    if disparar_leitura:
+        alvos = cftv_gravadores.alvos_dos_cards(visao["cards"])
+        cftv_gravadores.disparar(current_app._get_current_object(), alvos)  # type: ignore[attr-defined]
     acessos = cftv_gravadores.leituras()
     cadastro = cftv_gravadores.cadastro_canais()
     verificacao = cftv_verificacao.por_gravador()
@@ -1121,7 +1120,8 @@ def _canais_dos_gravadores(
         c["canais_capacidade"] = manual.get(alvo_dvr)
         c["canais"] = cftv_gravadores.canais_do_card(c, acessos.get(ip), manual.get(alvo_dvr), cadastro.get(ip))
         c["inventario"] = cftv_gravadores.inventario_do_card(c, acessos.get(ip), cadastro.get(ip), verificacao.get(ip))
-        if c["canais"]:
+        # Sem leitura nem conferência, os livres são desconhecidos: não entram na soma
+        if c["canais"] and c["canais"]["livres"] is not None:
             sede = sede_por_unidade.get(c["unidade_id"], c["unidade_id"]) if c["unidade_id"] is not None else None
             livres_por_sede[sede] = livres_por_sede.get(sede, 0) + c["canais"]["livres"]
     for s in visao["sedes"]:
