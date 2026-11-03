@@ -96,15 +96,23 @@ def _sessao(fw: dict[str, str]) -> requests.Session:
     return sessao
 
 
-def _get(fw: dict[str, str], caminho: str) -> Any:
+def _requisitar(
+    fw: dict[str, str], metodo: str, caminho: str, token: str, corpo: dict[str, Any] | None = None
+) -> requests.Response:
     with _sessao(fw) as sessao:
-        resp = sessao.get(
+        return sessao.request(
+            metodo,
             f"{fw['url']}/api/v2/{caminho}",
-            headers={"Authorization": f"Bearer {fw['token']}"},
+            headers={"Authorization": f"Bearer {token}"},
+            json=corpo,
             timeout=_TIMEOUT,
             # Autoassinado: a CA não valida; a confiança vem da impressão digital (_CertificadoFixo)
             verify=False,  # nosec B501
         )
+
+
+def _get(fw: dict[str, str], caminho: str) -> Any:
+    resp = _requisitar(fw, "GET", caminho, fw["token"])
     resp.raise_for_status()
     dados = resp.json()
     if dados.get("status") != "success":
@@ -402,41 +410,46 @@ def get_cached_clientes() -> list[dict[str, Any]]:
 
 
 class QuarentenaError(Exception):
-    """O FortiGate não aceitou colocar ou tirar o IP da quarentena."""
+    """O FortiGate não aceitou colocar ou tirar o IP da quarentena (detalhe só no log)."""
+
+
+class QuarentenaTokenError(QuarentenaError):
+    """O FortiGate recusou o token (401/403): falta token com escrita."""
+
+
+class QuarentenaRedeError(QuarentenaError):
+    """Não deu para falar com o FortiGate."""
 
 
 def _post(fw: dict[str, str], caminho: str, corpo: dict[str, Any]) -> Any:
     """POST com o token de escrita (ou o de leitura, se não houver).
 
     Raises:
-        QuarentenaError: HTTP de erro ou resposta sem ``success``.
+        QuarentenaTokenError: Token recusado (401/403).
+        QuarentenaRedeError: Falha de rede.
+        QuarentenaError: Outro HTTP de erro ou resposta sem ``success``.
     """
-    token = fw.get("token_escrita") or fw["token"]
     try:
-        with _sessao(fw) as sessao:
-            resp = sessao.post(
-                f"{fw['url']}/api/v2/{caminho}",
-                headers={"Authorization": f"Bearer {token}"},
-                json=corpo,
-                timeout=_TIMEOUT,
-                verify=False,  # nosec B501 — autoassinado; confiança pela impressão digital
-            )
+        resp = _requisitar(fw, "POST", caminho, fw.get("token_escrita") or fw["token"], corpo)
     except requests.RequestException as exc:
-        raise QuarentenaError(f"Falha de rede ao falar com o FortiGate {fw['nome']}.") from exc
+        log.warning("fortigate_api.escrita_rede", fortigate=fw["nome"], caminho=caminho, erro=str(exc)[:300])
+        raise QuarentenaRedeError(fw["nome"]) from exc
     if resp.status_code in (401, 403):
-        raise QuarentenaError(
-            f"O FortiGate {fw['nome']} recusou o token (HTTP {resp.status_code}): configure um token com escrita "
-            f"em FORTIGATE_{fw['nome'].upper().replace(' ', '_')}_TOKEN_ESCRITA."
-        )
-    if resp.status_code >= 400:
-        raise QuarentenaError(f"O FortiGate {fw['nome']} devolveu HTTP {resp.status_code}.")
+        log.warning("fortigate_api.escrita_recusada", fortigate=fw["nome"], caminho=caminho, http=resp.status_code)
+        raise QuarentenaTokenError(fw["nome"])
     try:
-        dados = resp.json()
-    except ValueError as exc:
-        raise QuarentenaError(f"O FortiGate {fw['nome']} devolveu resposta inválida.") from exc
+        dados = resp.json() if resp.status_code < 400 else {}
+    except ValueError:
+        dados = {}
     if dados.get("status") != "success":
-        raise QuarentenaError(f"O FortiGate {fw['nome']} não confirmou ({dados.get('status')}).")
+        log.warning("fortigate_api.escrita_falhou", fortigate=fw["nome"], caminho=caminho, http=resp.status_code)
+        raise QuarentenaError(fw["nome"])
     return dados.get("results")
+
+
+def variavel_token_escrita(nome: str) -> str:
+    """Nome da variável do token de escrita do FortiGate (``Sede`` → ``FORTIGATE_SEDE_TOKEN_ESCRITA``)."""
+    return f"FORTIGATE_{nome.upper().replace(' ', '_')}_TOKEN_ESCRITA"
 
 
 def por_nome(nome: str) -> dict[str, str] | None:

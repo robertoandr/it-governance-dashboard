@@ -57,7 +57,17 @@ from app.models.incidente_agente import (
     REJEITADA,
 )
 from itgov.services import acronis_edr
-from itgov.services.acronis_edr import AcaoNaoPermitidaError, IncidenteEdr, IncidenteNaoEncontradoError
+from itgov.services.acronis_edr import (
+    DESISOLAR,
+    ISOLAMENTO_INCERTO,
+    ISOLAMENTO_NAO_APLICADO,
+    ISOLAR,
+    STATUS_ACAO_FINAIS,
+    STATUS_ACAO_OK,
+    AcaoNaoPermitidaError,
+    IncidenteEdr,
+    IncidenteNaoEncontradoError,
+)
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -75,16 +85,6 @@ LOTE_POR_RODADA = 20
 LOTE_IA = 1
 URL_ANTIGA = timedelta(days=30)
 CATEGORIAS_URL = frozenset({"URL_BLOCKED", "WEBSITE_URL_BLOCKED"})
-STATUS_ACAO_FINAIS = frozenset(
-    {"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "SKIPPED", "CANCELLED", "TIMEOUT", "TIMED_OUT"}
-)
-STATUS_ACAO_OK = frozenset({"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS"})
-ISOLAR = "WORKLOAD_ISOLATE"
-DESISOLAR = "WORKLOAD_DEISOLATE"
-# Isolamento que com certeza não aconteceu; TIMED_OUT fica na lista (a máquina pode ter isolado depois)
-ISOLAMENTO_NAO_APLICADO = frozenset({"FAILED", "SKIPPED", "CANCELLED"})
-# Isolamento incerto: o Acronis deu timeout, então vale a pena disparar de novo
-ISOLAMENTO_INCERTO = frozenset({"TIMEOUT", "TIMED_OUT"})
 
 _TRAVA = os.path.join(tempfile.gettempdir(), "itgov-incidentes-agente.lock")
 

@@ -185,7 +185,7 @@ def test_get_recusa_status_diferente_de_success() -> None:
     resp = requests.Response()
     resp.status_code = 200
     resp._content = b'{"status": "error", "http_status": 403}'
-    with patch.object(fa.requests.Session, "get", return_value=resp) as get, pytest.raises(ValueError):
+    with patch.object(fa.requests.Session, "request", return_value=resp) as get, pytest.raises(ValueError):
         fa._get(fw, "monitor/system/status")
     assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer fake-token"}
 

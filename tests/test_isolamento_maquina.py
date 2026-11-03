@@ -16,7 +16,7 @@ from app.models.user import User
 from app.services import isolamento_maquina as iso
 from itgov.services import acronis_edr, fortigate_api
 from itgov.services.acronis_edr import IncidenteEdr
-from itgov.services.fortigate_api import QuarentenaError
+from itgov.services.fortigate_api import QuarentenaError, QuarentenaRedeError, QuarentenaTokenError
 
 _FW = {"nome": "Sede", "url": "https://fw.test", "token": "ler", "sha256": "", "token_escrita": "esc"}
 
@@ -73,20 +73,19 @@ def test_resolver_por_nome_curto_ou_fqdn_e_por_ip(ambiente) -> None:
     assert iso.resolver("172.29.3.86") == ("NT0307261", "172.29.3.86")
 
 
-def test_resolver_cai_no_dns_e_recusa_lixo(ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolver_cai_no_dns_e_alvo_invalido_e_recusado(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(iso.socket, "gethostbyname", lambda n: "172.29.3.90")
     assert iso.resolver("OUTRA") == ("OUTRA", "172.29.3.90")
-    with pytest.raises(iso.IsolamentoError):
-        iso.resolver("x; rm -rf /")
-    with pytest.raises(iso.IsolamentoError):
-        iso.resolver("")
+    assert not iso.alvo_valido("x; rm -rf /") and not iso.alvo_valido("")
+    assert iso.isolar("x; rm -rf /", "", "u") == (None, iso.isolar("", "", "u")[1])
+    assert "Informe o nome" in iso.isolar("", "", "u")[1]
 
 
 # ── isolar ──────────────────────────────────────────────────────────────────
 
 
 def test_sem_incidente_vai_para_quarentena_no_fortigate(banco, ambiente) -> None:
-    r = iso.isolar("NT0307261", "máquina recolhida", "chefe@test")
+    r, _ = iso.isolar("NT0307261", "máquina recolhida", "chefe@test")
     assert (r.mecanismo, r.status, r.fortigate, r.ip) == (FORTIGATE, ISOLADA, "Sede", "172.29.3.86")
     assert ambiente["quarentena"] == [("Sede", "172.29.3.86")]
     assert "172.29.3.0/24" in r.resultado
@@ -103,7 +102,7 @@ def test_com_incidente_que_permite_isola_no_acronis(banco, ambiente, monkeypatch
         return "act-1"
 
     monkeypatch.setattr(acronis_edr, "executar_acao", executar)
-    r = iso.isolar("NT0307261", "suspeita", "chefe@test")
+    r, _ = iso.isolar("NT0307261", "suspeita", "chefe@test")
     assert (r.mecanismo, r.status, r.incident_id, r.activity_id, r.acao_status) == (
         ACRONIS,
         ISOLADA,
@@ -118,7 +117,7 @@ def test_com_incidente_que_permite_isola_no_acronis(banco, ambiente, monkeypatch
 def test_incidente_sem_acao_de_isolar_usa_fortigate(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(acronis_edr, "listar_abertos", lambda: [_inc("i1", "NT0307261")])
     monkeypatch.setattr(acronis_edr, "detalhe", lambda iid, cid: _inc("i1", "NT0307261", {"PROCESS_STOP": ""}))
-    assert iso.isolar("NT0307261", "", "u").mecanismo == FORTIGATE
+    assert iso.isolar("NT0307261", "", "u")[0].mecanismo == FORTIGATE
 
 
 def test_acronis_fora_do_ar_usa_fortigate_e_avisa(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,32 +125,29 @@ def test_acronis_fora_do_ar_usa_fortigate_e_avisa(banco, ambiente, monkeypatch: 
         raise httpx.ConnectError("fora")
 
     monkeypatch.setattr(acronis_edr, "listar_abertos", falha)
-    r = iso.isolar("NT0307261", "", "u")
+    r, _ = iso.isolar("NT0307261", "", "u")
     assert r.mecanismo == FORTIGATE and r.resultado.startswith("Acronis fora do ar")
 
 
 def test_fortigate_recusa_token_grava_falha(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
     def recusa(fw: dict, ip: str) -> None:
-        raise QuarentenaError("O FortiGate Sede recusou o token (HTTP 403)")
+        raise QuarentenaTokenError("Sede")
 
     monkeypatch.setattr(fortigate_api, "quarentenar", recusa)
-    r = iso.isolar("172.29.3.86", "", "u")
-    assert r.status == FALHOU and "403" in r.resultado
+    r, _ = iso.isolar("172.29.3.86", "", "u")
+    assert r.status == FALHOU and "FORTIGATE_SEDE_TOKEN_ESCRITA" in r.resultado
     # falha não conta como isolada: dá para pedir de novo
     assert iso.ativo("NT0307261", "172.29.3.86") is None
 
 
 def test_protecoes(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(iso.IsolamentoError, match="gateway"):
-        iso.isolar("172.29.3.254", "", "u")
-    with pytest.raises(iso.IsolamentoError, match="rede interna"):
-        iso.isolar("8.8.8.8", "", "u")
+    assert "gateway" in iso.isolar("172.29.3.254", "", "u")[1]
+    assert "rede interna" in iso.isolar("8.8.8.8", "", "u")[1]
     monkeypatch.setenv("ISOLAR_IPS_PROTEGIDOS", "172.29.3.10, 172.29.3.11")
-    with pytest.raises(iso.IsolamentoError, match="protegidos"):
-        iso.isolar("172.29.3.11", "", "u")
-    with pytest.raises(iso.IsolamentoError, match="Nenhum FortiGate"):
-        iso.isolar("10.9.9.9", "", "u")
+    assert "protegidos" in iso.isolar("172.29.3.11", "", "u")[1]
+    assert "Nenhum FortiGate" in iso.isolar("10.9.9.9", "", "u")[1]
     assert ambiente["quarentena"] == []
+    assert IsolamentoMaquina.query.count() == 0
 
 
 def test_sem_ip_e_sem_incidente_pede_o_ip(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -159,37 +155,35 @@ def test_sem_ip_e_sem_incidente_pede_o_ip(banco, ambiente, monkeypatch: pytest.M
         raise iso.socket.gaierror("x")
 
     monkeypatch.setattr(iso.socket, "gethostbyname", nao_resolve)
-    with pytest.raises(iso.IsolamentoError, match="Informe o IP"):
-        iso.isolar("FANTASMA", "", "u")
+    assert iso.isolar("FANTASMA", "", "u") == (None, iso.isolar("FANTASMA", "", "u")[1])
+    assert "Informe o IP" in iso.isolar("FANTASMA", "", "u")[1]
 
 
 def test_nao_isola_duas_vezes(banco, ambiente) -> None:
     iso.isolar("NT0307261", "", "u")
-    with pytest.raises(iso.IsolamentoError, match="já está isolada"):
-        iso.isolar("172.29.3.86", "", "u")
+    assert iso.isolar("172.29.3.86", "", "u") == (None, "NT0307261 já está isolada.")
 
 
 # ── liberar e acompanhar ────────────────────────────────────────────────────
 
 
 def test_liberar_fortigate(banco, ambiente) -> None:
-    r = iso.isolar("NT0307261", "", "u")
-    iso.liberar(r, "chefe@test")
+    r, _ = iso.isolar("NT0307261", "", "u")
+    assert iso.liberar(r, "chefe@test") == ""
     assert r.status == LIBERADA and r.liberado_por == "chefe@test"
     assert ambiente["liberar"] == ["172.29.3.86"]
-    with pytest.raises(iso.IsolamentoError):
-        iso.liberar(r, "chefe@test")
+    assert "não está isolada" in iso.liberar(r, "chefe@test")
 
 
 def test_liberar_fortigate_com_falha_continua_isolada(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
-    r = iso.isolar("NT0307261", "", "u")
+    r, _ = iso.isolar("NT0307261", "", "u")
 
     def falha(fw: dict, ip: str) -> None:
-        raise QuarentenaError("rede")
+        raise QuarentenaRedeError("Sede")
 
     monkeypatch.setattr(fortigate_api, "liberar_quarentena", falha)
     iso.liberar(r, "chefe@test")
-    assert r.status == ISOLADA and r.liberado_por == "" and "Monitor" in r.resultado
+    assert r.status == ISOLADA and r.liberado_por == "" and r.resultado.startswith("Falha de rede")
 
 
 def test_acronis_acompanha_isolar_e_desisolar(banco, ambiente, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -200,12 +194,11 @@ def test_acronis_acompanha_isolar_e_desisolar(banco, ambiente, monkeypatch: pyte
     monkeypatch.setattr(acronis_edr, "executar_acao", lambda i, a, c: next(ids))
     status = {"act-iso": "SUCCEEDED", "act-des": "STARTED"}
     monkeypatch.setattr(acronis_edr, "status_acao", lambda iid, cid, act: status[act])
-    r = iso.isolar("NT0307261", "", "u")
+    r, _ = iso.isolar("NT0307261", "", "u")
     assert iso.acompanhar() == 1 and r.acao_status == "SUCCEEDED"
     iso.liberar(r, "chefe@test")
     assert r.liberar_status == "QUEUED" and iso.liberando(r)
-    with pytest.raises(iso.IsolamentoError):
-        iso.liberar(r, "chefe@test")  # já liberando
+    assert iso.liberar(r, "chefe@test") != ""  # já liberando
     iso.acompanhar()
     assert r.status == ISOLADA and r.liberar_status == "STARTED"
     status["act-des"] = "SUCCEEDED"
@@ -219,7 +212,7 @@ def test_acronis_que_falhou_ao_isolar_sai_da_lista(banco, ambiente, monkeypatch:
     monkeypatch.setattr(acronis_edr, "detalhe", lambda iid, cid: inc)
     monkeypatch.setattr(acronis_edr, "executar_acao", lambda i, a, c: "act")
     monkeypatch.setattr(acronis_edr, "status_acao", lambda iid, cid, act: "FAILED")
-    r = iso.isolar("NT0307261", "", "u")
+    r, _ = iso.isolar("NT0307261", "", "u")
     iso.acompanhar()
     assert r.status == FALHOU
     assert iso.painel()["ativas"] == [] and iso.painel()["historico"][0]["id"] == r.id
@@ -246,7 +239,7 @@ class _Sessao:
     def __exit__(self, *a: Any) -> None:
         return None
 
-    def post(self, url: str, **kw: Any) -> _Resp:
+    def request(self, metodo: str, url: str, **kw: Any) -> _Resp:
         self.chamadas.append((url, kw["headers"]["Authorization"], kw["json"]))
         if isinstance(self.resp, Exception):
             raise self.resp
@@ -267,18 +260,19 @@ def test_quarentena_usa_token_de_escrita_e_corpo_certo(monkeypatch: pytest.Monke
 
 
 @pytest.mark.parametrize(
-    ("resp", "trecho"),
+    ("resp", "tipo"),
     [
-        (_Resp(403, {}), "TOKEN_ESCRITA"),
-        (_Resp(500, {}), "HTTP 500"),
-        (_Resp(200, {"status": "error"}), "não confirmou"),
-        (requests.ConnectionError("x"), "Falha de rede"),
+        (_Resp(403, {}), QuarentenaTokenError),
+        (_Resp(500, {}), QuarentenaError),
+        (_Resp(200, {"status": "error"}), QuarentenaError),
+        (requests.ConnectionError("x"), QuarentenaRedeError),
     ],
 )
-def test_quarentena_erros_viram_mensagem(monkeypatch: pytest.MonkeyPatch, resp: Any, trecho: str) -> None:
+def test_quarentena_erros_tipados(monkeypatch: pytest.MonkeyPatch, resp: Any, tipo: type) -> None:
     monkeypatch.setattr(fortigate_api, "_sessao", lambda fw: _Sessao(resp, []))
-    with pytest.raises(QuarentenaError, match=trecho):
+    with pytest.raises(tipo) as erro:
         fortigate_api.quarentenar(_FW, "172.29.3.86")
+    assert "Sede" in iso.motivo_quarentena(erro.value, "Sede")
 
 
 def test_quarentena_sem_token_de_escrita_usa_o_de_leitura(monkeypatch: pytest.MonkeyPatch) -> None:

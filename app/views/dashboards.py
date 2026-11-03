@@ -608,10 +608,9 @@ def cyber_isolar_maquina() -> object:
     from app.services import isolamento_maquina
 
     corpo = request.get_json(silent=True) or {}
-    try:
-        r = isolamento_maquina.isolar(str(corpo.get("alvo") or ""), str(corpo.get("motivo") or ""), _quem_decide())
-    except isolamento_maquina.IsolamentoError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+    r, erro = isolamento_maquina.isolar(str(corpo.get("alvo") or ""), str(corpo.get("motivo") or ""), _quem_decide())
+    if r is None:
+        return jsonify({"ok": False, "error": erro}), 400
     return jsonify({"ok": r.status == "isolada", "isolamento": r.para_dict(), "error": r.resultado})
 
 
@@ -641,10 +640,9 @@ def cyber_liberar_maquina(isolamento_id: int) -> object:
     from app.services import isolamento_maquina
 
     r = _isolamento_ou_404(isolamento_id)
-    try:
-        isolamento_maquina.liberar(r, _quem_decide())
-    except isolamento_maquina.IsolamentoError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 409
+    erro = isolamento_maquina.liberar(r, _quem_decide())
+    if erro:
+        return jsonify({"ok": False, "error": erro}), 409
     ok = r.status == "liberada" or r.liberar_status == "QUEUED"
     return jsonify({"ok": ok, "isolamento": r.para_dict(), "error": r.resultado})
 

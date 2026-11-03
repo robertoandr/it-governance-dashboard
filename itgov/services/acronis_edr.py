@@ -49,6 +49,18 @@ ACOES_PERMITIDAS = (
     "ADD_ALL_PROCESS_FILE_URL_TO_BLOCK_LIST",
 )
 
+ISOLAR = "WORKLOAD_ISOLATE"
+DESISOLAR = "WORKLOAD_DEISOLATE"
+# Situação de uma ação de resposta (``status_acao``)
+STATUS_ACAO_FINAIS = frozenset(
+    {"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "SKIPPED", "CANCELLED", "TIMEOUT", "TIMED_OUT"}
+)
+STATUS_ACAO_OK = frozenset({"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS"})
+# Isolamento que com certeza não aconteceu; TIMED_OUT fica de fora (a máquina pode ter isolado depois)
+ISOLAMENTO_NAO_APLICADO = frozenset({"FAILED", "SKIPPED", "CANCELLED"})
+# Isolamento incerto: o Acronis deu timeout, então vale a pena disparar de novo
+ISOLAMENTO_INCERTO = frozenset({"TIMEOUT", "TIMED_OUT"})
+
 
 class IncidenteNaoEncontradoError(Exception):
     """O Acronis não tem mais o incidente (410/404): a máquina saiu ou o incidente foi apagado."""
