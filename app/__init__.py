@@ -78,6 +78,7 @@ def create_app(settings: AppSettings | None = None) -> Flask:
     with app.app_context():
         from app.models import aprovacao as _aprovacao_model
         from app.models import incidente_agente as _incidente_agente_model
+        from app.models import isolamento as _isolamento_model  # noqa: F401
         from app.models import link as _link_model  # noqa: F401
         from app.models import pentest as _pentest_model  # noqa: F401
         from app.models import rede as _rede_model

@@ -23,7 +23,15 @@ def env_fortigates(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_configurados_separa_prontos_e_pendentes(env_fortigates) -> None:
     prontos, pendentes = fa.configurados()
-    assert prontos == [{"nome": "Sede", "url": "https://172.29.3.254:5443", "token": "fake-token-sede", "sha256": ""}]
+    assert prontos == [
+        {
+            "nome": "Sede",
+            "url": "https://172.29.3.254:5443",
+            "token": "fake-token-sede",
+            "sha256": "",
+            "token_escrita": "",
+        }
+    ]
     assert pendentes == ["Triunfo"]
 
 

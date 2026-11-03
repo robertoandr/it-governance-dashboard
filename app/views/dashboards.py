@@ -586,6 +586,69 @@ def cyber_reisolar(proposta_id: int) -> object:
     )
 
 
+def _resumo_isolar() -> str:
+    corpo = request.get_json(silent=True) or {}
+    alvo = str(corpo.get("alvo") or "")[:120]
+    motivo = str(corpo.get("motivo") or "")[:120]
+    return f"Cyber: isolar a máquina {alvo}" + (f" — {motivo}" if motivo else "")
+
+
+@bp.route("/cyber/isolamentos", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_isolar)
+def cyber_isolar_maquina() -> object:
+    """Isola qualquer máquina (corpo ``{"alvo": nome ou IP, "motivo": "..."}``).
+
+    Acronis se a máquina tiver incidente que permita isolar; senão, quarentena
+    do IP no FortiGate. Quem não é super admin só pede: vai para a fila de aprovação.
+    """
+    from flask import jsonify
+
+    from app.services import isolamento_maquina
+
+    corpo = request.get_json(silent=True) or {}
+    try:
+        r = isolamento_maquina.isolar(str(corpo.get("alvo") or ""), str(corpo.get("motivo") or ""), _quem_decide())
+    except isolamento_maquina.IsolamentoError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": r.status == "isolada", "isolamento": r.para_dict(), "error": r.resultado})
+
+
+def _isolamento_ou_404(isolamento_id: int) -> Any:
+    from app.extensions import db
+    from app.models.isolamento import IsolamentoMaquina
+
+    r = db.session.get(IsolamentoMaquina, isolamento_id)
+    if r is None:
+        abort(404)
+    return r
+
+
+def _resumo_liberar(isolamento_id: int) -> str:
+    r = _isolamento_ou_404(isolamento_id)
+    return f"Cyber: liberar a rede da máquina {r.maquina or r.ip}"
+
+
+@bp.route("/cyber/isolamentos/<int:isolamento_id>/liberar", methods=["POST"])
+@login_required
+@require_role("admin", "gestor", pagina="cyber", nivel="ver")
+@requer_aprovacao(_resumo_liberar)
+def cyber_liberar_maquina(isolamento_id: int) -> object:
+    """Devolve a rede à máquina isolada pelo "Isolar máquina" (com aprovação)."""
+    from flask import jsonify
+
+    from app.services import isolamento_maquina
+
+    r = _isolamento_ou_404(isolamento_id)
+    try:
+        isolamento_maquina.liberar(r, _quem_decide())
+    except isolamento_maquina.IsolamentoError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+    ok = r.status == "liberada" or r.liberar_status == "QUEUED"
+    return jsonify({"ok": ok, "isolamento": r.para_dict(), "error": r.resultado})
+
+
 def _resumo_lote() -> str:
     corpo = request.get_json(silent=True) or {}
     return f"Cyber: encerrar/falso positivo em lote ({len(corpo.get('ids') or [])} incidentes)"

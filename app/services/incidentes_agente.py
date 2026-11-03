@@ -652,7 +652,15 @@ def painel() -> dict[str, Any]:
         "esperando": [p.para_dict() for p in esperando],
         "decididas": [p.para_dict() for p in decididas],
         "isoladas": _isoladas(),
+        "isolamentos": _isolamentos_manuais(),
     }
+
+
+def _isolamentos_manuais() -> dict[str, Any]:
+    """Máquinas isoladas a pedido ("Isolar máquina"), fora das propostas do agente."""
+    from app.services import isolamento_maquina
+
+    return isolamento_maquina.painel()
 
 
 def _isoladas() -> list[dict[str, Any]]:
@@ -686,7 +694,9 @@ def rodada(agora: datetime | None = None) -> dict[str, Any]:
     feito: dict[str, Any] = {}
     if _tentativa["acompanhamento"] is None or agora - _tentativa["acompanhamento"] >= INTERVALO_ACOMPANHAMENTO:
         _tentativa["acompanhamento"] = agora
-        feito["acompanhamento"] = acompanhar_acoes()
+        from app.services import isolamento_maquina
+
+        feito["acompanhamento"] = acompanhar_acoes() + isolamento_maquina.acompanhar()
     if _tentativa["triagem"] is None or agora - _tentativa["triagem"] >= INTERVALO_TRIAGEM:
         _tentativa["triagem"] = agora
         feito["triagem"] = triar(agora)
