@@ -252,15 +252,10 @@ def rodada(agora: datetime | None = None) -> dict[str, Any]:
 
 
 def ultimas(n: int = 15) -> list[dict[str, Any]]:
-    """Últimas correções registradas, para a tela. Requer app context."""
-    from app.models.cftv_ip import CftvIpCorrecao
+    """Últimas correções registradas (ver ``app.models.cftv_ip.ultimas_correcoes``)."""
+    from app.models.cftv_ip import ultimas_correcoes
 
-    try:
-        linhas = CftvIpCorrecao.query.order_by(CftvIpCorrecao.quando.desc()).limit(n).all()
-    except SQLAlchemyError as exc:
-        log.warning("cftv_ip_sync.consulta_falhou", erro=str(exc)[:200])
-        return []
-    return [r.para_dict() for r in linhas]
+    return ultimas_correcoes(n)
 
 
 def iniciar_agendador(app: Flask) -> bool:

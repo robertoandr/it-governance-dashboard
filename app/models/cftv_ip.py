@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import structlog
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.extensions import db
+
+log = structlog.get_logger(__name__)
 
 
 def _agora() -> datetime:
@@ -43,3 +48,17 @@ class CftvIpCorrecao(db.Model):
             "situacao": self.situacao,
             "detalhe": self.detalhe,
         }
+
+
+def ultimas_correcoes(n: int = 15) -> list[dict[str, object]]:
+    """Últimas correções registradas, para a tela. Requer app context.
+
+    Fica no modelo (e não em ``cftv_ip_sync``) para a view não importar o agente,
+    que importa a view: seria um ciclo.
+    """
+    try:
+        linhas = CftvIpCorrecao.query.order_by(CftvIpCorrecao.quando.desc()).limit(n).all()
+    except SQLAlchemyError as exc:
+        log.warning("cftv_ip.consulta_falhou", erro=str(exc)[:200])
+        return []
+    return [r.para_dict() for r in linhas]

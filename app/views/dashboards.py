@@ -1014,7 +1014,7 @@ def _visao_cftv(filtro_raw: str, disparar_leitura: bool = True) -> _VisaoCftv:
 @require_role("admin", "gestor", "operador", pagina="cftv")
 def cftv_monitoring() -> str:
     """Render painel CFTV: cards por gravador (DVR/NVR), filtro por unidade."""
-    from app.services import cftv_ip_sync
+    from app.models.cftv_ip import ultimas_correcoes
     from itgov.api.v1.cftv_monitoring import DIAS_HISTORICO, SEM_UNIDADE, formatar_duracao
     from itgov.services.cftv_snmp import AUTH_PROTOCOLOS, NIVEIS, PRIV_PROTOCOLOS
 
@@ -1061,7 +1061,7 @@ def cftv_monitoring() -> str:
             | {v.dvr for v in vinculos if v.acesso != ACESSO_NUVEM}
         ),
         nuvem=nuvem,
-        correcoes_ip=cftv_ip_sync.ultimas() if ver_gravadores else [],
+        correcoes_ip=ultimas_correcoes() if ver_gravadores else [],
         filtro=filtro_raw if filtro is not None else "",
         dias_historico=DIAS_HISTORICO,
         agora=time.time(),
