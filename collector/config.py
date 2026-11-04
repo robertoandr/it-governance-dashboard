@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     CFTV_CAM_USER: str = ""  # usuário das câmeras do Triunfo
     CFTV_CAM_TRIUNFO_PASS: str = ""
     CFTV_CAM_TRIUNFO_PASS2: str = ""
+    CFTV_CAM_LOJA_USER: str = ""  # câmeras Hikvision D1–D18 da Loja Centro
+    CFTV_CAM_LOJA_PASS: str = ""
+    FACIAL_CENTRO_USER: str = ""  # leitores faciais da Sede Centro
+    FACIAL_CENTRO_PASS: str = ""
     INTELBRAS_HTTP_USER: str = ""
     INTELBRAS_HTTP_PASSWORD: str = ""
     # Acronis Cyber Cloud — coletor de agentes e proteção

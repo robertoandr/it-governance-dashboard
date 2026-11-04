@@ -48,7 +48,7 @@
 
 {# Botão (só admin) para trocar a senha do equipamento para a padrão, via fila de aprovação. #}
 {% macro padronizar_form(d) %}
-{% if eh_admin and d.ip and d.cred_status in ('ok', 'pendente') and d.cred != 'padrao' %}
+{% if eh_admin and d.ip and d.cred_status in ('ok', 'pendente') and d.cred not in ('padrao', 'nao_precisa') %}
 <form method="POST" action="{{ url_for('dashboards.cftv_padronizar_senha') }}" class="inline">
   <input type="hidden" name="host" value="{{ d.host }}">
   <input type="hidden" name="ip" value="{{ d.ip }}">

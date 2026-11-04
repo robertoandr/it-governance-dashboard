@@ -14,9 +14,10 @@ encontrado, que a página /gov/cftv exibe no drill-down do gravador.
 ### Credencial por equipamento
 
 Cada host traz na tag ``cftv_cred`` qual credencial do ``.env`` ele aceita
-(``padrao``, ``centro``, ``triunfo``, ``triunfo2`` ou ``intelbras``, ver :func:`credenciais`).
-Host sem a tag, ou com credencial não configurada, não é consultado: o job
-nunca "chuta" senha.
+(``padrao``, ``centro``, ``triunfo``, ``triunfo2``, ``intelbras``, ``loja`` ou ``facial``,
+ver :func:`credenciais`). Host sem a tag, ou com credencial não configurada, não é
+consultado: o job nunca "chuta" senha. ``nao_precisa`` marca equipamento que não
+precisa de senha (central de alarme, app): não é consultado e conta como ok no painel.
 
 ### Proteção contra bloqueio de conta
 
@@ -111,6 +112,8 @@ def credenciais() -> dict[str, tuple[str, str]]:
         "triunfo": (settings.CFTV_CAM_USER, settings.CFTV_CAM_TRIUNFO_PASS),
         "triunfo2": (settings.CFTV_CAM_USER, settings.CFTV_CAM_TRIUNFO_PASS2),
         "intelbras": (settings.INTELBRAS_HTTP_USER, settings.INTELBRAS_HTTP_PASSWORD),
+        "loja": (settings.CFTV_CAM_LOJA_USER, settings.CFTV_CAM_LOJA_PASS),
+        "facial": (settings.FACIAL_CENTRO_USER, settings.FACIAL_CENTRO_PASS),
     }
     return {chave: par for chave, par in pares.items() if par[0] and par[1]}
 

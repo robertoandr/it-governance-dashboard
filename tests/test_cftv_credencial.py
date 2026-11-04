@@ -23,6 +23,8 @@ from itgov.services.intelbras_api import AcessoNegadoError
         ({"cftv_cred": "centro", "model": "VIP-1230"}, "ok"),
         ({"cftv_cred": "centro", "cftv_cred_recusada": "centro:2026-10-20"}, "recusada"),
         ({"cftv_cred": "centro", "model": "X", "cftv_cred_recusada": "centro:2026-10-20"}, "recusada"),
+        ({"cftv_cred": "nao_precisa"}, "ok"),
+        ({"cftv_cred": "nao_precisa", "cftv_cred_recusada": "padrao:2026-11-01"}, "recusada"),
     ],
 )
 def test_cred_status(tags: dict[str, str], esperado: str) -> None:
