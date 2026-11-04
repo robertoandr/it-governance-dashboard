@@ -113,7 +113,8 @@ def _cred_info(tags: dict[str, str]) -> dict[str, Any]:
 
     Returns:
         ``{"cred": str, "cred_recusada": {"cred", "data"} | None, "cred_status": str}``
-        com ``cred_status`` em ``recusada`` | ``ok`` | ``pendente`` | ``sem_cred``.
+        com ``cred_status`` em ``recusada`` | ``ok`` | ``pendente`` | ``sem_cred``
+        (``cftv_cred=nao_precisa`` conta como ``ok``).
     """
     cred = tags.get("cftv_cred", "")
     recusada_raw = tags.get("cftv_cred_recusada", "")
@@ -124,6 +125,8 @@ def _cred_info(tags: dict[str, str]) -> dict[str, Any]:
 
     if recusada:
         status = "recusada"
+    elif cred == "nao_precisa":  # sem senha (central de alarme, app): nada a cobrar
+        status = "ok"
     elif not cred:
         status = "sem_cred"
     elif tags.get("model"):

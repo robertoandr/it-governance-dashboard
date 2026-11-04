@@ -73,6 +73,10 @@ def cfg(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         CFTV_CAM_TRIUNFO_PASS2="t2",
         INTELBRAS_HTTP_USER="",
         INTELBRAS_HTTP_PASSWORD="",
+        CFTV_CAM_LOJA_USER="",
+        CFTV_CAM_LOJA_PASS="",
+        FACIAL_CENTRO_USER="",
+        FACIAL_CENTRO_PASS="",
     )
     monkeypatch.setattr(mod, "settings", s)
     return s
@@ -212,6 +216,15 @@ def test_credenciais_so_as_configuradas(cfg: SimpleNamespace) -> None:
     assert set(credenciais()) == {"padrao"}
     cfg.CFTV_CAM_CENTRO_USER, cfg.CFTV_CAM_CENTRO_PASS = "centro", "c1"
     assert credenciais()["centro"] == ("centro", "c1")
+
+
+def test_credenciais_loja_e_facial(cfg: SimpleNamespace) -> None:
+    cfg.CFTV_CAM_LOJA_USER, cfg.CFTV_CAM_LOJA_PASS = "admin", "l1"
+    cfg.FACIAL_CENTRO_USER, cfg.FACIAL_CENTRO_PASS = "admin", "f1"
+    creds = credenciais()
+    assert creds["loja"] == ("admin", "l1")
+    assert creds["facial"] == ("admin", "f1")
+    assert "nao_precisa" not in creds  # equipamento sem senha nunca é consultado
 
 
 def test_selecionar_pula_sem_tag_sem_credencial_e_recusa_recente() -> None:

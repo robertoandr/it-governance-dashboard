@@ -31,6 +31,8 @@ _CRED_ENV: dict[str, tuple[str, str]] = {
     "triunfo": ("CFTV_CAM_USER", "CFTV_CAM_TRIUNFO_PASS"),
     "triunfo2": ("CFTV_CAM_USER", "CFTV_CAM_TRIUNFO_PASS2"),
     "intelbras": ("INTELBRAS_HTTP_USER", "INTELBRAS_HTTP_PASSWORD"),
+    "loja": ("CFTV_CAM_LOJA_USER", "CFTV_CAM_LOJA_PASS"),
+    "facial": ("FACIAL_CENTRO_USER", "FACIAL_CENTRO_PASS"),
 }
 
 # Fabricantes com troca de senha automática (CGI Intelbras/Dahua). Vazio: gravadores
