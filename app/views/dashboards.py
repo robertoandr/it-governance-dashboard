@@ -6,6 +6,7 @@ import asyncio
 import os
 import time
 import unicodedata
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, NamedTuple
 from uuid import UUID
@@ -2029,6 +2030,16 @@ def rede_cadastrar_ativo() -> object:
         )
 
     if request.method == "GET":
+        # Volta do "+ Novo tipo…": o tipo recém-criado vem escolhido e o que já foi digitado é mantido
+        tipo_novo = request.args.get("tipo", "")
+        if tipo_novo in labels and tipo_novo != tipo:
+            sugestao["tipo"] = tipo_novo
+            sugestao["nome"] = sugerir_nome(
+                tipo_novo, sigla_unidade(raiz), (a["nome"] for a in ativos), classificacoes.siglas(classes)
+            )
+        for campo in ("nome", "unidade_id", "criticidade", "ambiente", "descricao"):
+            if request.args.get(campo):
+                sugestao[campo] = request.args[campo].strip()
         return _render(sugestao)
 
     valores = {k: (request.form.get(k) or "").strip() for k in sugestao}
@@ -2094,10 +2105,11 @@ def rede_classificacao_criar() -> object:
     rotulo = (request.form.get("rotulo") or "").strip()
     sigla = (request.form.get("sigla") or "").strip().upper()
     palavras = ", ".join(p.strip() for p in (request.form.get("palavras") or "").split(",") if p.strip())[:500]
+    voltar = _voltar_ao_cadastro()
     erro = classificacoes.validar(rotulo, sigla, classificacoes.carregar())
     if erro:
         flash(erro, "error")
-        return redirect(url_for("dashboards.rede_monitoring"))
+        return redirect(voltar() if voltar else url_for("dashboards.rede_monitoring"))
     chave = classificacoes.chave_de(rotulo)
     db.session.add(
         ClassificacaoDispositivo(
@@ -2110,10 +2122,43 @@ def rede_classificacao_criar() -> object:
         db.session.rollback()
         log.warning("rede.classificacao_falhou", erro=str(exc))
         flash("Não foi possível salvar a classificação.", "error")
-        return redirect(url_for("dashboards.rede_monitoring"))
+        return redirect(voltar() if voltar else url_for("dashboards.rede_monitoring"))
     log.info("rede.classificacao_criada", chave=chave, sigla=sigla, user=current_user.email)
     flash(f"Classificação {rotulo} ({sigla}) cadastrada.", "success")
+    if voltar:
+        return redirect(voltar(chave))
     return redirect(url_for("dashboards.rede_monitoring", tipo=chave))
+
+
+def _voltar_ao_cadastro() -> Callable[..., str] | None:
+    """Monta a volta para o cadastro do ativo quando o tipo novo foi criado de lá.
+
+    O formulário "+ Novo tipo…" do cadastro manda ``voltar_ip`` e o que já foi
+    digitado (``c_nome``, ``c_unidade_id``...). Só aceita IP válido, para não virar
+    redirecionamento aberto.
+
+    Returns:
+        Função que recebe a chave do tipo (opcional) e devolve a URL do cadastro,
+        ou ``None`` se o pedido não veio do cadastro.
+    """
+    import ipaddress
+
+    ip = (request.form.get("voltar_ip") or "").strip()
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    campos = {
+        c: request.form.get(f"c_{c}", "").strip()[:500]
+        for c in ("nome", "unidade_id", "criticidade", "ambiente", "descricao")
+        if request.form.get(f"c_{c}", "").strip()
+    }
+
+    def _url(tipo: str = "") -> str:
+        extra = {"tipo": tipo} if tipo else {}
+        return url_for("dashboards.rede_cadastrar_ativo", ip=ip, **campos, **extra)
+
+    return _url
 
 
 @bp.route("/rede/classificacoes/<chave>/remover", methods=["POST"])

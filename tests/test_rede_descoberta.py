@@ -350,3 +350,75 @@ def test_remover_ativo_inexistente_404(authed_client, ativos_db) -> None:
 def test_operador_ve_ativos_mas_nao_remove(operador_client, ativos_db) -> None:
     assert operador_client.get("/gov/ativos-rede").status_code == 200
     assert operador_client.post("/gov/ativos-rede/00000000-0000-0000-0000-000000000000/remover").status_code == 403
+
+
+# ── "+ Novo tipo…" no cadastro ───────────────────────────────────────────────
+
+
+@pytest.fixture
+def limpa_classificacoes(factory_app) -> Iterator[None]:
+    from app.models.rede import ClassificacaoDispositivo
+    from itgov.models.ativo import definir_tipos_extras
+
+    yield
+    with factory_app.app_context():
+        ClassificacaoDispositivo.query.delete()
+        db.session.commit()
+    definir_tipos_extras({})
+
+
+def test_cadastrar_oferece_novo_tipo(authed_client, rede, ativos_db, faixas) -> None:
+    html = authed_client.get("/gov/rede/cadastrar?ip=172.29.1.20").get_data(as_text=True)
+    assert '<option value="__novo__">+ Novo tipo…</option>' in html
+    assert 'id="f-novo-tipo"' in html and 'name="voltar_ip" value="172.29.1.20"' in html
+
+
+def test_novo_tipo_volta_ao_cadastro_com_tipo_escolhido(
+    authed_client, rede, ativos_db, faixas, limpa_classificacoes
+) -> None:
+    resp = authed_client.post(
+        "/gov/rede/classificacoes",
+        data={
+            "rotulo": "Relógio de ponto",
+            "sigla": "pon",
+            "voltar_ip": "172.29.1.20",
+            "c_nome": "Ponto recepção",
+            "c_descricao": "térreo",
+            "c_criticidade": "baixa",
+        },
+    )
+    assert resp.status_code == 302
+    destino = resp.headers["Location"]
+    assert "/gov/rede/cadastrar" in destino and "tipo=relogio_de_ponto" in destino and "ip=172.29.1.20" in destino
+
+    html = authed_client.get(destino).get_data(as_text=True)
+    assert '<option value="relogio_de_ponto" selected' in html
+    assert 'value="Ponto recepção"' in html and "térreo" in html
+    assert '<option value="baixa" selected' in html
+
+
+def test_novo_tipo_sem_nome_digitado_sugere_nome_do_tipo(
+    authed_client, rede, ativos_db, faixas, limpa_classificacoes
+) -> None:
+    resp = authed_client.post(
+        "/gov/rede/classificacoes", data={"rotulo": "Relógio de ponto", "sigla": "PON", "voltar_ip": "172.29.1.20"}
+    )
+    html = authed_client.get(resp.headers["Location"]).get_data(as_text=True)
+    assert 'value="SCE-PON-001"' in html
+
+
+def test_novo_tipo_com_erro_volta_ao_cadastro(authed_client, rede, ativos_db, faixas, limpa_classificacoes) -> None:
+    resp = authed_client.post(
+        "/gov/rede/classificacoes", data={"rotulo": "Impressora", "sigla": "XY", "voltar_ip": "172.29.1.20"}
+    )
+    assert resp.status_code == 302 and "/gov/rede/cadastrar" in resp.headers["Location"]
+    assert "Já existe" in authed_client.get(resp.headers["Location"]).get_data(as_text=True)
+
+
+def test_novo_tipo_voltar_ip_invalido_vai_para_rede(authed_client, rede, ativos_db, limpa_classificacoes) -> None:
+    resp = authed_client.post(
+        "/gov/rede/classificacoes",
+        data={"rotulo": "Relógio de ponto", "sigla": "PON", "voltar_ip": "https://evil.example"},
+    )
+    assert resp.status_code == 302
+    assert "/gov/rede/cadastrar" not in resp.headers["Location"] and "evil" not in resp.headers["Location"]
