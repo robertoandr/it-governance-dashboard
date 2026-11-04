@@ -225,7 +225,7 @@
   {% if correcoes_ip %}
   <details class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm">
     <summary class="cursor-pointer text-slate-700 dark:text-slate-200">
-      🔁 IP de câmera corrigido no Zabbix pelo agente — {{ correcoes_ip | selectattr('situacao', 'equalto', 'corrigido') | list | length }} das últimas {{ correcoes_ip | length }} <span class="text-xs text-slate-400">(de hora em hora: câmera fora no Zabbix cujo gravador recebe vídeo dela em outro IP)</span>
+      🔁 Câmeras arrumadas no Zabbix pelo agente — {{ correcoes_ip | selectattr('situacao', 'in', ['corrigido', 'desativado', 'criado']) | list | length }} das últimas {{ correcoes_ip | length }} <span class="text-xs text-slate-400">(de hora em hora: IP trocado quando o gravador recebe vídeo em outro IP; cópia ou host repetido desativado; host criado para câmera com vídeo sem host)</span>
     </summary>
     <div class="overflow-x-auto mt-2">
       <table class="w-full text-xs">
@@ -236,8 +236,8 @@
             <td class="py-1 pr-3 whitespace-nowrap">{{ r.quando.astimezone(tz).strftime('%d/%m %H:%M') }}</td>
             <td class="pr-3">{{ r.nome or r.host }}</td>
             <td class="pr-3">{{ r.gravador }} · ch {{ r.canal }}</td>
-            <td class="pr-3 font-mono whitespace-nowrap">{{ r.ip_antigo }} → {{ r.ip_novo }} <span class="text-slate-400">({{ 'API do gravador' if r.fonte == 'api' else 'SNMP' }})</span></td>
-            <td class="{{ 'text-green-700 dark:text-green-400' if r.situacao == 'corrigido' else 'text-amber-700 dark:text-amber-400' }}">{{ r.situacao }}{% if r.situacao != 'corrigido' %} — {{ r.detalhe }}{% endif %}</td>
+            <td class="pr-3 font-mono whitespace-nowrap">{% if r.ip_antigo and r.ip_antigo != r.ip_novo %}{{ r.ip_antigo }} → {% endif %}{{ r.ip_novo }} <span class="text-slate-400">({{ {'api': 'API do gravador', 'snmp': 'SNMP', 'dup': 'IP repetido'}.get(r.fonte, r.fonte) }})</span></td>
+            <td class="{{ 'text-green-700 dark:text-green-400' if r.situacao in ['corrigido', 'desativado', 'criado'] else 'text-amber-700 dark:text-amber-400' }}">{{ r.situacao }}{% if r.situacao != 'corrigido' %} — {{ r.detalhe }}{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
