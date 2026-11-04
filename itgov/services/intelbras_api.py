@@ -26,6 +26,7 @@ import httpx
 from pydantic import BaseModel
 
 CAPACIDADES = (4, 8, 16, 32, 64, 128)
+_MAX_CANAIS = 256  # nenhum gravador tem tantos canais: valor acima disso é máscara de bits
 # Nome de fábrica de canal sem câmera: "CAM 4", "Canal 12", "CH05", "D7"
 _TITULO_PADRAO = re.compile(r"^(?:cam(?:era)?|c[aâ]mera|canal|ch|channel|d|ip ?cam)\s*0*\d+$", re.I)
 
@@ -149,6 +150,29 @@ def _autenticar(c: httpx.Client, ip: str, usuario: str, senha: str) -> tuple[htt
     return auth, serie
 
 
+def canais_sem_video(texto: str) -> list[int]:
+    """Canais (a partir de 1) sem vídeo na resposta de ``getEventIndexes&code=VideoLoss``.
+
+    Firmware atual lista só os canais com perda: ``channels[k]=<índice do canal>``.
+    Firmware antigo (ex.: HDCVI 3116 G2, 3.210 de 2017) lista todos os canais,
+    ``channels[i]=0`` sem perda e ``channels[i]=1<<i`` com perda (máscara de bits).
+    Reconhece o antigo por valor repetido (vários zeros) ou valor acima de
+    qualquer índice de canal possível.
+
+    Args:
+        texto: Corpo da resposta.
+
+    Returns:
+        Canais sem vídeo, em ordem.
+    """
+    pares = [(int(i), int(v)) for i, v in re.findall(r"channels\[(\d+)\]=(\d+)", texto)]
+    valores = [v for _, v in pares]
+    mascara = len(valores) != len(set(valores)) or any(v >= _MAX_CANAIS for v in valores)
+    if mascara:
+        return sorted({i + 1 for i, v in pares if v})
+    return sorted({v + 1 for v in valores})
+
+
 def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> LeituraGravador:
     """Lê modelo, canais, canais sem vídeo, nomes dos canais e câmeras.
 
@@ -179,7 +203,7 @@ def ler_gravador(ip: str, usuario: str, senha: str, timeout: float = 8.0) -> Lei
         titulos_txt = _get("configManager.cgi?action=getConfig&name=ChannelTitle")
         cameras = cameras_do_gravador(_get("LogicDeviceManager.cgi?action=getCameraAll"))
 
-    sem_video = sorted({int(m) + 1 for m in re.findall(r"channels\[\d+\]=(\d+)", perdas)})
+    sem_video = canais_sem_video(perdas)
     titulos = {
         int(m.group(1)) + 1: m.group(2).strip() for m in re.finditer(r"ChannelTitle\[(\d+)\]\.Name=(.*)", titulos_txt)
     }

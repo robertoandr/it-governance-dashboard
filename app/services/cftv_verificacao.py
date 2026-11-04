@@ -12,6 +12,9 @@ Só nos gravadores Intelbras cuja senha HTTP o dashboard já acertou
 - Imagem, nos ``HORARIOS_FOTO`` (de dia): tira a foto do canal. Câmera que
   não entrega foto (duas tentativas) = sem resposta; tela chapada = sem cena
   (``cftv_imagem``). A miniatura fica guardada só enquanto há problema.
+  Foto que falha num canal que está gravando normalmente vira
+  ``indisponivel`` (ver ``imagem_efetiva``): o vídeo chega ao gravador, quem
+  não entrega a foto é o gravador (ex.: NVD 1432 com câmera ONVIF devolve HTTP 500).
 
 - Conferência, a cada ``INTERVALO_CONFERENCIA``: relê cada gravador e compara,
   canal a canal, a câmera que ele tem configurada com a conferência no local
@@ -228,8 +231,29 @@ def verificar_imagens(lista: list[Alvo], agora: datetime | None = None) -> set[s
     return feitos
 
 
+def imagem_efetiva(imagem: str, gravacao: str) -> str:
+    """Situação da imagem a mostrar, cruzando a foto com a gravação.
+
+    Foto sem resposta num canal que grava normalmente não é câmera sem imagem:
+    o vídeo chega ao gravador, que só não entrega a foto (NVD 1432 com câmera
+    ONVIF responde HTTP 500 no ``snapshot.cgi``). Tela chapada continua
+    problema mesmo gravando (analógica sem sinal grava tela preta).
+
+    Args:
+        imagem: ``VerificacaoCanal.imagem`` guardada.
+        gravacao: ``VerificacaoCanal.gravacao`` guardada.
+
+    Returns:
+        ``imagem`` ou ``"indisponivel"``.
+    """
+    return "indisponivel" if imagem == "sem_resposta" and gravacao == "ok" else imagem
+
+
 def por_gravador() -> dict[str, dict[int, dict[str, Any]]]:
-    """Última verificação: IP → canal → ``{"gravacao", "ultima_gravacao", "gravacao_em", "imagem", "imagem_em", "miniatura"}``."""
+    """Última verificação: IP → canal → ``{"gravacao", "ultima_gravacao", "gravacao_em", "imagem", "imagem_em", "miniatura"}``.
+
+    ``imagem`` já vem cruzada com a gravação (``imagem_efetiva``).
+    """
     from app.models.unidade import VerificacaoCanal
 
     try:
@@ -243,7 +267,7 @@ def por_gravador() -> dict[str, dict[int, dict[str, Any]]]:
             "gravacao": v.gravacao,
             "ultima_gravacao": v.ultima_gravacao,
             "gravacao_em": v.gravacao_em,
-            "imagem": v.imagem,
+            "imagem": imagem_efetiva(v.imagem, v.gravacao),
             "imagem_em": v.imagem_em,
             "miniatura": v.miniatura is not None,
         }

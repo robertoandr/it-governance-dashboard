@@ -1028,3 +1028,18 @@ def test_cftv_avulso_com_nome_parecido_nao_duplica_card(authed_client, factory_a
         with factory_app.app_context():
             DvrUnidade.query.filter(DvrUnidade.dvr.in_(fantasmas)).delete(synchronize_session=False)
             db.session.commit()
+
+
+def test_canais_sem_video_formato_atual() -> None:
+    assert intelbras_api.canais_sem_video("channels[0]=1\r\nchannels[1]=6\r\n") == [2, 7]
+    assert intelbras_api.canais_sem_video("channels[0]=0\r\n") == [1]
+    assert intelbras_api.canais_sem_video("Error\r\nBad Request!\r\n") == []
+
+
+def test_canais_sem_video_firmware_antigo_mascara_de_bits() -> None:
+    # HDCVI 3116 G2 (3.210, 2017): lista todos os canais, 0 = ok, 1<<i = sem vídeo
+    texto = "".join(f"channels[{i}]={(1 << i) if 7 <= i <= 15 else 0}\r\n" for i in range(32))
+    assert intelbras_api.canais_sem_video(texto) == list(range(8, 17))
+    # Só o canal 1 sem vídeo: channels[0]=1 e o resto zero
+    texto = "channels[0]=1\r\n" + "".join(f"channels[{i}]=0\r\n" for i in range(1, 16))
+    assert intelbras_api.canais_sem_video(texto) == [1]

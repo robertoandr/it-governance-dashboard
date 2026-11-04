@@ -243,6 +243,8 @@ def rodada(agora: datetime | None = None) -> dict[str, Any]:
     alvos = cftv_gravadores.alvos_dos_cards(visao["cards"])
     with cftv_gravadores.ocupado():
         lidos = cftv_gravadores.atualizar(alvos)
+        ips_gravadores = {ip for c in visao["cards"] if (ip := (c.get("gravador_host") or {}).get("ip"))}
+        cftv_gravadores.limpar_abandonados(ips_gravadores, agora)
     correcoes = candidatos(visao["cards"], cftv_gravadores.leituras(), agora)
     ips_cftv = {d.get("ip", "") for d in (get_cached_cftv_summary() or {}).get("devices", []) if d.get("ip")}
     contagem = aplicar(correcoes, ips_cftv) if correcoes else {}
