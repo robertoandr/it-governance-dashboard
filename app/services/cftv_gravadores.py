@@ -65,6 +65,7 @@ PROPRIA = "propria"
 INTERVALO = timedelta(minutes=5)
 ESPERA_FALHA = timedelta(hours=6)
 ESPERA_RECUSA = timedelta(minutes=30)
+ABANDONO = timedelta(days=7)  # IP fora dos gravadores e sem leitura há tanto tempo: acesso apagado
 _ocupado = threading.Lock()
 
 
@@ -202,6 +203,37 @@ def atualizar(gravadores: list[Alvo]) -> int:
             continue
         lidos += 1
     return lidos
+
+
+def limpar_abandonados(ips_gravadores: set[str], agora: datetime | None = None) -> list[str]:
+    """Apaga o acesso de IPs que não são mais gravador e não são lidos há ``ABANDONO`` (requer app context).
+
+    Sobra de IP antigo de gravador ou de câmera que já foi tratada como gravador.
+    Sem a lista de gravadores (Zabbix fora), não apaga nada.
+
+    Args:
+        ips_gravadores: IPs dos gravadores de agora (cards de ``montar_visao``).
+        agora: Horário da rodada (UTC).
+
+    Returns:
+        IPs apagados.
+    """
+    from app.extensions import db
+    from app.models.unidade import GravadorAcesso
+
+    if not ips_gravadores:
+        return []
+    agora = agora or datetime.now(UTC)
+    apagados = []
+    for acesso in GravadorAcesso.query.all():
+        visto = _utc(acesso.lido_em)
+        if acesso.ip not in ips_gravadores and (visto is None or agora - visto > ABANDONO):
+            db.session.delete(acesso)
+            apagados.append(acesso.ip)
+    if apagados:
+        db.session.commit()
+        log.info("cftv_gravadores.abandonados_apagados", ips=apagados)
+    return apagados
 
 
 def alvos_dos_cards(cards: list[dict[str, Any]]) -> list[Alvo]:

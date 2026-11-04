@@ -274,7 +274,9 @@ def test_textos_e_envio_para_o_zabbix(banco, monkeypatch: pytest.MonkeyPatch) ->
         [
             VerificacaoCanal(ip_gravador=_IP, canal=3, gravacao="parada", imagem="chapada"),
             VerificacaoCanal(ip_gravador=_IP, canal=12, gravacao="desligada", imagem="ok"),
-            VerificacaoCanal(ip_gravador=_IP, canal=5, gravacao="ok", imagem="sem_resposta"),
+            VerificacaoCanal(
+                ip_gravador=_IP, canal=5, gravacao="", imagem="sem_resposta"
+            ),  # gravando ok seria "indisponivel"
             VerificacaoCanal(ip_gravador="10.77.0.7", canal=1, gravacao="ok", imagem="ok"),
         ]
     )
@@ -509,3 +511,40 @@ def test_miniatura_e_pagina(authed_client, banco, monkeypatch: pytest.MonkeyPatc
 def test_miniatura_exige_login(factory_app) -> None:
     resp = factory_app.test_client().get(f"/gov/cftv/miniatura/{_IP}/1")
     assert resp.status_code in (302, 401)
+
+
+@pytest.mark.parametrize(
+    ("imagem", "gravacao", "esperado"),
+    [
+        ("sem_resposta", "ok", "indisponivel"),  # gravador não entrega a foto, mas o vídeo chega (NVD + ONVIF)
+        ("sem_resposta", "parada", "sem_resposta"),
+        ("sem_resposta", "", "sem_resposta"),
+        ("chapada", "ok", "chapada"),  # analógica sem sinal grava tela preta
+        ("ok", "parada", "ok"),
+        ("", "ok", ""),
+    ],
+)
+def test_imagem_efetiva(imagem: str, gravacao: str, esperado: str) -> None:
+    assert cv.imagem_efetiva(imagem, gravacao) == esperado
+
+
+def test_foto_sem_resposta_de_canal_gravando_nao_e_sem_imagem(banco) -> None:
+    for canal, gravacao, imagem in ((1, "ok", "sem_resposta"), (2, "parada", "sem_resposta"), (3, "ok", "chapada")):
+        db.session.add(VerificacaoCanal(ip_gravador=_IP, canal=canal, gravacao=gravacao, imagem=imagem))
+    db.session.commit()
+    estado = cv.por_gravador()[_IP]
+    assert {c: v["imagem"] for c, v in estado.items()} == {1: "indisponivel", 2: "sem_resposta", 3: "chapada"}
+    assert cv.textos_para_zabbix({_IP})[_IP][cv.CHAVE_SEM_IMAGEM] == "canais 2 e 3"
+
+
+def test_limpar_abandonados(banco) -> None:
+    velho, recente = _AGORA - timedelta(days=8), _AGORA - timedelta(days=1)
+    for ip, lido in (("10.77.0.1", velho), ("10.77.0.2", velho), ("10.77.0.3", recente), ("10.77.0.4", None)):
+        db.session.add(GravadorAcesso(ip=ip, falhas="{}", lido_em=lido))
+    db.session.commit()
+    # Sem lista de gravadores (Zabbix fora): não apaga nada
+    assert cg.limpar_abandonados(set(), _AGORA) == []
+    apagados = cg.limpar_abandonados({"10.77.0.2"}, _AGORA)
+    assert sorted(apagados) == ["10.77.0.1", "10.77.0.4"]
+    restantes = {a.ip for a in GravadorAcesso.query.filter(GravadorAcesso.ip.like("10.77.0.%"))}
+    assert restantes == {"10.77.0.2", "10.77.0.3"}

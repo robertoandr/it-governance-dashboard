@@ -1149,7 +1149,12 @@ INVENTARIO_COLUNAS = (
     "Status",
 )
 _TIPO_CAMERA = {"ip": "IP", "analogica": "Analógica", "outro": "Outro equipamento"}
-_IMAGEM_CSV = {"ok": "ok", "sem_resposta": "sem imagem (não responde)", "chapada": "sem imagem (tela chapada)"}
+_IMAGEM_CSV = {
+    "ok": "ok",
+    "indisponivel": "foto indisponível (gravando normalmente)",
+    "sem_resposta": "sem imagem (não responde)",
+    "chapada": "sem imagem (tela chapada)",
+}
 _GRAVACAO_CSV = {"ok": "gravando", "parada": "sem gravar", "desligada": "gravação desligada"}
 _STATUS_CAMERA = {"up": "online", "down": "offline", "nodata": "sem dados", "maint": "manutenção"}
 

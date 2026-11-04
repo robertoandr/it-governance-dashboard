@@ -234,6 +234,7 @@ class VerificacaoCanal(db.Model):
     ultima_gravacao: datetime | None = db.Column(db.DateTime, nullable=True)
     gravacao_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
     # "ok", "sem_resposta" (câmera não entrega foto), "chapada" (tela sem cena) ou ""
+    # (na leitura, sem_resposta de canal gravando vira "indisponivel": cftv_verificacao.imagem_efetiva)
     imagem: str = db.Column(db.String(12), nullable=False, default="", server_default="")
     imagem_em: datetime | None = db.Column(db.DateTime(timezone=True), nullable=True)
     # Foto reduzida, só enquanto a imagem está com problema

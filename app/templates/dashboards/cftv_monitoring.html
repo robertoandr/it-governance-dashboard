@@ -432,7 +432,7 @@
       </div>
 
       {% set k = c.canais %}
-      {% set sem_imagem = c.inventario | selectattr('sem_imagem') | rejectattr('imagem', 'in', ['ok', 'sem_resposta', 'chapada']) | list %}
+      {% set sem_imagem = c.inventario | selectattr('sem_imagem') | rejectattr('imagem', 'in', ['ok', 'indisponivel', 'sem_resposta', 'chapada']) | list %}
       {% set sem_imagem_auto = c.inventario | selectattr('imagem', 'in', ['sem_resposta', 'chapada']) | list %}
       {% set sem_gravar = c.inventario | selectattr('gravacao', 'in', ['parada', 'desligada']) | list %}
       {% if k or sem_imagem or sem_imagem_auto or sem_gravar %}
@@ -566,7 +566,8 @@
                 <td class="py-1 pr-2 text-slate-500 font-mono">{{ x.mac or '—' }}</td>
                 <td class="py-1 pr-2">{% if x.video == 'sem' %}<span class="text-red-600 font-semibold">sem vídeo</span>{% elif x.video == 'ok' %}<span class="text-green-600">ok</span>{% else %}<span class="text-slate-400" title="O gravador não informa com certeza">?</span>{% endif %}</td>
                 <td class="py-1 pr-2">
-                  {% if x.imagem == 'sem_resposta' %}<span class="text-red-600 font-semibold" title="A câmera não entregou foto (duas tentativas)">sem imagem</span>
+                  {% if x.imagem == 'indisponivel' %}<span class="text-slate-500" title="O gravador não entregou a foto, mas o canal está gravando normalmente (o vídeo chega)">foto indisponível</span>
+                  {% elif x.imagem == 'sem_resposta' %}<span class="text-red-600 font-semibold" title="A câmera não entregou foto (duas tentativas)">sem imagem</span>
                   {% elif x.imagem == 'chapada' %}<span class="text-red-600 font-semibold" title="A foto é uma tela chapada, sem cena">sem imagem</span>{% if x.miniatura %} <a href="{{ url_for('dashboards.cftv_miniatura', ip=c.gravador_host.ip, canal=x.canal) }}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">foto</a>{% endif %}
                   {% elif x.imagem == 'ok' %}<span class="text-green-600">ok</span>
                   {% elif x.sem_imagem %}<span class="text-amber-600 font-semibold" title="Na conferência no local">sem imagem</span>
