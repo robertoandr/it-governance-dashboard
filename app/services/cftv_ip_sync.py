@@ -13,7 +13,18 @@ A cada ``INTERVALO`` o agente:
 3. se o IP for outro, válido, da rede interna e de nenhum outro host CFTV,
    troca no Zabbix as interfaces do host que estavam no IP antigo.
 
-Cada troca (ou recusa) fica em ``CftvIpCorrecao`` e aparece no /gov/cftv.
+Na mesma rodada, para ter um host só por câmera e nenhuma câmera sem host:
+
+4. câmera fora cujo IP novo já é de outro host CFTV **online** é cópia (a mesma
+   câmera gravada por dois gravadores): o host da cópia é desativado;
+5. vários hosts de câmera ativos com o mesmo IP: fica um (o que a leitura do
+   gravador confirma no canal, depois o online, depois o mais antigo) e os
+   outros são desativados — senão a câmera que cai avisa duas, três vezes;
+6. câmera IP com vídeo num gravador e sem host nenhum no Zabbix (nem
+   desativado) ganha host com ping, como as outras (``origem=dashboard``).
+
+Desativar é reversível (``status=1``). Cada troca, recusa, desativação ou
+criação fica em ``CftvIpCorrecao`` e aparece no /gov/cftv.
 No máximo ``MAX_POR_RODADA`` trocas por rodada: uma leitura com defeito não
 consegue reescrever o cadastro inteiro.
 """
@@ -53,6 +64,13 @@ _TRAVA = os.path.join(tempfile.gettempdir(), "itgov-cftv-ip-sync.lock")
 CORRIGIDO = "corrigido"
 CONFLITO = "conflito"  # o IP novo já é de outro host CFTV no Zabbix
 FALHOU = "falhou"  # o Zabbix recusou ou o host não tinha interface no IP antigo
+DESATIVADO = "desativado"  # cópia de câmera já monitorada em outro host
+CRIADO = "criado"  # câmera com vídeo no gravador e sem host no Zabbix
+
+MAX_CRIAR_POR_RODADA = 20
+GRUPO_CAMERAS = "CFTV/Cameras"
+TEMPLATE_PING = "ICMP Ping"
+_FABRICANTES = {"itb": "Intelbras", "intelbras": "Intelbras"}
 
 
 class Correcao(NamedTuple):
@@ -158,12 +176,16 @@ def _trocar_no_zabbix(c: Correcao) -> int:
     return trocadas
 
 
-def aplicar(correcoes: list[Correcao], ips_cftv: set[str]) -> dict[str, int]:
+def aplicar(
+    correcoes: list[Correcao], ips_cftv: set[str], online_por_ip: dict[str, str] | None = None
+) -> dict[str, int]:
     """Faz as trocas no Zabbix e registra cada uma. Requer app context.
 
     Args:
         correcoes: De ``candidatos``.
         ips_cftv: IPs de todos os hosts CFTV no Zabbix (para não duplicar).
+        online_por_ip: IP → nome do host de câmera online nele. IP novo já
+            monitorado online em outro host = a correção é uma cópia: desativa.
 
     Returns:
         Situação → quantas.
@@ -173,7 +195,10 @@ def aplicar(correcoes: list[Correcao], ips_cftv: set[str]) -> dict[str, int]:
 
     contagem: dict[str, int] = {}
     for c in correcoes[:MAX_POR_RODADA]:
-        if c.ip_novo in ips_cftv:
+        dono = (online_por_ip or {}).get(c.ip_novo)
+        if c.ip_novo in ips_cftv and dono:
+            situacao, detalhe = _desativar(c.hostid, c.host, f"cópia: a câmera já é monitorada em {dono} (online)")
+        elif c.ip_novo in ips_cftv:
             situacao, detalhe = CONFLITO, f"{c.ip_novo} já é de outro host CFTV no Zabbix"
         else:
             try:
@@ -221,6 +246,258 @@ def aplicar(correcoes: list[Correcao], ips_cftv: set[str]) -> dict[str, int]:
     return contagem
 
 
+def _desativar(hostid: str, host: str, motivo: str) -> tuple[str, str]:
+    """Desativa o host no Zabbix (``status=1``, reversível): ``(situação, detalhe)``."""
+    from itgov.api.v1.cftv_monitoring import _zbx
+
+    try:
+        _zbx("host.update", {"hostid": hostid, "status": 1})
+    except (RuntimeError, requests.RequestException) as exc:
+        log.warning("cftv_ip_sync.desativar_falhou", host=host, erro=f"{type(exc).__name__}: {exc}"[:200])
+        return FALHOU, "o Zabbix não aceitou desativar o host (detalhe no log)"
+    return DESATIVADO, f"host desativado — {motivo}"
+
+
+def _registrar(
+    hostid: str,
+    host: str,
+    nome: str,
+    gravador: str,
+    canal: int,
+    ip_antigo: str,
+    ip_novo: str,
+    fonte: str,
+    situacao: str,
+    detalhe: str,
+) -> None:
+    from app.extensions import db
+    from app.models.cftv_ip import CftvIpCorrecao
+
+    db.session.add(
+        CftvIpCorrecao(
+            hostid=hostid,
+            host=host[:128],
+            nome=nome[:200],
+            gravador=gravador[:120],
+            canal=canal,
+            ip_antigo=ip_antigo,
+            ip_novo=ip_novo,
+            fonte=fonte,
+            situacao=situacao,
+            detalhe=detalhe[:255],
+        )
+    )
+    db.session.commit()
+    log.info("cftv_ip_sync.registro", host=host, gravador=gravador, canal=canal, ip=ip_novo, situacao=situacao)
+
+
+def _canal_int(valor: object) -> int:
+    texto = str(valor or "")
+    return int(texto) if texto.isdigit() else 0
+
+
+def _ips_dos_gravadores(
+    cards: list[dict[str, Any]], acessos: dict[str, dict[str, Any]], agora: datetime
+) -> dict[str, dict[int, Any]]:
+    """Gravador (tag ``dvr``) → canal → câmera IP com vídeo, das leituras frescas da API."""
+    resultado: dict[str, dict[int, Any]] = {}
+    for card in cards:
+        ip_gravador = (card.get("gravador_host") or {}).get("ip", "")
+        acesso = acessos.get(ip_gravador) or {}
+        leitura, lido = acesso.get("leitura"), acesso.get("lido_ok_em")
+        if not ip_gravador or leitura is None or lido is None or agora - lido > LEITURA_FRESCA:
+            continue
+        resultado[card.get("gravador", "")] = {
+            cam.canal: cam
+            for cam in leitura.cameras
+            if cam.tipo == "ip" and ip_valido(cam.ip) and cam.ip != ip_gravador and cam.canal not in leitura.sem_video
+        }
+    return resultado
+
+
+def duplicados(
+    devices: list[dict[str, Any]], confirmados: dict[str, dict[int, Any]]
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """Hosts de câmera ativos repetidos no mesmo IP: ``[(host a desativar, host que fica), ...]``.
+
+    Fica o que a leitura do gravador confirma (mesmo IP no canal do host), depois
+    o online, depois o de menor hostid (o mais antigo).
+
+    Args:
+        devices: ``get_cached_cftv_summary()["devices"]`` (só hosts ativos).
+        confirmados: De ``_ips_dos_gravadores``.
+    """
+    por_ip: dict[str, list[dict[str, Any]]] = {}
+    for d in devices:
+        if d.get("subcat") == "camera" and not d.get("is_gravador") and ip_valido(d.get("ip") or ""):
+            por_ip.setdefault(d["ip"], []).append(d)
+    pares = []
+    for ip, hosts in por_ip.items():
+        if len(hosts) < 2:
+            continue
+
+        def ordem(d: dict[str, Any], ip: str = ip) -> tuple[int, int, int]:
+            cam = confirmados.get(d.get("gravador", ""), {}).get(_canal_int(d.get("canal")))
+            return (0 if cam is not None and cam.ip == ip else 1, 0 if d.get("status") == "up" else 1, int(d["hostid"]))
+
+        fica, *sobra = sorted(hosts, key=ordem)
+        pares.extend((d, fica) for d in sobra)
+    return pares
+
+
+def faltantes(
+    cards: list[dict[str, Any]],
+    confirmados: dict[str, dict[int, Any]],
+    ips_zabbix: set[str],
+    outros: set[tuple[str, int]],
+) -> list[tuple[dict[str, Any], Any, list[str]]]:
+    """Câmeras IP com vídeo no gravador e sem host no Zabbix: ``[(card, câmera, outros gravadores), ...]``.
+
+    A mesma câmera em mais de um gravador ganha um host só, no primeiro; os
+    outros ficam anotados.
+
+    Args:
+        cards: Cards de ``montar_visao``.
+        confirmados: De ``_ips_dos_gravadores``.
+        ips_zabbix: IPs de todas as interfaces do Zabbix, hosts desativados inclusive.
+        outros: ``(IP do gravador, canal)`` marcados na conferência como outro equipamento.
+    """
+    achadas: dict[str, tuple[dict[str, Any], Any, list[str]]] = {}
+    for card in cards:
+        ip_gravador = (card.get("gravador_host") or {}).get("ip", "")
+        for canal, cam in sorted(confirmados.get(card.get("gravador", ""), {}).items()):
+            if cam.ip in ips_zabbix or (ip_gravador, canal) in outros:
+                continue
+            if cam.ip in achadas:
+                achadas[cam.ip][2].append(f"{card.get('titulo', '')} ch{canal}")
+            else:
+                achadas[cam.ip] = (card, cam, [])
+    return list(achadas.values())
+
+
+def _criar_host_camera(card: dict[str, Any], cam: Any, hosts_existentes: set[str]) -> str:
+    """Cria o host de ping da câmera, como os outros de ``CFTV/Cameras``. Devolve o hostid.
+
+    Raises:
+        RuntimeError: Grupo/template não existe ou o Zabbix recusou.
+        requests.RequestException: Falha de rede.
+    """
+    from itgov.api.v1.cftv_monitoring import _zbx
+    from itgov.services.cftv_snmp import nome_tecnico
+
+    grupos = _zbx("hostgroup.get", {"output": ["groupid"], "filter": {"name": [GRUPO_CAMERAS]}})
+    templates = _zbx("template.get", {"output": ["templateid"], "filter": {"host": [TEMPLATE_PING]}})
+    if not grupos or not templates:
+        raise RuntimeError(f"grupo {GRUPO_CAMERAS} ou template {TEMPLATE_PING} não existe no Zabbix")
+    gravador = card.get("gravador", "")
+    base = "cam-" + nome_tecnico(gravador).lower().replace(" ", "-").replace("_", "-") + f"-ch{cam.canal:02d}"
+    tecnico = base if base not in hosts_existentes else f"{base}-{cam.ip.replace('.', '-')}"
+    tags = [
+        {"tag": "category", "value": "cftv"},
+        {"tag": "subcategory", "value": "camera"},
+        {"tag": "dvr", "value": gravador},
+        {"tag": "canal", "value": str(cam.canal)},
+        {"tag": "andar", "value": gravador},
+        {"tag": "origem", "value": "dashboard"},
+    ]
+    fabricante = _FABRICANTES.get((cam.fabricante or "").lower())
+    if fabricante:
+        tags.append({"tag": "vendor", "value": fabricante})
+    if cam.modelo:
+        tags += [{"tag": "model", "value": cam.modelo}, {"tag": "model_source", "value": "gravador"}]
+    criado = _zbx(
+        "host.create",
+        {
+            "host": tecnico,
+            "name": f"Câmera {gravador} - canal {cam.canal}",
+            "groups": [{"groupid": grupos[0]["groupid"]}],
+            "templates": [{"templateid": templates[0]["templateid"]}],
+            "tags": tags,
+            "interfaces": [{"type": 1, "main": 1, "useip": 1, "ip": cam.ip, "dns": "", "port": "10050"}],
+        },
+    )
+    hosts_existentes.add(tecnico)
+    return str(criado["hostids"][0])
+
+
+def arrumar_hosts(
+    cards: list[dict[str, Any]],
+    devices: list[dict[str, Any]],
+    acessos: dict[str, dict[str, Any]],
+    agora: datetime,
+    ignorar: set[str] | None = None,
+) -> dict[str, int]:
+    """Passos 5 e 6: desativa hosts repetidos no mesmo IP e cria os que faltam. Requer app context.
+
+    Args:
+        cards: Cards de ``montar_visao``.
+        devices: ``get_cached_cftv_summary()["devices"]``.
+        acessos: ``cftv_gravadores.leituras()``.
+        agora: Horário da rodada (UTC).
+        ignorar: IPs novos das correções desta rodada (o host existe, só está no IP antigo).
+
+    Returns:
+        Situação → quantos.
+    """
+    from app.models.unidade import CanalCftv
+    from itgov.api.v1.cftv_monitoring import _zbx
+
+    contagem: dict[str, int] = {}
+    confirmados = _ips_dos_gravadores(cards, acessos, agora)
+    for d, fica in duplicados(devices, confirmados):
+        situacao, detalhe = _desativar(
+            d["hostid"], d.get("host", ""), f"IP repetido: a câmera fica em {fica.get('name', '')}"
+        )
+        _registrar(
+            d["hostid"],
+            d.get("host", ""),
+            d.get("name", ""),
+            d.get("gravador", ""),
+            _canal_int(d.get("canal")),
+            d["ip"],
+            d["ip"],
+            "dup",
+            situacao,
+            detalhe,
+        )
+        contagem[situacao] = contagem.get(situacao, 0) + 1
+    try:
+        interfaces = _zbx("hostinterface.get", {"output": ["ip"]})
+        hosts_existentes = {h["host"] for h in _zbx("host.get", {"output": ["host"]})}
+    except (RuntimeError, requests.RequestException) as exc:
+        log.warning("cftv_ip_sync.inventario_falhou", erro=f"{type(exc).__name__}: {exc}"[:200])
+        return contagem
+    ips_zabbix = {i.get("ip", "") for i in interfaces} | (ignorar or set())
+    outros = {(c.ip_gravador, c.canal) for c in CanalCftv.query.filter_by(situacao="outro")}
+    novos = faltantes(cards, confirmados, ips_zabbix, outros)
+    for card, cam, tambem in novos[:MAX_CRIAR_POR_RODADA]:
+        gravador = card.get("gravador", "")
+        try:
+            hostid = _criar_host_camera(card, cam, hosts_existentes)
+        except (RuntimeError, requests.RequestException) as exc:
+            log.warning("cftv_ip_sync.criar_falhou", ip=cam.ip, erro=f"{type(exc).__name__}: {exc}"[:200])
+            hostid, situacao, detalhe = "", FALHOU, "o Zabbix não aceitou criar o host (detalhe no log)"
+        else:
+            situacao = CRIADO
+            detalhe = "host de ping criado" + (f"; também gravada em {', '.join(tambem)}" if tambem else "")
+        _registrar(
+            hostid,
+            "",
+            f"Câmera {gravador} - canal {cam.canal}",
+            card.get("titulo", ""),
+            cam.canal,
+            "",
+            cam.ip,
+            "api",
+            situacao,
+            detalhe,
+        )
+        contagem[situacao] = contagem.get(situacao, 0) + 1
+    if len(novos) > MAX_CRIAR_POR_RODADA:
+        log.warning("cftv_ip_sync.limite_criar", pendentes=len(novos) - MAX_CRIAR_POR_RODADA)
+    return contagem
+
+
 def _conflito_ja_registrado(c: Correcao) -> bool:
     from app.models.cftv_ip import CftvIpCorrecao
 
@@ -236,7 +513,7 @@ def rodada(agora: datetime | None = None) -> dict[str, Any]:
     """
     from app.services import cftv_gravadores
     from app.views.dashboards import _visao_cftv
-    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
+    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary, invalidar_cache_cftv
 
     agora = agora or _agora()
     visao = _visao_cftv("", disparar_leitura=False).visao
@@ -246,8 +523,19 @@ def rodada(agora: datetime | None = None) -> dict[str, Any]:
         ips_gravadores = {ip for c in visao["cards"] if (ip := (c.get("gravador_host") or {}).get("ip"))}
         cftv_gravadores.limpar_abandonados(ips_gravadores, agora)
     correcoes = candidatos(visao["cards"], cftv_gravadores.leituras(), agora)
-    ips_cftv = {d.get("ip", "") for d in (get_cached_cftv_summary() or {}).get("devices", []) if d.get("ip")}
-    contagem = aplicar(correcoes, ips_cftv) if correcoes else {}
+    devices = (get_cached_cftv_summary() or {}).get("devices", [])
+    ips_cftv = {d.get("ip", "") for d in devices if d.get("ip")}
+    online = {
+        d["ip"]: d.get("name", "")
+        for d in devices
+        if d.get("ip") and not d.get("is_gravador") and d.get("status") == "up"
+    }
+    contagem = aplicar(correcoes, ips_cftv, online) if correcoes else {}
+    acessos = cftv_gravadores.leituras()
+    for situacao, n in arrumar_hosts(visao["cards"], devices, acessos, agora, {c.ip_novo for c in correcoes}).items():
+        contagem[situacao] = contagem.get(situacao, 0) + n
+    if contagem.get(DESATIVADO) or contagem.get(CRIADO):
+        invalidar_cache_cftv()
     resultado = {"lidos": lidos, "candidatos": len(correcoes), **contagem}
     log.info("cftv_ip_sync.rodada", **resultado)
     return resultado

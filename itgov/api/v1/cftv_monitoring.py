@@ -150,6 +150,8 @@ def _buscar_cftv() -> dict:
         {
             "output": ["hostid", "host", "name", "maintenance_status"],
             "groupids": gids,
+            # Host desativado (ex.: cópia de câmera desativada pelo cftv_ip_sync) não entra
+            "monitored_hosts": True,
             "selectInterfaces": ["type", "main", "ip", "port", "available", "error", "details"],
             "selectTags": ["tag", "value"],
             # Só para o SNMP dos gravadores (cf7); o Zabbix não devolve valor de macro secreta
