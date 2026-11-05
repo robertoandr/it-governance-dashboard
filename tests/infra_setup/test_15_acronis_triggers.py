@@ -90,3 +90,17 @@ def test_ja_existe_nao_recria() -> None:
     s15.garantir_categoria(api, "999", "cota", "Sem licença (cota)", 3, dry=False)
     api.item.create.assert_not_called()
     api.trigger.create.assert_not_called()
+
+
+def test_remove_categoria_backup() -> None:
+    assert "backup" in s15.REMOVIDAS
+    assert all(chave != "backup" for chave, _, _ in s15.CATEGORIAS)
+    api = MagicMock()
+    api.item.get.return_value = [{"itemid": "77"}]
+    s15.remover_categoria(api, "11225", "backup", dry=True)
+    api.item.delete.assert_not_called()
+    s15.remover_categoria(api, "11225", "backup", dry=False)
+    api.item.delete.assert_called_once_with("77")
+    api.item.get.return_value = []
+    s15.remover_categoria(api, "11225", "backup", dry=False)
+    assert api.item.delete.call_count == 1

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Cyber — Triggers do Acronis sem backup:** backup de máquina não é contratado no plano da Gadens, então a categoria "Falha de backup" saiu do agente `acronis_triggers` e o `infra-setup/15_acronis_triggers.py` apaga o item `acronis.alerta[backup]` (e o trigger dele) no Zabbix. Ficam 5 categorias.
+
 ### Added
 - **Cyber — Triggers do Acronis no lugar do e-mail:** novo agente (`acronis_triggers`, um worker só) lê os alertas ativos do Acronis a cada 10 min e separa em 6 categorias: EDR crítico não mitigado, malware ou ameaça, falha de backup, proteção com falha (serviço parado, conflito de antimalware, isolamento que falhou…), sem licença (cota) e agente offline. Cada categoria manda "N máquinas: A, B, C" ao item trapper `acronis.alerta[<categoria>]` do host `acronis-alertas-dashboard`, cujo trigger fica em problema enquanto houver máquina. Os triggers levam a tag `alerta=so-dashboard`: ficam no Zabbix e no novo bloco **Triggers do Acronis** de `/gov/cyber/noc`, sem chamado e sem WhatsApp. Falha ao ler o Acronis não zera os triggers. Zabbix: `infra-setup/15_acronis_triggers.py` (cria host, itens e triggers e tira `alerta=so-dashboard` da ação de chamado). Item 0.1 do plano de implantação do Acronis (decisão de 05/11: sem e-mail).
 - **Rede — Tipo novo direto no cadastro do ativo descoberto:** o campo Tipo de `/gov/rede/cadastrar` ganhou a opção **+ Novo tipo…**, que abre ali mesmo nome, sigla e palavras-chave. Ao criar, volta ao cadastro com o tipo novo já escolhido e mantém o que já tinha sido digitado (nome, unidade, criticidade, ambiente, descrição). Usa a mesma classificação de `Rede → Classificações de dispositivo` (e a mesma fila de aprovação); a volta só aceita IP válido.
