@@ -137,6 +137,13 @@ def test_protocolo_por_fabricante(vendor: str, fonte: str) -> None:
     assert protocolo_para(vendor)[0] == fonte
 
 
+def test_gravador_sem_fabricante_usa_api_intelbras() -> None:
+    assert protocolo_para("", "dvr-triunfo_2_folha2")[0] == "intelbras_cgi"
+    assert protocolo_para("", "DVR-Shopping")[0] == "intelbras_cgi"
+    assert protocolo_para("", "cam-sem-vendor")[0] == "onvif"
+    assert protocolo_para("Hikvision", "dvr-hik")[0] == "hikvision_isapi"
+
+
 # ── consultar / coletar ───────────────────────────────────────────────────────
 
 

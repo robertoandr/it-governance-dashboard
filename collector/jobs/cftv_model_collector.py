@@ -299,10 +299,15 @@ def modelo_onvif(ip: str, usuario: str, senha: str) -> str:
     return campos.get("Model", "")
 
 
-def protocolo_para(vendor: str) -> tuple[str, Any]:
-    """Escolhe um único protocolo pelo fabricante (evita logins repetidos)."""
+def protocolo_para(vendor: str, host: str = "") -> tuple[str, Any]:
+    """Escolhe um único protocolo pelo fabricante (evita logins repetidos).
+
+    Gravador sem a tag ``vendor`` (host ``dvr-*``) é Intelbras: os gravadores
+    foram cadastrados sem fabricante, e pelo ONVIF eles recusam a mesma senha
+    que a API Intelbras aceita.
+    """
     v = vendor.strip().lower()
-    if v in {"intelbras", "dahua"}:
+    if v in {"intelbras", "dahua"} or (not v and host.lower().startswith("dvr-")):
         return "intelbras_cgi", modelo_intelbras
     if v == "hikvision":
         return "hikvision_isapi", modelo_hikvision
@@ -311,7 +316,7 @@ def protocolo_para(vendor: str) -> tuple[str, Any]:
 
 def consultar(eq: Equipamento, usuario: str, senha: str) -> Resultado:
     """Consulta o modelo de um equipamento com o protocolo do seu fabricante."""
-    fonte, funcao = protocolo_para(eq.vendor)
+    fonte, funcao = protocolo_para(eq.vendor, eq.host)
     try:
         model = funcao(eq.ip, usuario, senha)
     except CredencialRecusadaError:
