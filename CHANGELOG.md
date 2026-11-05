@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **CFTV — Coletor de modelos e gravador sem fabricante:** gravador `dvr-*` cadastrado sem a tag `vendor` passa a ser consultado pela API Intelbras, e não pelo ONVIF. Pelo ONVIF ele recusava a mesma senha que a leitura dos gravadores do dashboard usa (falso "senha recusada" em Corredor Técnico, Triunfo_2_Folha2 e Triunfo_4_Extrato). A versão fica em 2.12.1, porque o merge do #377 tinha deixado a 2.12.0.
+
+### Fixed
 - **CFTV — Segunda senha da Loja Centro e faciais:** nova chave `loja2` na tag `cftv_cred` (`CFTV_CAM_LOJA_USER` + `CFTV_CAM_LOJA_PASS2`) para as câmeras Hikvision da Loja que recusam a primeira senha (D2–D13, D18), no coletor de modelos e na padronização de senha. A chave `facial` passa a ler `FACIAL_USER`/`FACIAL_PASS`, as variáveis que existem no `.env` (as `FACIAL_CENTRO_*` nunca foram criadas, então os faciais nunca eram consultados).
 
 ### Added
