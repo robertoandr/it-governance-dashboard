@@ -237,3 +237,18 @@ def test_invalidacao_vale_para_outros_workers(monkeypatch: pytest.MonkeyPatch, t
     assert cftv_monitoring._cache_data is not None
     cftv_monitoring.get_cached_cftv_summary()
     assert len(buscas) == 2
+
+
+def test_cred_loja2_e_facial_leem_as_variaveis_do_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import cftv_credencial as cc
+
+    monkeypatch.setenv("CFTV_CAM_LOJA_USER", "admin")
+    monkeypatch.setenv("CFTV_CAM_LOJA_PASS", "l1")
+    monkeypatch.setenv("CFTV_CAM_LOJA_PASS2", "l2")
+    monkeypatch.setenv("FACIAL_USER", "admin")
+    monkeypatch.setenv("FACIAL_PASS", "f1")
+    assert cc._cred("loja") == ("admin", "l1")
+    assert cc._cred("loja2") == ("admin", "l2")
+    assert cc._cred("facial") == ("admin", "f1")
+    monkeypatch.delenv("CFTV_CAM_LOJA_PASS2")
+    assert cc._cred("loja2") is None
