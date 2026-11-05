@@ -287,6 +287,7 @@ def test_cyber_raiz_redireciona_para_incidentes(authed_client, com_acronis: None
         ("/gov/cyber/agentes", "agente"),
         ("/gov/cyber/vulnerabilidades", "vulnerabilidades"),
         ("/gov/cyber/permissoes", "permissoes"),
+        ("/gov/cyber/programas", "programas"),
         ("/gov/cyber/phishing", "phishing"),
         ("/gov/cyber/pentest", "pentest"),
     ],
@@ -299,7 +300,7 @@ def test_cada_pagina_renderiza_e_abre_na_propria_aba(
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert f"aba: '{pagina}'" in html
-    # A navegação entre páginas é por link, com todas as 9 páginas.
+    # A navegação entre páginas é por link, com todas as 10 páginas.
     for destino in (
         "incidentes",
         "noc",
@@ -308,6 +309,7 @@ def test_cada_pagina_renderiza_e_abre_na_propria_aba(
         "agentes",
         "vulnerabilidades",
         "permissoes",
+        "programas",
         "phishing",
         "pentest",
     ):
