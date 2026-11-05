@@ -24,6 +24,14 @@ from itgov.services import zabbix_templates as zt
         ({"tipo_sugerido": "switch", "snmp_descr": "RouterOS RB4011"}, "Mikrotik by SNMP", "alta"),
         ({"tipo_sugerido": "switch", "has_snmp": True}, "Network Generic Device by SNMP", "baixa"),
         ({"tipo_sugerido": "ap", "vendor": "Ubiquiti", "has_snmp": True}, "Ubiquiti AirOS by SNMP", "alta"),
+        # só o DHCP diz que é Ubiquiti (vendor class "ubnt"), como os APs e antenas da Rede em 05/11
+        ({"tipo_sugerido": "ap", "vci": "ubnt", "has_snmp": True}, "Ubiquiti AirOS by SNMP", "alta"),
+        ({"tipo_sugerido": "ap", "vci": "ubnt", "hostname": "ESTUDIO"}, "Ubiquiti AirOS by SNMP", "baixa"),
+        (
+            {"tipo_sugerido": "firewall", "vendor": "Ubiquiti UniFi Dream Machine Pro Max", "has_snmp": True},
+            "Linux by SNMP",
+            "alta",
+        ),
         ({"tipo_sugerido": "outro", "snmp_descr": "APC Web/SNMP Smart-UPS 1500"}, "APC UPS by SNMP", "alta"),
         ({"tipo_sugerido": "servidor", "portas": "3389"}, "Windows by Zabbix agent active", "baixa"),
         ({"tipo_sugerido": "servidor", "portas": "22"}, "Linux by Zabbix agent active", "baixa"),
