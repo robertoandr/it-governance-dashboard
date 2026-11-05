@@ -294,6 +294,7 @@
     ('live', 'dashboards.cyber_live', 'Investigação ao vivo'),
     ('siem', 'dashboards.cyber_siem', 'Agente SIEM'),
     ('agente', 'dashboards.cyber_agentes', 'Agente de incidentes'),
+    ('vulnerabilidades', 'dashboards.cyber_vulnerabilidades', 'Vulnerabilidades'),
     ('phishing', 'dashboards.cyber_phishing', 'Phishing'),
     ('pentest', 'dashboards.cyber_pentest', 'Pentest'),
   ] %}
@@ -794,6 +795,101 @@
       </div>
     </template>
   </div>
+
+  {# ========================== ABA VULNERABILIDADES ========================= #}
+  {% if pagina == 'vulnerabilidades' %}
+  <div>
+    <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
+      Resultado da última varredura do Acronis em cada máquina: programas com vulnerabilidade (quantas cada um tem)
+      e patches pendentes. Só leitura: aprovar e instalar patch continua no console do Acronis. A API pública não
+      informa o número de cada CVE, só a contagem por programa.
+    </p>
+    {% if vuln_carregando %}
+      <p class="text-sm text-gray-400">Lendo as varreduras do Acronis… atualize a página em alguns segundos.</p>
+    {% elif not vuln %}
+      <p class="text-sm text-gray-400">Sem dados de varredura (Acronis não configurado ou falha na leitura).</p>
+    {% else %}
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {{ stat_card('Máquinas com varredura', vuln.maquinas | length, 'text-gray-800 dark:text-slate-100', 'de ' ~ vuln.agentes ~ ' agentes') }}
+        {{ stat_card('Vulnerabilidades', vuln.total_vulnerabilidades, 'text-red-600' if vuln.total_vulnerabilidades else 'text-green-600', none) }}
+        {{ stat_card('Patches pendentes', vuln.total_patches, 'text-orange-600' if vuln.total_patches else 'text-green-600', 'somados por máquina') }}
+        {{ stat_card('Varredura mais antiga', hora_local(vuln.mais_antiga), 'text-gray-800 dark:text-slate-100', 'lido ' ~ hora_local(vuln.atualizado_em)) }}
+      </div>
+      {% if vuln.agentes and (vuln.maquinas | length) < vuln.agentes %}
+      <p class="text-xs text-amber-700 dark:text-amber-400 mb-4">
+        {{ vuln.agentes - (vuln.maquinas | length) }} máquinas ainda sem varredura: a avaliação de vulnerabilidade
+        e a gestão de patch entram no plano de proteção no piloto (item 1.1 do plano de implantação).
+      </p>
+      {% endif %}
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+          <h3 class="font-semibold text-gray-800 mb-3 dark:text-slate-100">Programas com mais vulnerabilidades</h3>
+          <ul class="text-sm divide-y divide-gray-100 dark:divide-slate-800">
+            {% for prog, qtd, n in vuln.top_programas() %}
+            <li class="py-1.5 flex justify-between gap-3"><span class="text-gray-700 dark:text-slate-200 break-words">{{ prog }}</span><span class="shrink-0 text-gray-500 dark:text-slate-400"><span class="font-semibold text-red-600">{{ qtd }}</span> em {{ n }} máq.</span></li>
+            {% else %}
+            <li class="py-1.5 text-gray-400">Nenhuma vulnerabilidade.</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+          <h3 class="font-semibold text-gray-800 mb-3 dark:text-slate-100">Patches pendentes em mais máquinas</h3>
+          <ul class="text-sm divide-y divide-gray-100 dark:divide-slate-800">
+            {% for patch, n in vuln.top_patches() %}
+            <li class="py-1.5 flex justify-between gap-3"><span class="text-gray-700 dark:text-slate-200 break-words">{{ patch }}</span><span class="shrink-0 font-semibold text-orange-600">{{ n }} máq.</span></li>
+            {% else %}
+            <li class="py-1.5 text-gray-400">Nenhum patch pendente.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <form method="get" class="flex flex-wrap items-end gap-3 mb-3">
+        <div>
+          <label for="vuln-q" class="block text-xs text-gray-500 mb-1 dark:text-slate-400">Buscar máquina, programa ou patch</label>
+          <input id="vuln-q" name="q" value="{{ vuln_busca }}" class="rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1 text-sm w-64 max-w-full">
+        </div>
+        <button type="submit" class="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700">Buscar</button>
+        {% if vuln_busca %}<a href="{{ url_for('dashboards.cyber_vulnerabilidades') }}" class="text-sm text-gray-500 hover:underline">limpar</a>{% endif %}
+      </form>
+      <div class="overflow-x-auto bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-slate-800">
+              <th class="p-2 font-medium">Máquina</th>
+              <th class="p-2 font-medium">Varredura</th>
+              <th class="p-2 font-medium">Vulnerabilidades</th>
+              <th class="p-2 font-medium">Patches pendentes</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50 dark:divide-slate-800">
+            {% for m in vuln_maquinas %}
+            <tr class="align-top">
+              <td class="p-2 font-medium text-gray-800 dark:text-slate-100 whitespace-nowrap">{{ m.nome }}</td>
+              <td class="p-2 text-gray-500 dark:text-slate-400 whitespace-nowrap">{{ hora_local(m.varredura_em) }}<span class="block text-[10px]">{{ m.tipos | join(' + ') }}</span></td>
+              <td class="p-2 text-gray-600 dark:text-slate-300 min-w-[180px]">
+                {% if m.total_vulnerabilidades %}<span class="font-semibold text-red-600">{{ m.total_vulnerabilidades }}</span>
+                  <span class="block text-xs">{% for prog, qtd in m.programas | dictsort(by='value', reverse=true) %}{{ prog }} ({{ qtd }}){% if not loop.last %}, {% endif %}{% endfor %}</span>
+                {% else %}<span class="text-green-600">nenhuma</span>{% endif %}
+              </td>
+              <td class="p-2 text-gray-600 dark:text-slate-300 min-w-[220px]">
+                {% if m.patches %}
+                <details><summary class="cursor-pointer"><span class="font-semibold text-orange-600">{{ m.patches | length }}</span> patch{{ 'es' if m.patches | length > 1 }}</summary>
+                  <ul class="list-disc ml-5 mt-1 text-xs">{% for p in m.patches %}<li>{{ p }}</li>{% endfor %}</ul>
+                </details>
+                {% else %}<span class="text-green-600">nenhum</span>{% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="p-3 text-gray-400">Nenhuma máquina{{ ' para essa busca' if vuln_busca }}.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {# ============================= ABA PHISHING ============================== #}
   <div x-show="ehAba('phishing')" x-cloak>

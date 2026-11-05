@@ -454,6 +454,41 @@ def cyber_agentes() -> str:
     return render_template("dashboards/cyber.html", pagina="agente", **_contexto_cyber())
 
 
+@bp.route("/cyber/vulnerabilidades")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_vulnerabilidades() -> str:
+    """Página Vulnerabilidades: programas vulneráveis e patches pendentes por máquina (varreduras do Acronis)."""
+    from itgov.services import acronis_vulnerabilidades
+
+    painel = acronis_vulnerabilidades.obter_painel()
+    busca = (request.args.get("q") or "").strip()[:60]
+    maquinas = painel.maquinas if painel else []
+    if busca:
+        termo = busca.lower()
+        maquinas = [
+            m
+            for m in maquinas
+            if termo in m.nome.lower()
+            or any(termo in p.lower() for p in m.programas)
+            or any(termo in p.lower() for p in m.patches)
+        ]
+
+    def hora_local(valor: datetime | None) -> str:
+        return valor.astimezone(_TZ_LOCAL).strftime("%d/%m %H:%M") if valor else "—"
+
+    return render_template(
+        "dashboards/cyber.html",
+        pagina="vulnerabilidades",
+        vuln=painel,
+        vuln_maquinas=maquinas,
+        vuln_busca=busca,
+        vuln_carregando=acronis_vulnerabilidades.carregando(),
+        hora_local=hora_local,
+        **_contexto_cyber(),
+    )
+
+
 @bp.route("/cyber/phishing")
 @login_required
 @require_role("admin", "gestor", pagina="cyber")
