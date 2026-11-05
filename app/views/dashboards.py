@@ -423,7 +423,11 @@ def cyber_incidentes() -> str:
 @require_role("admin", "gestor", pagina="cyber")
 def cyber_noc() -> str:
     """Página NOC de Segurança: visão correlacionada Acronis + Zabbix + FortiGate."""
-    return render_template("dashboards/cyber.html", pagina="noc", **_contexto_cyber())
+    from app.services import acronis_triggers
+
+    return render_template(
+        "dashboards/cyber.html", pagina="noc", acronis_triggers=acronis_triggers.painel(), **_contexto_cyber()
+    )
 
 
 @bp.route("/cyber/live")

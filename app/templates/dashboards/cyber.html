@@ -443,6 +443,35 @@
       </div>
 
     </div>
+
+    {# Triggers do Acronis (no lugar dos avisos por e-mail do console) #}
+    {% set at = acronis_triggers | default({}) %}
+    <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4 mt-4">
+      <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <h3 class="font-semibold text-gray-800 dark:text-slate-100">Triggers do Acronis</h3>
+        {% if at.em %}<span class="text-xs text-gray-400" data-iso="{{ at.em }}">Lido {{ at.em[:16] | replace('T', ' ') }} UTC · {{ at.alertas_lidos }} alertas · atualiza a cada 10 min</span>{% endif %}
+      </div>
+      {% if at.erro %}<p class="text-xs text-orange-600 mb-2">Última leitura falhou: {{ at.erro }}. Mostrando a anterior.</p>{% endif %}
+      {% if at.categorias %}
+        <ul class="divide-y divide-gray-100 dark:divide-slate-800 text-sm">
+          {% for c in at.categorias %}
+          <li class="py-2 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+            <span class="sm:w-56 shrink-0 font-medium text-gray-700 dark:text-slate-200">
+              <span class="inline-block w-2 h-2 rounded-full mr-1 {{ ('bg-red-500' if c.severidade >= 4 else 'bg-orange-400' if c.severidade == 3 else 'bg-yellow-400') if c.total else 'bg-green-500' }}"></span>{{ c.nome }}
+            </span>
+            {% if c.total %}
+              <span class="text-gray-600 dark:text-slate-300 break-words"><span class="font-semibold">{{ c.total }}</span> — {{ c.maquinas[:20] | join(', ') }}{% if c.total > 20 %} e mais {{ c.total - 20 }}{% endif %}</span>
+            {% else %}
+              <span class="text-green-600">ok</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="text-xs text-gray-400 mt-3">Cada linha é um trigger no Zabbix (host "Acronis — alertas (dashboard)", tag alerta=so-dashboard): fica em problema enquanto houver máquina, sem chamado e sem WhatsApp.</p>
+      {% else %}
+        <p class="text-sm text-gray-400">Ainda sem leitura (a primeira roda ~2 min depois da subida do app).</p>
+      {% endif %}
+    </div>
   </div>
 
   {# ============================== ABA AO VIVO ============================= #}
