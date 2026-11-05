@@ -143,7 +143,7 @@ def grupo(host: dict[str, Any], info: InfoEquipamento | None, gravadores: set[st
     if ip in cameras:
         return "cameras"
     if host.get("tipo_sugerido") == "camera":
-        sinais = " ".join(str(host.get(c) or "") for c in ("zabbix_host", "ia_nome", "hostname"))
+        sinais = " ".join(str(host.get(c) or "") for c in ("zabbix_host", "ia_nome", "hostname", "motivo"))
         if _GRAVADOR.search(sinais) or (info is not None and _GRAVADOR.search(info.modelo)):
             return "gravadores"
         return "cameras"

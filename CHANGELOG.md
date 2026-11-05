@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Rede — Câmera reconhecida pela resposta do aparelho:** a cada 6 h, os IPs online que a descoberta deixou como "outro" são testados sem senha: `/ISAPI/System/deviceInfo` (Hikvision) e `/cgi-bin/magicBox.cgi` (Intelbras/Dahua) respondem 401 com um `realm` que diz o que o aparelho é (`IP Camera(GR165)`, `DS-7632NXI-K2`, `Login to <série>`). Quem responde passa a **câmera** na página Rede, com a assinatura no motivo; gravador Hikvision vai para a aba Gravadores. Nenhuma senha é enviada, então não conta como tentativa nem bloqueia usuário. Negativo é testado de novo depois de 1 dia, positivo depois de 7. Resultado em `ASSINATURAS_PATH` (padrão `/app/data/assinaturas_rede.json`). Motivo: câmera de outra sub-rede não mostra o MAC e muitas não deixam a RTSP aberta, como a 172.29.11.149, que aparecia como "só responde a ping". Em 05/11, 24 dos 78 IPs "outro" online responderam assim (a maioria leitores faciais já no Zabbix; 7 fora dele).
+
+### Added
 - **Cyber — Aba Programas:** nova página `/gov/cyber/programas` com os programas instalados nas máquinas (máquina, programa, versão, quando), os instalados em mais máquinas e os programas de acesso remoto (TeamViewer, AnyDesk, RustDesk…) em destaque, com busca e filtro "só acesso remoto". Fonte: alertas `MiMonitoringSoftwareInstalled` do monitoramento do Acronis (`/api/alert_manager/v1/alerts`), sem repetir máquina+programa+versão; cache de 1 h. Mostra o que foi **instalado** desde que o aviso está ligado, não o inventário completo: a API pública não traz o inventário de software nem os dispositivos descobertos. Item 3.4 do plano de implantação do Acronis.
 
 ### Added
