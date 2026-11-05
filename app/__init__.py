@@ -130,6 +130,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     incidentes_agente.iniciar_agendador(app)
 
+    # Cyber: alertas do Acronis viram triggers no Zabbix/NOC (no lugar do e-mail do console)
+    from app.services import acronis_triggers
+
+    acronis_triggers.iniciar_agendador(app)
+
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
 
