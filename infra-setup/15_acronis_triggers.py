@@ -53,11 +53,15 @@ TAG_ALERTA = ("alerta", "so-dashboard")
 CATEGORIAS: tuple[tuple[str, str, int], ...] = (
     ("edr_critico", "EDR crítico não mitigado", 4),
     ("malware", "Malware ou ameaça", 4),
-    ("backup", "Falha de backup", 4),
     ("protecao", "Proteção com falha", 3),
     ("cota", "Sem licença (cota)", 3),
     ("offline", "Agente offline", 2),
 )
+
+
+# Categorias que existiram e saíram: o item (e com ele o trigger) é apagado.
+# backup: não contratado no plano da Gadens (05/11/2026).
+REMOVIDAS: tuple[str, ...] = ("backup",)
 
 
 def chave_item(categoria: str) -> str:
@@ -179,6 +183,21 @@ def garantir_categoria(api: ZabbixAPI, hostid: str | None, chave: str, nome: str
     wa.ok(f"trigger '{trigger}' criado")
 
 
+def remover_categoria(api: ZabbixAPI, hostid: str | None, chave: str, dry: bool) -> None:
+    """Apaga o item de uma categoria que saiu (o Zabbix apaga o trigger junto)."""
+    if hostid is None:
+        return
+    itens = api.item.get(hostids=[hostid], filter={"key_": chave_item(chave)}, output=["itemid"])
+    if not itens:
+        wa.ok(f"item {chave_item(chave)} não existe (ok)")
+        return
+    if dry:
+        wa.info(f"apagaria o item {chave_item(chave)} e o trigger dele")
+        return
+    api.item.delete(*[i["itemid"] for i in itens])
+    wa.ok(f"item {chave_item(chave)} e trigger apagados")
+
+
 def ajustar_acao_chamado(api: ZabbixAPI, dry: bool) -> None:
     """A ação de chamado deixa de pegar ``alerta=so-dashboard``."""
     acao = api.action.get(filter={"name": ACAO_CHAMADO}, output=["actionid"], selectFilter="extend")
@@ -209,6 +228,8 @@ def main() -> None:
         hostid = garantir_host(api, garantir_grupo(api, dry), dry)
         for chave, nome, sev in CATEGORIAS:
             garantir_categoria(api, hostid, chave, nome, sev, dry)
+        for chave in REMOVIDAS:
+            remover_categoria(api, hostid, chave, dry)
     except APIRequestError as exc:
         sys.exit(f"  [ERRO] {exc}")
 

@@ -44,9 +44,8 @@ def arquivo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         (_alerta("OfferingItemIsNotSufficient", sev="critical"), "cota"),
         (_alerta("MachineOffline20"), "offline"),
         (_alerta("MachineOffline30", sev="critical"), "offline"),
-        (_alerta("BackupFailed", sev="error"), "backup"),
-        (_alerta("BackupDidNotStart", sev="critical"), "backup"),
-        (_alerta("BackupWarning", sev="warning"), None),
+        (_alerta("BackupFailed", sev="error"), None),  # backup não contratado
+        (_alerta("BackupDidNotStart", sev="critical"), None),
         (_alerta("MiMonitoringSoftwareInstalled"), None),
         (_alerta("MiMonitoringMissingPatches"), None),
         ({"type": None}, None),

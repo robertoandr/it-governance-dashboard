@@ -20,7 +20,9 @@ Categorias (decisão de 05/11/2026, plano de implantação do Acronis, item 0.1)
   antimalware, isolamento que falhou, definições desatualizadas
 - ``cota`` — máquina sem licença suficiente (``OfferingItemIsNotSufficient``)
 - ``offline`` — agente offline há 20/30 dias (``MachineOffline*``)
-- ``backup`` — falha de backup (qualquer tipo com "backup" e severidade de erro)
+
+Backup de máquina não é contratado no plano da Gadens (05/11/2026): alertas de
+backup ficam de fora.
 """
 
 from __future__ import annotations
@@ -76,7 +78,6 @@ class Categoria(BaseModel):
 CATEGORIAS: tuple[Categoria, ...] = (
     Categoria(chave="edr_critico", nome="EDR crítico não mitigado", severidade=4),
     Categoria(chave="malware", nome="Malware ou ameaça", severidade=4),
-    Categoria(chave="backup", nome="Falha de backup", severidade=4),
     Categoria(chave="protecao", nome="Proteção com falha", severidade=3),
     Categoria(chave="cota", nome="Sem licença (cota)", severidade=3),
     Categoria(chave="offline", nome="Agente offline", severidade=2),
@@ -93,7 +94,6 @@ _PROTECAO = frozenset(
 )
 _MALWARE = frozenset({"MaliciousUrlDetected", "QuarantineFailed"})
 _TERMOS_MALWARE = ("ransomware", "malware", "threat", "activeprotection")
-_SEV_ERRO = frozenset({"error", "critical"})
 
 
 def chave_item(categoria: str) -> str:
@@ -133,8 +133,6 @@ def categoria_do_alerta(raw: dict[str, Any]) -> str | None:
         return "cota"
     if tipo.startswith("MachineOffline"):
         return "offline"
-    if "backup" in baixo and (sev in _SEV_ERRO or "fail" in baixo):
-        return "backup"
     return None
 
 
