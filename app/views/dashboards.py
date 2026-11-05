@@ -2623,10 +2623,21 @@ def relatorio(chave: str) -> str | Response:
 @require_role("admin", "gestor", pagina="licencas")
 def m365_licenses() -> str:
     """Render painel de Licenças M365 — uso vs disponível + custos manuais."""
+    from app.services import acronis_triggers
     from itgov.api.v1.m365_licenses import get_licenses_summary
+    from itgov.services import acronis_licencas
 
     data = get_licenses_summary()
-    return render_template("dashboards/m365_licenses.html", data=data)
+    cota = next((c for c in acronis_triggers.painel().get("categorias", []) if c.get("chave") == "cota"), None)
+    acronis = acronis_licencas.obter()
+    return render_template(
+        "dashboards/m365_licenses.html",
+        data=data,
+        acronis=acronis,
+        acronis_lido=acronis.atualizado_em.astimezone(_TZ_LOCAL).strftime("%H:%M") if acronis else "",
+        acronis_carregando=acronis_licencas.carregando(),
+        acronis_sem_licenca=(cota or {}).get("maquinas", []),
+    )
 
 
 @bp.route("/licenses/update", methods=["POST"])

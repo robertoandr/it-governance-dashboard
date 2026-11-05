@@ -69,6 +69,64 @@ document.addEventListener('alpine:init', function () {
 {% block content %}
 <div x-data="licensesPage">
 
+{# --- Acronis Cyber Protect: uso × contratado (item 3.3 do plano do Acronis) --- #}
+{% if acronis or acronis_carregando %}
+<div class="bg-white rounded-xl shadow p-5 mb-6 dark:bg-slate-800">
+  <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+    <h3 class="font-semibold text-gray-800 dark:text-slate-100">Acronis Cyber Protect</h3>
+    {% if acronis %}<span class="text-xs text-gray-400">alerta a partir de 85% · crítico a partir de 95% · lido às {{ acronis_lido }}</span>{% endif %}
+  </div>
+  {% if not acronis %}
+    <p class="text-sm text-gray-400">Lendo as licenças do Acronis… atualize a página em alguns segundos.</p>
+  {% else %}
+    {% if acronis.em_alerta %}
+    <div class="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-3 mb-3 text-sm text-red-700 dark:text-red-300">
+      {% for i in acronis.em_alerta %}
+      <p><strong>{{ i.nome }}</strong>: {{ i.usado }} de {{ i.contratado }} ({{ i.uso_pct }}%){% if i.livres is not none and i.livres <= 0 %} — sem licença sobrando{% else %} — {{ i.livres }} sobrando{% endif %}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if acronis_sem_licenca %}
+    <p class="text-sm text-orange-700 dark:text-orange-300 mb-3">
+      O Acronis avisa {{ acronis_sem_licenca | length }} máquina{{ 's' if acronis_sem_licenca | length > 1 }} sem licença suficiente: {{ acronis_sem_licenca | join(', ') }}.
+    </p>
+    {% endif %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-slate-700">
+            <th class="pb-2 pr-3 font-medium">Item</th>
+            <th class="pb-2 pr-3 font-medium text-right">Em uso</th>
+            <th class="pb-2 pr-3 font-medium text-right">Contratado</th>
+            <th class="pb-2 pr-3 font-medium text-right">Sobrando</th>
+            <th class="pb-2 font-medium w-40">Uso</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50 dark:divide-slate-700/50">
+          {% for i in acronis.itens %}
+          {% set cor = {'critico': 'bg-red-500', 'atencao': 'bg-yellow-500', 'ok': 'bg-green-500'}[i.nivel] %}
+          <tr>
+            <td class="py-2 pr-3 text-gray-700 dark:text-slate-200">{{ i.nome }}</td>
+            <td class="py-2 pr-3 text-right font-semibold">{{ i.usado }}</td>
+            <td class="py-2 pr-3 text-right">{{ i.contratado if i.contratado is not none else 'sem cota' }}</td>
+            <td class="py-2 pr-3 text-right {{ 'text-red-600 font-semibold' if i.livres is not none and i.livres <= 0 }}">{{ i.livres if i.livres is not none else '—' }}</td>
+            <td class="py-2">
+              {% if i.uso_pct is not none %}
+              <div class="flex items-center gap-2">
+                <div class="h-2 flex-1 rounded bg-gray-100 dark:bg-slate-700"><div class="h-2 rounded {{ cor }}" style="width: {{ [i.uso_pct, 100] | min }}%"></div></div>
+                <span class="text-xs w-12 text-right">{{ i.uso_pct }}%</span>
+              </div>
+              {% else %}<span class="text-xs text-gray-400">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if not data.has_data %}
 <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center dark:bg-yellow-900/20 dark:border-yellow-800">
   <p class="text-yellow-700 font-semibold dark:text-yellow-300">Nenhum dado de licença disponível.</p>
