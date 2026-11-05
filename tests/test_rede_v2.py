@@ -705,3 +705,22 @@ def test_dhcp_android_reclassifica_host_que_estava_no_zabbix() -> None:
     clientes = [{"ip": "10.0.0.9", "hostname": "", "mac": "AA", "vci": "android-dhcp-16", "fonte": "dhcp",
                  "fortigate": "fg"}]  # fmt: skip
     assert aplicar_clientes(hosts, clientes)[0]["tipo_sugerido"] == "movel"
+
+
+def test_pagina_rede_marca_computador_com_acronis(authed_client, pagina) -> None:
+    from itgov.services.acronis_inventario import Computador, InventarioComputadores
+
+    inventario = InventarioComputadores(
+        atualizado_em=datetime.now(UTC),
+        computadores=[Computador(nome="PC-RICOH", tipo="desktop", usuario="beto (GRUPOGADENS)", ips=["172.29.1.5"])],
+    )
+    with patch("itgov.services.acronis_inventario.obter_inventario", return_value=inventario):
+        html = authed_client.get("/gov/rede").get_data(as_text=True)
+    assert "PC-RICOH" in html and "beto (GRUPOGADENS)" in html
+    assert "reconhecido pelo MAC ou IP" in html
+
+
+def test_pagina_rede_sem_acronis_nao_quebra(authed_client, pagina) -> None:
+    with patch("itgov.services.acronis_inventario.obter_inventario", return_value=None):
+        html = authed_client.get("/gov/rede").get_data(as_text=True)
+    assert "reconhecido pelo MAC ou IP" not in html

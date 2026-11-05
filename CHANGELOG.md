@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Rede — Computador com Acronis reconhecido na descoberta:** o inventário do Acronis passa a guardar os MACs, os IPs (todos os adaptadores) e a hora do último login de cada máquina. Na página `/gov/rede`, o ativo descoberto com o mesmo MAC (ou, sem MAC conhecido, o mesmo IP) ganha a marca **Acronis** com o nome do computador e o último usuário logado, e modelo e nº de série vêm do Acronis quando a descoberta não tinha. A busca acha pelo nome do computador e pelo usuário. MAC ou IP repetido em mais de um computador (dock, VPN) não marca nada, e câmera lida pelo gravador nunca vira computador. Em 05/11: 241 ativos reconhecidos (223 computadores). Item 3.1 do plano de implantação do Acronis.
+
 ### Changed
 - **Cyber — Triggers do Acronis sem backup:** backup de máquina não é contratado no plano da Gadens, então a categoria "Falha de backup" saiu do agente `acronis_triggers` e o `infra-setup/15_acronis_triggers.py` apaga o item `acronis.alerta[backup]` (e o trigger dele) no Zabbix. Ficam 5 categorias.
 

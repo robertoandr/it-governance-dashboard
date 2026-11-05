@@ -19,6 +19,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from itgov.services.acronis_inventario import indices, normalizar_mac
+
 GRUPOS: dict[str, str] = {"gravadores": "Gravadores (DVR/NVR)", "cameras": "Câmeras", "outros": "Outros"}
 
 # Linhas de gravador por modelo: Intelbras MHDX/HDCVI/XVR e Hikvision DS-xxxxH* = DVR;
@@ -32,7 +34,8 @@ _GRAVADOR = re.compile(r"\b(?:DVR|NVR|I?NVD|MHDX|XVR)", re.I)
 class InfoEquipamento(BaseModel):
     """O que se sabe de um equipamento; campos vazios quando a fonte não informou.
 
-    ``fonte``: ``gravador`` (lido pela API do gravador), ``rede`` (descoberta)
+    ``fonte``: ``gravador`` (lido pela API do gravador), ``acronis`` (computador
+    com agente Acronis, achado pelo MAC ou IP), ``rede`` (descoberta)
     ou ``ia`` (modelo sugerido pela IA). ``equipamento``: ``DVR``, ``NVR`` ou
     ``Gravador`` para gravadores; vazio para o resto.
     """
@@ -45,6 +48,8 @@ class InfoEquipamento(BaseModel):
     equipamento: str = ""
     gravador_ip: str = ""
     canal: int | None = None
+    acronis: str = ""
+    usuario: str = ""
 
 
 def tipo_gravador(modelo: str, analogicas: int = 0) -> str:
@@ -61,12 +66,17 @@ def tipo_gravador(modelo: str, analogicas: int = 0) -> str:
     return "Gravador"
 
 
-def inventario(leituras: dict[str, dict[str, Any]], hosts: list[dict[str, Any]]) -> dict[str, InfoEquipamento]:
-    """IP → o que se sabe do equipamento, juntando gravadores, descoberta e IA.
+def inventario(
+    leituras: dict[str, dict[str, Any]], hosts: list[dict[str, Any]], computadores: list[Any] | None = None
+) -> dict[str, InfoEquipamento]:
+    """IP → o que se sabe do equipamento, juntando gravadores, descoberta, Acronis e IA.
 
     Args:
         leituras: ``cftv_gravadores.leituras()`` (IP do gravador → leitura).
         hosts: Hosts da página Rede (``mac``, ``vendor``, ``ia_modelo``).
+        computadores: Computadores do inventário Acronis (``acronis_inventario``).
+            O host com o mesmo MAC (ou, sem MAC conhecido, o mesmo IP) é marcado
+            como computador com Acronis, com nome e último usuário logado.
 
     Returns:
         Um item por IP com alguma informação.
@@ -95,17 +105,25 @@ def inventario(leituras: dict[str, dict[str, Any]], hosts: list[dict[str, Any]])
                 gravador_ip=ip,
                 canal=cam.canal,
             )
+    por_mac, por_ip = indices(computadores or [])
     for h in hosts:
         ip = h.get("ip")
         if not ip:
             continue
         item = info.get(ip) or InfoEquipamento()
         item.mac = item.mac or str(h.get("mac") or "").lower()
+        mac = normalizar_mac(item.mac)
+        comp = por_mac.get(mac) if mac else por_ip.get(ip)
+        if comp is not None and not item.gravador_ip and item.fonte != "gravador":
+            item.acronis, item.usuario = comp.nome, comp.usuario
+            item.modelo = item.modelo or comp.modelo
+            item.serie = item.serie or comp.serie
+            item.fonte = item.fonte or "acronis"
         item.fabricante = item.fabricante or str(h.get("vendor") or "")
         if not item.modelo and (ia := str(h.get("ia_modelo") or "")):
             item.modelo, item.fonte = ia, item.fonte or "ia"
         item.fonte = item.fonte or "rede"
-        if item.modelo or item.serie or item.mac or item.fabricante:
+        if item.modelo or item.serie or item.mac or item.fabricante or item.acronis:
             info[ip] = item
     return info
 
@@ -141,7 +159,7 @@ def rotulo_equipamento(host: dict[str, Any], info: InfoEquipamento | None) -> st
 
 
 def casa_busca(host: dict[str, Any], info: InfoEquipamento | None, termo: str, rotulo_tipo: str) -> bool:
-    """O host aparece na busca? Procura em IP, tipo, nome, modelo, série e MAC.
+    """O host aparece na busca? Procura em IP, tipo, nome, modelo, série, MAC e computador Acronis.
 
     Args:
         host: Host da página Rede.
@@ -160,5 +178,5 @@ def casa_busca(host: dict[str, Any], info: InfoEquipamento | None, termo: str, r
         host.get("hostname", ""),
     ]
     if info is not None:
-        campos += [info.modelo, info.serie, info.mac, info.equipamento]
+        campos += [info.modelo, info.serie, info.mac, info.equipamento, info.acronis, info.usuario]
     return any(termo in str(c or "").lower() for c in campos)

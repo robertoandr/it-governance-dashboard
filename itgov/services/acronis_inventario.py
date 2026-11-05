@@ -62,6 +62,9 @@ class Computador(BaseModel):
     ip: str = ""
     online: bool = False
     inventario_em: datetime | None = None
+    macs: list[str] = []
+    ips: list[str] = []
+    usuario_em: datetime | None = None
 
     @property
     def disco_uso_pct(self) -> float:
@@ -95,6 +98,29 @@ def _gb(valor: Any) -> float:
         return round(int(str(valor).strip('"')) / 1024**3, 1)
     except (TypeError, ValueError):
         return 0.0
+
+
+_MAC = re.compile(r"^[0-9A-F]{2}(?::[0-9A-F]{2}){5}$")
+_IPV4 = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+
+
+def _lista(valor: Any) -> list[str]:
+    """Lista de textos a partir de lista ou de texto separado por vírgula (a API usa os dois)."""
+    if isinstance(valor, list):
+        itens = valor
+    elif isinstance(valor, str):
+        itens = valor.strip("[]").split(",")
+    else:
+        return []
+    return [str(x).strip().strip("'\"") for x in itens if str(x).strip().strip("'\"")]
+
+
+def normalizar_mac(valor: str) -> str:
+    """MAC em maiúsculas com ``:`` (``ac-82-47-95-99-94`` → ``AC:82:47:95:99:94``); vazio se inválido ou zerado."""
+    mac = str(valor or "").strip().upper().replace("-", ":")
+    if not _MAC.match(mac) or mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"):
+        return ""
+    return mac
 
 
 def tipo_computador(modelo: str, fabricante: str, so: str, produto_so: str, cpu: str, wifi: bool = False) -> str:
@@ -148,7 +174,31 @@ def montar_computador(recurso: dict[str, Any], atributos: list[dict[str, Any]]) 
     ram = _gb(agente.get("memory_size")) or round(
         sum(int(r.get("capacity") or 0) for r in det.get("rams") or []) / 1024**3, 1
     )
-    usuario = str(kv.get("atp", {}).get("last_logged_in_user") or "")
+    atp = kv.get("atp", {})
+    usuario = str(atp.get("last_logged_in_user") or "")
+    login = str(atp.get("last_logged_in_timestamp") or "")
+    adaptadores = det.get("networkAdapters") or []
+    macs = list(
+        dict.fromkeys(
+            m
+            for m in (
+                normalizar_mac(x)
+                for x in [*_lista(agente.get("mac_addresses")), *(str(n.get("macAddress") or "") for n in adaptadores)]
+            )
+            if m
+        )
+    )
+    ips = list(
+        dict.fromkeys(
+            x
+            for x in [
+                *_lista(agente.get("ip_addresses")),
+                *_lista(padrao.get("ip_addresses")),
+                *(ip for n in adaptadores for ip in _lista(n.get("ipAddresses"))),
+            ]
+            if _IPV4.match(x)
+        )
+    )
     scan = hw.get("scan_time")
     nome = str(recurso.get("user_defined_name") or recurso.get("name") or "").split(".")[0]
     return Computador(
@@ -171,6 +221,9 @@ def montar_computador(recurso: dict[str, Any], atributos: list[dict[str, Any]]) 
         ip=str(padrao.get("ip") or "").split(",")[0],
         online=str(agente.get("online", "")).lower() == "true",
         inventario_em=datetime.fromtimestamp(int(scan) / 1e9, UTC) if str(scan or "").isdigit() else None,
+        macs=macs,
+        ips=ips,
+        usuario_em=datetime.fromtimestamp(int(login), UTC) if login.isdigit() else None,
     )  # fmt: skip
 
 
@@ -210,6 +263,32 @@ async def _buscar() -> InventarioComputadores:
     return InventarioComputadores(
         atualizado_em=datetime.now(UTC), computadores=computadores, sem_inventario=len(recursos) - len(computadores)
     )
+
+
+def indices(computadores: list[Computador]) -> tuple[dict[str, Computador], dict[str, Computador]]:
+    """MAC → computador e IP → computador, para cruzar com a descoberta de rede.
+
+    Um MAC ou IP que aparece em mais de um computador (adaptador de dock, VPN,
+    IP reaproveitado) fica de fora: melhor não marcar do que marcar errado.
+
+    Args:
+        computadores: Computadores do inventário.
+
+    Returns:
+        ``(por_mac, por_ip)``.
+    """
+    por_mac: dict[str, Computador] = {}
+    por_ip: dict[str, Computador] = {}
+    repetidos: set[str] = set()
+    for c in computadores:
+        for chave, destino in [*((m, por_mac) for m in c.macs), *((i, por_ip) for i in c.ips)]:
+            if chave in destino and destino[chave] is not c:
+                repetidos.add(chave)
+            destino[chave] = c
+    for chave in repetidos:
+        por_mac.pop(chave, None)
+        por_ip.pop(chave, None)
+    return por_mac, por_ip
 
 
 def _carregar() -> InventarioComputadores | None:
