@@ -1964,9 +1964,11 @@ def _inventario_da_pagina(hosts: list[dict[str, Any]]) -> tuple[dict[str, Any], 
     from app.models.unidade import CanalCftv
     from app.services import cftv_gravadores
     from app.services.inventario_rede import grupo, inventario
+    from itgov.services import acronis_inventario
 
     leituras = cftv_gravadores.leituras()
-    inv = inventario(leituras, hosts)
+    computadores = acronis_inventario.obter_inventario()
+    inv = inventario(leituras, hosts, computadores.computadores if computadores else None)
     try:
         canais = CanalCftv.query.all()
     except SQLAlchemyError as exc:

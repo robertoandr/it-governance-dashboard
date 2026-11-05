@@ -230,8 +230,13 @@
               <span class="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle {{ 'bg-green-500' if h.online else 'bg-slate-300 dark:bg-slate-600' }}" title="{{ 'respondendo agora' if h.online else 'não respondeu na última varredura' }}"></span>{{ h.ip }}
               {% if h.recente %}<span class="ml-1 font-sans text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded px-1.5 py-0.5">novo na rede</span>{% endif %}
             </td>
-            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title="{{ h.hostname }}">{{ h.ia_nome or (h.hostname if h.hostname and h.hostname != h.ip else '—') }}</td>
             {% set i = inv.get(h.ip) %}
+            <td class="py-2 pr-3 text-slate-600 dark:text-slate-300 max-w-[180px]">
+              <span class="block truncate" title="{{ h.hostname }}">{{ h.ia_nome or (h.hostname if h.hostname and h.hostname != h.ip else '—') }}</span>
+              {% if i and i.acronis %}
+              <span class="block truncate text-[10px] mt-0.5" title="Computador com agente Acronis, reconhecido pelo MAC ou IP{% if i.usuario %} · último usuário logado: {{ i.usuario }}{% endif %}"><span class="font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded px-1 py-0.5">Acronis</span> {{ i.acronis }}{% if i.usuario %} · {{ i.usuario }}{% endif %}</span>
+              {% endif %}
+            </td>
             <td class="py-2 pr-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">
               {% if equipamento.get(h.ip) %}<span class="mr-1 text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded px-1.5 py-0.5">{{ equipamento[h.ip] }}</span>{% endif %}
               {{ i.modelo if i and i.modelo else '—' }}{% if i and i.modelo and i.fonte == 'ia' %}<span class="ml-1 text-[10px] font-semibold text-violet-700 dark:text-violet-300" title="Sugerido pela IA a partir dos sinais do aparelho">IA</span>{% endif %}

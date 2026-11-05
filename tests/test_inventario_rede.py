@@ -14,6 +14,7 @@ from app.services.inventario_rede import (
     rotulo_equipamento,
     tipo_gravador,
 )
+from itgov.services.acronis_inventario import Computador
 from itgov.services.intelbras_api import CameraGravador, LeituraGravador
 
 
@@ -146,3 +147,45 @@ class TestBusca:
 
     def test_vazio_casa_tudo(self) -> None:
         assert casa_busca(_host("10.0.0.1"), None, "  ", "Outro")
+
+
+# ── Computador com Acronis (pelo MAC ou IP) ─────────────────────────────────
+
+
+_PC = Computador(
+    nome="DESKTOP-ANA", tipo="notebook", usuario="ana (GRUPOGADENS)", modelo="X1", serie="PE07",
+    macs=["AC:82:47:95:99:94"], ips=["172.29.1.85"],
+)  # fmt: skip
+
+
+def test_acronis_pelo_mac_mesmo_com_ip_trocado() -> None:
+    inv = inventario({}, [_host("172.29.1.200", mac="ac:82:47:95:99:94", vendor="Intel")], [_PC])
+    item = inv["172.29.1.200"]
+    assert (item.acronis, item.usuario, item.modelo, item.serie, item.fonte) == (
+        "DESKTOP-ANA", "ana (GRUPOGADENS)", "X1", "PE07", "acronis",
+    )  # fmt: skip
+    assert item.fabricante == "Intel"
+
+
+def test_acronis_pelo_ip_quando_nao_ha_mac() -> None:
+    assert inventario({}, [_host("172.29.1.85")], [_PC])["172.29.1.85"].acronis == "DESKTOP-ANA"
+
+
+def test_mac_diferente_nao_casa_pelo_ip() -> None:
+    inv = inventario({}, [_host("172.29.1.85", mac="11:22:33:44:55:66")], [_PC])
+    assert inv["172.29.1.85"].acronis == ""
+
+
+def test_camera_do_gravador_nunca_vira_computador() -> None:
+    leitura = LeituraGravador(
+        modelo="NVD", cameras=[CameraGravador(canal=1, tipo="ip", ip="172.29.1.85", modelo="VIP", mac="")]
+    )
+    inv = inventario({"10.0.0.1": {"leitura": leitura}}, [_host("172.29.1.85")], [_PC])
+    assert inv["172.29.1.85"].acronis == "" and inv["172.29.1.85"].modelo == "VIP"
+
+
+def test_busca_acha_pelo_computador_e_usuario() -> None:
+    info = InfoEquipamento(acronis="DESKTOP-ANA", usuario="ana (GRUPOGADENS)")
+    assert casa_busca(_host("172.29.1.85"), info, "desktop-ana", "")
+    assert casa_busca(_host("172.29.1.85"), info, "ANA (grupo", "")
+    assert not casa_busca(_host("172.29.1.85"), info, "beto", "")

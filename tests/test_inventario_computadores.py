@@ -159,3 +159,48 @@ def test_pagina_zabbix_filtra_computadores(authed_client, pagina_zabbix) -> None
     assert "PC-BETO" in html and "NOTE-ANA" not in html
     html = authed_client.get("/gov/zabbix?q=lenovo").get_data(as_text=True)
     assert "NOTE-ANA" in html and "PC-BETO" not in html
+
+
+# ── MAC, IPs e último login (cruzamento com a página Rede) ──────────────────
+
+
+def test_normalizar_mac() -> None:
+    assert inv.normalizar_mac("ac-82-47-95-99-94") == "AC:82:47:95:99:94"
+    assert inv.normalizar_mac(" ac:82:47:95:99:94 ") == "AC:82:47:95:99:94"
+    assert inv.normalizar_mac("00:00:00:00:00:00") == ""
+    assert inv.normalizar_mac("não é mac") == ""
+    assert inv.normalizar_mac("") == ""
+
+
+def test_montar_computador_traz_macs_ips_e_login() -> None:
+    attrs = _attrs({"manufacturer": "LENOVO", "model": "X1"}, ["i5-10210U"])
+    attrs[0]["kvs"].append({"key": "last_logged_in_timestamp", "value": 1793887987})
+    attrs[1]["kvs"] += [
+        {"key": "mac_addresses", "value": ["AC:82:47:95:99:94", "ac:82:47:95:99:95"]},
+        {"key": "ip_addresses", "value": "13.13.13.2,172.29.1.85"},
+    ]
+    attrs[3]["details"]["networkAdapters"] = [
+        {"type": "802.3", "macAddress": "AC:82:47:95:99:94", "ipAddresses": ["172.29.1.85", "fe80::1"]},
+        {"type": "802.3", "macAddress": "C4-34-6B-AD-E6-02", "ipAddresses": ["172.29.2.247"]},
+    ]
+    c = inv.montar_computador({"id": "1", "name": "PC-ANA"}, attrs)
+    assert c is not None
+    assert c.macs == ["AC:82:47:95:99:94", "AC:82:47:95:99:95", "C4:34:6B:AD:E6:02"]
+    assert c.ips == ["13.13.13.2", "172.29.1.85", "172.29.2.247"]
+    assert c.usuario_em == datetime.fromtimestamp(1793887987, UTC)
+
+
+def test_montar_computador_sem_macs_nem_login() -> None:
+    c = inv.montar_computador({"id": "1", "name": "PC"}, _attrs({"manufacturer": "HP"}, []))
+    assert c is not None and c.macs == [] and c.ips == [] and c.usuario_em is None
+
+
+def test_indices_descarta_mac_e_ip_repetidos() -> None:
+    a = inv.Computador(nome="A", tipo="desktop", macs=["AA:00:00:00:00:01", "DD:00:00:00:00:00"], ips=["10.0.0.1"])
+    b = inv.Computador(
+        nome="B", tipo="desktop", macs=["BB:00:00:00:00:02", "DD:00:00:00:00:00"], ips=["10.0.0.1", "10.0.0.2"]
+    )
+    por_mac, por_ip = inv.indices([a, b])
+    assert set(por_mac) == {"AA:00:00:00:00:01", "BB:00:00:00:00:02"}
+    assert por_mac["AA:00:00:00:00:01"] is a
+    assert set(por_ip) == {"10.0.0.2"} and por_ip["10.0.0.2"] is b
