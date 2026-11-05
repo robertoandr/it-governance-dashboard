@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Rede — Template da Ubiquiti pelo DHCP e UniFi Dream Machine:** o vendor class do DHCP (`vci`, que a Ubiquiti manda como `ubnt`) passa a contar na escolha do template. Os 41 APs e antenas Ubiquiti da página Rede apareciam como access point, mas a sugestão caía no genérico porque o fabricante só vinha no DHCP; agora recebem **Ubiquiti AirOS by SNMP** (confiança alta quando o SNMP responde). A UniFi Dream Machine (ex.: Pro Max, 172.29.1.186) recebe **Linux by SNMP** no grupo Links WAN, porque a Ubiquiti não publica template de UDM para o Zabbix.
+
 ### Added
 - **Cyber — Aba Programas:** nova página `/gov/cyber/programas` com os programas instalados nas máquinas (máquina, programa, versão, quando), os instalados em mais máquinas e os programas de acesso remoto (TeamViewer, AnyDesk, RustDesk…) em destaque, com busca e filtro "só acesso remoto". Fonte: alertas `MiMonitoringSoftwareInstalled` do monitoramento do Acronis (`/api/alert_manager/v1/alerts`), sem repetir máquina+programa+versão; cache de 1 h. Mostra o que foi **instalado** desde que o aviso está ligado, não o inventário completo: a API pública não traz o inventário de software nem os dispositivos descobertos. Item 3.4 do plano de implantação do Acronis.
 

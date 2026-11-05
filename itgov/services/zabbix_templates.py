@@ -54,14 +54,18 @@ _REGRAS: tuple[tuple[str, str, str, str, str, bool], ...] = (
     ("switch", r"huawei", "Huawei VRP by SNMP", "Rede/Switches", "snmp", True),
     ("switch", r"d-?link", "D-Link DES_DGS Switch by SNMP", "Rede/Switches", "snmp", True),
     ("switch", r"aruba|procurve|hewlett|\bhpe?\b", "HP Enterprise Switch by SNMP", "Rede/Switches", "snmp", True),
-    ("ap", r"ubiquiti|unifi|airos", "Ubiquiti AirOS by SNMP", "Rede/Access points", "snmp", True),
+    ("ap", r"ubiquiti|unifi|airos|\bubnt", "Ubiquiti AirOS by SNMP", "Rede/Access points", "snmp", True),
+    # UniFi Dream Machine: Linux por dentro; a Ubiquiti não publica template de UDM para o Zabbix
+    ("", r"dream ?machine|\budm(?:[- ]?pro)?\b", "Linux by SNMP", "Links WAN", "snmp", True),
     ("firewall", r"forti", "FortiGate by SNMP", "Links WAN", "snmp", True),
     ("", r"\bapc\b|smart-ups|symmetra", "APC UPS by SNMP", "Nobreaks", "snmp", True),
 )
 
 
 def _texto(host: dict[str, Any]) -> str:
-    return " ".join(str(host.get(c) or "") for c in ("vendor", "snmp_descr", "hostname", "ia_nome", "os_guess")).lower()
+    # ``vci``: vendor class do DHCP (Ubiquiti manda ``ubnt``), muitas vezes o único sinal do fabricante
+    campos = ("vendor", "snmp_descr", "hostname", "ia_nome", "os_guess", "vci")
+    return " ".join(str(host.get(c) or "") for c in campos).lower()
 
 
 def sugerir(host: dict[str, Any]) -> Sugestao | None:
