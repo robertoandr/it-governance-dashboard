@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cyber — Aba Permissões e incidentes por categoria:** nova página `/gov/cyber/permissoes` com o que os planos de proteção do Acronis liberam (processos e hashes confiáveis, pastas fora da verificação, conexões) e bloqueiam, com a origem de cada item (quarentena, incidente ou manual) e filtros. Destaca as permissões arriscadas (binário do sistema ou interpretador, pasta inteira de usuário) para revisão no console. O NOC de Segurança ganha o bloco **Incidentes abertos por categoria**, no lugar da tática MITRE, que a API pública não tem; a quarentena também não tem API. Fonte: configurações dos planos (`policy_management`) e incidentes abertos do EDR; cache de 1 h. Item 3.3 do plano de implantação do Acronis.
+
 ### Fixed
 - **CFTV — Coletor de modelos e gravador sem fabricante:** gravador `dvr-*` cadastrado sem a tag `vendor` passa a ser consultado pela API Intelbras, e não pelo ONVIF. Pelo ONVIF ele recusava a mesma senha que a leitura dos gravadores do dashboard usa (falso "senha recusada" em Corredor Técnico, Triunfo_2_Folha2 e Triunfo_4_Extrato). A versão fica em 2.12.1, porque o merge do #377 tinha deixado a 2.12.0.
 
