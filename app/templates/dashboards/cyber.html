@@ -295,6 +295,7 @@
     ('siem', 'dashboards.cyber_siem', 'Agente SIEM'),
     ('agente', 'dashboards.cyber_agentes', 'Agente de incidentes'),
     ('vulnerabilidades', 'dashboards.cyber_vulnerabilidades', 'Vulnerabilidades'),
+    ('permissoes', 'dashboards.cyber_permissoes', 'Permissões'),
     ('phishing', 'dashboards.cyber_phishing', 'Phishing'),
     ('pentest', 'dashboards.cyber_pentest', 'Pentest'),
   ] %}
@@ -473,6 +474,28 @@
         <p class="text-sm text-gray-400">Ainda sem leitura (a primeira roda ~2 min depois da subida do app).</p>
       {% endif %}
     </div>
+
+    {# Incidentes abertos por categoria (a API pública não tem tática MITRE) #}
+    {% set pc = perm | default(none) %}
+    {% if pc and pc.categorias %}
+    <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4 mt-4">
+      <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <h3 class="font-semibold text-gray-800 dark:text-slate-100">Incidentes abertos por categoria</h3>
+        <span class="text-xs text-gray-400">{{ pc.incidentes_abertos }} incidentes não mitigados em {{ pc.maquinas_com_incidente }} máquinas</span>
+      </div>
+      {% set maior = pc.categorias[0][2] %}
+      <ul class="text-sm space-y-2">
+        {% for chave, rotulo, n in pc.categorias %}
+        <li class="flex items-center gap-3">
+          <span class="w-48 shrink-0 text-gray-700 dark:text-slate-200">{{ rotulo }}</span>
+          <div class="h-2 flex-1 rounded bg-gray-100 dark:bg-slate-700"><div class="h-2 rounded bg-red-500" style="width: {{ (100 * n / maior) | round(1) }}%"></div></div>
+          <span class="w-10 text-right font-semibold">{{ n }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="text-xs text-gray-400 mt-3">Um incidente com duas categorias conta nas duas. A tática MITRE não vem pela API pública do Acronis.</p>
+    </div>
+    {% endif %}
   </div>
 
   {# ============================== ABA AO VIVO ============================= #}
@@ -883,6 +906,66 @@
             </tr>
             {% else %}
             <tr><td colspan="4" class="p-3 text-gray-400">Nenhuma máquina{{ ' para essa busca' if vuln_busca }}.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ============================== ABA PERMISSÕES =========================== #}
+  {% if pagina == 'permissoes' %}
+  <div>
+    <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
+      O que os planos de proteção do Acronis liberam (processos, hashes e pastas que o antivírus e a proteção ativa
+      não verificam) e o que bloqueiam, com a origem de cada item. Só leitura: mudar a lista continua no console.
+      A quarentena em si não vem pela API pública; aqui aparece o que saiu dela para a lista de permissões.
+    </p>
+    {% if perm_carregando %}
+      <p class="text-sm text-gray-400">Lendo os planos do Acronis… atualize a página em alguns segundos.</p>
+    {% elif not perm %}
+      <p class="text-sm text-gray-400">Sem dados dos planos (Acronis não configurado ou falha na leitura).</p>
+    {% else %}
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        {{ stat_card('Permissões', perm.permitidos | length, 'text-gray-800 dark:text-slate-100', perm.planos | join(', ')) }}
+        {{ stat_card('Permissões arriscadas', perm.arriscados | length, 'text-red-600' if perm.arriscados else 'text-green-600', 'binário do sistema ou pasta de usuário') }}
+        {{ stat_card('Bloqueios', perm.bloqueados | length, 'text-gray-800 dark:text-slate-100', none) }}
+        {{ stat_card('Vindas da quarentena', perm.itens | selectattr('origem', 'equalto', 'quarentena') | list | length, 'text-gray-800 dark:text-slate-100', 'lido ' ~ perm_lido) }}
+      </div>
+      {% if perm.arriscados %}
+      <div class="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-3 mb-4 text-sm text-red-700 dark:text-red-300">
+        <p class="font-semibold mb-1">Revisar no console (item 0.2 do plano de implantação):</p>
+        <ul class="list-disc ml-5 space-y-0.5">
+          {% for i in perm.arriscados %}<li><code class="break-all">{{ i.valor }}</code> — {{ i.lista | lower }}, {{ i.risco }}{% if i.incidente %} (incidente {{ i.incidente }}){% endif %}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <div class="flex flex-wrap gap-2 mb-3 text-sm">
+        {% for chave, rotulo in [('', 'Tudo'), ('arriscados', 'Arriscadas'), ('permitidos', 'Permissões'), ('bloqueados', 'Bloqueios')] %}
+        <a href="{{ url_for('dashboards.cyber_permissoes', ver=chave) if chave else url_for('dashboards.cyber_permissoes') }}" class="px-3 py-1 rounded border {{ 'border-blue-600 text-blue-600' if perm_filtro == chave else 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300' }}">{{ rotulo }}</a>
+        {% endfor %}
+      </div>
+      <div class="overflow-x-auto bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-slate-800">
+              <th class="p-2 font-medium">Item</th>
+              <th class="p-2 font-medium">Lista</th>
+              <th class="p-2 font-medium">Origem</th>
+              <th class="p-2 font-medium">Plano</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50 dark:divide-slate-800">
+            {% for i in perm_itens %}
+            <tr class="align-top {{ 'bg-red-50/60 dark:bg-red-900/10' if i.risco }}">
+              <td class="p-2 font-mono text-xs break-all text-gray-800 dark:text-slate-100 min-w-[260px]">{{ i.valor }}{% if i.risco %}<span class="block font-sans text-red-600">{{ i.risco }}</span>{% endif %}</td>
+              <td class="p-2 whitespace-nowrap"><span class="text-xs rounded px-1.5 py-0.5 {{ 'bg-green-100 text-green-700' if i.permitido else 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200' }}">{{ i.lista }}</span></td>
+              <td class="p-2 text-gray-600 dark:text-slate-300 min-w-[160px]">{% if i.origem == 'incidente' %}incidente {{ i.incidente }}{% elif i.origem == 'quarentena' %}quarentena{% else %}manual{% endif %}{% if i.descricao %}<span class="block text-[11px] text-gray-400">{{ i.descricao }}</span>{% endif %}</td>
+              <td class="p-2 text-gray-500 dark:text-slate-400 whitespace-nowrap">{{ i.plano }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="p-3 text-gray-400">Nenhum item.</td></tr>
             {% endfor %}
           </tbody>
         </table>

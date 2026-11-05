@@ -424,9 +424,38 @@ def cyber_incidentes() -> str:
 def cyber_noc() -> str:
     """Página NOC de Segurança: visão correlacionada Acronis + Zabbix + FortiGate."""
     from app.services import acronis_triggers
+    from itgov.services import acronis_permissoes
 
     return render_template(
-        "dashboards/cyber.html", pagina="noc", acronis_triggers=acronis_triggers.painel(), **_contexto_cyber()
+        "dashboards/cyber.html",
+        pagina="noc",
+        acronis_triggers=acronis_triggers.painel(),
+        perm=acronis_permissoes.obter(),
+        **_contexto_cyber(),
+    )
+
+
+@bp.route("/cyber/permissoes")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_permissoes() -> str:
+    """Página Permissões: o que os planos do Acronis liberam e bloqueiam, e de onde veio cada item."""
+    from itgov.services import acronis_permissoes
+
+    painel = acronis_permissoes.obter()
+    filtro = request.args.get("ver", "")
+    if filtro not in ("permitidos", "bloqueados", "arriscados"):
+        filtro = ""
+    itens = (getattr(painel, filtro) if filtro else painel.itens) if painel else []
+    return render_template(
+        "dashboards/cyber.html",
+        pagina="permissoes",
+        perm=painel,
+        perm_itens=sorted(itens, key=lambda i: (not i.risco, i.permitido is False, i.plano, i.lista, i.valor.lower())),
+        perm_filtro=filtro,
+        perm_carregando=acronis_permissoes.carregando(),
+        perm_lido=painel.atualizado_em.astimezone(_TZ_LOCAL).strftime("%d/%m %H:%M") if painel else "",
+        **_contexto_cyber(),
     )
 
 
