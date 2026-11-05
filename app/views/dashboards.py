@@ -435,6 +435,38 @@ def cyber_noc() -> str:
     )
 
 
+@bp.route("/cyber/programas")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_programas() -> str:
+    """Página Programas: o que foi instalado nas máquinas, pelos avisos do monitoramento do Acronis."""
+    from itgov.services import acronis_programas
+
+    painel = acronis_programas.obter()
+    busca = (request.args.get("q") or "").strip()[:60]
+    so_remoto = request.args.get("ver") == "remoto"
+    itens = (painel.acesso_remoto if so_remoto else painel.instalacoes) if painel else []
+    if busca:
+        termo = busca.lower()
+        itens = [i for i in itens if termo in i.maquina.lower() or termo in i.programa.lower()]
+
+    def hora_local(valor: datetime | None) -> str:
+        return valor.astimezone(_TZ_LOCAL).strftime("%d/%m/%Y %H:%M") if valor else "—"
+
+    return render_template(
+        "dashboards/cyber.html",
+        pagina="programas",
+        prog=painel,
+        prog_itens=itens[:500],
+        prog_total=len(itens),
+        prog_busca=busca,
+        prog_remoto=so_remoto,
+        prog_carregando=acronis_programas.carregando(),
+        hora_local=hora_local,
+        **_contexto_cyber(),
+    )
+
+
 @bp.route("/cyber/permissoes")
 @login_required
 @require_role("admin", "gestor", pagina="cyber")
