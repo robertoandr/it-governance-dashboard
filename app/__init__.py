@@ -135,6 +135,11 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
     acronis_triggers.iniciar_agendador(app)
 
+    # Rede: IPs "outro" que se identificam como câmera/gravador sem senha (HTTP 401 do ISAPI/CGI)
+    from app.services import assinatura_agente
+
+    assinatura_agente.iniciar_agendador(app)
+
     # Existing raw-SQLite governance DB (unchanged)
     from app.services.db import init_db
 

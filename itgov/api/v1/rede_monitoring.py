@@ -509,9 +509,19 @@ def _registrar_vistos(hosts: list[dict]) -> dict[str, Any]:
 
 
 def _enriquecer(hosts: list[dict], vistos: dict[str, Any], agora: datetime) -> None:
-    """Marca ``recente`` e aplica a sugestão da IA onde as regras não souberam."""
+    """Marca ``recente`` e aplica a assinatura HTTP e a sugestão da IA onde as regras não souberam.
+
+    A assinatura (câmera/gravador que se identificou sem senha, ver
+    ``app.services.assinatura_agente``) vem antes da IA: é o próprio aparelho dizendo.
+    """
+    from app.services import assinatura_agente
+
     limite = agora - timedelta(days=RECENTE_DIAS)
+    assinaturas = assinatura_agente.carregar()
     for h in hosts:
+        sig = assinatura_agente.assinatura(h["ip"], assinaturas)
+        if sig and h.get("tipo_sugerido") == "outro":
+            h["tipo_sugerido"], h["motivo"] = "camera", sig.motivo
         v = vistos.get(h["ip"])
         h["recente"] = bool(v and not v.baseline and _utc(v.primeiro_visto) >= limite)
         h["primeiro_visto"] = _utc(v.primeiro_visto).isoformat() if v else ""
