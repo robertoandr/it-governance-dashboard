@@ -565,8 +565,9 @@
   <div x-show="ehAba('siem')" x-cloak>
 
     <p class="text-sm text-gray-500 dark:text-slate-400 mb-4">
-      O agente lê os logs dos FortiGate a cada 5 minutos e analisa a cada 15, cruzando com os incidentes
-      do Acronis. Ele só aponta e recomenda: nenhuma mudança é feita nos firewalls. Achados graves avisam no WhatsApp.
+      O agente lê os logs dos FortiGate a cada 5 minutos e analisa a cada 15, junto com os incidentes e os alertas
+      novos do Acronis. Ele só aponta e recomenda: nenhuma mudança é feita nos firewalls nem nas máquinas.
+      Achados graves dos FortiGate avisam no WhatsApp; os do Acronis ficam só aqui.
     </p>
 
     <p x-show="siemCarregando && !siem" class="text-sm text-gray-400">Carregando…</p>
