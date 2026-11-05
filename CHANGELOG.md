@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cyber — Alertas do Acronis no Agente SIEM:** a cada análise (15 min), o agente SIEM lê os alertas do Acronis criados na janela (`/api/alert_manager/v1/alerts`), classifica como o agente de triggers e gera achados próprios, marcados como **Acronis**: malware ou ameaça e incidente EDR crítico não mitigado (alta), proteção com falha e programa de acesso remoto instalado (média). A IA recebe o resumo junto com os logs dos FortiGate e pode cruzar as duas fontes. Achados do Acronis ficam só no dashboard: não entram no item de graves que avisa no WhatsApp. O plano previa syslog, mas o encaminhamento (item 1.5) ainda não existe no console; a fonte passa a ser o syslog quando existir. Item 3.5 do plano de implantação do Acronis.
+
+### Added
 - **Cyber — Aba Programas:** nova página `/gov/cyber/programas` com os programas instalados nas máquinas (máquina, programa, versão, quando), os instalados em mais máquinas e os programas de acesso remoto (TeamViewer, AnyDesk, RustDesk…) em destaque, com busca e filtro "só acesso remoto". Fonte: alertas `MiMonitoringSoftwareInstalled` do monitoramento do Acronis (`/api/alert_manager/v1/alerts`), sem repetir máquina+programa+versão; cache de 1 h. Mostra o que foi **instalado** desde que o aviso está ligado, não o inventário completo: a API pública não traz o inventário de software nem os dispositivos descobertos. Item 3.4 do plano de implantação do Acronis.
 
 ### Added
