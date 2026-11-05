@@ -36,7 +36,7 @@ opentelemetry-sdk>=1.42.1
 opentelemetry-exporter-otlp-proto-grpc>=1.42.1
 opentelemetry-instrumentation-flask>=0.66b0
 opentelemetry-instrumentation-httpx>=0.63b0
-opentelemetry-instrumentation-sqlalchemy>=0.63b0
+opentelemetry-instrumentation-sqlalchemy>=0.66b2
 gunicorn[gthread]>=26  # --no-control-socket (entrypoint) exige 26+
 pycryptodome==4.1.0  # ldap3 NTLM precisa de MD4 (OpenSSL 3.x não tem); versão fixa = a que roda em prod desde 25/10
 
