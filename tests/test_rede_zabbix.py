@@ -310,3 +310,29 @@ def test_celular_nunca_e_sugerido_nem_monitorado() -> None:
     with patch.object(zt, "_zbx", zbx), pytest.raises(ValueError, match="celular não entra no Zabbix"):
         rede_zabbix.monitorar(celular, "ICMP Ping", "CFTV/Cameras", "agente", "auto", "automático")
     assert not zbx.chamadas
+
+
+def test_automatico_nao_cria_host_sem_a_leitura_do_fortigate(factory_app, limpo) -> None:
+    """Host sem dado do FortiGate na rodada não vira host: pode ser celular sem classe DHCP."""
+    visto = {**_CAM, "ip": "10.41.1.21", "fortigate": "Shopping", "mac": "00:1A:2B:3C:4D:5E"}
+    with factory_app.app_context(), patch.object(rede_zabbix.fortigate_api, "configurados", return_value=([{}], [])):
+        rede_zabbix.definir_auto(True)
+        with patch.object(zt, "monitorar", return_value=("600", True)) as criar:
+            assert rede_zabbix._processar([_CAM, visto]) == 1
+        assert criar.call_args.args[0] == "10.41.1.21"
+        assert "10.41.1.20" not in rede_zabbix.decisoes()  # volta a ser avaliado na próxima rodada
+
+
+@pytest.mark.parametrize(
+    ("extra", "criados"),
+    [
+        ({"mac": "EA:AC:5C:53:EC:C2", "hostname": ""}, 0),  # MAC aleatório sem nome e sem classe: iPhone típico
+        ({"mac": "EA:AC:5C:53:EC:C2", "hostname": "CAM-20"}, 1),
+        ({"mac": "00:1A:2B:3C:4D:5E", "hostname": ""}, 1),
+    ],
+)
+def test_automatico_nao_cria_host_de_mac_aleatorio_anonimo(factory_app, limpo, extra: dict, criados: int) -> None:
+    with factory_app.app_context():
+        rede_zabbix.definir_auto(True)
+        with patch.object(zt, "monitorar", return_value=("600", True)):
+            assert rede_zabbix._processar([{**_CAM, **extra}]) == criados
