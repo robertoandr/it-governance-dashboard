@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Rede — Celular não entra no Zabbix quando falta o DHCP:** o automático só cria host de IP que o FortiGate está vendo na rodada. Se a leitura de um FortiGate falhava, os aparelhos dele chegavam sem classe DHCP e sem nome, a regra de celular não tinha o que olhar e o host era criado (em 05/11, celulares Android do Shopping viraram "Câmera Samsung"). MAC aleatório sem nome e sem classe, o iPhone típico, também não é mais criado sozinho e fica para confirmar à mão.
 - **Rede — Template da Ubiquiti pelo DHCP e UniFi Dream Machine:** o vendor class do DHCP (`vci`, que a Ubiquiti manda como `ubnt`) passa a contar na escolha do template. Os 41 APs e antenas Ubiquiti da página Rede apareciam como access point, mas a sugestão caía no genérico porque o fabricante só vinha no DHCP; agora recebem **Ubiquiti AirOS by SNMP** (confiança alta quando o SNMP responde). A UniFi Dream Machine (ex.: Pro Max, 172.29.1.186) recebe **Linux by SNMP** no grupo Links WAN, porque a Ubiquiti não publica template de UDM para o Zabbix.
 
 ### Added

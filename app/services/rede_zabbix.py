@@ -20,7 +20,7 @@ import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
 from itgov.api.v1.rede_descoberta import eh_celular
-from itgov.services import zabbix_templates
+from itgov.services import fortigate_api, zabbix_templates
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -162,6 +162,21 @@ def _rodar(app: Flask, hosts: list[dict[str, Any]]) -> None:
         _ocupado.release()
 
 
+def _pode_ser_celular(host: dict[str, Any]) -> bool:
+    """Falta dado para afirmar que o host não é celular? Só o automático usa.
+
+    Sem a leitura do FortiGate o host chega sem classe DHCP e sem nome, e
+    ``eh_celular`` não tem o que olhar (se um FortiGate falha, os aparelhos
+    dele somem da lista só naquela rodada). MAC aleatório sem nome e sem classe
+    é o iPhone típico; não entra em ``eh_celular`` porque impressoras atrás de
+    outro equipamento também aparecem assim, então só fica para confirmar à mão.
+    """
+    if fortigate_api.configurados()[0] and not host.get("fortigate"):
+        return True
+    mac = str(host.get("mac") or "")
+    return len(mac) > 1 and mac[1].upper() in "26AE" and not host.get("vci") and not host.get("hostname")
+
+
 def _processar(hosts: list[dict[str, Any]]) -> int:
     from app.services import classificacoes
     from itgov.api.v1.rede_descoberta import aplicar_classificacoes
@@ -178,7 +193,7 @@ def _processar(hosts: list[dict[str, Any]]) -> int:
         if d is not None and not (d.decisao == "erro" and agora - _utc(d.em) > ESPERA_ERRO):
             continue
         info = situacao(h, None)
-        if info["estado"] != "auto":
+        if info["estado"] != "auto" or _pode_ser_celular(h):
             continue
         s = info["sugestao"]
         try:
