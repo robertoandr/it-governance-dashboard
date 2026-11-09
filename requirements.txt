@@ -17,7 +17,7 @@ structlog>=24.1.0
 # Integration HTTP client + models (Sprint 10E)
 httpx>=0.28.1
 tenacity>=9.2.1
-pydantic>=2.7.0
+pydantic>=2.14.3
 pydantic-settings>=2.16.2
 
 # REST API (Sprint 10E — Flask-RESTX namespaces, wired Sprint 10H)
