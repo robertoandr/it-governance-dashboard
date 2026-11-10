@@ -19,7 +19,7 @@ from app.models.unidade import CanalCftv, GravadorAcesso, VerificacaoCanal
 from app.services import cftv_gravadores as cg
 from app.services import cftv_verificacao as cv
 from itgov.api.v1 import cftv_monitoring
-from itgov.services import cftv_imagem, intelbras_api
+from itgov.services import camera_rtsp, cftv_imagem, intelbras_api
 from itgov.services.intelbras_api import AcessoNegadoError, CameraGravador, LeituraGravador, SessaoGravador
 
 _AGORA = datetime(2026, 10, 15, 14, 10, tzinfo=UTC)  # 11:10 em Brasília
@@ -225,6 +225,32 @@ def test_verificar_imagens(banco, monkeypatch: pytest.MonkeyPatch) -> None:
     assert (depois["imagem"], depois["miniatura"]) == ("ok", False)
 
 
+def test_foto_direto_da_camera_quando_o_gravador_nao_entrega(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cv, "ESPERA_NOVA_FOTO", 0)
+    monkeypatch.setattr(cv, "PAUSA_ENTRE_FOTOS", 0)
+    falso = _GravadorFalso({}, {1: [None, None], 2: [None, None], 3: [None, None], 4: [_jpeg(cena=True)]})
+    monkeypatch.setattr(cv, "SessaoGravador", falso)
+    pedidos: list[str] = []
+
+    def foto(ip: str, usuario: str, senha: str) -> bytes | None:
+        pedidos.append(ip)
+        if ip == "10.77.1.2":
+            raise camera_rtsp.CredencialRecusadaError(ip)
+        return _jpeg(cena=True)
+
+    monkeypatch.setattr(camera_rtsp, "foto", foto)
+    cameras = (
+        cv.CameraDireta(1, "10.77.1.1", "u", "p"),
+        cv.CameraDireta(2, "10.77.1.2", "u", "p"),
+        cv.CameraDireta(4, "10.77.1.4", "u", "p"),
+    )
+    cv.verificar_imagens([cv.Alvo(_IP, "u", "p", [1, 2, 3, 4], cameras)], _AGORA)
+    estado = cv.por_gravador()[_IP]
+    # 1: foto pela câmera; 2: câmera recusou; 3: sem câmera IP cadastrada; 4: o gravador entregou
+    assert {c: v["imagem"] for c, v in estado.items()} == {1: "ok", 2: "sem_resposta", 3: "sem_resposta", 4: "ok"}
+    assert pedidos == ["10.77.1.1", "10.77.1.2"]
+
+
 def test_gravador_fora_do_ar_nao_entra_como_verificado(banco, monkeypatch: pytest.MonkeyPatch) -> None:
     class Fora(_GravadorFalso):
         def __enter__(self) -> _GravadorFalso:
@@ -267,6 +293,40 @@ def test_alvos_so_com_senha_aceita_e_canais_ativos(banco) -> None:
         patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value={"devices": []}),
     ):
         assert cv.alvos() == [cv.Alvo(_IP, "u", "p", [1, 2])]
+
+
+def test_alvos_levam_a_camera_ip_com_credencial_aceita(banco) -> None:
+    db.session.add_all(
+        [
+            GravadorAcesso(
+                ip=_IP, credencial="padrao", leitura=LeituraGravador(canais=4).model_dump_json(), falhas="{}"
+            ),
+            CanalCftv(ip_gravador=_IP, canal=1, situacao="ativo", ip_camera="10.77.1.1"),
+            CanalCftv(ip_gravador=_IP, canal=2, situacao="ativo", ip_camera="10.77.1.2"),  # recusou
+            CanalCftv(ip_gravador=_IP, canal=3, situacao="ativo", ip_camera="10.77.1.3"),  # sem tag
+            CanalCftv(ip_gravador=_IP, canal=4, situacao="ativo"),
+        ]
+    )
+    db.session.commit()
+    devices = [
+        {"ip": "10.77.1.1", "cred": "centro", "cred_recusada": None},
+        {"ip": "10.77.1.2", "cred": "centro", "cred_recusada": "centro:2026-11-01"},
+        {"ip": "10.77.1.3", "cred": ""},
+        {"ip": _IP, "cred": "centro", "is_gravador": True, "gravador": "G1", "name": "G1"},
+    ]
+    env = {
+        "CFTV_CAM_PADRAO_USER": "u",
+        "CFTV_CAM_PADRAO_PASS": "p",
+        "CFTV_CAM_CENTRO_USER": "c",
+        "CFTV_CAM_CENTRO_PASS": "s",
+    }
+    with (
+        patch.dict("os.environ", env),
+        patch.object(cftv_monitoring, "get_cached_cftv_summary", return_value={"devices": devices}),
+    ):
+        [alvo] = cv.alvos()
+    assert alvo.canais == [1, 2, 3, 4]
+    assert alvo.cameras == (cv.CameraDireta(1, "10.77.1.1", "c", "s"),)
 
 
 def test_textos_e_envio_para_o_zabbix(banco, monkeypatch: pytest.MonkeyPatch) -> None:
