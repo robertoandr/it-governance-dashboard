@@ -95,13 +95,27 @@ PRIORIDADE = {
 }
 
 # Só o problema abre chamado; o webhook ignora recovery/atualização. Mesmo
-# assim definimos só o template de problema (recovery=0).
+# assim os três templates precisam existir: a ação 12 manda recuperação e
+# atualização para todas as mídias, e sem template o Zabbix registra
+# "No message defined for media type" (534 falhas até 10/11).
 MESSAGE_TEMPLATES = [
     {
         "eventsource": "0",
         "recovery": "0",
         "subject": "{EVENT.SEVERITY}: {EVENT.NAME}",
         "message": "Chamado GDesk para {HOST.NAME} — evento #{EVENT.ID}",
+    },
+    {
+        "eventsource": "0",
+        "recovery": "1",
+        "subject": "Resolvido: {EVENT.NAME}",
+        "message": "Problema resolvido em {HOST.NAME} — evento #{EVENT.ID}",
+    },
+    {
+        "eventsource": "0",
+        "recovery": "2",
+        "subject": "Atualizado: {EVENT.NAME}",
+        "message": "Problema atualizado em {HOST.NAME} — evento #{EVENT.ID}",
     },
 ]
 

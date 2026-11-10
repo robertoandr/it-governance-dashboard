@@ -155,6 +155,8 @@ def test_falta_url_ou_chave_falha() -> None:
         ('{"ticket_id": 2}', "2"),
         ('{"number": "T-3"}', "T-3"),
         ('{"data": {"id": 4}}', "4"),
+        # Formato real do GDesk (HTTP 201), conferido em 10/11/2026.
+        ('{"ticket": {"id": 3014, "status": "novo", "queue_name": "T.I."}}', "3014"),
         ('{"ok": true}', ""),
         ("texto-nao-json", ""),
     ],
