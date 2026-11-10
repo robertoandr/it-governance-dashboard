@@ -137,6 +137,7 @@ class TestNoOrphanBlueprintsInApp:
             "aprovacoes",  # added: V2.0 super admin (app/views/aprovacoes.py)
             "tarefas",  # added: módulo Tarefas, Sprint 1 (app/views/tarefas.py)
             "painel_tv",  # added: painel de TV do NOC, modelos /gov/v1 … /gov/v5 (app/views/painel_tv.py)
+            "previa",  # added: prévia dos modelos de redesign com dados ao vivo, /gov/previa (app/views/previa.py)
             "restx_doc",  # internal Flask-RESTX
         }
 

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Prévia{% endblock %} · Governança 360</title>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/fira/fira-sans-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/previa.css') }}">
+</head>
+<body class="{% block tema %}tema-c{% endblock %}">
+  <nav class="troca" aria-label="Modelos em teste">
+    <span>Prévia com dados de {{ p.atualizado if p else 'agora' }} ·</span>
+    {% for chave, nome in modelos.items() %}
+    <a href="{{ url_for('previa.previa_modelo', modelo=chave) }}"{% if chave == modelo %} aria-current="page"{% endif %}>{{ chave|upper }} · {{ nome }}</a>
+    {% endfor %}
+    <a class="fim" href="{{ url_for('dashboards.overview') }}">Voltar ao dashboard</a>
+  </nav>
+  {% if p and p.indisponivel %}
+  <p role="status" style="margin:0;padding:8px 16px;background:#FFFAEB;color:#7A2E0E;font-size:13px">Sem dados agora de: {{ p.indisponivel|join(', ') }}. O resto da tela está atualizado.</p>
+  {% endif %}
+  {% block corpo %}{% endblock %}
+</body>
+</html>

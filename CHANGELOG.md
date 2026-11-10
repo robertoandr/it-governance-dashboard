@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Prévia dos modelos de redesign com dados ao vivo:** `/gov/previa` (só admin) abre três modelos novos da Visão Geral com os dados de agora, sem mudar as telas atuais. **A · Console de observabilidade:** números do momento, mapa de hosts em mosaico por tipo (cada quadrado é um host, com a pior gravidade aberta nele), idade dos problemas e feed dos mais graves. **B · Caixa de triagem:** alertas e chamados numa lista só, agrupada por gravidade e SLA, com o detalhe de cada item ao abrir a linha. **C · Página de status:** faixa com o estado geral, as áreas da operação (infraestrutura, CFTV, service desk e integrações), incidentes ativos (o mesmo problema em vários hosts vira uma linha) e quanto cada pilar tira do score. Gravidade sempre por forma e texto (▲ alta, ◆ média, ● atenção), não só por cor. Fontes Fira Sans e Fira Code servidas pelo próprio app (licença OFL), porque a CSP não permite o Google Fonts. Os problemas do Zabbix passam a trazer o `clock`, para a idade em horas e dias.
+
+### Added
 - **CFTV — Foto direto da câmera quando o gravador não entrega:** os NVD 1432 da Sede (172.29.11.17/.18/.19) devolvem HTTP 500 no `snapshot.cgi` para as câmeras ONVIF (CIP-D1312-M / CIP-B1312-M), e 75 canais ficavam como "foto indisponível". As próprias câmeras respondem `ActionNotSupported` ao `GetSnapshotUri`, então a foto passa a ser um quadro do vídeo: ONVIF `GetStreamUri` do perfil mais leve (substream 640x360) e o primeiro quadro do RTSP vira JPEG (~1,5 s por câmera). Só quando o gravador falha, uma tentativa por câmera e por rodada, com a credencial que o Zabbix já marcou como aceita na câmera (tag `cftv_cred` sem `cftv_cred_recusada`); câmera que recusa não é tentada de novo na rodada. Nova dependência: `av>=18.1.0` (PyAV, traz o FFmpeg na wheel).
 
 ### Fixed

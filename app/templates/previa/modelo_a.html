@@ -1,0 +1,122 @@
+{% extends "previa/_base.html" %}
+{% block titulo %}A · Console de observabilidade{% endblock %}
+{% block tema %}tema-a{% endblock %}
+{% block corpo %}
+{% set marca = {'alta': '▲', 'media': '◆', 'atencao': '●'} %}
+{% set rotulo = {'alta': 'Alta', 'media': 'Média', 'atencao': 'Atenção'} %}
+<header class="a-topo">
+  <div>
+    <p class="muted" style="font-size:12px">Governança 360 · NOC</p>
+    <h1>{{ p.gravidades.alta }} problemas de gravidade alta · {{ p.hosts_fora }} hosts sem resposta</h1>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+    <span class="a-periodo"><span aria-current="true">Ao vivo · <span class="n">{{ p.atualizado }}</span></span></span>
+    <a class="btn" href="{{ url_for('previa.previa_modelo', modelo='a') }}">Atualizar</a>
+  </div>
+</header>
+
+<main class="a-corpo">
+  <section class="a-stat" aria-label="Números do momento">
+    <div class="cartao">
+      <span class="rot">Score de governança</span>
+      <span class="val n {{ 'g-alta' if p.score is not none and p.score < 60 else 'g-media' }}">{{ '%.1f'|format(p.score)|replace('.', ',') if p.score is not none else '—' }}<small> /100</small></span>
+      <span class="rot">{{ p.status or '—' }}</span>
+    </div>
+    <div class="cartao">
+      <span class="rot">Problemas ativos</span>
+      <span class="val n">{{ p.problemas|length }}</span>
+      <span class="rot"><span class="g-alta">▲ {{ p.gravidades.alta }}</span> · <span class="g-media">◆ {{ p.gravidades.media }}</span> · ● {{ p.gravidades.atencao }}</span>
+    </div>
+    <div class="cartao">
+      <span class="rot">Hosts sem resposta</span>
+      <span class="val n {{ 'g-alta' if p.hosts_fora }}">{{ p.hosts_fora }}<small> /{{ p.hosts_total }}</small></span>
+      <span class="rot">disponibilidade {{ '%.1f'|format(p.disponibilidade)|replace('.', ',') if p.disponibilidade is not none else '—' }}%</span>
+    </div>
+    <div class="cartao">
+      <span class="rot">Câmeras online</span>
+      <span class="val n">{{ p.cameras_on }}<small> /{{ p.cameras_total }}</small></span>
+      <span class="rot">gravadores {{ p.gravadores_on }}/{{ p.gravadores_total }}</span>
+    </div>
+    <div class="cartao">
+      <span class="rot">Chamados fora do SLA</span>
+      <span class="val n {{ 'g-alta' if p.chamados_fora }}">{{ p.chamados_fora }}<small> /{{ p.chamados_abertos }}</small></span>
+      <span class="rot">abertos no Zendesk</span>
+    </div>
+  </section>
+
+  <section class="cartao a-mapa" aria-labelledby="t-mapa">
+    <div class="a-cab">
+      <h2 id="t-mapa" class="titulo-sec">Mapa de hosts</h2>
+      <div class="a-legenda">
+        <span><span class="g-alta">■</span> alta</span><span><span class="g-media">▨</span> média</span><span><span style="color:#4A5363">■</span> atenção</span><span><span style="color:#2B3A33">■</span> sem problema</span>
+      </div>
+    </div>
+    {% for g in p.mapa %}
+    <div class="a-grupo">
+      <div class="a-grupo-cab"><span>{{ g.tipo }}</span><span class="n muted">{{ g.com_problema }} com problema · {{ g.hosts|length }}</span></div>
+      <div class="a-tiles" role="img" aria-label="{{ g.tipo }}: {{ g.com_problema }} de {{ g.hosts|length }} hosts com problema">
+        {% for h in g.hosts %}<span class="a-tile {{ h.estado }}" title="{{ h.nome }}{% if h.estado %} · {{ rotulo[h.estado] }}{% endif %}"></span>{% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <p class="muted">Lista de hosts do Zabbix indisponível agora.</p>
+    {% endfor %}
+  </section>
+
+  <div class="a-lado">
+    <section class="cartao" style="padding:16px;display:flex;flex-direction:column;gap:10px" aria-labelledby="t-idade">
+      <h2 id="t-idade" class="titulo-sec">Há quanto tempo estão abertos</h2>
+      {% set maior = (p.idades|map(attribute='total')|max) if p.idades else 0 %}
+      <div class="a-idades" role="img" aria-label="Problemas por idade: {% for f in p.idades %}{{ f.rotulo }} {{ f.total }}{{ ', ' if not loop.last }}{% endfor %}">
+        {% for f in p.idades %}
+        <div class="a-barra">
+          <span class="n">{{ f.total }}</span>
+          <div class="pilha">
+            <div class="alta" style="height:{{ (f.alta / maior * 100)|round(0, 'ceil') if maior else 0 }}px"></div>
+            <div class="media" style="height:{{ (f.media / maior * 100)|round(0, 'ceil') if maior else 0 }}px"></div>
+            <div class="atencao" style="height:{{ (f.atencao / maior * 100)|round(0, 'ceil') if maior else 0 }}px"></div>
+          </div>
+          <span class="muted">{{ f.rotulo }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if p.mais_de_7_dias %}<p class="g-alta" style="font-size:13px">▲ {{ p.mais_de_7_dias }} abertos há mais de 7 dias</p>{% endif %}
+    </section>
+
+    <section class="cartao" style="padding:16px" aria-labelledby="t-fontes">
+      <h2 id="t-fontes" class="titulo-sec" style="margin-bottom:6px">Integrações</h2>
+      {% for f in p.fontes %}
+      <div class="a-fonte">
+        <span>{% if f.estado == 'online' %}<span class="g-ok">●</span>{% elif f.estado == 'nao_configurada' %}<span class="muted">○</span>{% else %}<span class="g-alta">▲</span>{% endif %} {{ f.nome }}</span>
+        <span class="n muted">{{ (f.latencia_ms ~ ' ms') if f.latencia_ms else (f.detalhe or f.estado) }}</span>
+      </div>
+      {% endfor %}
+    </section>
+  </div>
+
+  <section class="cartao a-feed" aria-labelledby="t-feed">
+    <div class="a-cab" style="margin-bottom:6px">
+      <h2 id="t-feed" class="titulo-sec">Problemas · mais graves e mais novos primeiro</h2>
+      <a href="{{ url_for('dashboards.zabbix_monitoring') }}">Abrir no painel Zabbix</a>
+    </div>
+    <div class="rolagem" style="max-height:440px">
+      <table>
+        <thead><tr><th scope="col">Gravidade</th><th scope="col">Host</th><th scope="col">Problema</th><th scope="col" style="text-align:right">Aberto há</th></tr></thead>
+        <tbody>
+          {% for x in p.problemas[:40] %}
+          <tr>
+            <td class="g-{{ x.gravidade }}" style="white-space:nowrap"><span class="marca" aria-hidden="true">{{ marca[x.gravidade] }}</span> {{ rotulo[x.gravidade] }}</td>
+            <td>{{ x.host }}</td>
+            <td class="muted">{{ x.nome }}</td>
+            <td class="n" style="text-align:right;white-space:nowrap">{{ x.idade }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">Nenhum problema ativo.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if p.problemas|length > 40 %}<p class="muted" style="font-size:13px;margin-top:8px">Mostrando 40 de {{ p.problemas|length }}.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}
