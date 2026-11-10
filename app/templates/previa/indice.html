@@ -1,0 +1,13 @@
+{% extends "previa/_base.html" %}
+{% block titulo %}Modelos em teste{% endblock %}
+{% block corpo %}
+<main class="c-pag">
+  <h1 style="font-size:22px;font-weight:600">Modelos de redesign em teste</h1>
+  <p class="muted">Cada modelo abre com os dados de agora. As telas atuais do dashboard não mudam.</p>
+  <ul style="list-style:none;margin:0;padding:0;display:grid;gap:12px">
+    {% for chave, nome in modelos.items() %}
+    <li class="cartao" style="padding:16px 20px"><a href="{{ url_for('previa.previa_modelo', modelo=chave) }}" style="font-weight:600;font-size:16px">{{ chave|upper }} · {{ nome }}</a></li>
+    {% endfor %}
+  </ul>
+</main>
+{% endblock %}
