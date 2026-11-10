@@ -1,2 +1,2 @@
-SQLAlchemy==2.1.6
+SQLAlchemy==2.1.8
 structlog==26.1.0
