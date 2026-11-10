@@ -12,9 +12,11 @@ Só nos gravadores Intelbras cuja senha HTTP o dashboard já acertou
 - Imagem, nos ``HORARIOS_FOTO`` (de dia): tira a foto do canal. Câmera que
   não entrega foto (duas tentativas) = sem resposta; tela chapada = sem cena
   (``cftv_imagem``). A miniatura fica guardada só enquanto há problema.
-  Foto que falha num canal que está gravando normalmente vira
-  ``indisponivel`` (ver ``imagem_efetiva``): o vídeo chega ao gravador, quem
-  não entrega a foto é o gravador (ex.: NVD 1432 com câmera ONVIF devolve HTTP 500).
+  Quando o gravador não entrega a foto (NVD 1432 com câmera ONVIF devolve
+  HTTP 500), ela é tirada direto da câmera IP, por um quadro do vídeo RTSP
+  (``camera_rtsp``), com a credencial que o Zabbix marcou como aceita na
+  câmera (tag ``cftv_cred``). Sem foto nem assim, num canal que está
+  gravando normalmente, vira ``indisponivel`` (ver ``imagem_efetiva``).
 
 - Conferência, a cada ``INTERVALO_CONFERENCIA``: relê cada gravador e compara,
   canal a canal, a câmera que ele tem configurada com a conferência no local
@@ -48,7 +50,7 @@ import requests
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
-from itgov.services import cftv_imagem
+from itgov.services import camera_rtsp, cftv_imagem
 from itgov.services.intelbras_api import AcessoNegadoError, CameraGravador, LeituraGravador, SessaoGravador
 
 if TYPE_CHECKING:
@@ -70,6 +72,15 @@ _TZ = ZoneInfo("America/Sao_Paulo")
 _TRAVA = os.path.join(tempfile.gettempdir(), "itgov-cftv-verificacao.lock")
 
 
+class CameraDireta(NamedTuple):
+    """Câmera IP de um canal, para a foto direto nela quando o gravador não entrega."""
+
+    canal: int
+    ip: str
+    usuario: str
+    senha: str
+
+
 class Alvo(NamedTuple):
     """Gravador a verificar."""
 
@@ -77,6 +88,7 @@ class Alvo(NamedTuple):
     usuario: str
     senha: str
     canais: list[int]
+    cameras: tuple[CameraDireta, ...] = ()
 
 
 def _agora() -> datetime:
@@ -96,21 +108,46 @@ def _nomes_gravadores() -> dict[str, str]:
     }
 
 
+def _credenciais_cameras() -> dict[str, tuple[str, str]]:
+    """IP da câmera → usuário/senha da credencial aceita nela (tag ``cftv_cred`` sem recusa)."""
+    from app.services.cftv_gravadores import CREDENCIAIS
+    from itgov.api.v1.cftv_monitoring import get_cached_cftv_summary
+
+    saida: dict[str, tuple[str, str]] = {}
+    for d in get_cached_cftv_summary().get("devices", []):
+        cred = d.get("cred") or ""
+        if d.get("is_gravador") or not d.get("ip") or cred not in CREDENCIAIS or d.get("cred_recusada"):
+            continue
+        usuario, senha = (os.getenv(v, "") for v in CREDENCIAIS[cred])
+        if usuario and senha:
+            saida[d["ip"]] = (usuario, senha)
+    return saida
+
+
 def alvos() -> list[Alvo]:
     """Gravadores com senha HTTP aceita e canais com câmera na conferência (requer app context)."""
     from app.models.unidade import CanalCftv, GravadorAcesso
     from app.services.cftv_gravadores import _usuario_senha
 
     canais: dict[str, list[int]] = {}
+    ip_camera: dict[str, dict[int, str]] = {}
     for c in CanalCftv.query.filter_by(situacao="ativo").order_by(CanalCftv.canal):
         canais.setdefault(c.ip_gravador, []).append(c.canal)
+        if c.ip_camera and not c.analogica:
+            ip_camera.setdefault(c.ip_gravador, {})[c.canal] = c.ip_camera
     nomes = _nomes_gravadores()
+    creds = _credenciais_cameras()
     resultado = []
     for acesso in GravadorAcesso.query.all():
         if acesso.ip in canais and acesso.credencial and acesso.leitura and not acesso.erro:
             usuario, senha = _usuario_senha(acesso.credencial, nomes.get(acesso.ip, ""))
             if usuario and senha:
-                resultado.append(Alvo(acesso.ip, usuario, senha, canais[acesso.ip]))
+                cameras = tuple(
+                    CameraDireta(canal, ip, *creds[ip])
+                    for canal, ip in sorted(ip_camera.get(acesso.ip, {}).items())
+                    if ip in creds
+                )
+                resultado.append(Alvo(acesso.ip, usuario, senha, canais[acesso.ip], cameras))
     return resultado
 
 
@@ -187,6 +224,18 @@ def _foto(g: SessaoGravador, canal: int) -> bytes | None:
     return jpeg
 
 
+def _foto_da_camera(camera: CameraDireta | None, recusadas: set[str]) -> bytes | None:
+    """Foto direto da câmera (uma tentativa); câmera que recusa a senha não é tentada de novo na rodada."""
+    if camera is None or camera.ip in recusadas:
+        return None
+    try:
+        return camera_rtsp.foto(camera.ip, camera.usuario, camera.senha)
+    except camera_rtsp.CredencialRecusadaError:
+        recusadas.add(camera.ip)
+        log.warning("cftv_verificacao.camera_recusou", ip=camera.ip)
+        return None
+
+
 def verificar_imagens(lista: list[Alvo], agora: datetime | None = None) -> set[str]:
     """Tira a foto de cada canal e vê se há imagem (requer app context).
 
@@ -201,12 +250,18 @@ def verificar_imagens(lista: list[Alvo], agora: datetime | None = None) -> set[s
 
     agora = agora or _agora()
     feitos: set[str] = set()
+    recusadas: set[str] = set()
     for alvo in lista:
+        pela_camera = 0
+        cameras = {c.canal: c for c in alvo.cameras}
         try:
             with SessaoGravador(alvo.ip, alvo.usuario, alvo.senha) as g:
                 for canal in alvo.canais:
                     reg = _registro(alvo.ip, canal)
                     jpeg = _foto(g, canal)
+                    if jpeg is None:
+                        jpeg = _foto_da_camera(cameras.get(canal), recusadas)
+                        pela_camera += jpeg is not None
                     try:
                         analise = cftv_imagem.analisar(jpeg) if jpeg is not None else None
                     except ValueError:
@@ -227,6 +282,8 @@ def verificar_imagens(lista: list[Alvo], agora: datetime | None = None) -> set[s
             continue
         else:
             feitos.add(alvo.ip)
+            if pela_camera:
+                log.info("cftv_verificacao.fotos_pela_camera", ip=alvo.ip, canais=pela_camera)
         db.session.commit()
     return feitos
 

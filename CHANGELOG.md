@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **CFTV — Foto direto da câmera quando o gravador não entrega:** os NVD 1432 da Sede (172.29.11.17/.18/.19) devolvem HTTP 500 no `snapshot.cgi` para as câmeras ONVIF (CIP-D1312-M / CIP-B1312-M), e 75 canais ficavam como "foto indisponível". As próprias câmeras respondem `ActionNotSupported` ao `GetSnapshotUri`, então a foto passa a ser um quadro do vídeo: ONVIF `GetStreamUri` do perfil mais leve (substream 640x360) e o primeiro quadro do RTSP vira JPEG (~1,5 s por câmera). Só quando o gravador falha, uma tentativa por câmera e por rodada, com a credencial que o Zabbix já marcou como aceita na câmera (tag `cftv_cred` sem `cftv_cred_recusada`); câmera que recusa não é tentada de novo na rodada. Nova dependência: `av>=18.1.0` (PyAV, traz o FFmpeg na wheel).
+
 ### Fixed
 - **Alertas — GDesk grava o número do chamado e para de dar erro na recuperação:** o GDesk responde `{"ticket": {"id": ...}}` (HTTP 201) e o webhook só procurava `id`/`data.id`, então a tag `gdesk_ticket` voltava vazia nos 587 chamados abertos desde 27/10. O media type GDesk também ganha mensagem de recuperação e de atualização: a ação 12 manda esses avisos para todas as mídias e, sem mensagem, o Zabbix registrava "No message defined for media type" (534 falhas). O webhook continua ignorando recuperação e atualização. Aplicar com `infra-setup/14_create_gdesk_alert.py`.
 - **Rede — Celular não entra no Zabbix quando falta o DHCP:** o automático só cria host de IP que o FortiGate está vendo na rodada. Se a leitura de um FortiGate falhava, os aparelhos dele chegavam sem classe DHCP e sem nome, a regra de celular não tinha o que olhar e o host era criado (em 05/11, celulares Android do Shopping viraram "Câmera Samsung"). MAC aleatório sem nome e sem classe, o iPhone típico, também não é mais criado sozinho e fica para confirmar à mão.
