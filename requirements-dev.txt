@@ -30,7 +30,7 @@ pip-audit>=2.7             # auditoria de vulnerabilidades (substitui safety)
 pre-commit>=4.7.0
 
 # ----- Dev Utils -----
-ipython>=8.20              # REPL melhorado
+ipython>=9.18.1              # REPL melhorado
 ipdb>=0.13                 # debugger interativo
 types-PyYAML
 zabbix-utils>=2.0.4  # infra-setup/ (scripts de provisionamento do Zabbix)
