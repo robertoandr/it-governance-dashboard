@@ -52,3 +52,5 @@ nh3>=0.3
 
 # CFTV — análise da foto do canal (câmera sem imagem / congelada)
 pillow>=11.0
+# CFTV — foto direto da câmera IP pelo vídeo RTSP quando o gravador não entrega (traz o FFmpeg na wheel)
+av>=19.0.2
