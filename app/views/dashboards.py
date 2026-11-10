@@ -945,7 +945,7 @@ def phishing_educativo(isca: str | None = None) -> str:
 def zabbix_monitoring() -> str:
     """Render painel de monitoramento Zabbix."""
     from itgov.api.v1.zabbix_monitoring import get_cached_hosts_por_tipo, get_cached_problems, get_cached_zabbix_summary
-    from itgov.services import acronis_inventario
+    from itgov.services import acronis_inventario, m365_pessoas
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
@@ -957,12 +957,38 @@ def zabbix_monitoring() -> str:
     if tipo not in acronis_inventario.TIPOS_COMPUTADOR:
         tipo = ""
     busca = (request.args.get("q") or "").strip().lower()
+    pessoas = m365_pessoas.obter()
+    pessoa = {
+        c.nome: pessoas.de(c.usuario) if pessoas else None for c in (inventario.computadores if inventario else [])
+    }
+    conta = request.args.get("conta", "")
+    if conta not in ("desativada", "sem_conta"):
+        conta = ""
+
+    def _conta_bate(c: Any) -> bool:
+        p = pessoa.get(c.nome)
+        if conta == "desativada":
+            return p is not None and not p.ativa
+        if conta == "sem_conta":
+            return bool(c.usuario) and pessoas is not None and p is None
+        return True
+
+    def _quem(c: Any) -> str:
+        p = pessoa.get(c.nome)
+        return f"{p.nome} {p.email}" if p else ""
+
     computadores = [
         c
         for c in (inventario.computadores if inventario else [])
         if (not tipo or c.tipo == tipo)
-        and (not busca or busca in f"{c.nome} {c.usuario} {c.modelo} {c.fabricante} {c.cpu} {c.so}".lower())
+        and _conta_bate(c)
+        and (not busca or busca in f"{c.nome} {c.usuario} {c.modelo} {c.fabricante} {c.cpu} {c.so} {_quem(c)}".lower())
     ]
+    todos = inventario.computadores if inventario else []
+    contas_resumo = {
+        "desativada": sum(1 for c in todos if (p := pessoa.get(c.nome)) is not None and not p.ativa),
+        "sem_conta": sum(1 for c in todos if c.usuario and pessoas is not None and pessoa.get(c.nome) is None),
+    }
     return render_template(
         "dashboards/zabbix_monitoring.html",
         summary=summary,
@@ -976,6 +1002,10 @@ def zabbix_monitoring() -> str:
         computadores=computadores,
         tipo=tipo,
         busca=request.args.get("q", ""),
+        pessoa=pessoa,
+        pessoas_lidas=pessoas is not None,
+        conta=conta,
+        contas_resumo=contas_resumo,
     )
 
 
@@ -1941,6 +1971,7 @@ def rede_monitoring() -> str:
         montar_descobertos,
     )
     from itgov.models.ativo import rotulos_tipo
+    from itgov.services import m365_pessoas
 
     if not os.getenv("ZABBIX_URL"):
         abort(404)
@@ -2012,6 +2043,7 @@ def rede_monitoring() -> str:
     return render_template(
         "dashboards/rede_monitoring.html",
         data=data,
+        pessoas=m365_pessoas.obter(),
         revisao=revisao,
         inv=inv,
         q=q,
