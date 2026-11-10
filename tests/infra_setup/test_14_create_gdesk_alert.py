@@ -99,6 +99,12 @@ def test_webhook_usa_alerta_js_e_grava_tag() -> None:
     assert "gdesk_ticket" in gd.WEBHOOK_SCRIPT
 
 
+def test_templates_cobrem_problema_recuperacao_e_atualizacao() -> None:
+    # Sem os três, a ação 12 gera "No message defined for media type".
+    assert sorted(t["recovery"] for t in gd.MESSAGE_TEMPLATES) == ["0", "1", "2"]
+    assert all(t["eventsource"] == "0" for t in gd.MESSAGE_TEMPLATES)
+
+
 def test_defaults_de_url_e_fila() -> None:
     # Sem env, cai nos padrões combinados (IP do vm-sistemas e fila T.I.).
     assert gd.GDESK_URL.endswith(":4000")

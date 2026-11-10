@@ -80,8 +80,9 @@ var Gdesk = {
         var ticket = '';
         try {
             var data = JSON.parse(resp);
-            ticket = data.id || data.ticket_id || data.number ||
-                     (data.data ? (data.data.id || data.data.number) : '') || '';
+            // GDesk responde {"ticket": {"id": 3014, ...}} (HTTP 201).
+            var t = data.ticket || data.data || data;
+            ticket = t.id || t.ticket_id || t.number || '';
         } catch (e) {
             Zabbix.log(3, '[GDesk] resposta nao-JSON: ' + resp);
         }
