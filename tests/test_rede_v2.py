@@ -724,3 +724,22 @@ def test_pagina_rede_sem_acronis_nao_quebra(authed_client, pagina) -> None:
     with patch("itgov.services.acronis_inventario.obter_inventario", return_value=None):
         html = authed_client.get("/gov/rede").get_data(as_text=True)
     assert "reconhecido pelo MAC ou IP" not in html
+
+
+def test_pagina_rede_mostra_pessoa_do_m365(authed_client, pagina) -> None:
+    from itgov.services import m365_pessoas as mp
+    from itgov.services.acronis_inventario import Computador, InventarioComputadores
+
+    inventario = InventarioComputadores(
+        atualizado_em=datetime.now(UTC),
+        computadores=[Computador(nome="PC-RICOH", tipo="desktop", usuario="beto (GRUPOGADENS)", ips=["172.29.1.5"])],
+    )
+    pessoas = mp.indexar(
+        [{"userPrincipalName": "beto@empresa.com.br", "displayName": "Beto Lima", "accountEnabled": False}]
+    )
+    with (
+        patch("itgov.services.acronis_inventario.obter_inventario", return_value=inventario),
+        patch.object(mp, "obter", return_value=pessoas),
+    ):
+        html = authed_client.get("/gov/rede").get_data(as_text=True)
+    assert "Beto Lima" in html and "conta desativada" in html

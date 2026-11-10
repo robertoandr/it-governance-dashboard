@@ -313,6 +313,10 @@ def create_app(settings: AppSettings | None = None) -> Flask:
 
         aquecer_inventario()
 
+        from itgov.services.m365_pessoas import aquecer as aquecer_pessoas
+
+        aquecer_pessoas()
+
     # CLI commands
     from app.commands import register_commands
 

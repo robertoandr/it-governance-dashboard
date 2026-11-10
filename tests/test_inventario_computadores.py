@@ -204,3 +204,31 @@ def test_indices_descarta_mac_e_ip_repetidos() -> None:
     assert set(por_mac) == {"AA:00:00:00:00:01", "BB:00:00:00:00:02"}
     assert por_mac["AA:00:00:00:00:01"] is a
     assert set(por_ip) == {"10.0.0.2"} and por_ip["10.0.0.2"] is b
+
+
+# ── Último usuário × conta do M365 ──────────────────────────────────────────
+
+
+def test_pagina_zabbix_mostra_pessoa_do_m365(authed_client, pagina_zabbix, monkeypatch: pytest.MonkeyPatch) -> None:
+    from itgov.services import m365_pessoas as mp
+
+    monkeypatch.setenv("ZENDESK_SUBDOMAIN", "acme")
+    pessoas = mp.indexar(
+        [{"userPrincipalName": "ana@empresa.com.br", "displayName": "Ana Souza", "accountEnabled": False}]
+    )
+    with patch.object(mp, "obter", return_value=pessoas):
+        html = authed_client.get("/gov/zabbix").get_data(as_text=True)
+        assert "Ana Souza" in html and "conta desativada" in html
+        assert "Conta desativada: 2" in html
+        assert "acme.zendesk.com/agent/search/1?q=requester%3Aana%40empresa.com.br" in html
+        assert "NOTE-ANA" in authed_client.get("/gov/zabbix?q=souza").get_data(as_text=True)
+        assert "PC-BETO" in authed_client.get("/gov/zabbix?conta=desativada").get_data(as_text=True)
+        assert "PC-BETO" not in authed_client.get("/gov/zabbix?conta=sem_conta").get_data(as_text=True)
+
+
+def test_pagina_zabbix_login_sem_conta_m365(authed_client, pagina_zabbix) -> None:
+    from itgov.services import m365_pessoas as mp
+
+    with patch.object(mp, "obter", return_value=mp.indexar([])):
+        html = authed_client.get("/gov/zabbix").get_data(as_text=True)
+    assert "sem conta M365" in html and "Sem conta M365: 2" in html

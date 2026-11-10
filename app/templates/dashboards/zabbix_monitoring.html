@@ -200,7 +200,14 @@
     {% for chave, rotulo in tipos_computador.items() if chave in inventario.por_tipo %}
     <a href="{{ url_for('dashboards.zabbix_monitoring', tipo=chave, q=busca or None) }}#computadores" class="{{ chip }} {{ 'bg-gadens-600 text-white border-gadens-600' if tipo == chave else 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300' }}">{{ rotulo }}: {{ inventario.por_tipo[chave] }}</a>
     {% endfor %}
+    {% if contas_resumo.desativada %}
+    <a href="{{ url_for('dashboards.zabbix_monitoring', tipo=tipo or None, q=busca or None, conta=None if conta == 'desativada' else 'desativada') }}#computadores" class="{{ chip }} {{ 'bg-red-600 text-white border-red-600' if conta == 'desativada' else 'border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' }}" title="Último login de uma conta desativada no M365">Conta desativada: {{ contas_resumo.desativada }}</a>
+    {% endif %}
+    {% if contas_resumo.sem_conta %}
+    <a href="{{ url_for('dashboards.zabbix_monitoring', tipo=tipo or None, q=busca or None, conta=None if conta == 'sem_conta' else 'sem_conta') }}#computadores" class="{{ chip }} {{ 'bg-amber-600 text-white border-amber-600' if conta == 'sem_conta' else 'border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300' }}" title="Último login de uma conta local ou que não existe no M365">Sem conta M365: {{ contas_resumo.sem_conta }}</a>
+    {% endif %}
     {% if tipo %}<input type="hidden" name="tipo" value="{{ tipo }}">{% endif %}
+    {% if conta %}<input type="hidden" name="conta" value="{{ conta }}">{% endif %}
     <input type="search" name="q" value="{{ busca }}" placeholder="Buscar nome, usuário, modelo, CPU…" class="ml-auto rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1 w-56">
   </form>
   <div class="overflow-x-auto max-h-[560px] overflow-y-auto">
@@ -222,7 +229,14 @@
           <td class="py-1.5 pr-3">
             <span class="inline-block w-1.5 h-1.5 rounded-full mr-1 {{ 'bg-green-500' if c.online else 'bg-gray-300' }}" title="{{ 'agente online' if c.online else 'agente offline' }}"></span>
             <span class="font-medium text-gray-800 dark:text-slate-100">{{ c.nome }}</span>
-            {% if c.usuario %}<div class="text-[10px] text-gray-400 truncate max-w-[180px]" title="{{ c.usuario }}">{{ c.usuario }}</div>{% endif %}
+            {% set p = pessoa.get(c.nome) %}
+            {% if p %}
+            <div class="text-[10px] text-gray-500 dark:text-slate-400 truncate max-w-[220px]" title="Último login: {{ c.usuario }} · {{ p.email }}">
+              {{ p.nome }}
+              {% if not p.ativa %}<span class="ml-0.5 font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded px-1" title="A conta deste usuário está desativada no M365, mas foi o último login neste computador">conta desativada</span>{% endif %}
+              {% if p.chamados_url %}<a href="{{ p.chamados_url }}" target="_blank" rel="noopener" class="ml-0.5 text-gadens-600 hover:underline" title="Chamados abertos por {{ p.email }} no Zendesk">chamados</a>{% endif %}
+            </div>
+            {% elif c.usuario %}<div class="text-[10px] text-gray-400 truncate max-w-[180px]" title="{{ c.usuario }}{% if pessoas_lidas %} · sem conta correspondente no M365{% endif %}">{{ c.usuario }}{% if pessoas_lidas %} <span class="text-amber-600">· sem conta M365</span>{% endif %}</div>{% endif %}
           </td>
           <td class="py-1.5 pr-3 whitespace-nowrap">{{ tipos_computador[c.tipo] }}</td>
           <td class="py-1.5 pr-3">{{ c.fabricante or '—' }}<div class="text-[10px] text-gray-400">{{ c.modelo }}{% if c.serie %} · S/N {{ c.serie }}{% endif %}</div></td>
