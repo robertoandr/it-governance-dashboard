@@ -13,6 +13,13 @@ Funções puras (testáveis sem rede):
 - ``achados_por_regra``: malware, EDR crítico, proteção com falha e programa de
   acesso remoto instalado. O "FortiGate" desses achados é ``Acronis``.
 
+Além dos alertas entram as **atividades** concluídas na janela
+(``/api/task_manager/v2/activities``): o encaminhamento por syslog só existe
+com gravador Linux e não temos agente Linux, então o rastro de quem mexeu no
+console (plano editado ou revogado, agente removido, sessão remota) e os
+patches que falharam vêm pela API (``resumir_atividades`` e
+``achados_de_atividades``).
+
 Achados do Acronis ficam só no dashboard (decisão de 05/11/2026: alertas do
 Acronis sem WhatsApp); o agente SIEM não os manda para o item de graves.
 Tudo aqui é leitura.
@@ -152,4 +159,153 @@ def achados_por_regra(resumo: dict[str, Any]) -> list[Achado]:
                 "e revisar o acesso à máquina.",
             )
         )
+    return achados
+
+
+# ── Atividades (o que o syslog traria como "atividades e tarefas") ──────────
+
+_FALHAS = ("error", "timedout")
+_TIPOS_PATCH = ("SystemPatchInstallation", "UserPatchInstallation")
+_TIPOS_ATUALIZACAO = ("UpdateAgent", "DownloadInstaller", "Download", "Rollback")
+_SESSAO_REMOTA = "rds_ai_assistant"
+
+
+def _curto(nome: Any) -> str:
+    return str(nome or "").split(".")[0].strip()
+
+
+def _maquina_da_atividade(a: dict[str, Any]) -> str:
+    """Máquina da atividade: o agente que executou, ou o que vier no contexto."""
+    ctx = a.get("context") or {}
+    return _curto(a.get("executorHostname")) or _curto(ctx.get("computerName")) or _curto(ctx.get("machineAddress"))
+
+
+def _humano(usuario: str) -> bool:
+    """Conta de pessoa (e-mail); ``BY_SCHEDULE`` e o nome do tenant são do próprio Acronis."""
+    return "@" in usuario
+
+
+def resumir_atividades(atividades: list[dict[str, Any]], inicio: datetime, fim: datetime) -> dict[str, Any]:
+    """O que foi feito no Acronis na janela: mudanças de proteção, sessões remotas e falhas.
+
+    Args:
+        atividades: Itens crus de ``/api/task_manager/v2/activities``.
+        inicio: Começo da janela (exclusivo).
+        fim: Fim da janela (inclusivo).
+
+    Returns:
+        ``{"total", "relevantes", "por_tipo", "protecao_removida", "planos_editados",
+        "planos_editados_automatico", "sessoes_remotas", "patches_falhos",
+        "atualizacao_agente_falha"}``; as listas trazem textos prontos para evidência.
+    """
+    revogados: Counter[tuple[str, str]] = Counter()
+    removidos: list[str] = []
+    editados: Counter[tuple[str, str]] = Counter()
+    automaticos = 0
+    sessoes: dict[str, set[str]] = {}
+    patches: list[str] = []
+    atualizacoes: Counter[str] = Counter()
+    por_tipo: Counter[str] = Counter()
+    total = 0
+    for a in atividades:
+        quando = _data(a.get("completedAt") or a.get("updatedAt"))
+        if not quando or not inicio < quando <= fim:
+            continue
+        total += 1
+        tipo = str(a.get("type") or "?")
+        codigo = str((a.get("result") or {}).get("code") or "?")
+        ctx = a.get("context") or {}
+        titulo = str(ctx.get("title") or "")
+        usuario = str(a.get("startedByUser") or "").strip() or "?"
+        plano = str(ctx.get("PlanName") or (a.get("policy") or {}).get("name") or "?")
+        if titulo.startswith("Revoking plan"):
+            revogados[(usuario, plano)] += 1
+            tipo = "plano revogado"
+        elif titulo.startswith("Removing agent"):
+            removidos.append(f"{usuario}: agente {_curto((ctx.get('Persistent') or {}).get('Name'))} removido")
+            tipo = "agente removido"
+        elif titulo.startswith("Editing plan"):
+            if _humano(usuario):
+                editados[(usuario, plano)] += 1
+            else:
+                automaticos += 1
+            tipo = "plano editado"
+        elif _SESSAO_REMOTA in tipo:
+            sessoes.setdefault(usuario, set()).add(str(ctx.get("session_id") or a.get("uuid") or ""))
+            tipo = "sessão remota"
+        elif tipo in _TIPOS_PATCH and codigo in _FALHAS:
+            aviso = ((a.get("result") or {}).get("warnings") or [{}])[0].get("context") or {}
+            erro = f" (erro {aviso['errCode']})" if aviso.get("errCode") else ""
+            patches.append(f"{_maquina_da_atividade(a) or '?'}: {ctx.get('appName') or '?'}{erro}")
+        elif tipo in _TIPOS_ATUALIZACAO and codigo in _FALHAS:
+            atualizacoes[_maquina_da_atividade(a) or "?"] += 1
+        por_tipo[f"{tipo} ({codigo})"] += 1
+    removida = [f"{u}: plano '{p}' revogado de {n} máquina(s)" for (u, p), n in revogados.most_common()] + removidos
+    editadas = [f"{u}: plano '{p}' editado {n}x" for (u, p), n in editados.most_common()]
+    remotas = [f"{u}: {len(ids)} sessão(ões)" for u, ids in sorted(sessoes.items())]
+    patches = sorted(set(patches))
+    return {
+        "total": total,
+        "relevantes": len(removida) + len(editadas) + len(remotas) + len(patches) + len(atualizacoes),
+        "por_tipo": [[t, n] for t, n in por_tipo.most_common(12)],
+        "protecao_removida": removida[:_MAX_MAQUINAS],
+        "planos_editados": editadas[:_MAX_MAQUINAS],
+        "planos_editados_automatico": automaticos,
+        "sessoes_remotas": remotas[:_MAX_MAQUINAS],
+        "patches_falhos": patches[:_MAX_MAQUINAS],
+        "patches_falhos_total": len(patches),
+        "atualizacao_agente_falha": _lista(atualizacoes),
+    }
+
+
+# chave do resumo → (assinatura, severidade, título, resumo, recomendação)
+_REGRAS_ATIVIDADES: dict[str, tuple[str, str, str, str, str]] = {
+    "protecao_removida": (
+        "acronis-protecao-removida",
+        "media",
+        "Proteção do Acronis retirada de máquinas",
+        "Plano de proteção revogado ou agente removido do console nesta janela.",
+        "Confirmar com quem fez se a máquina saiu de uso; se não saiu, reaplicar o plano de proteção.",
+    ),
+    "planos_editados": (
+        "acronis-plano-alterado",
+        "baixa",
+        "Plano de proteção do Acronis alterado",
+        "Alguém editou um plano de proteção no console nesta janela.",
+        "Conferir o que mudou no plano (proteções desligadas, exclusões novas) e se a mudança foi combinada.",
+    ),
+    "patches_falhos": (
+        "acronis-patch-falhou",
+        "baixa",
+        "Instalação de patch falhou pelo Acronis",
+        "Atualizações de programa que o Acronis tentou instalar e deram erro nesta janela.",
+        "Repetir a instalação ou atualizar o programa à mão nas máquinas listadas.",
+    ),
+}
+
+
+def achados_de_atividades(resumo: dict[str, Any]) -> list[Achado]:
+    """Achados objetivos das atividades do Acronis, que valem mesmo sem a IA.
+
+    Args:
+        resumo: Saída de ``resumir_atividades``.
+
+    Returns:
+        Um achado por regra que disparou, com ``fortigate`` = ``Acronis``.
+    """
+    achados: list[Achado] = []
+    for chave, (assinatura, severidade, titulo, texto, recomendacao) in _REGRAS_ATIVIDADES.items():
+        evidencias = resumo.get(chave) or []
+        if evidencias:
+            achados.append(
+                Achado(
+                    assinatura=assinatura,
+                    fortigate=FONTE,
+                    severidade=severidade,
+                    titulo=titulo,
+                    resumo=texto,
+                    evidencias=evidencias,
+                    recomendacao=recomendacao,
+                )
+            )
     return achados
