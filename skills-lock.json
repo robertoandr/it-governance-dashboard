@@ -68,9 +68,9 @@
       "computedHash": "fccc3f5d3e026ddc6a4dd41d57808ba5c9636ecff6eff0368fa4619aa89993c6"
     },
     "ui-ux-pro-max": {
-      "source": "nexu-io/open-design",
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
-      "skillPath": "skills/ui-ux-pro-max/SKILL.md",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
       "computedHash": "13887b516bebbd2e97885435ea022b2aec36cc77224f639d098a47f2723865cb"
     },
     "zabbix-api": {
