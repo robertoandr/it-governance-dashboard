@@ -166,7 +166,6 @@ def _buscar_problemas() -> list[dict]:
                 "severity_label": sev_label.get(sev, "unknown"),
                 "acknowledged": str(p.get("acknowledged", "0")) == "1",
                 "clock_fmt": clock_fmt,
-                "clock": ts,
                 "hosts": trigger_hosts.get(p["objectid"], []),
             }
         )
