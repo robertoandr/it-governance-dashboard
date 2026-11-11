@@ -251,6 +251,34 @@ def test_foto_direto_da_camera_quando_o_gravador_nao_entrega(banco, monkeypatch:
     assert pedidos == ["10.77.1.1", "10.77.1.2"]
 
 
+def test_leitura_do_gravador_nao_segura_o_banco_aberto_para_escrita(banco, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Durante a conversa com o gravador não pode haver escrita pendente (trava o SQLite por minutos)."""
+    monkeypatch.setattr(cv, "ESPERA_NOVA_FOTO", 0)
+    monkeypatch.setattr(cv, "PAUSA_ENTRE_FOTOS", 0)
+
+    class Vigia(_GravadorFalso):
+        def _sem_escrita(self) -> None:
+            assert not db.session.new and not db.session.dirty
+            assert not db.session.connection().in_nested_transaction()
+            assert db.session.connection().connection.dbapi_connection.in_transaction is False
+
+        def foto(self, canal: int) -> bytes | None:
+            self._sem_escrita()
+            return super().foto(canal)
+
+        def ultima_gravacao(self, canal: int, inicio: datetime, fim: datetime) -> datetime | None:
+            self._sem_escrita()
+            return super().ultima_gravacao(canal, inicio, fim)
+
+    falso = Vigia({1: datetime(2026, 10, 15, 11, 9), 2: None}, {1: [_jpeg(cena=True)], 2: [_jpeg(cena=False)]})
+    monkeypatch.setattr(cv, "SessaoGravador", falso)
+    db.session.commit()
+    assert cv.verificar_imagens(_alvo(1, 2), _AGORA) == {_IP}
+    assert cv.verificar_gravacao(_alvo(1, 2), _AGORA) == {_IP}
+    estado = cv.por_gravador()[_IP]
+    assert {c: (v["imagem"], v["gravacao"]) for c, v in estado.items()} == {1: ("ok", "ok"), 2: ("chapada", "parada")}
+
+
 def test_gravador_fora_do_ar_nao_entra_como_verificado(banco, monkeypatch: pytest.MonkeyPatch) -> None:
     class Fora(_GravadorFalso):
         def __enter__(self) -> _GravadorFalso:
