@@ -90,6 +90,7 @@ safety-report.json
 
 # ===== Dados / Backups / Logs =====
 data/
+!.agents/skills/*/data/
 !data/schema.sql
 !data/seed.py
 # app/data/license_costs.seed.json é o seed versionado consumido por
