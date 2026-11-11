@@ -191,27 +191,33 @@ def verificar_gravacao(lista: list[Alvo], agora: datetime | None = None) -> set[
     agora = agora or _agora()
     feitos: set[str] = set()
     for alvo in lista:
+        # Lê tudo do gravador primeiro e só depois grava: com o banco aberto para
+        # escrita durante a leitura, o SQLite fica travado para o resto do painel.
+        lidos: list[tuple[int, str, datetime | None]] = []
+        recusado = False
         try:
             with SessaoGravador(alvo.ip, alvo.usuario, alvo.senha) as g:
                 hora = g.hora()
                 modos = g.modos_gravacao()
                 for canal in alvo.canais:
-                    reg = _registro(alvo.ip, canal)
                     if modos.get(canal) == 2:
-                        reg.gravacao, reg.ultima_gravacao = "desligada", None
-                    else:
-                        fim = g.ultima_gravacao(canal, hora - BUSCA_GRAVACAO, hora)
-                        reg.ultima_gravacao = fim
-                        reg.gravacao = "ok" if fim is not None and hora - fim <= TOLERANCIA_GRAVACAO else "parada"
-                    reg.gravacao_em = agora
+                        lidos.append((canal, "desligada", None))
+                        continue
+                    fim = g.ultima_gravacao(canal, hora - BUSCA_GRAVACAO, hora)
+                    parada = fim is None or hora - fim > TOLERANCIA_GRAVACAO
+                    lidos.append((canal, "parada" if parada else "ok", fim))
         except AcessoNegadoError:
-            _recusado(alvo.ip, agora)
+            recusado = True
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("cftv_verificacao.gravacao_falhou", ip=alvo.ip, erro=f"{type(exc).__name__}: {exc}"[:200])
-            db.session.rollback()
             continue
         else:
             feitos.add(alvo.ip)
+        for canal, gravacao, fim in lidos:
+            reg = _registro(alvo.ip, canal)
+            reg.gravacao, reg.ultima_gravacao, reg.gravacao_em = gravacao, fim, agora
+        if recusado:
+            _recusado(alvo.ip, agora)
         db.session.commit()
     return feitos
 
@@ -254,10 +260,13 @@ def verificar_imagens(lista: list[Alvo], agora: datetime | None = None) -> set[s
     for alvo in lista:
         pela_camera = 0
         cameras = {c.canal: c for c in alvo.cameras}
+        # Tira todas as fotos primeiro e só depois grava: a rodada de um gravador
+        # leva minutos e não pode segurar o SQLite aberto para escrita esse tempo todo.
+        lidos: list[tuple[int, str, bytes | None]] = []
+        recusado = False
         try:
             with SessaoGravador(alvo.ip, alvo.usuario, alvo.senha) as g:
                 for canal in alvo.canais:
-                    reg = _registro(alvo.ip, canal)
                     jpeg = _foto(g, canal)
                     if jpeg is None:
                         jpeg = _foto_da_camera(cameras.get(canal), recusadas)
@@ -267,23 +276,26 @@ def verificar_imagens(lista: list[Alvo], agora: datetime | None = None) -> set[s
                     except ValueError:
                         analise = None
                     if jpeg is None or analise is None:
-                        reg.imagem, reg.miniatura = "sem_resposta", None
+                        lidos.append((canal, "sem_resposta", None))
                     elif cftv_imagem.sem_imagem(analise):
-                        reg.imagem, reg.miniatura = "chapada", cftv_imagem.miniatura(jpeg)
+                        lidos.append((canal, "chapada", cftv_imagem.miniatura(jpeg)))
                     else:
-                        reg.imagem, reg.miniatura = "ok", None
-                    reg.imagem_em = agora
+                        lidos.append((canal, "ok", None))
                     time.sleep(PAUSA_ENTRE_FOTOS)
         except AcessoNegadoError:
-            _recusado(alvo.ip, agora)
+            recusado = True
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("cftv_verificacao.imagem_falhou", ip=alvo.ip, erro=f"{type(exc).__name__}: {exc}"[:200])
-            db.session.rollback()
             continue
         else:
             feitos.add(alvo.ip)
             if pela_camera:
                 log.info("cftv_verificacao.fotos_pela_camera", ip=alvo.ip, canais=pela_camera)
+        for canal, imagem, miniatura in lidos:
+            reg = _registro(alvo.ip, canal)
+            reg.imagem, reg.miniatura, reg.imagem_em = imagem, miniatura, agora
+        if recusado:
+            _recusado(alvo.ip, agora)
         db.session.commit()
     return feitos
 
