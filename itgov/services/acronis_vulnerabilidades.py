@@ -215,6 +215,50 @@ async def _buscar() -> PainelVulnerabilidades:
     return montar_painel(atividades, nomes, datetime.now(UTC))
 
 
+async def buscar_atividades_desde(desde: datetime) -> list[dict[str, Any]]:
+    """Atividades do Acronis concluídas depois de ``desde`` (todas, não só varreduras).
+
+    É o que o encaminhamento por syslog entregaria como "atividades e tarefas":
+    quem editou ou revogou plano, removeu agente, abriu sessão remota, e os
+    patches e atualizações que falharam. Só leitura.
+
+    Args:
+        desde: Começo da janela (UTC).
+
+    Returns:
+        Itens crus de ``/api/task_manager/v2/activities``, no máximo ``_LIMITE_ATIVIDADES``,
+        cada um com ``executorHostname`` (nome da máquina do agente, "" se não houver).
+
+    Raises:
+        httpx.HTTPError: Falha de rede ou HTTP.
+    """
+    base = os.getenv("ACRONIS_BASE_URL", "").rstrip("/")
+    client_id, secret = _creds()
+    atividades: list[dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+        token = _json(
+            await c.post(f"{base}/api/2/idp/token", auth=(client_id, secret), data={"grant_type": "client_credentials"})
+        )["access_token"]
+        c.headers["Authorization"] = f"Bearer {token}"
+        params: dict[str, Any] = {
+            "completedAt": f"gt({desde.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')})",
+            "limit": 1000,
+        }
+        while True:
+            dados = _json(await c.get(f"{base}/api/task_manager/v2/activities", params=params))
+            atividades.extend(dados.get("items", []))
+            depois = (dados.get("paging") or {}).get("cursors", {}).get("after")
+            if not depois or not dados.get("items") or len(atividades) >= _LIMITE_ATIVIDADES:
+                break
+            params["after"] = depois
+        if atividades:  # o nome da máquina nem sempre vem na atividade: sai do agente que a executou
+            agentes = _json(await c.get(f"{base}/api/agent_manager/v2/agents", params={"limit": 1000})).get("items", [])
+            nomes = {str(g.get("id")): str(g.get("hostname") or g.get("name") or "") for g in agentes if g.get("id")}
+            for a in atividades:
+                a["executorHostname"] = nomes.get(str((a.get("executor") or {}).get("id") or ""), "")
+    return atividades
+
+
 def _carregar() -> PainelVulnerabilidades | None:
     try:
         return asyncio.run(_buscar())

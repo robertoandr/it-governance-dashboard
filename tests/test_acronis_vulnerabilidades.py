@@ -130,3 +130,36 @@ def test_pagina_vulnerabilidades_carregando(authed_client, monkeypatch: pytest.M
     with patch.object(av, "obter_painel", return_value=None), patch.object(av, "carregando", return_value=True):
         html = authed_client.get("/gov/cyber/vulnerabilidades").get_data(as_text=True)
     assert "Lendo as varreduras do Acronis" in html
+
+
+def test_buscar_atividades_desde_pagina_e_poe_o_nome_da_maquina(monkeypatch) -> None:
+    import asyncio
+    import json
+    from datetime import UTC, datetime
+
+    import httpx
+
+    from itgov.services import acronis_vulnerabilidades as av
+
+    pedidos: list[dict[str, str]] = []
+
+    def responde(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/idp/token"):
+            return httpx.Response(200, json={"access_token": "t"})
+        if req.url.path.endswith("/agents"):
+            return httpx.Response(200, json={"items": [{"id": "ag1", "hostname": "PC-01.empresa.local"}]})
+        pedidos.append(dict(req.url.params))
+        if "after" not in req.url.params:
+            item = {"type": "WinScan", "executor": {"id": "ag1"}, "obs": "n@o"}
+            corpo = json.dumps({"items": [item], "paging": {"cursors": {"after": "c2"}}}).encode()
+            return httpx.Response(200, content=corpo.replace(b"@", bytes([0xE3])))  # latin-1 no meio do UTF-8
+        return httpx.Response(200, json={"items": [{"type": "TpScan", "executor": {"id": "outro"}}], "paging": {}})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(av.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(responde), **kw))
+    monkeypatch.setenv("ACRONIS_BASE_URL", "https://acronis.test")
+    monkeypatch.setenv("ACRONIS_CLIENT_ID", "id")
+    monkeypatch.setenv("ACRONIS_CLIENT_SECRET", "s")
+    itens = asyncio.run(av.buscar_atividades_desde(datetime(2026, 11, 11, 18, 0, tzinfo=UTC)))
+    assert [(i["type"], i["executorHostname"]) for i in itens] == [("WinScan", "PC-01.empresa.local"), ("TpScan", "")]
+    assert pedidos[0]["completedAt"] == "gt(2026-11-11T18:00:00Z)" and pedidos[1]["after"] == "c2"
