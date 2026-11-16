@@ -205,13 +205,21 @@ _CELULAR = re.compile(
     r"|REALME|OPPO|^SM-[A-Z]\d|^[AMSZ]\d{2,3}[A-Z]?[-_ ]",
     re.I,
 )
+# Relógio inteligente: "Watch" é o nome DHCP padrão do Apple Watch. Só como palavra
+# inteira ("WatchGuard" é firewall) e sem CAM/DVR/NVR no nome ("Watch-CAM01" é câmera).
+_RELOGIO = re.compile(r"(?<![A-Z0-9])WATCH(?![A-Z0-9])|AMAZFIT|SMARTWATCH", re.I)
+_NOME_DE_CAMERA = re.compile(r"(?<![A-Z])(?:CAM(?:ERA)?|DVR|NVR)(?![A-Z])", re.I)
+
+
+def _eh_relogio(nome: str) -> bool:
+    return bool(_RELOGIO.search(nome)) and not _NOME_DE_CAMERA.search(nome)
 
 
 def eh_celular(host: dict[str, Any]) -> str:
-    """Diz se o host é celular/tablet (Android ou iOS), que nunca vai para o Zabbix.
+    """Diz se o host é celular, tablet ou relógio inteligente, que nunca vai para o Zabbix.
 
     Sinais: classe DHCP Android (``android-dhcp-*``) e nome de host do
-    aparelho (iPhone, iPad, Galaxy, A15-de-Fulano...). Valem mesmo para
+    aparelho (iPhone, iPad, Galaxy, A15-de-Fulano, Watch...). Valem mesmo para
     host que já está no Zabbix.
 
     Args:
@@ -227,6 +235,8 @@ def eh_celular(host: dict[str, Any]) -> str:
         nome = str(host.get(campo) or "")
         if nome and _CELULAR.search(nome):
             return f"nome {nome} (celular/tablet)"
+        if nome and _eh_relogio(nome):
+            return f"nome {nome} (relógio inteligente)"
     return ""
 
 

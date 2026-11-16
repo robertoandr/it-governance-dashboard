@@ -681,15 +681,34 @@ def test_cadastrar_classificacao_reclassifica_e_remove(authed_client, pagina, se
         {"hostname": "moto-g84"},
         {"hostname": "REDMI-NOTE-13"},
         {"hostname": "x", "ia_nome": "Galaxy S23"},
+        {"hostname": "Watch"},
+        {"hostname": "Apple-Watch-de-Ana"},
+        {"hostname": "", "ia_nome": "Watch"},
+        {"hostname": "Amazfit-GTS"},
     ],
 )
 def test_eh_celular(host: dict) -> None:
     assert eh_celular(host)
 
 
-@pytest.mark.parametrize("host", [{"vci": "MSFT 5.0", "hostname": "Camille"}, {"hostname": "CAM01"}, {}])
+@pytest.mark.parametrize(
+    "host",
+    [
+        {"vci": "MSFT 5.0", "hostname": "Camille"},
+        {"hostname": "CAM01"},
+        {"hostname": "WatchGuard-T45"},
+        {"hostname": "Watch-CAM01"},
+        {"hostname": "Watchtower"},
+        {},
+    ],
+)
 def test_nao_e_celular(host: dict) -> None:
     assert eh_celular(host) == ""
+
+
+def test_relogio_nao_vira_camera_nem_com_grupo_do_zabbix() -> None:
+    tipo, motivo = classificar({"zabbix_grupos": ["CFTV/Cameras"], "hostname": "Watch"})
+    assert tipo == "movel" and "relógio" in motivo
 
 
 def test_celular_no_zabbix_continua_celular() -> None:
