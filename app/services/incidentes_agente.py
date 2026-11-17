@@ -79,6 +79,12 @@ log = structlog.get_logger(__name__)
 INTERVALO_TRIAGEM = timedelta(minutes=30)
 INTERVALO_ACOMPANHAMENTO = timedelta(minutes=5)
 LOTE_POR_RODADA = 20
+# Proposta rejeitada, que falhou ou já executada cujo incidente continua aberto no
+# Acronis volta para a fila depois deste prazo (antes ficava aberta para sempre).
+REANALISE = timedelta(days=7)
+# Quantas propostas "sumidas" da listagem são conferidas uma a uma por rodada
+# antes de virar obsoleta (a listagem já veio incompleta e derrubou propostas válidas).
+CONFERIR_SUMIDAS = 50
 # 1 incidente por chamada: na combo high-availability (único acesso da chave; Claude caído
 # → tudo no gemini) 1 incidente leva ~27 s, mas 3 chegaram a 154 s e, com a variância do
 # OmniRoute, estouraram os 300 s em produção (26/10). Um por vez mantém folga grande.
@@ -246,6 +252,17 @@ def _gravar(
         p = PropostaIncidente(incident_id=base.incident_id, customer_id=base.customer_id, decisao=decisao)
         db.session.add(p)
     fonte_inc = inc or base
+    if p.status and p.status != PROPOSTA:
+        # Reanálise: guarda a decisão anterior nas evidências e limpa a execução antiga
+        quando = p.decidido_em.strftime("%d/%m/%Y") if p.decidido_em else ""
+        anterior = (
+            f"Reanálise: antes {p.decisao} ({p.status}"
+            + (f", {p.decidido_por} em {quando}" if p.decidido_por else "")
+            + ")"
+        )
+        evidencias = [anterior, *evidencias]
+        p.decidido_por, p.decidido_em = "", None
+        p.resultado = p.activity_id = p.acao_status = ""
     p.customer_id = base.customer_id
     p.maquina = base.maquina[:200]
     p.criado_no_acronis = base.criado_em
@@ -259,6 +276,40 @@ def _gravar(
     p.decisao, p.acao, p.justificativa = decisao, acao, justificativa[:800]
     p.evidencias_json = json.dumps(evidencias, ensure_ascii=False)
     p.fonte, p.status, p.analisado_em = fonte, PROPOSTA, agora
+
+
+def _encerrado_no_acronis(incident_id: str, customer_id: str) -> bool:
+    """Confere no Acronis se o incidente saiu mesmo da fila (encerrado, mitigado ou apagado).
+
+    Em falha de rede responde False: a proposta fica como está até a próxima rodada.
+    """
+    try:
+        inc = acronis_edr.detalhe(incident_id, customer_id)
+    except IncidenteNaoEncontradoError:
+        return True
+    except httpx.HTTPError as exc:
+        log.warning("incidentes_agente.conferir_falhou", incidente=incident_id, erro=str(exc)[:200])
+        return False
+    return inc.estado in acronis_edr.ESTADOS_FINAIS or (bool(inc.mitigacao) and inc.mitigacao != "NOT_MITIGATED")
+
+
+def reanalisar(p: PropostaIncidente, agora: datetime) -> bool:
+    """A proposta de um incidente que CONTINUA aberto no Acronis deve voltar para a triagem?
+
+    - obsoleta: sim, sempre (foi dada como resolvida, mas o incidente segue aberto);
+    - rejeitada, falhou ou executada: só depois de ``REANALISE`` da decisão;
+    - isolamento executado: nunca (o registro controla o desisolar).
+    """
+    if p.status == OBSOLETA:
+        return True
+    if p.status not in (REJEITADA, FALHOU, EXECUTADA):
+        return False
+    if p.status == EXECUTADA and p.decisao == ACAO and p.acao == ISOLAR:
+        return False
+    if p.decidido_em is None:
+        return False
+    decidido = p.decidido_em if p.decidido_em.tzinfo else p.decidido_em.replace(tzinfo=UTC)
+    return agora - decidido >= REANALISE
 
 
 def triar(agora: datetime | None = None) -> dict[str, Any]:
@@ -276,18 +327,21 @@ def triar(agora: datetime | None = None) -> dict[str, Any]:
     por_id = {i.incident_id: i for i in abertos}
     propostas = {p.incident_id: p for p in PropostaIncidente.query.all()}
 
-    # Resolvido/encerrado por fora antes da decisão: a proposta perde o sentido
+    # Resolvido/encerrado por fora antes da decisão: a proposta perde o sentido.
+    # Só depois de conferir o incidente: sumir da listagem não basta.
+    sumidas = [p for p in propostas.values() if p.status == PROPOSTA and p.incident_id not in por_id]
     obsoletas = 0
-    for p in propostas.values():
-        if p.status == PROPOSTA and p.incident_id not in por_id:
+    for p in sumidas[:CONFERIR_SUMIDAS]:
+        if _encerrado_no_acronis(p.incident_id, p.customer_id):
             p.status, p.resultado = OBSOLETA, "Incidente resolvido ou encerrado fora do dashboard."
             obsoletas += 1
     # Grava já: o que vem a seguir é HTTP (Acronis e IA, até minutos) e não pode
     # rodar com a trava de escrita do SQLite presa.
     db.session.commit()
 
-    # Novos, ou ainda em proposta mas que mudaram no Acronis
-    pendentes = [
+    # Primeiro os novos e os que mudaram no Acronis; depois os que continuam abertos
+    # com proposta já sem efeito (obsoleta, rejeitada, falhou...).
+    novos = [
         i
         for i in abertos
         if i.incident_id not in propostas
@@ -295,7 +349,9 @@ def triar(agora: datetime | None = None) -> dict[str, Any]:
             propostas[i.incident_id].status == PROPOSTA
             and propostas[i.incident_id].atualizado_no_acronis != i.atualizado_em
         )
-    ][:LOTE_POR_RODADA]
+    ]
+    reanalise = [i for i in abertos if i.incident_id in propostas and reanalisar(propostas[i.incident_id], agora)]
+    pendentes = (novos + reanalise)[:LOTE_POR_RODADA]
     por_maquina = Counter(i.maquina for i in abertos)
 
     detalhes: dict[str, IncidenteEdr | None] = {}
@@ -351,6 +407,7 @@ def triar(agora: datetime | None = None) -> dict[str, Any]:
     resultado = {
         "abertos": len(abertos),
         "triados": len(regras),
+        "reanalise": len(reanalise),
         "ia": bool(da_ia),
         "erro_ia": erro_ia,
         "obsoletas": obsoletas,
