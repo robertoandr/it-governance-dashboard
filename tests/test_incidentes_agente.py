@@ -173,7 +173,7 @@ def test_triagem_sem_ia_grava_regras(banco, sem_ia, monkeypatch: pytest.MonkeyPa
         },
     )
     r = ia.triar(_AGORA)
-    assert r == {"abertos": 4, "triados": 3, "ia": False, "erro_ia": "", "obsoletas": 0}
+    assert r == {"abertos": 4, "triados": 3, "reanalise": 0, "ia": False, "erro_ia": "", "obsoletas": 0}
     decisoes = {p.incident_id: (p.decisao, p.fonte) for p in PropostaIncidente.query.all()}
     assert decisoes == {"novo": (ENCERRAR, "regra"), "velho": (ENCERRAR, "regra"), "sumiu": (ENCERRAR, "regra")}
 
@@ -253,8 +253,79 @@ def test_triagem_marca_obsoleta_e_reanalisa_so_o_que_mudou(banco, sem_ia, monkey
     ia.triar(_AGORA)
     assert chamadas == ["a"]  # "b" já decidida não volta
     monkeypatch.setattr(ia.acronis_edr, "listar_abertos", lambda: [])
+    fechado = _inc("a")
+    fechado.estado = "CLOSED"
+    monkeypatch.setattr(ia.acronis_edr, "detalhe", lambda iid, c: fechado)
     assert ia.triar(_AGORA)["obsoletas"] == 1
     assert PropostaIncidente.query.filter_by(incident_id="a").one().status == OBSOLETA
+
+
+def test_triagem_nao_derruba_proposta_se_incidente_continua_aberto(banco, sem_ia, monkeypatch) -> None:
+    """Listagem incompleta: o incidente some da lista mas segue aberto → a proposta fica."""
+    _api_falsa(monkeypatch, [_inc("a"), _inc("b"), _inc("c")], {"a": _inc("a"), "b": _inc("b"), "c": _inc("c")})
+    ia.triar(_AGORA)
+    mitigado = _inc("b")
+    mitigado.mitigacao = "MITIGATED"
+    monkeypatch.setattr(ia.acronis_edr, "listar_abertos", lambda: [])
+    _api_falsa(
+        monkeypatch,
+        [],
+        {"a": _inc("a"), "b": mitigado, "c": httpx.ConnectTimeout("lento")},
+    )
+    assert ia.triar(_AGORA)["obsoletas"] == 1
+    status = {p.incident_id: p.status for p in PropostaIncidente.query.all()}
+    assert status == {"a": PROPOSTA, "b": OBSOLETA, "c": PROPOSTA}
+
+
+def test_reanalisar_regras_por_status(banco) -> None:
+    velho = _AGORA - ia.REANALISE - timedelta(hours=1)
+    recente = _AGORA - timedelta(days=1)
+
+    def p(status: str, decidido: datetime | None, decisao: str = INVESTIGAR, acao: str = "") -> PropostaIncidente:
+        return PropostaIncidente(incident_id="x", decisao=decisao, acao=acao, status=status, decidido_em=decidido)
+
+    assert ia.reanalisar(p(OBSOLETA, None), _AGORA)
+    assert ia.reanalisar(p(REJEITADA, velho), _AGORA)
+    assert not ia.reanalisar(p(REJEITADA, recente), _AGORA)
+    assert ia.reanalisar(p(FALHOU, velho.replace(tzinfo=None)), _AGORA)  # SQLite devolve sem fuso
+    assert ia.reanalisar(p(EXECUTADA, velho, ACAO, "ADD_ALL_PROCESS_FILE_URL_TO_BLOCK_LIST"), _AGORA)
+    assert not ia.reanalisar(p(EXECUTADA, velho, ACAO, ia.ISOLAR), _AGORA)
+    assert not ia.reanalisar(p(PROPOSTA, velho), _AGORA)
+    assert not ia.reanalisar(p(REJEITADA, None), _AGORA)
+
+
+def test_triagem_reanalisa_obsoleta_e_rejeitada_antiga_ainda_abertas(banco, sem_ia, monkeypatch) -> None:
+    abertos = [_inc("novo"), _inc("obs"), _inc("rej_velha"), _inc("rej_nova")]
+    _api_falsa(monkeypatch, abertos, {i.incident_id: _inc(i.incident_id, deteccoes=[_det(True)]) for i in abertos})
+    for iid, status, dias in (("obs", OBSOLETA, 0), ("rej_velha", REJEITADA, 8), ("rej_nova", REJEITADA, 1)):
+        db.session.add(
+            PropostaIncidente(
+                incident_id=iid,
+                customer_id="cust",
+                decisao=INVESTIGAR,
+                status=status,
+                decidido_por="roberto" if status == REJEITADA else "",
+                decidido_em=_AGORA - timedelta(days=dias) if status == REJEITADA else None,
+            )
+        )
+    db.session.commit()
+    r = ia.triar(_AGORA)
+    assert r["triados"] == 3 and r["reanalise"] == 2
+    props = {p.incident_id: p for p in PropostaIncidente.query.all()}
+    assert props["obs"].status == PROPOSTA and props["obs"].decisao == ENCERRAR
+    assert props["rej_velha"].status == PROPOSTA and props["rej_velha"].decidido_por == ""
+    assert "Reanálise: antes investigar (rejeitada, roberto em" in props["rej_velha"].evidencias_json
+    assert props["rej_nova"].status == REJEITADA
+
+
+def test_triagem_novos_tem_prioridade_sobre_reanalise(banco, sem_ia, monkeypatch) -> None:
+    novos = [_inc(f"n{n}") for n in range(ia.LOTE_POR_RODADA)]
+    antigo = _inc("obs")
+    _api_falsa(monkeypatch, [antigo, *novos], {i.incident_id: i for i in [antigo, *novos]})
+    db.session.add(PropostaIncidente(incident_id="obs", customer_id="cust", decisao=INVESTIGAR, status=OBSOLETA))
+    db.session.commit()
+    ia.triar(_AGORA)
+    assert PropostaIncidente.query.filter_by(incident_id="obs").one().status == OBSOLETA
 
 
 def test_triagem_respeita_lote_por_rodada(banco, sem_ia, monkeypatch: pytest.MonkeyPatch) -> None:
