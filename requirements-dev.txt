@@ -18,7 +18,7 @@ pytest-asyncio>=0.23.0     # suporte async/await em testes
 ruff>=0.17.5                # linter + formatter ultra-rápido
 
 # ----- Type Checking -----
-mypy>=1.10
+mypy>=2.4.1
 types-requests
 types-python-dateutil
 
