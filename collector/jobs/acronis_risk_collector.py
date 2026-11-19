@@ -255,28 +255,13 @@ class AcronisRiskCollector:
             return None
 
     def _coletar_ultimo_login(self) -> dict[str, str] | None:
-        """Retorna {'user': email, 'time': ISO8601} do último evento de login.
+        """Retorna {'user': email, 'time': ISO8601} da conta alterada mais recentemente.
 
-        Tenta /api/2/audit_log primeiro (indisponível em alguns MSPs — retorna 404).
-        Fallback: /api/2/tenants/{tid}/users + /api/2/users?uuids=... usando
-        updated_at como proxy de atividade recente.
+        O tenant (datacenter Opus/br02) não expõe audit log para clientes de API:
+        /api/2/audit_log e variantes retornam 404 (conferido em 19/11/2026). Por isso
+        usa /api/2/tenants/{tid}/users + /api/2/users?uuids=... com updated_at como
+        aproximação de atividade — a tela já mostra o valor como "aprox.".
         """
-        # 1. Audit log (disponível apenas em algumas instalações Acronis)
-        for type_filter in ("user.login", None):
-            try:
-                params: dict[str, Any] = {"order": "desc", "limit": 10, "lod": "short"}
-                if type_filter:
-                    params["type"] = type_filter
-                data = self._get("/api/2/audit_log", params=params)
-                for ev in data.get("items", []):
-                    user = ev.get("user_login") or ev.get("user_email") or ""
-                    ev_time = ev.get("time") or ev.get("created_at") or ""
-                    if user:
-                        return {"user": user, "time": ev_time}
-            except Exception as exc:
-                log.warning("acronis_audit_log_error", type_filter=type_filter, error=str(exc))
-
-        # 2. Fallback: listar usuários do tenant e usar updated_at como proxy
         try:
             tid = self._tenant_id_from_token()
             if not tid:

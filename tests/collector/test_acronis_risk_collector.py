@@ -128,6 +128,34 @@ def test_coletar_planos_pagina_e_achata() -> None:
     assert get.call_args_list[1].args[1] == {"after": "x", "limit": 500}
 
 
+def test_ultimo_login_nao_chama_audit_log_e_pega_conta_mais_recente() -> None:
+    c = _collector()
+    respostas = {
+        "/api/2/tenants/tid-1/users": {"items": ["u1", "u2"]},
+        "/api/2/users": {
+            "items": [
+                {"login": "velho@x.com", "updated_at": "2026-08-01T10:00:00Z"},
+                {"login": "novo@x.com", "updated_at": "2026-11-18T10:00:00Z"},
+            ]
+        },
+    }
+    with (
+        patch.object(c, "_tenant_id_from_token", return_value="tid-1"),
+        patch.object(c, "_get", side_effect=lambda path, params=None: respostas[path]) as get,
+    ):
+        assert c._coletar_ultimo_login() == {"user": "novo@x.com", "time": "2026-11-18T10:00:00Z"}
+    assert all("audit_log" not in call.args[0] for call in get.call_args_list)
+
+
+def test_ultimo_login_retorna_none_quando_api_falha() -> None:
+    c = _collector()
+    with (
+        patch.object(c, "_tenant_id_from_token", return_value="tid-1"),
+        patch.object(c, "_get", side_effect=requests.HTTPError("403")),
+    ):
+        assert c._coletar_ultimo_login() is None
+
+
 def test_coletar_planos_retorna_none_quando_api_falha() -> None:
     c = _collector()
     with patch.object(c, "_get", side_effect=requests.HTTPError("403")):
