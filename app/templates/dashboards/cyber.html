@@ -179,6 +179,15 @@
         agMarcarTodos: function () {
           this.agMarcados = this.agLista().filter((p) => this.agEmLote(p)).map((p) => p.id);
         },
+        agUsuario: function (p) {
+          const u = p && p.usuario;
+          if (!u) { return ''; }
+          return 'último usuário: ' + (u.nome ? u.nome + ' (' + u.login + ')' : u.login) + (u.ativa === false ? ' · conta desativada' : '');
+        },
+        agUsuarioConfirma: function (p) {
+          const t = this.agUsuario(p);
+          return t ? '\n\n' + t.charAt(0).toUpperCase() + t.slice(1) + '.' : '\n\nÚltimo usuário: não encontrado no inventário do Acronis.';
+        },
         agRotulo: function (p) {
           return {encerrar: 'Encerrar no Acronis', falso_positivo: 'Marcar falso positivo', acao: 'Executar ' + p.acao}[p.decisao] || 'Aprovar';
         },
@@ -203,7 +212,7 @@
         agAprovar: function (ev) {
           const id = ev.currentTarget.dataset.id;
           const p = this.ag.esperando.find((x) => String(x.id) === id);
-          if (!p || !confirm(this.agRotulo(p) + ' — máquina ' + p.maquina + '?')) { return; }
+          if (!p || !confirm(this.agRotulo(p) + ' — máquina ' + p.maquina + '?' + this.agUsuarioConfirma(p))) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/' + id + '/aprovar');
         },
         agRejeitar: function (ev) {
@@ -212,7 +221,7 @@
         agDesisolar: function (ev) {
           const id = ev.currentTarget.dataset.id;
           const p = this.ag.isoladas.find((x) => String(x.id) === id);
-          if (!p || !confirm('Desisolar a máquina ' + p.maquina + '? Ela volta a ter acesso à rede.')) { return; }
+          if (!p || !confirm('Desisolar a máquina ' + p.maquina + '? Ela volta a ter acesso à rede.' + this.agUsuarioConfirma(p))) { return; }
           this._agPost('/gov/cyber/incidentes/propostas/' + id + '/desisolar');
         },
         agReisolar: function (ev) {
@@ -223,17 +232,22 @@
         },
         isoAlvo: '',
         isoMotivo: '',
-        isolar: function () {
+        isolar: async function () {
           const alvo = this.isoAlvo.trim();
           if (!alvo) { alert('Informe o nome ou o IP da máquina.'); return; }
-          if (!confirm('Isolar a máquina ' + alvo + '? Ela perde o acesso à rede (pelo Acronis; precisa de incidente aberto que permita isolar).')) { return; }
+          let quem = {};
+          try {
+            const r = await fetch('/gov/cyber/usuario-maquina?alvo=' + encodeURIComponent(alvo), {credentials: 'same-origin'});
+            if (r.ok) { quem = await r.json(); }
+          } catch (e) { quem = {}; }
+          if (!confirm('Isolar a máquina ' + alvo + '? Ela perde o acesso à rede (pelo Acronis; precisa de incidente aberto que permita isolar).' + this.agUsuarioConfirma(quem))) { return; }
           this._agPost('/gov/cyber/isolamentos', {alvo: alvo, motivo: this.isoMotivo.trim()});
           this.isoAlvo = ''; this.isoMotivo = '';
         },
         isoLiberar: function (ev) {
           const id = ev.currentTarget.dataset.id;
           const r = this.ag.isolamentos.ativas.find((x) => String(x.id) === id);
-          if (!r || !confirm('Liberar a rede da máquina ' + (r.maquina || r.ip) + '?')) { return; }
+          if (!r || !confirm('Liberar a rede da máquina ' + (r.maquina || r.ip) + '?' + this.agUsuarioConfirma(r))) { return; }
           this._agPost('/gov/cyber/isolamentos/' + id + '/liberar');
         },
         agAprovarLote: function () {
@@ -370,7 +384,10 @@
           {% for inc in incidentes %}
           <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/40">
             <td class="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-slate-400">{{ inc.time or '—' }}</td>
-            <td class="px-4 py-3 font-medium text-gray-800 dark:text-slate-100">{{ inc.resource_name }}</td>
+            <td class="px-4 py-3 font-medium text-gray-800 dark:text-slate-100">{{ inc.resource_name }}
+              {% set u = (usuarios or {}).get(inc.resource_name) %}
+              {% if u %}<div class="text-xs font-normal text-gray-500 dark:text-slate-400">último usuário: {{ u.nome ~ ' (' ~ u.login ~ ')' if u.nome else u.login }}{% if u.ativa == false %} · <span class="text-red-600">conta desativada</span>{% endif %}</div>{% endif %}
+            </td>
             <td class="px-4 py-3 text-gray-600 dark:text-slate-300">{{ inc.alert_type }}</td>
             <td class="px-4 py-3">
               {% set sev = inc.severity | lower %}
@@ -701,7 +718,8 @@
             <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
               <template x-for="r in ag.isolamentos.ativas" :key="r.id">
                 <tr>
-                  <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="(r.maquina || r.ip) + (r.maquina && r.ip ? ' (' + r.ip + ')' : '')"></td>
+                  <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100"><span x-text="(r.maquina || r.ip) + (r.maquina && r.ip ? ' (' + r.ip + ')' : '')"></span>
+                    <div class="text-xs font-normal text-gray-500" x-show="r.usuario" x-text="agUsuario(r)"></div></td>
                   <td class="px-4 py-2 text-xs text-gray-500"
                       x-text="'Acronis · ' + (r.acao_status || '—') + ' · ' + dataHora(r.isolado_em) + ' · ' + r.pedido_por"></td>
                   <td class="px-4 py-2 text-xs text-gray-500" x-text="r.motivo + (r.liberar_status ? ' · liberar: ' + r.liberar_status : '') + ' · ' + r.resultado"></td>
@@ -720,7 +738,7 @@
             <summary class="text-xs text-gray-500 cursor-pointer">Histórico (<span x-text="ag.isolamentos ? ag.isolamentos.historico.length : 0"></span>)</summary>
             <ul class="text-xs text-gray-500 dark:text-slate-400 mt-2 space-y-1">
               <template x-for="r in (ag.isolamentos ? ag.isolamentos.historico : [])" :key="r.id">
-                <li x-text="dataHora(r.isolado_em) + ' · ' + (r.maquina || r.ip) + ' · ' + r.mecanismo + ' · ' + r.status + ' · ' + r.resultado + (r.liberado_por ? ' (liberada por ' + r.liberado_por + ')' : '')"></li>
+                <li x-text="dataHora(r.isolado_em) + ' · ' + (r.maquina || r.ip) + (r.usuario ? ' (' + agUsuario(r) + ')' : '') + ' · ' + r.mecanismo + ' · ' + r.status + ' · ' + r.resultado + (r.liberado_por ? ' (liberada por ' + r.liberado_por + ')' : '')"></li>
               </template>
             </ul>
           </details>
@@ -739,7 +757,8 @@
             <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
               <template x-for="p in ag.isoladas" :key="p.id">
                 <tr>
-                  <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="p.maquina"></td>
+                  <td class="px-5 py-2 font-medium text-gray-800 dark:text-slate-100"><span x-text="p.maquina"></span>
+                    <div class="text-xs font-normal text-gray-500" x-show="p.usuario" x-text="agUsuario(p)"></div></td>
                   <td class="px-4 py-2 text-xs text-gray-500" x-text="'isolada em ' + dataHora(p.decidido_em) + ' · ' + (p.acao_status || '—')"></td>
                   <td class="px-4 py-2 text-xs text-gray-500"
                       x-text="p.desisolar_status ? 'desisolar: ' + p.desisolar_status + ' · ' + p.desisolar_resultado + (p.desisolado_por ? ' (' + p.desisolado_por + ')' : '') : ''"></td>
@@ -770,6 +789,7 @@
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold" :class="agCor(p.decisao)"
                       x-text="p.decisao === 'acao' ? p.acao : p.decisao"></span>
                 <span class="font-semibold text-gray-800 dark:text-slate-100" x-text="p.maquina"></span>
+                <span class="text-xs font-semibold text-indigo-700 dark:text-indigo-300" x-show="p.usuario" x-text="agUsuario(p)"></span>
                 <span class="text-xs text-gray-500" x-text="p.severidade + ' · ' + p.veredito + ' · ' + p.categorias.join(', ')"></span>
                 <span class="ml-auto text-xs text-gray-400" x-text="'incidente de ' + dataHora(p.criado_no_acronis) + ' · fonte: ' + p.fonte"></span>
               </div>
@@ -806,7 +826,8 @@
               <template x-for="p in ag.decididas" :key="p.id">
                 <tr>
                   <td class="px-4 py-2 text-xs text-gray-400 whitespace-nowrap" x-text="dataHora(p.decidido_em)"></td>
-                  <td class="px-4 py-2 font-medium text-gray-800 dark:text-slate-100" x-text="p.maquina"></td>
+                  <td class="px-4 py-2 font-medium text-gray-800 dark:text-slate-100"><span x-text="p.maquina"></span>
+                    <div class="text-xs font-normal text-gray-500" x-show="p.usuario" x-text="agUsuario(p)"></div></td>
                   <td class="px-4 py-2 text-xs" x-text="p.decisao === 'acao' ? p.acao : p.decisao"></td>
                   <td class="px-4 py-2 text-xs font-semibold" :class="p.status === 'executada' ? 'text-green-600' : (p.status === 'falhou' ? 'text-red-600' : 'text-gray-500')"
                       x-text="p.status + (p.acao_status ? ' (' + p.acao_status + ')' : '')"></td>

@@ -720,3 +720,39 @@ def test_garantir_colunas_em_banco_antigo(tmp_path) -> None:
         "desisolado_por",
         "desisolado_em",
     } <= colunas
+
+
+def _busca_falsa(maquina: str, ip: str = "") -> Any:
+    from itgov.services.usuario_maquina import UsuarioMaquina
+
+    if maquina.split(".")[0].lower() == "pc-1":
+        return UsuarioMaquina(login="fulano.diretor", nome="Fulano Diretor", email="f@x.com", ativa=True)
+    return None
+
+
+def test_painel_mostra_ultimo_usuario_em_todas_as_listas(banco, sem_ia, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ia.usuario_maquina, "busca_atual", lambda: _busca_falsa)
+    _isolada("a1", maquina="pc-1.grupogadens.com.br")
+    p = _proposta(iid="1")  # maquina "pc-1"
+    sem = _proposta(iid="9")
+    dados = ia.painel()
+    esperando = {x["id"]: x["usuario"] for x in dados["esperando"]}
+    assert esperando[p.id]["nome"] == "Fulano Diretor"
+    assert esperando[sem.id] is None
+    assert dados["isoladas"][0]["usuario"]["login"] == "fulano.diretor"
+    assert dados["decididas"][0]["usuario"]["nome"] == "Fulano Diretor"
+
+
+def test_resumo_da_fila_de_aprovacao_cita_ultimo_usuario(banco, sem_ia, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.views import dashboards
+
+    monkeypatch.setattr(ia.usuario_maquina, "busca_atual", lambda: _busca_falsa)
+    p = _proposta(ACAO, acao=ia.ISOLAR, iid="1")
+    assert dashboards._resumo_proposta(p.id).endswith("máquina pc-1 (último usuário: Fulano Diretor)")
+
+
+def test_rota_usuario_maquina(banco, authed_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ia.usuario_maquina, "busca_atual", lambda: _busca_falsa)
+    assert authed_client.get("/gov/cyber/usuario-maquina?alvo=PC-1").get_json()["usuario"]["nome"] == "Fulano Diretor"
+    assert authed_client.get("/gov/cyber/usuario-maquina?alvo=pc-9").get_json() == {"usuario": None}
+    assert authed_client.get("/gov/cyber/usuario-maquina").get_json() == {"usuario": None}

@@ -319,3 +319,15 @@ def test_cada_pagina_renderiza_e_abre_na_propria_aba(
 def test_paginas_exigem_login(factory_client) -> None:
     assert factory_client.get("/gov/cyber/noc").status_code == 302
     assert factory_client.get("/gov/cyber/pentest").status_code == 302
+
+
+def test_pagina_incidentes_mostra_ultimo_usuario(authed_client, com_acronis: None, monkeypatch) -> None:
+    from itgov.services import usuario_maquina
+    from itgov.services.usuario_maquina import UsuarioMaquina
+
+    _mock_fontes(monkeypatch)
+    pessoa = UsuarioMaquina(login="fulano.diretor", nome="Fulano Diretor", ativa=False)
+    monkeypatch.setattr(usuario_maquina, "busca_atual", lambda: lambda m, ip="": pessoa if m == "pc-rh-01" else None)
+    html = authed_client.get("/gov/cyber/incidentes").get_data(as_text=True)
+    assert "último usuário: Fulano Diretor (fulano.diretor)" in html
+    assert "conta desativada" in html

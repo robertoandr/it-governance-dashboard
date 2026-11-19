@@ -407,11 +407,16 @@ def cyber_incidentes() -> str:
     tipo = request.args.get("tipo") or None
     busca = request.args.get("q") or None
     incidentes = filtrar_incidentes(incidentes_raw, severidade=severidade, tipo=tipo, busca=busca)
+    from itgov.services import usuario_maquina
+
+    buscar = usuario_maquina.busca_atual()
+    usuarios = {i.get("resource_name"): buscar(str(i.get("resource_name") or ""), "") for i in incidentes}
     severidades = sorted({str(i.get("severity", "")).strip() for i in incidentes_raw if i.get("severity")})
     return render_template(
         "dashboards/cyber.html",
         pagina="incidentes",
         incidentes=incidentes,
+        usuarios=usuarios,
         severidades=severidades,
         filtro={"severidade": severidade or "", "tipo": tipo or "", "q": busca or ""},
         **ctx,
@@ -599,7 +604,15 @@ def _quem_decide() -> str:
 def _resumo_proposta(proposta_id: int) -> str:
     p = _proposta_ou_404(proposta_id)
     alvo = p.acao if p.decisao == "acao" else p.decisao
-    return f"Cyber: {alvo} no incidente da máquina {p.maquina}"
+    return f"Cyber: {alvo} no incidente da máquina {p.maquina}{_ultimo_usuario_txt(p.maquina)}"
+
+
+def _ultimo_usuario_txt(maquina: str, ip: str = "") -> str:
+    """`` (último usuário: Fulano)`` para o resumo da fila de aprovação ("" sem dado)."""
+    from itgov.services import usuario_maquina
+
+    u = usuario_maquina.busca_atual()(maquina, ip)
+    return f" (último usuário: {u.rotulo})" if u else ""
 
 
 @bp.route("/cyber/incidentes/propostas/<int:proposta_id>/aprovar", methods=["POST"])
@@ -691,7 +704,21 @@ def _resumo_isolar() -> str:
     corpo = request.get_json(silent=True) or {}
     alvo = str(corpo.get("alvo") or "")[:120]
     motivo = str(corpo.get("motivo") or "")[:120]
-    return f"Cyber: isolar a máquina {alvo}" + (f" — {motivo}" if motivo else "")
+    return f"Cyber: isolar a máquina {alvo}{_ultimo_usuario_txt(alvo)}" + (f" — {motivo}" if motivo else "")
+
+
+@bp.route("/cyber/usuario-maquina")
+@login_required
+@require_role("admin", "gestor", pagina="cyber")
+def cyber_usuario_maquina() -> object:
+    """Último usuário logado da máquina (``?alvo=nome ou IP``), para confirmar antes de isolar."""
+    from flask import jsonify
+
+    from itgov.services import usuario_maquina
+
+    alvo = (request.args.get("alvo") or "").strip()[:200]
+    u = usuario_maquina.busca_atual()(alvo, "") if alvo else None
+    return jsonify({"usuario": u.model_dump() if u else None})
 
 
 @bp.route("/cyber/isolamentos", methods=["POST"])

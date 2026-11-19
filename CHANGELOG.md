@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cyber — Último usuário logado em todas as máquinas antes de isolar:** para não isolar sem querer o computador de um diretor ou de outra pessoa importante, as propostas do agente, as últimas decisões, as **Máquinas isoladas**, o **Isolar máquina** (ativas e histórico) e a tabela de **Incidentes** mostram o último usuário de cada máquina: nome da pessoa no M365 com o login, ou só o login quando não há conta, e o aviso "conta desativada". As confirmações de aprovar, isolar, desisolar e liberar a rede repetem quem é o usuário, e o pedido que vai para a fila do super admin leva "(último usuário: Fulano)". No **Isolar máquina** o nome ou IP digitado é consultado antes de confirmar (`GET /gov/cyber/usuario-maquina?alvo=`). Fonte: inventário do Acronis (`last_logged_in_user`, cache de 6 h), cruzado pelo nome curto da máquina ou pelo IP.
+
 ### Removed
 - **Prévia dos modelos de redesign (`/gov/previa`):** os três modelos (console, triagem e página de status) não foram aprovados; a rota, os templates, o CSS e as fontes Fira saem do app. A Visão Geral atual continua e os ajustes passam a ser feitos direto nela.
 
