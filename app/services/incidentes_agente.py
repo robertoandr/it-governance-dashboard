@@ -56,7 +56,7 @@ from app.models.incidente_agente import (
     PROPOSTA,
     REJEITADA,
 )
-from itgov.services import acronis_edr
+from itgov.services import acronis_edr, usuario_maquina
 from itgov.services.acronis_edr import (
     DESISOLAR,
     ISOLAMENTO_INCERTO,
@@ -708,15 +708,19 @@ def painel() -> dict[str, Any]:
         .all()
     )
     ultima = db.session.query(db.func.max(PropostaIncidente.analisado_em)).scalar()
+    buscar = usuario_maquina.busca_atual()
+    isolamentos = _isolamentos_manuais()
+    for lista in ("ativas", "historico"):
+        usuario_maquina.anotar(isolamentos.get(lista, []), buscar)
     return {
         "configurado": acronis_edr.configurado(),
         "ia": ia_ativa(),
         "ultima_triagem": ultima.isoformat() if ultima else None,
         "por_decisao": {d: contagem.get(d, 0) for d in DECISOES},
-        "esperando": [p.para_dict() for p in esperando],
-        "decididas": [p.para_dict() for p in decididas],
-        "isoladas": _isoladas(),
-        "isolamentos": _isolamentos_manuais(),
+        "esperando": usuario_maquina.anotar([p.para_dict() for p in esperando], buscar),
+        "decididas": usuario_maquina.anotar([p.para_dict() for p in decididas], buscar),
+        "isoladas": usuario_maquina.anotar(_isoladas(), buscar),
+        "isolamentos": isolamentos,
     }
 
 
